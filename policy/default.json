@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "windows": { "beforeClaimMin": 2, "afterClaimMin": 45, "graceMin": 30, "calendarDays": 3 },
+  "thresholds": { "verified": 0.85, "partial": 0.5 },
+  "features": {
+    "timeProximity": 0.25,
+    "counterpartyExact": 0.35,
+    "counterpartyDomain": 0.15,
+    "subjectOverlap": 0.15,
+    "amountExact": 0.25,
+    "merchantMatch": 0.2
+  },
+  "rules": [
+    { "id": "no_coverage", "when": { "coverage": "none" }, "then": "UNVERIFIABLE" },
+    { "id": "over_scope", "when": { "typeNotInGrant": true }, "then": "OVER_SCOPE" },
+    { "id": "over_ceiling", "when": { "amountAboveCeiling": true }, "then": "OVER_SCOPE" },
+    { "id": "verified", "when": { "bestScoreGte": "verified" }, "then": "VERIFIED" },
+    { "id": "partial", "when": { "bestScoreGte": "partial" }, "then": "PARTIAL" },
+    { "id": "not_found", "when": { "graceElapsed": true, "bestScoreLt": "partial" }, "then": "NOT_FOUND" },
+    { "id": "pending", "when": { "graceElapsed": false }, "then": "PENDING" }
+  ],
+  "unasked": {
+    "signals": {
+      "agentSessionActive": 0.4,
+      "userIdle": 0.3,
+      "agentSignature": 0.5,
+      "activityLogAdjacent": 0.4
+    },
+    "threshold": 0.6
+  },
+  "allowlistedFields": {
+    "gmail.sent": ["counterparty", "subjectHint", "occurredAt", "contentHash"],
+    "gmail.receipt": ["merchant", "amountCents", "currency", "subjectHint", "occurredAt", "contentHash"],
+    "gcal.event": ["subjectHint", "occurredAt", "counterparty", "contentHash"]
+  }
+}

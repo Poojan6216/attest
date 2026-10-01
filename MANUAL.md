@@ -3,7 +3,7 @@
 The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, where, why, and which sprint task it unblocks. Tick when done and tell the agent "done: <item>" so it can un-block the task.
 
 ## Before Sprint 0
-- [ ] Create the GitHub repo `Poojan6216/attest`, public and empty (checked 2026-10-01: the name is free). Either create it on github.com (no README, no license, no .gitignore) or reply **"create the repo"** and the agent will run `gh repo create Poojan6216/attest --public --source=. --remote=origin --push` (gh is already logged in as Poojan6216). Unblocks: the first push (0.1) and CI green on GitHub (0.11).
+- [x] Create the GitHub repo `Poojan6216/attest`. Done 2026-10-01: founder said "create the repo"; the agent created it public with `gh repo create` and pushed `main`: https://github.com/Poojan6216/attest
 - [x] Install Node 22 + pnpm on the Mac. Done 2026-10-01: Node 22.14.0 was present; the agent installed pnpm 10.34.6 into `~/.local/bin`.
 
 ## During Sprint 2 (observers)
@@ -27,6 +27,7 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 - [ ] Nothing expected. If the privacy pre-review (6.7) returns NOT READY on an item only you can change (e.g., a store account setting), it lands here.
 
 ## Sprint 7 (launch)
+- [ ] Decide when to make `Poojan6216/attest` public again (it was made private on 2026-10-01 at your request). Needed before 7.2 (GitHub Pages for `PRIVACY.md` on the free plan) and before launch posts that say "read the source". To flip it: `gh repo edit Poojan6216/attest --visibility public --accept-visibility-change-consequences`, or tell the agent "make the repo public".
 - [ ] Chrome Web Store developer account ($5 one-time), same Google account as the GitHub Pages owner. Unblocks 7.8 submission.
 - [ ] Enable GitHub Pages on the repo (Settings → Pages → main, `/docs` or root) so `PRIVACY.md` has a public URL. Unblocks 7.2.
 - [ ] Submit the release zip: upload `.output/attest-0.1.0.zip`, fill the data-usage form from `launch/store-listing.md` (the agent writes the exact answers), add screenshots from `launch/screenshots/`, submit for review.

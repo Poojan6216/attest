@@ -486,6 +486,9 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-01] [0.1] Scaffolded the extension (WXT, Manifest V3, Preact, Tailwind, strict TypeScript), Apache-2.0 license, README with the limitations, changelog. It builds and loads in Chromium 153 with zero console errors. Not pushed: the GitHub repo does not exist yet (MANUAL.md).
 [2026-10-01] [0.2] Lint and format: ESLint strict (type-checked) + Prettier, the `attest/no-act` rule (no clicks, events, DOM writes, navigation or network in anything that reads a vendor page), a fence that keeps `src/core` pure, and a rule that keeps service-worker listeners top-level. Proven by 73 tests and by deliberate violations that fail. Pre-commit hook runs lint + typecheck.
 [2026-10-01] [0.3] Test rails: Vitest (unit + property with fast-check), Playwright loading the real build into a fresh Chromium profile, a localhost fixture server (path-traversal safe, property-tested), and `pnpm bench` which writes RESULTS.md (no numbers yet). 88 unit/property tests and the E2E smoke test pass.
+[2026-10-01] [0.1] Repo created on your go-ahead: https://github.com/Poojan6216/attest (public). Before the first push I swapped the three fake API keys in the leak-test fixture for shapes no secret scanner mistakes for real credentials, and amended that unpushed commit so history is clean.
+[2026-10-01] [0.1] Repo made private at your request. Before launch it needs to go public again (GitHub Pages for the privacy policy, "read the source"); that's in MANUAL.md under Sprint 7.
+[2026-10-01] [0.8] Policy as data: policy/default.json exactly as the spec, loaded by a pure, strict Zod loader that deep-freezes it and names the exact path of every problem (10+ malformed cases tested). A test proves no threshold value appears anywhere in the code. Core now typechecks with no DOM types. Host lists and feature flags (all off) are in config.
 ```
 
 ---
