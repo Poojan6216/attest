@@ -9,10 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 import { type BrowserContext, chromium, type Page, type Worker } from '@playwright/test';
 
-export const EXTENSION_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../.output/chrome-mv3',
-);
+/**
+ * The unpacked build under test. ATTEST_EXTENSION_PATH points at another build (used to prove that a
+ * deliberately broken build fails the mandatory tests); CI never sets it.
+ */
+export const EXTENSION_PATH =
+  process.env.ATTEST_EXTENSION_PATH ??
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.output/chrome-mv3');
 
 export interface LaunchOptions {
   /** Extra Chromium switches, e.g. NetLog capture for the network-intercept test. */

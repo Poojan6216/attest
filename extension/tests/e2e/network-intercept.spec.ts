@@ -1,0 +1,183 @@
+/**
+ * @mandatory — Hard Rule 1: nothing leaves the browser.
+ *
+ * Runs the real build through a 5-minute scripted session (three fixture pages, popup, options,
+ * side panel, an alarm firing) with Chromium's NetLog on, then asserts that every request the
+ * extension or a page initiated went to an allowlisted host. In this sprint the allowlist is empty.
+ * The negative control proves on every run that the guard sees a canary request from the service
+ * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened.
+ */
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { expect, type Page, test } from '@playwright/test';
+import type { WxtBrowser } from 'wxt/browser';
+
+import { NETWORK_ALLOWLIST } from '../../src/config';
+import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
+import { recordConsole } from './support/channels';
+import { launchExtension, type LaunchedExtension } from './support/extension';
+import { parseNetLog, urlRequests } from './support/netlog';
+import {
+  analyse,
+  guardArgs,
+  installRouteGuard,
+  type NetworkReport,
+  type RouteRecord,
+} from './support/network-guard';
+
+declare const chrome: WxtBrowser;
+
+/** Sprint 0: empty. Sprint 5 adds exactly the telemetry host, and only while telemetry is on. */
+const ALLOWLIST: readonly string[] = [];
+const SESSION_MS = 5 * 60_000;
+const STEP_MS = 15_000;
+const FIXTURE_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
+const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
+
+interface GuardedSession {
+  readonly server: FixtureServer;
+  readonly extension: LaunchedExtension;
+  readonly routeRecords: RouteRecord[];
+  readonly consoleLines: string[];
+  readonly netLogPath: string;
+  readonly dir: string;
+}
+
+async function startGuardedSession(): Promise<GuardedSession> {
+  const server = await startFixtureServer();
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-netlog-'));
+  const netLogPath = path.join(dir, 'netlog.json');
+  const extension = await launchExtension({ extraArgs: guardArgs(netLogPath) });
+  const routeRecords = await installRouteGuard(extension.context, { fixtureOrigin: server.origin });
+  const consoleLines: string[] = [];
+  recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
+  return { server, extension, routeRecords, consoleLines, netLogPath, dir };
+}
+
+/** Closes the browser (which flushes NetLog), then analyses everything that was requested. */
+async function finishGuardedSession(session: GuardedSession): Promise<NetworkReport> {
+  await session.extension.close();
+  await session.server.close();
+  const report = analyse(
+    urlRequests(parseNetLog(readFileSync(session.netLogPath, 'utf8'))),
+    session.routeRecords,
+    {
+      fixtureOrigin: session.server.origin,
+      allowlist: ALLOWLIST,
+    },
+  );
+  rmSync(session.dir, { recursive: true, force: true });
+  return report;
+}
+
+function logReport(report: NetworkReport): void {
+  console.log(`[network-intercept] attributed requests: ${String(report.attributed.length)}`);
+  for (const request of report.attributed) {
+    console.log(
+      `[network-intercept] BLOCKED ${request.host} via=${request.via} initiator=${request.initiator}`,
+    );
+  }
+  console.log(`[network-intercept] violations: ${JSON.stringify(report.violations)}`);
+  console.log(
+    `[network-intercept] unknown browser-initiated hosts: ${JSON.stringify(report.unknownBrowserHosts)}`,
+  );
+  console.log(
+    `[network-intercept] ignored Chromium background hosts: ${JSON.stringify(report.browserInternalHosts)}`,
+  );
+}
+
+async function openAll(session: GuardedSession): Promise<Page[]> {
+  const pages: Page[] = [];
+  for (const fixture of FIXTURE_PAGES) {
+    const page = await session.extension.context.newPage();
+    recordConsole(page, fixture, session.consoleLines);
+    await page.goto(session.server.url(fixture));
+    pages.push(page);
+  }
+  for (const extensionPage of EXTENSION_PAGES) {
+    const page = await session.extension.openExtensionPage(extensionPage);
+    recordConsole(page, extensionPage, session.consoleLines);
+    pages.push(page);
+  }
+  return pages;
+}
+
+test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
+  test('the allowlist asserted here is the allowlist the extension ships', () => {
+    expect([...NETWORK_ALLOWLIST]).toEqual([...ALLOWLIST]);
+  });
+
+  test('a 5-minute scripted session makes no request outside the allowlist', async () => {
+    test.setTimeout(SESSION_MS + 3 * 60_000);
+    const session = await startGuardedSession();
+    const deadline = Date.now() + SESSION_MS;
+    let report: NetworkReport;
+    try {
+      const pages = await openAll(session);
+      // Fire the extension's own alarm well inside the session (Chrome's floor is 30 s).
+      const worker = await session.extension.serviceWorker();
+      await worker.evaluate(() => chrome.alarms.create('attest.purge', { delayInMinutes: 0.5 }));
+      let step = 0;
+      while (Date.now() < deadline) {
+        const page = pages[step % pages.length];
+        if (page !== undefined) await page.reload();
+        step += 1;
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(STEP_MS, Math.max(0, deadline - Date.now()))),
+        );
+      }
+      expect(session.consoleLines.some((line) => line.includes('"event":"alarm.fired"'))).toBe(true);
+      // Every page was reloaded repeatedly over the whole session.
+      expect(step).toBeGreaterThanOrEqual(2 * pages.length);
+    } finally {
+      report = await finishGuardedSession(session);
+    }
+    logReport(report);
+    expect(report.violations).toEqual([]);
+    expect(report.unknownBrowserHosts).toEqual([]);
+  });
+
+  test('negative control: the guard catches a request from the worker, an extension page, and a page', async () => {
+    const session = await startGuardedSession();
+    let report: NetworkReport;
+    try {
+      const worker = await session.extension.serviceWorker();
+      await worker.evaluate(() => fetch('https://sw-canary.example.com/attest').catch(() => undefined));
+      // Playwright routing never sees WebSockets, so only the NetLog layer can catch this one.
+      await worker.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            const socket = new WebSocket('wss://ws-canary.example.com/attest');
+            socket.onerror = () => {
+              resolve();
+            };
+            socket.onclose = () => {
+              resolve();
+            };
+          }),
+      );
+      const options = await session.extension.openExtensionPage('options.html');
+      await options.evaluate(() => fetch('https://page-canary.example.org/attest').catch(() => undefined));
+      const fixture = await session.extension.context.newPage();
+      await fixture.goto(session.server.url('_harness/blank.html'));
+      await fixture.evaluate(() => fetch('https://fixture-canary.example.net/attest').catch(() => undefined));
+    } finally {
+      report = await finishGuardedSession(session);
+    }
+    logReport(report);
+    expect(report.violations).toEqual(
+      expect.arrayContaining([
+        'sw-canary.example.com',
+        'page-canary.example.org',
+        'fixture-canary.example.net',
+        'ws-canary.example.com',
+      ]),
+    );
+    // The WebSocket canary is attributed by NetLog alone: the ground-truth layer works on its own.
+    expect(report.attributed).toContainEqual(
+      expect.objectContaining({ host: 'ws-canary.example.com', via: 'netlog' }),
+    );
+  });
+});

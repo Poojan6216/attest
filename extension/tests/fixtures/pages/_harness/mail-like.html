@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Attest harness: mail-like page</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 1rem; }
+      [role='row'] { display: flex; gap: 1rem; padding: 0.25rem 0; border-bottom: 1px solid #ddd; }
+    </style>
+  </head>
+  <body>
+    <!-- Synthetic, hand-written structure. Not a capture of any real vendor page. -->
+    <main role="main" aria-label="Sent">
+      <h1>Sent</h1>
+      <div role="grid" aria-label="Messages">
+        <div role="row"><span email="alex@example.com" title="alex@example.com">Alex</span><span>Q3 deck</span><span title="Wed, Oct 1, 2026, 2:02 PM">2:02 PM</span></div>
+        <div role="row"><span email="sam@example.org" title="sam@example.org">Sam</span><span>Re: invoice</span><span title="Wed, Oct 1, 2026, 2:03 PM">2:03 PM</span></div>
+      </div>
+    </main>
+  </body>
+</html>

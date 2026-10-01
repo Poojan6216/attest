@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Attest harness: calendar-like page</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 1rem; }
+      [role='gridcell'] { display: inline-block; width: 12rem; min-height: 4rem; border: 1px solid #ddd; vertical-align: top; }
+    </style>
+  </head>
+  <body>
+    <!-- Synthetic, hand-written structure. Not a capture of any real vendor page. -->
+    <main role="main" aria-label="Week of October 1, 2026">
+      <h1>Week of October 1, 2026</h1>
+      <div role="grid" aria-label="Calendar grid">
+        <div role="gridcell" aria-label="Thursday, October 2">
+          <div role="button" data-eventid="evt-1" aria-label="Team sync, 10:00 to 10:30, Thursday, October 2">Team sync</div>
+        </div>
+        <div role="gridcell" aria-label="Friday, October 3"></div>
+      </div>
+    </main>
+  </body>
+</html>
