@@ -22,3 +22,9 @@ export const STORAGE_KEYS = {
  * Sprint 5 adds exactly one telemetry host here, and only when the user opts in.
  */
 export const NETWORK_ALLOWLIST: readonly string[] = [];
+
+/**
+ * Width of the time buckets used by the `[type+timeBucket]` ledger index (storage plumbing, not a
+ * grading window). Candidate retrieval reads the buckets that overlap its policy window.
+ */
+export const LEDGER_TIME_BUCKET_MINUTES = 60;
