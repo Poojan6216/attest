@@ -16,8 +16,17 @@ tester.run('attest/top-level-listeners', topLevelListeners, {
     'export default defineBackground({ main() { browser.runtime.onInstalled.addListener(onInstalled); } });',
     // An async handler is fine; registering inside one is not.
     'chrome.runtime.onMessage.addListener(async (message) => { await handle(message); });',
+    'function main() { listen(createHandlers()); }',
   ],
   invalid: [
+    {
+      code: 'async function main() { await ready(); listen(handlers); }',
+      errors: [{ messageId: 'async' }],
+    },
+    {
+      code: 'boot().then(() => listen(handlers));',
+      errors: [{ messageId: 'deferred', data: { callee: 'then' } }],
+    },
     {
       code: 'async function init() { chrome.runtime.onMessage.addListener(onMessage); }',
       errors: [{ messageId: 'async' }],

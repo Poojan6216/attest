@@ -3,8 +3,9 @@
  * synchronously during the worker's first turn. A listener added inside an async function or a
  * promise/timer callback is silently dropped after the worker restarts (extension_engineer checklist).
  *
- * Reports `*.addListener(...)` when any enclosing function is async, a generator, or a callback passed
- * to then/catch/finally/setTimeout/setInterval/queueMicrotask/requestIdleCallback.
+ * Reports `*.addListener(...)` and the bus's `listen(...)` when any enclosing function is async, a
+ * generator, or a callback passed to then/catch/finally/setTimeout/setInterval/queueMicrotask/
+ * requestIdleCallback.
  */
 
 const DEFERRING_CALLEES = new Set([
@@ -54,7 +55,10 @@ const rule = {
   },
   create(context) {
     return {
-      'CallExpression[callee.type="MemberExpression"][callee.property.name="addListener"]'(node) {
+      // `x.addListener(...)` and the bus's own `listen(...)`, which registers runtime.onMessage.
+      'CallExpression[callee.type="MemberExpression"][callee.property.name="addListener"], CallExpression[callee.type="Identifier"][callee.name="listen"]'(
+        node,
+      ) {
         for (const ancestor of context.sourceCode.getAncestors(node)) {
           if (
             ancestor.type !== 'FunctionDeclaration' &&

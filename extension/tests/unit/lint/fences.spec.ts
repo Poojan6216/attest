@@ -116,6 +116,14 @@ describe('lint fences (real config)', () => {
     expect(await ruleIds('entrypoints/background.ts', code)).toContain('attest/top-level-listeners');
   });
 
+  it('an inline disable does not switch off the listener rule in the background or the bus', async () => {
+    const code =
+      'export async function init() {\n  // eslint-disable-next-line attest/top-level-listeners\n  chrome.runtime.onMessage.addListener(() => undefined);\n}\n';
+    for (const file of ['entrypoints/background.ts', 'src/bus/probe.ts']) {
+      expect(await ruleIds(file, code), file).toContain('attest/top-level-listeners');
+    }
+  });
+
   it('eval and new Function are forbidden everywhere', async () => {
     expect(await ruleIds('src/ui/probe.ts', "eval('1');\n")).toContain('no-eval');
     expect(await ruleIds('src/ui/probe.ts', "export const f = new Function('return 1');\n")).toContain(

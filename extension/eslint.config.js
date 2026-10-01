@@ -191,6 +191,7 @@ export default tseslint.config(
   {
     files: LISTENER_SCOPES,
     plugins: { attest },
+    linterOptions: { noInlineConfig: true },
     rules: { 'attest/top-level-listeners': 'error' },
   },
   {

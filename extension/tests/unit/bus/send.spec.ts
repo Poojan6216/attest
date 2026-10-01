@@ -1,0 +1,236 @@
+/**
+ * Outgoing side: invalid messages never leave, transport failures resolve `undefined` and are logged,
+ * and `query()` always resolves a `ui.result` for the kind it asked about.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
+
+import { BUS_ERROR_CODES, BusError, transportErrorCode } from '../../../src/bus/errors';
+import { listen } from '../../../src/bus/listen';
+import { type BusMessage, BUS_MESSAGE_TYPES, type BusMessageType } from '../../../src/bus/messages';
+import { query, send } from '../../../src/bus/send';
+import { CLAIM, captureLogs, connectAs, extensionPage, OBSERVATION, SECRET, TS, VALID } from './harness';
+
+const records = captureLogs();
+
+beforeEach(() => {
+  fakeBrowser.reset();
+});
+
+/**
+ * One invalid message per type that the compiler accepts: TypeScript cannot see string formats,
+ * ranges, or extra fields carried by a variable. This is what `send()` exists to catch.
+ */
+function typedButInvalid(): Record<BusMessageType, BusMessage> {
+  const smuggledClaim = { ...CLAIM, body: SECRET };
+  const smuggledObservation = { ...OBSERVATION, html: SECRET };
+  return {
+    'adapter.health': {
+      type: 'adapter.health',
+      health: { ...VALID['adapter.health'].health, checkedAt: 'now' },
+    },
+    'adapter.claims': { ...VALID['adapter.claims'], claims: [smuggledClaim] },
+    'observer.observations': { ...VALID['observer.observations'], observations: [smuggledObservation] },
+    'coverage.ping': { type: 'coverage.ping', ping: { ...VALID['coverage.ping'].ping, accountHash: SECRET } },
+    'ui.query': { type: 'ui.query', query: { kind: 'health.list' }, ...{ extra: SECRET } },
+    'ui.result': { type: 'ui.result', kind: 'health.list', ok: true, data: undefined },
+    'ledger.changed': { type: 'ledger.changed', tables: [], at: TS },
+  };
+}
+
+describe('send(): outgoing validation', () => {
+  it.each(BUS_MESSAGE_TYPES)(
+    'an invalid %s throws BusError(invalid_outgoing) before anything is sent',
+    async (type) => {
+      const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage');
+      const listener = vi.fn();
+      fakeBrowser.runtime.onMessage.addListener(listener);
+
+      const attempt = send(typedButInvalid()[type]);
+
+      await expect(attempt).rejects.toBeInstanceOf(BusError);
+      await expect(attempt).rejects.toMatchObject({ name: 'BusError', code: 'invalid_outgoing' });
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(listener).not.toHaveBeenCalled();
+    },
+  );
+
+  it('sends the validated message (a valid one is passed to Chrome unchanged)', async () => {
+    const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage');
+    connectAs(extensionPage());
+    listen({ 'adapter.claims': () => undefined });
+
+    await send(VALID['adapter.claims']);
+
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0]?.[0]).toEqual(VALID['adapter.claims']);
+    expect(sendMessage.mock.calls[0]?.[1]).toBeTypeOf('function'); // callback form: lastError is checked
+  });
+
+  it('the error carries no content: its message is built from the code only', async () => {
+    const attempt = send(typedButInvalid()['adapter.claims']);
+    await expect(attempt).rejects.toThrow('bus: invalid_outgoing');
+  });
+});
+
+describe('send(): transport failures', () => {
+  it('nobody listening: runtime.lastError is read, logged as bus.send_failed, resolves undefined', async () => {
+    await expect(send(VALID['adapter.health'])).resolves.toBeUndefined();
+
+    expect(records).toEqual([
+      {
+        level: 'warn',
+        event: 'bus.send_failed',
+        fields: {
+          type: 'adapter.health',
+          error: expect.stringMatching(/^BusError code=send_failed /) as string,
+        },
+      },
+    ]);
+    expect(fakeBrowser.runtime.lastError).toBeUndefined();
+  });
+
+  it("Chrome's 'Receiving end does not exist' lastError is logged as no_receiver", async () => {
+    fakeBrowser.runtime.onMessage.addListener(() => {
+      throw new Error('Could not establish connection. Receiving end does not exist.');
+    });
+
+    await expect(send(VALID['ledger.changed'])).resolves.toBeUndefined();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.event).toBe('bus.send_failed');
+    expect(records[0]?.fields.type).toBe('ledger.changed');
+    expect(records[0]?.fields.error).toMatch(/^BusError code=no_receiver /);
+  });
+
+  it('a synchronous throw from sendMessage (orphaned context) resolves undefined and is logged', async () => {
+    vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockImplementation(() => {
+      throw new Error('Extension context invalidated.');
+    });
+
+    await expect(send(VALID['coverage.ping'])).resolves.toBeUndefined();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      level: 'warn',
+      event: 'bus.send_failed',
+      fields: { type: 'coverage.ping' },
+    });
+    expect(records[0]?.fields.error).toMatch(/^BusError code=context_invalidated /);
+  });
+
+  it('a handler that rejects still answers, so the sender sees no transport failure', async () => {
+    connectAs(extensionPage());
+    listen({ 'adapter.health': () => Promise.reject(new Error('disk full')) });
+
+    await expect(send(VALID['adapter.health'])).resolves.toBeUndefined();
+
+    expect(records.map((record) => record.event)).toEqual(['bus.handler_failed']);
+  });
+});
+
+describe('query()', () => {
+  it('resolves unavailable (and logs) when no service worker answers', async () => {
+    await expect(query({ kind: 'health.list' })).resolves.toEqual({
+      type: 'ui.result',
+      kind: 'health.list',
+      ok: false,
+      error: 'unavailable',
+    });
+    expect(records.map((record) => [record.event, record.fields.reason ?? null])).toEqual([
+      ['bus.send_failed', null],
+      ['bus.query_unavailable', 'no_response'],
+    ]);
+  });
+
+  it('resolves unavailable when the answer is not a ui.result', async () => {
+    fakeBrowser.runtime.onMessage.addListener((_message, _sender, sendResponse) => {
+      sendResponse({ rows: [SECRET] });
+      return true;
+    });
+
+    await expect(query({ kind: 'ledger.export' })).resolves.toEqual({
+      type: 'ui.result',
+      kind: 'ledger.export',
+      ok: false,
+      error: 'unavailable',
+    });
+    expect(records).toEqual([
+      {
+        level: 'warn',
+        event: 'bus.query_unavailable',
+        fields: { kind: 'ledger.export', reason: 'malformed_result' },
+      },
+    ]);
+    expect(JSON.stringify(records)).not.toContain(SECRET);
+  });
+
+  it('resolves unavailable when the answer is for a different kind', async () => {
+    fakeBrowser.runtime.onMessage.addListener((_message, _sender, sendResponse) => {
+      sendResponse({ type: 'ui.result', kind: 'health.list', ok: true, data: [] });
+      return true;
+    });
+
+    const result = await query({ kind: 'ledger.export' });
+
+    expect(result).toEqual({ type: 'ui.result', kind: 'ledger.export', ok: false, error: 'unavailable' });
+    expect(records[0]?.fields).toEqual({ kind: 'ledger.export', reason: 'kind_mismatch' });
+  });
+
+  it('an invalid query is never sent: it rejects with BusError(invalid_outgoing)', async () => {
+    const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage');
+
+    const attempt = query({ kind: 'health.list', ...{ filter: SECRET } });
+
+    await expect(attempt).rejects.toMatchObject({ name: 'BusError', code: 'invalid_outgoing' });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(JSON.stringify(records)).not.toContain(SECRET);
+  });
+
+  it('passes a failed ui.result from the worker through unchanged', async () => {
+    connectAs(extensionPage('/options.html'));
+    listen({
+      'ui.query': (message) => ({
+        type: 'ui.result',
+        kind: message.query.kind,
+        ok: false,
+        error: 'unknown_query',
+      }),
+    });
+
+    await expect(query({ kind: 'health.list' })).resolves.toEqual({
+      type: 'ui.result',
+      kind: 'health.list',
+      ok: false,
+      error: 'unknown_query',
+    });
+    expect(records).toEqual([]);
+  });
+});
+
+describe('transportErrorCode / BusError', () => {
+  it("maps Chrome's transport messages to safe codes", () => {
+    expect(transportErrorCode('Could not establish connection. Receiving end does not exist.')).toBe(
+      'no_receiver',
+    );
+    expect(transportErrorCode('The message port closed before a response was received.')).toBe('port_closed');
+    expect(
+      transportErrorCode(
+        'A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received',
+      ),
+    ).toBe('port_closed');
+    expect(transportErrorCode('Extension context invalidated.')).toBe('context_invalidated');
+    expect(transportErrorCode('something else entirely')).toBe('send_failed');
+    expect(transportErrorCode(undefined)).toBe('send_failed');
+  });
+
+  it('every code builds an error whose message names only the code', () => {
+    for (const code of BUS_ERROR_CODES) {
+      const error = new BusError(code, { cause: new Error(SECRET) });
+      expect(error).toBeInstanceOf(Error);
+      expect(error.name).toBe('BusError');
+      expect(error.code).toBe(code);
+      expect(error.message).toBe(`bus: ${code}`);
+    }
+  });
+});
