@@ -489,6 +489,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-01] [0.1] Repo created on your go-ahead: https://github.com/Poojan6216/attest (public). Before the first push I swapped the three fake API keys in the leak-test fixture for shapes no secret scanner mistakes for real credentials, and amended that unpushed commit so history is clean.
 [2026-10-01] [0.1] Repo made private at your request. Before launch it needs to go public again (GitHub Pages for the privacy policy, "read the source"); that's in MANUAL.md under Sprint 7.
 [2026-10-01] [0.8] Policy as data: policy/default.json exactly as the spec, loaded by a pure, strict Zod loader that deep-freezes it and names the exact path of every problem (10+ malformed cases tested). A test proves no threshold value appears anywhere in the code. Core now typechecks with no DOM types. Host lists and feature flags (all off) are in config.
+[2026-10-01] [0.6] Ledger storage: Dexie database with the eight tables and the indexes the reviewers asked for, typed repositories that validate on write and on read, duplicate observations/claims are no-ops (by content hash / raw hash), a migration framework (v1 to v2 tested), and a deterministic export. 78 tests; the verifier mutated the code 13 ways and the tests caught all 13.
 ```
 
 ---

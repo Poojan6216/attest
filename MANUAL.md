@@ -37,3 +37,4 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 - [ ] One post from `launch/weekly-posts.md`
 - [ ] One alert reply from `launch/alerts.md`
 - [ ] One selector repair if any adapter shows DEGRADED (agent does the code; you re-capture the fixture)
+- [ ] Choose the license before the repo is ever made public again: keep Apache-2.0 (open source; forks may be published), switch to a source-available license (code readable for audit, redistribution forbidden), or proprietary. Any version published under Apache-2.0 stays Apache-2.0 for anyone who copied it, so this must be decided first. Tell the agent the choice; it updates `LICENSE`, `package.json`, the README and the launch copy. Raised by the founder 2026-10-01 (concern: someone republishing a fork).

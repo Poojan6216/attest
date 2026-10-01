@@ -1,0 +1,151 @@
+/**
+ * The ledger database: the Dexie subclass, the v1 stores spec, and the row reader.
+ *
+ * Dexie is imported only inside src/ledger (lint fence). Tables are exposed as typed getters over
+ * `this.table(...)` so no definite-assignment fields or casts are needed; Dexie leaves accessors that
+ * already exist on the prototype alone.
+ *
+ * Rows on disk are untrusted: they may predate a schema change or have been written by a buggy build.
+ * Every read goes through `readRow`, which strips derived index fields, Zod-parses with the strict domain
+ * schema, and skips (and logs by id only) a row that fails. Corrupt rows never reach the UI.
+ */
+import { Dexie, type Table } from 'dexie';
+import { z } from 'zod';
+
+import { log } from '../log';
+import {
+  stripIndexFields,
+  type ClaimRow,
+  type CoverageRow,
+  type LedgerTableName,
+  type ObservationRow,
+  type ReceiptRow,
+  type RequestRow,
+} from './index-fields';
+import { AgentId, Ulid, type AdapterHealth, type Grant, type MetaEntry } from './types';
+
+/**
+ * Schema v1 (tech_reviewer index requirements). First entry of each spec is the primary key.
+ *  - `&` unique: one observation per contentHash, one claim per rawHash (idempotent upserts).
+ *  - `[a+b]` compound: type+timeBucket for candidate retrieval, agent+date for the daily views.
+ *  - `*` multiEntry: one index entry per counterparty token.
+ *  - coverage has a compound primary key `[observerId+accountKey]` (accountKey = accountHash or '').
+ */
+export const STORES_V1 = {
+  requests: 'id, [agent+date], conversationId',
+  claims: 'id, &rawHash, [agent+date], requestId, type',
+  observations: 'id, &contentHash, [type+timeBucket], *counterpartyTokens, occurredAt',
+  grants: 'agent',
+  receipts: 'id, claimId, [agent+date], state, grade',
+  adapterHealth: 'adapterId',
+  coverage: '[observerId+accountKey], observerId, lastSyncAt',
+  meta: 'key',
+} as const satisfies Readonly<Record<LedgerTableName, string>>;
+
+export type CoverageKey = [observerId: string, accountKey: string];
+
+/** Developer-chosen keys (adapter ids, observer ids, meta keys); the logger still redacts non-identifiers. */
+const PLAIN_KEY = z.string().min(1);
+
+/**
+ * The field that identifies a row in ledger logs (the primary key, or its first part) and the schema its
+ * value must pass to be logged. A corrupt row's id field can hold anything, content included, so a value
+ * that is not a well-formed id is logged as `null`, never echoed (Hard Rule 10).
+ */
+const ROW_ID: Readonly<Record<LedgerTableName, { readonly field: string; readonly schema: z.ZodType }>> = {
+  requests: { field: 'id', schema: Ulid },
+  claims: { field: 'id', schema: Ulid },
+  observations: { field: 'id', schema: Ulid },
+  grants: { field: 'agent', schema: AgentId },
+  receipts: { field: 'id', schema: Ulid },
+  adapterHealth: { field: 'adapterId', schema: PLAIN_KEY },
+  coverage: { field: 'observerId', schema: PLAIN_KEY },
+  meta: { field: 'key', schema: PLAIN_KEY },
+};
+
+export class LedgerDb extends Dexie {
+  get requests(): Table<RequestRow, string> {
+    return this.table<RequestRow, string>('requests');
+  }
+
+  get claims(): Table<ClaimRow, string> {
+    return this.table<ClaimRow, string>('claims');
+  }
+
+  get observations(): Table<ObservationRow, string> {
+    return this.table<ObservationRow, string>('observations');
+  }
+
+  get grants(): Table<Grant, AgentId> {
+    return this.table<Grant, AgentId>('grants');
+  }
+
+  get receipts(): Table<ReceiptRow, string> {
+    return this.table<ReceiptRow, string>('receipts');
+  }
+
+  get adapterHealth(): Table<AdapterHealth, string> {
+    return this.table<AdapterHealth, string>('adapterHealth');
+  }
+
+  get coverage(): Table<CoverageRow, CoverageKey> {
+    return this.table<CoverageRow, CoverageKey>('coverage');
+  }
+
+  get meta(): Table<MetaEntry, string> {
+    return this.table<MetaEntry, string>('meta');
+  }
+}
+
+/**
+ * The table name as the logger prints it. The logger keeps only lowercase identifiers, so `adapterHealth`
+ * would be redacted; `adapter_health` survives.
+ */
+export function logTableId(table: LedgerTableName): string {
+  return table.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+/** A well-formed id for the table's log lines, or `null` when the value is not one. */
+export function loggableId(table: LedgerTableName, value: unknown): string | null {
+  const { schema } = ROW_ID[table];
+  return typeof value === 'string' && schema.safeParse(value).success ? value : null;
+}
+
+function rowId(table: LedgerTableName, row: unknown): string | null {
+  if (typeof row !== 'object' || row === null) return null;
+  return loggableId(table, Reflect.get(row, ROW_ID[table].field));
+}
+
+/**
+ * Stored row → strict domain object, or `undefined` when there is no row or the row is invalid.
+ * An invalid row is logged as `ledger.row_invalid` with its table and id only (never its content).
+ */
+export function readRow<S extends z.ZodType>(
+  table: LedgerTableName,
+  schema: S,
+  row: unknown,
+): z.output<S> | undefined {
+  if (row === undefined) return undefined;
+  const parsed = schema.safeParse(stripIndexFields(table, row));
+  if (parsed.success) return parsed.data;
+  log.warn('ledger.row_invalid', {
+    table: logTableId(table),
+    id: rowId(table, row),
+    issues: parsed.error.issues.length,
+  });
+  return undefined;
+}
+
+/** Many rows → the valid domain objects among them, in the same order. */
+export function readRows<S extends z.ZodType>(
+  table: LedgerTableName,
+  schema: S,
+  rows: readonly unknown[],
+): z.output<S>[] {
+  const out: z.output<S>[] = [];
+  for (const row of rows) {
+    const value = readRow(table, schema, row);
+    if (value !== undefined) out.push(value);
+  }
+  return out;
+}
