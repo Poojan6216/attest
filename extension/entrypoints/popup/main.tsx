@@ -1,3 +1,5 @@
+import '../../src/setup';
+
 import { render } from 'preact';
 
 import '../../src/ui/tailwind.css';
