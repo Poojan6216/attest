@@ -44,7 +44,7 @@ export const STORES_V1 = {
 
 export type CoverageKey = [observerId: string, accountKey: string];
 
-/** Developer-chosen keys (adapter ids, observer ids, meta keys); the logger still redacts non-identifiers. */
+/** Developer-chosen keys (adapter ids, observer ids, meta keys); the logger prints one only if it is in LOG_VALUES. */
 const PLAIN_KEY = z.string().min(1);
 
 /**
@@ -98,8 +98,8 @@ export class LedgerDb extends Dexie {
 }
 
 /**
- * The table name as the logger prints it. The logger keeps only lowercase identifiers, so `adapterHealth`
- * would be redacted; `adapter_health` survives.
+ * The table name as the logger prints it: snake_case, the form listed in the logger's vocabulary
+ * (src/log-vocabulary.ts), so `adapterHealth` logs as `adapter_health`.
  */
 export function logTableId(table: LedgerTableName): string {
   return table.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);

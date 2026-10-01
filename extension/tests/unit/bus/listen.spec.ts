@@ -145,6 +145,17 @@ describe('drops', () => {
     await sendRaw(VALID['ledger.changed']);
 
     expect(drops()).toEqual([{ reason: 'no_handler', type: 'ledger.changed' }]);
+    // Routine wherever several contexts listen, so debug, not warn (TECH-9).
+    expect(records.filter((r) => r.event === 'bus.dropped').map((r) => r.level)).toEqual(['debug']);
+  });
+
+  it('every other drop is a warning', async () => {
+    connectAs(foreignExtension());
+    listen({ 'adapter.health': vi.fn() });
+
+    await sendRaw(VALID['adapter.health']);
+
+    expect(records.filter((r) => r.event === 'bus.dropped').map((r) => r.level)).toEqual(['warn']);
   });
 
   it('drops ui.query from a content script: only extension pages may ask for the ledger', async () => {

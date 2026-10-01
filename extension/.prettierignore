@@ -7,3 +7,4 @@ test-results/
 blob-report/
 # Captured DOM snapshots are byte-for-byte fixtures; never reformat them.
 tests/fixtures/
+mandatory-report.json

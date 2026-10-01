@@ -4,6 +4,8 @@
  */
 import { Comment, type Document, Element, NodeFilter, Text, Window } from 'happy-dom';
 
+import { stripQueryParts } from './capture-url';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Elements removed with their whole subtree: they run code, embed other documents, or fetch on render. */
@@ -38,8 +40,21 @@ const RESOURCE_ATTRIBUTES = new Set([
   'archive',
   'attributionsrc',
 ]);
-/** Navigational URLs: kept, minus query strings and userinfo (where tokens and ids live). */
-const LINK_ATTRIBUTES = new Set(['href', 'xlink:href', 'action', 'formaction', 'cite']);
+/**
+ * Navigational URLs: kept, minus query strings, parameter fragments and userinfo (where tokens and ids live).
+ * Includes the data-* attributes vendors keep links in (Gmail's data-saferedirecturl carries a signature).
+ */
+const LINK_ATTRIBUTES = new Set([
+  'href',
+  'xlink:href',
+  'action',
+  'formaction',
+  'cite',
+  'data-saferedirecturl',
+  'data-url',
+  'data-href',
+  'data-link',
+]);
 const DANGEROUS_SCHEME =
   /^(?:javascript|vbscript|livescript):|^data:(?:text\/html|application\/xhtml|image\/svg)/;
 
@@ -48,6 +63,8 @@ export function createInertWindow(): Window {
   return new Window({
     url: 'http://sanitize.invalid/',
     settings: {
+      // happy-dom 20 defaults this off; stated here so an upgrade cannot turn on script execution (SECURITY-7).
+      enableJavaScriptEvaluation: false,
       disableJavaScriptFileLoading: true,
       disableCSSFileLoading: true,
       disableComputedStyleRendering: true,
@@ -168,7 +185,11 @@ export function attributeVerdict(element: Element, name: string, value: string):
   return element.namespaceURI === SVG_NS ? 'presentation' : 'text';
 }
 
-/** Drops `user:password@` and the query string; keeps scheme, host, path and #fragment. */
+/**
+ * Drops `user:password@`, the query string and any fragment that carries parameters (`#access_token=…`, the
+ * `?…` of `#inbox?compose=…`); keeps scheme, host, path and a plain #fragment.
+ */
 export function trimUrl(value: string): string {
-  return value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/\?[^#]*/, '');
+  const bare = value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/\?[^#]*/, '');
+  return stripQueryParts(bare).text;
 }

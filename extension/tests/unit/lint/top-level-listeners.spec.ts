@@ -17,6 +17,13 @@ tester.run('attest/top-level-listeners', topLevelListeners, {
     // An async handler is fine; registering inside one is not.
     'chrome.runtime.onMessage.addListener(async (message) => { await handle(message); });',
     'function main() { listen(createHandlers()); }',
+    // Synchronous invokers and IIFEs run before main() returns.
+    'function main() { [a, b].forEach((e) => e.addListener(onEvent)); }',
+    '(() => { chrome.runtime.onMessage.addListener(onMessage); })();',
+    'const register = () => chrome.alarms.onAlarm.addListener(onAlarm); function main() { register(); }',
+    'export default defineBackground(() => { browser.runtime.onStartup.addListener(onStartup); });',
+    'new Promise((resolve) => { chrome.runtime.onMessage.addListener(onMessage); resolve(); });',
+    "self.addEventListener('message', onMessage);",
   ],
   invalid: [
     {
@@ -46,6 +53,31 @@ tester.run('attest/top-level-listeners', topLevelListeners, {
     {
       code: 'queueMicrotask(function () { chrome.storage.onChanged.addListener(onChanged); });',
       errors: [{ messageId: 'deferred', data: { callee: 'queueMicrotask' } }],
+    },
+    // TECH-5: listeners inside other listeners, Chrome callback APIs, and named functions passed as callbacks.
+    {
+      code: 'chrome.runtime.onInstalled.addListener(() => { chrome.runtime.onMessage.addListener(onMessage); });',
+      errors: [{ messageId: 'deferred', data: { callee: 'addListener' } }],
+    },
+    {
+      code: 'function later() { chrome.alarms.onAlarm.addListener(onAlarm); } chrome.runtime.onStartup.addListener(later);',
+      errors: [{ messageId: 'deferred', data: { callee: 'addListener' } }],
+    },
+    {
+      code: 'const later = () => { listen(handlers); }; boot.then(later);',
+      errors: [{ messageId: 'deferred', data: { callee: 'then' } }],
+    },
+    {
+      code: "chrome.storage.local.get('x', () => { listen(handlers); });",
+      errors: [{ messageId: 'deferred', data: { callee: 'get' } }],
+    },
+    {
+      code: "Promise.resolve().then(() => { self.addEventListener('message', onMessage); });",
+      errors: [{ messageId: 'deferred', data: { callee: 'then' } }],
+    },
+    {
+      code: "fetchSomething(function () { addEventListener('message', onMessage); });",
+      errors: [{ messageId: 'deferred', data: { callee: 'fetchSomething' } }],
     },
   ],
 });

@@ -11,17 +11,22 @@ concurrency:
 permissions:
   contents: read
 
+# Every action is pinned to a full commit SHA (the version is in the comment); Dependabot proposes updates
+# (.github/dependabot.yml). Hard Rule 9 for the build supply chain.
 jobs:
   extension:
     name: lint · typecheck · unit · build · e2e
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The job token is not left in .git/config for later steps (dependency install scripts included).
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -38,6 +43,10 @@ jobs:
       - name: Unit + property tests
         run: pnpm test
 
+      # src/core must not depend on the host time zone (Hard Rule 4): run the core suites in two more zones.
+      - name: Core tests in other time zones
+        run: pnpm --dir extension run test:tz
+
       - name: Build
         run: pnpm build
 
@@ -46,9 +55,13 @@ jobs:
 
       # The two tests that define the product (Hard Rules 1, 2, 10). Never skipped, retried, or weakened.
       - name: E2E (@mandatory)
-        run: pnpm --dir extension exec playwright test --grep @mandatory
+        run: pnpm --dir extension exec playwright test --grep @mandatory --reporter=list,json
         env:
           CI: 'true'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: mandatory-report.json
+
+      - name: Check every @mandatory test ran and passed
+        run: pnpm --dir extension exec tsx tests/tools/check-mandatory-report.ts mandatory-report.json
 
       - name: E2E (rest)
         run: pnpm --dir extension exec playwright test --grep-invert @mandatory
@@ -57,15 +70,17 @@ jobs:
 
       - name: Upload build
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: chrome-mv3
-          path: extension/.output/
+          path: extension/.output/chrome-mv3/
+          # .output is a dot-directory; upload-artifact v4 skips hidden paths by default (QA-1).
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
           path: extension/playwright-report/

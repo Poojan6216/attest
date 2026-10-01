@@ -4,13 +4,14 @@
  */
 import type { BusHandlers } from '../bus/listen';
 import type { UiQuery, UiResult } from '../bus/messages';
+import { nowIso } from '../clock';
 import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 
-/** The clock lives at the edge (never in src/core). ISO 8601 with offset. */
+/** The clock lives at the edge (never in src/core). ISO 8601 with the writer's local offset (src/clock.ts). */
 export type Clock = () => string;
 
-const systemClock: Clock = () => new Date().toISOString();
+const systemClock: Clock = nowIso;
 
 export async function answerUiQuery(query: UiQuery, clock: Clock = systemClock): Promise<UiResult> {
   const db = await getLedger();

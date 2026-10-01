@@ -13,6 +13,7 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "types": ["node"]
-  }
+    "types": []
+  },
+  "include": ["src/**/*", "entrypoints/**/*", ".wxt/wxt.d.ts"]
 }

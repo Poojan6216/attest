@@ -5,15 +5,18 @@
  * counts and Zod issue *paths* (field names), never field values.
  */
 
-export type LedgerErrorCode =
+export const LEDGER_ERROR_CODES = [
   /** A write or query argument failed its Zod schema. */
-  | 'invalid_input'
+  'invalid_input',
   /** A write reused an existing primary key for a different content/raw hash. */
-  | 'id_conflict'
+  'id_conflict',
   /** The migration list is empty, unordered, or leaves a ledger table undeclared. */
-  | 'invalid_migrations'
+  'invalid_migrations',
   /** IndexedDB refused to open or upgrade the database. */
-  | 'open_failed';
+  'open_failed',
+] as const;
+
+export type LedgerErrorCode = (typeof LEDGER_ERROR_CODES)[number];
 
 export type LedgerErrorContext = Readonly<Record<string, string | number | boolean>>;
 

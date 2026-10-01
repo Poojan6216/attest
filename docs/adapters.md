@@ -75,7 +75,7 @@ Nothing you can see. It attaches without Playwright's default overrides (no focu
 - **Removes what runs or fetches:** scripts, `noscript`, frames, `object`/`embed`, `template`, `<base>`, every `<link>`, `meta http-equiv`, comments, every `on*` attribute, and `javascript:`/`vbscript:`/`data:text/html` URLs.
 - **Removes every external resource:** `src`, `srcset`, `poster`, `background`, `ping`, `attributionsrc` and external SVG `href`s. Every image is dropped, including avatars and `data:` images, because a picture can be personal. In CSS, every `url(…)` except `#fragment` becomes `none`, as does every `image-set(…)` and every function whose name is written with an escape (`\75 rl(…)`), which Chrome still fetches. Every at-rule (`@import`, `@font-face`, `@media`, …) is dropped. The same `url(…)` rule applies to SVG attributes Chrome fetches from (`fill`, `stroke`, `mask`, `clip-path`, `marker-*`, `cursor`, …). The critical layout styles are already copied onto each element from the live page.
 - **Drops session secrets:** the `value` of hidden inputs (CSRF and session tokens), `nonce` attributes, and `<meta name="csrf-token">`-style tags.
-- **Trims links:** keeps the path and `#fragment`, drops query strings and `user:password@`.
+- **Removes tokens from URLs everywhere:** in links (`href`, `action`, `cite`, and the `data-saferedirecturl`, `data-url`, `data-href`, `data-link` attributes vendors keep links in) it keeps the path and a plain `#fragment` and drops `user:password@`. In every link, text node and attribute value (other `data-*`, `<meta content>`, visible text, relative URLs) it drops query strings (`?token=…`, a bare `?session=…`, percent-encoded `%3Ftoken%3D…`) and any fragment that carries parameters (`#access_token=…`, the `?compose=…` of `#inbox?compose=…`).
 - **Replaces personal data with seeded fakes:** emails (always `@example.com`, `@example.org` or `@example.net`), including accented ones and two forms a search for `@` cannot see: percent-encoded (`lena%40corp.io` in a search link) and inside base64 ids (Google Calendar event ids carry the calendar owner's address), which are re-encoded with the fake. Also phone numbers, card numbers (groups of four, or Amex 4-6-5), money amounts (same currency and format), street addresses, `--names`, display names next to an email (`Name <email>`, `Name (email)` as in the account button, or `name`/`title`/`aria-label` on an element that carries an email), and `--redact-selector` text. The same real value always gets the same fake within one capture, so labels stay consistent.
 - **Turns any other `@` into `＠`** (U+FF20, the full-width at sign), so a search for `@` finds only fake addresses.
 - **Keeps** `role`, `aria-*`, `data-*`, `id`, `class` and structure, because adapters anchor on them.
@@ -108,7 +108,7 @@ It only finds what has a pattern, or what you tell it about. You have to read th
 - **Numbers without formatting:** a phone written `5415550187`, a card written `4111111111111111`, account and order numbers, national ID numbers, dates of birth. Formatted phone numbers and card numbers in groups (spaces or dashes) are caught.
 - **Addresses that do not look like "number + street name + Street/Ave/Lane…"**: PO boxes, most non-US formats, or a city and postcode on their own.
 - **Amounts without a currency symbol or code.**
-- **Identifiers inside link paths or `#fragments`** (for example thread ids). Query strings are dropped; paths and fragments are kept.
+- **Identifiers inside link paths or plain `#fragments`** (for example thread ids). Query strings and parameter fragments are dropped everywhere; paths and plain fragments are kept. A token written into a path segment (`/share/<token>/…`) is not recognised.
 - **Data in other encodings:** emails that are hex-encoded, double percent-encoded or inside compressed or encrypted blobs, and names or phone numbers inside any encoding (only plain, percent-encoded and base64 emails are decoded). Names inside CSS (`content: "…"`) are not replaced either.
 - **Content it does not capture at all:** shadow DOM, iframes, and values typed into form fields. Text in an open editor is captured, so close drafts first.
 
@@ -118,5 +118,26 @@ It can also over-replace. A name it learned that is also an everyday word (a con
 
 - `extension/tests/unit/tools/sanitize.spec.ts`: every strip and neutralise rule, structure kept, seeds injected and visible, determinism, no network, and the final rule that every `@` belongs to a fake domain
 - `extension/tests/unit/tools/capture-pii.spec.ts`: every personal-data class (including percent-encoded and base64-hidden emails, and card numbers), name learning, `--redact-selector`, and how fakes are generated
+- `extension/tests/unit/tools/capture-url.spec.ts`: query strings and parameter fragments removed from links, `data-*`, `<meta content>`, text and relative URLs; the inert window never runs a script
 - `extension/tests/unit/tools/capture-css.spec.ts`, `capture-args.spec.ts`, `capture-output.spec.ts`: CSS neutraliser, command-line arguments, and `labels.json` handling
 - `extension/tests/e2e/capture-tool.spec.ts`: a real Chromium over CDP. It checks the live page stays untouched, the fixture renders from the fixture server with zero outside requests, and the `pnpm capture` command works under `tsx`. Run it with `cd extension && pnpm exec playwright test tests/e2e/capture-tool.spec.ts` (no extension build needed).
+
+## 6. Message bus
+
+Content scripts never touch the ledger. They post derived facts to the service worker over the typed bus in `extension/src/bus/` (`send`, `query`, `listen`), and nothing else may call `runtime.sendMessage`, `onMessage`, `tabs.sendMessage` or `connect` (lint fence). Every message is one member of the Zod union in `src/bus/messages.ts`: strict objects, every string and array length-capped (`SCHEMA_LIMITS` in `src/ledger/types.ts`). `send()` refuses an invalid message before it leaves; `listen()` parses on receipt and drops anything else.
+
+| Type | Sender | Receiver | Payload | Response |
+|---|---|---|---|---|
+| `adapter.health` | content script (adapter or observer) | service worker | `health`: `AdapterHealth` (id, version, OK or DEGRADED, reasons, checkedAt) | acknowledgement (`undefined`) |
+| `adapter.claims` | content script (agent adapter) | service worker | `adapterId`, `version`, `requests`: `Request[]`, `claims`: `Claim[]` (at most 500 each) | acknowledgement |
+| `observer.observations` | content script (Gmail or Calendar observer) | service worker | `observerId`, `version`, `observations`: `Observation[]` (at most 500) | acknowledgement |
+| `coverage.ping` | content script (observer) | service worker | `ping`: `CoveragePing` (observer id, account hash, sync time, window, user active) | acknowledgement |
+| `ui.query` | extension page only (popup, side panel, options) | service worker | `query`: `{ kind: 'ledger.export' }` or `{ kind: 'health.list' }` | a `ui.result` of the same kind |
+| `ui.result` | service worker | the page that asked (as its response) | `kind` and `ok: true` with `data`, or `ok: false` with `error` (`unknown_query`, `handler_failed`, `unavailable`) | none |
+| `ledger.changed` | service worker | open extension pages | `tables` (1 to 8 ledger table names), `at` | acknowledgement; nobody listening is normal |
+
+In Sprint 0 the service worker handles `ui.query` only (`src/background/router.ts`); observers (2.7) and adapters (3.6) add their handlers there.
+
+**Drops** (`bus.dropped`, logged with the reason and, when it is one of ours, the type; never the payload): `foreign_sender` (not this extension, or an orphaned context), `malformed` (fails the schema, unknown types included), `untrusted_context` (`ui.query` from a content script), each a warning; `no_handler` (this context does not handle that type, routine wherever several pages listen), at debug.
+
+**Send failures** (`bus.send_failed`, the message resolves `undefined`): `no_receiver`, `port_closed`, `context_invalidated`, `send_failed`, each a warning, except `no_receiver` for a broadcast (`ledger.changed`), which is expected when no page is open and logged at debug. An invalid outgoing message is never sent: `send()` rejects with `BusError('invalid_outgoing')`.

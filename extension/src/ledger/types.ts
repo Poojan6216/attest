@@ -10,6 +10,33 @@
  */
 import { z } from 'zod';
 
+/**
+ * Length caps on every free-text string and every array (SECURITY-4, Hard Rule 2). §7 caps textHint (200)
+ * and subjectHint (80); these cap the rest, so an extractor bug or a compromised content script cannot push
+ * a whole email body through `counterparty` into storage and exports. Sprint 1.0 carries them into
+ * src/core/schema.ts (Decisions.md [0.close]).
+ */
+export const SCHEMA_LIMITS = Object.freeze({
+  /** RFC 5321: 64-char local part + '@' + 255-char domain. */
+  COUNTERPARTY: 320,
+  MERCHANT: 120,
+  CONVERSATION_ID: 128,
+  /** Adapter, observer, extractor and rule ids; versions; signal names. */
+  ID: 64,
+  /** One human-readable reason, scope, or allowlist entry. */
+  ITEM: 120,
+  /** Reasons on one receipt or health report; signals on one receipt. */
+  REASONS: 32,
+  /** Entries in one grant list (allowlist, declared or observed scopes). */
+  LIST: 200,
+  /** Items in one bus batch, observation ids on one receipt. */
+  BATCH: 500,
+  META_VALUE: 256,
+});
+
+const L = SCHEMA_LIMITS;
+const Id = z.string().min(1).max(L.ID);
+
 export const Ulid = z.ulid();
 export const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'expected lowercase hex SHA-256');
 /** ISO 8601 with an explicit offset (`Z` or `±hh:mm`). */
@@ -32,7 +59,7 @@ export const ActionType = z.enum([
 export const Request = z.strictObject({
   id: Ulid,
   agent: AgentId,
-  conversationId: z.string(),
+  conversationId: z.string().max(L.CONVERSATION_ID),
   textHint: z.string().max(200),
   textHash: Sha256,
   ts: IsoTs,
@@ -43,7 +70,7 @@ export const Claim = z.strictObject({
   agent: AgentId,
   requestId: Ulid.optional(),
   type: ActionType,
-  counterparty: z.string().optional(),
+  counterparty: z.string().max(L.COUNTERPARTY).optional(),
   amountCents: z.number().int().optional(),
   currency: z.string().length(3).optional(),
   subjectHint: z.string().max(80).optional(),
@@ -51,8 +78,8 @@ export const Claim = z.strictObject({
   observedAt: IsoTs,
   sourceKind: z.enum(['activity_view', 'chat', 'notification', 'settings']),
   extractor: z.strictObject({
-    id: z.string(),
-    version: z.string(),
+    id: z.string().max(L.ID),
+    version: z.string().max(L.ID),
     confidence: z.number().min(0).max(1),
   }),
   rawHash: Sha256,
@@ -64,8 +91,8 @@ export const Observation = z.strictObject({
   id: Ulid,
   source: ObservationSource,
   type: ActionType,
-  counterparty: z.string().optional(),
-  merchant: z.string().optional(),
+  counterparty: z.string().max(L.COUNTERPARTY).optional(),
+  merchant: z.string().max(L.MERCHANT).optional(),
   amountCents: z.number().int().optional(),
   currency: z.string().length(3).optional(),
   subjectHint: z.string().max(80).optional(),
@@ -76,11 +103,11 @@ export const Observation = z.strictObject({
 
 export const Grant = z.strictObject({
   agent: AgentId,
-  allowedTypes: z.array(ActionType),
-  counterpartyAllowlist: z.array(z.string()),
+  allowedTypes: z.array(ActionType).max(ActionType.options.length),
+  counterpartyAllowlist: z.array(z.string().max(L.COUNTERPARTY)).max(L.LIST),
   spendCeilingCents: z.number().int().nullable(),
-  declaredScopes: z.array(z.string()),
-  observedScopes: z.array(z.string()).optional(),
+  declaredScopes: z.array(z.string().max(L.ITEM)).max(L.LIST),
+  observedScopes: z.array(z.string().max(L.ITEM)).max(L.LIST).optional(),
   updatedAt: IsoTs,
 });
 
@@ -89,13 +116,15 @@ export const Grade = z.enum(['VERIFIED', 'PARTIAL', 'NOT_FOUND', 'UNASKED', 'OVE
 export const Receipt = z.strictObject({
   id: Ulid,
   claimId: Ulid.optional(),
-  observationIds: z.array(Ulid),
+  observationIds: z.array(Ulid).max(L.BATCH),
   requestId: Ulid.optional(),
   grade: Grade,
   confidence: z.number().min(0).max(1),
-  ruleId: z.string(),
-  reasons: z.array(z.string()),
-  signals: z.record(z.string(), z.number()),
+  ruleId: z.string().max(L.ID),
+  reasons: z.array(z.string().max(L.ITEM)).max(L.REASONS),
+  signals: z
+    .record(z.string().max(L.ID), z.number())
+    .refine((signals) => Object.keys(signals).length <= L.REASONS, `at most ${String(L.REASONS)} signals`),
   state: z.enum(['PENDING', 'FINAL', 'USER_OVERRIDDEN']),
   inputsHash: Sha256,
   computedAt: IsoTs,
@@ -104,16 +133,16 @@ export const Receipt = z.strictObject({
 
 /** Latest health result per adapter/observer (Hard Rule 6: DEGRADED is stored and shown). */
 export const AdapterHealth = z.strictObject({
-  adapterId: z.string().min(1),
-  version: z.string().min(1),
+  adapterId: Id,
+  version: Id,
   status: z.enum(['OK', 'DEGRADED']),
-  reasons: z.array(z.string()),
+  reasons: z.array(z.string().max(L.ITEM)).max(L.REASONS),
   checkedAt: IsoTs,
 });
 
 /** What an observer could see, and when (Hard Rule 5: no coverage → UNVERIFIABLE). */
 export const CoveragePing = z.strictObject({
-  observerId: z.string().min(1),
+  observerId: Id,
   /** SHA-256 of the account identifier; never the identifier itself. */
   accountHash: Sha256.optional(),
   lastSyncAt: IsoTs,
@@ -124,8 +153,8 @@ export const CoveragePing = z.strictObject({
 
 /** Small key/value facts about the ledger itself (schema version, last purge, …). */
 export const MetaEntry = z.strictObject({
-  key: z.string().min(1),
-  value: z.union([z.string(), z.number(), z.boolean()]),
+  key: Id,
+  value: z.union([z.string().max(L.META_VALUE), z.number(), z.boolean()]),
 });
 
 export type AgentId = z.infer<typeof AgentId>;

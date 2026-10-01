@@ -192,6 +192,8 @@ describe('policy schema: the whole valid domain loads unchanged', () => {
           expect(loadPolicy(doc)).toEqual(doc);
         },
       ),
+      // qa_tester rule 4: property tests over src/core run at least 1,000 examples each.
+      { numRuns: 1_000 },
     );
   });
 });

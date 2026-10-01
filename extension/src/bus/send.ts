@@ -13,7 +13,20 @@ import { browser } from 'wxt/browser';
 
 import { log } from '../log';
 import { BusError, transportErrorCode } from './errors';
-import { BusMessage, type UiQuery, type UiResult, UiResultMessage, uiFailure } from './messages';
+import {
+  BusMessage,
+  type BusMessageType,
+  type UiQuery,
+  type UiResult,
+  UiResultMessage,
+  uiFailure,
+} from './messages';
+
+/**
+ * Notices sent to whoever is listening. With no UI page open nobody is, and Chrome reports no_receiver:
+ * that is expected, so it is logged at debug instead of warn (every other failure stays a warning).
+ */
+export const BROADCAST_TYPES: ReadonlySet<BusMessageType> = new Set<BusMessageType>(['ledger.changed']);
 
 /** Hands a validated message to Chrome. Rejects only with a `BusError` whose code names the failure. */
 function transmit(message: BusMessage): Promise<unknown> {
@@ -36,15 +49,19 @@ function transmit(message: BusMessage): Promise<unknown> {
 
 /**
  * Validates and sends one message. Resolves the receiver's response, or `undefined` when the
- * transport failed (logged as `bus.send_failed`). Rejects only with `BusError('invalid_outgoing')`.
+ * transport failed (logged as `bus.send_failed`: warn, or debug for a broadcast nobody was listening to).
+ * Rejects only with `BusError('invalid_outgoing')`.
  */
 export async function send(message: BusMessage): Promise<unknown> {
   const parsed = BusMessage.safeParse(message);
   if (!parsed.success) throw new BusError('invalid_outgoing');
+  const { type } = parsed.data;
   try {
     return await transmit(parsed.data);
   } catch (error) {
-    log.warn('bus.send_failed', { type: parsed.data.type, error });
+    const expected = BROADCAST_TYPES.has(type) && error instanceof BusError && error.code === 'no_receiver';
+    if (expected) log.debug('bus.send_failed', { type, error });
+    else log.warn('bus.send_failed', { type, error });
     return undefined;
   }
 }

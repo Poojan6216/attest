@@ -89,7 +89,7 @@ It asks for access to no websites. Later versions ask for access to exactly the 
 
 ## Logs
 
-Attest's diagnostic log, visible only in Chrome's developer tools on your computer, records event names, ids, counts and timestamps. It replaces every other piece of text with its length, so it never prints email addresses, subjects or page content.
+Attest's diagnostic log, visible only in Chrome's developer tools on your computer, prints only what Attest itself wrote into its code: event names and status words from a fixed list, ids and content hashes Attest generated, small counts, versions and timestamps. Any other text is replaced by its length, and any long number by a placeholder, whatever it looks like. It is built never to print email addresses, names, subjects, tokens or page content, and the secret-seed test checks the log for exactly that on every build.
 
 ## What Attest cannot tell you
 

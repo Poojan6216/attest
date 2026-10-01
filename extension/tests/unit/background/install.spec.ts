@@ -2,8 +2,8 @@ import { browser } from 'wxt/browser';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { handleInstalled } from '../../../src/background/install';
-import { STORAGE_KEYS } from '../../../src/config';
+import { handleInstalled, onInstalled } from '../../../src/background/install';
+import { ALARM_NAMES, STORAGE_KEYS } from '../../../src/config';
 import { InstallIdError } from '../../../src/ledger/install-id';
 import { type LogRecord, setLogSink } from '../../../src/log';
 
@@ -99,6 +99,53 @@ describe('handleInstalled', () => {
     vi.spyOn(fakeBrowser.storage.local, 'get').mockRejectedValueOnce(new Error('io'));
 
     await expect(handleInstalled({ reason: 'install' })).rejects.toBeInstanceOf(InstallIdError);
+  });
+});
+
+describe('onInstalled: the install id and the alarms are independent (QA-3, TECH-8)', () => {
+  const errors = (): string[] => records.filter((r) => r.level === 'error').map((r) => r.event);
+
+  it('install: creates the id and the purge alarm, and logs nothing at error', async () => {
+    await onInstalled({ reason: 'install' });
+
+    expect(await stored()).toMatch(UUID_V4);
+    expect(await browser.alarms.get(ALARM_NAMES.PURGE)).toBeDefined();
+    expect(errors()).toEqual([]);
+  });
+
+  it('an install-id storage failure is logged as install.failed and the alarms are still scheduled', async () => {
+    vi.spyOn(fakeBrowser.storage.local, 'get').mockRejectedValue(new Error('io'));
+
+    await expect(onInstalled({ reason: 'install' })).resolves.toBeUndefined();
+
+    expect(errors()).toEqual(['install.failed']);
+    expect(await browser.alarms.get(ALARM_NAMES.PURGE)).toBeDefined();
+  });
+
+  it('an alarm failure is logged as alarm.reset_failed, not install.failed, and the id is still created', async () => {
+    vi.spyOn(fakeBrowser.alarms, 'create').mockRejectedValue(new Error('alarms down'));
+
+    await expect(onInstalled({ reason: 'install' })).resolves.toBeUndefined();
+
+    expect(errors()).toEqual(['alarm.reset_failed']);
+    expect(await stored()).toMatch(UUID_V4);
+    expect(records.map((r) => r.event)).toContain('install.handled');
+  });
+
+  it.each([
+    ['chrome_update', { reason: 'chrome_update' }],
+    ['shared_module_update', { reason: 'shared_module_update' }],
+    ['malformed details', { reason: 'reinstall' }],
+  ])('%s does not reset the alarms (their countdown keeps running)', async (_label, details) => {
+    await browser.alarms.create(ALARM_NAMES.PURGE, { delayInMinutes: 5 });
+    const before = await browser.alarms.get(ALARM_NAMES.PURGE);
+    const create = vi.spyOn(fakeBrowser.alarms, 'create');
+
+    await onInstalled(details);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(await browser.alarms.get(ALARM_NAMES.PURGE)).toEqual(before);
+    expect(errors()).toEqual([]);
   });
 });
 

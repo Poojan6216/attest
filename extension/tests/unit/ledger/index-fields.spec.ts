@@ -151,7 +151,7 @@ describe('row builders', () => {
         expect(toObservationRow(observation).timeBucket).toBe(Math.floor(at.ms / BUCKET_MS));
         expect(toClaimRow(claim).date).toBe(new Date(at.ms + at.offset * 60_000).toISOString().slice(0, 10));
       }),
-      { numRuns: 300 },
+      { numRuns: 1_000 },
     );
   });
 });

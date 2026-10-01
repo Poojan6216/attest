@@ -101,6 +101,20 @@ describe('send(): transport failures', () => {
     expect(records[0]?.event).toBe('bus.send_failed');
     expect(records[0]?.fields.type).toBe('ledger.changed');
     expect(records[0]?.fields.error).toMatch(/^BusError code=no_receiver /);
+    // ledger.changed is a broadcast: nobody listening is expected, so debug (TECH-9).
+    expect(records[0]?.level).toBe('debug');
+  });
+
+  it('no_receiver for a message that is not a broadcast is still a warning', async () => {
+    fakeBrowser.runtime.onMessage.addListener(() => {
+      throw new Error('Could not establish connection. Receiving end does not exist.');
+    });
+
+    await expect(send(VALID['coverage.ping'])).resolves.toBeUndefined();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ level: 'warn', event: 'bus.send_failed' });
+    expect(records[0]?.fields.error).toMatch(/^BusError code=no_receiver /);
   });
 
   it('a synchronous throw from sendMessage (orphaned context) resolves undefined and is logged', async () => {

@@ -52,7 +52,11 @@ export type CoverageRow = CoveragePing & { readonly accountKey: string };
 const TIME_BUCKET_MS = LEDGER_TIME_BUCKET_MINUTES * 60_000;
 const EMAIL = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/;
 
-/** `YYYY-MM-DD` of an ISO-with-offset timestamp: the local date at the place it was recorded. */
+/**
+ * `YYYY-MM-DD` of an ISO-with-offset timestamp: the writer's local date at the place it was recorded. Edge
+ * stamps come from src/clock.ts nowIso() (local offset), and adapters store vendor times with the page's
+ * offset, so this is the date the user saw. Never used for ordering (see epochMs).
+ */
 export function dateKey(isoTs: string): string {
   return isoTs.slice(0, 10);
 }

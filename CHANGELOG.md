@@ -18,3 +18,21 @@ All notable changes to this project are documented here. The format follows [Kee
 - Options page shell with a resettable install id; `PRIVACY.md` v0.
 - Service worker wiring: bus, install handler, retention alarm scheduling.
 - CI on GitHub Actions.
+
+### Changed
+
+- The logger prints only a closed vocabulary of event names and values, plus ULIDs, hashes, ISO timestamps and versions; any other text prints as its length, long numbers as a placeholder, and non-standard error names as `Error`. Every log call names a literal event and literal keys (lint rule `attest/log-call`).
+- Lint fences now cover all extension code: no network API outside the two Sprint 5 files, no web storage, IndexedDB only in the ledger, no console aliasing, no Node, runtime messaging only through the bus, no DOM in service-worker code, and inline disables have no effect anywhere. `attest/no-act` also catches indirect calls, destructuring, reflection, DOM insertion, resource loading, and the vendor page's storage; `attest/core-determinism` keeps `src/core` free of clocks, randomness, time zones and locales.
+- Stored and bus schemas cap the length of every free-text string and array.
+- The no-leak test searches a compact form of every secret (and percent- and base64-decoded text), uses partial-leak canaries for every seed and three identifier-shaped seeds, and also reads web storage, CacheStorage, page storage and cookies.
+- The capture sanitiser removes query strings and token fragments from text, `data-*` attributes, `<meta content>` and relative URLs, not only from links.
+- On install or update, the install id and the alarms are handled independently; Chrome updates no longer restart the purge countdown.
+- Routine bus drops (`no_handler`) and broadcasts nobody hears are logged at debug.
+- Timestamps the extension stamps carry the local time-zone offset.
+- The toolbar tooltip reads "Attest: receipts for your AI agents".
+- CI actions are pinned to commit SHAs, the build artifact uploads again, and CI checks that every `@mandatory` test ran and passed.
+
+### Removed
+
+- The unused `ulidx` dependency, and Vite's module-preload polyfill (it contained a `fetch`).
+

@@ -7,32 +7,18 @@
  */
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
 import { CaptureError, hasErrorCode } from './capture-error';
 import type { SeedSecret } from './sanitize';
+import { BaseSeed, uniqueIds } from './seeds';
 
-export const SEEDS_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../fixtures/secrets/seeded.json',
-);
+export { SEEDS_PATH } from './seeds';
 
+/** Lenient on purpose: `--seeds <path>` may point at any file of seeds, not only the mandatory set. */
 const SeedFileSchema = z.object({
-  seeds: z
-    .array(
-      z.object({
-        id: z.string().regex(/^[a-z0-9_]+$/),
-        value: z.string().min(1),
-        canaries: z.array(z.string()).default([]),
-      }),
-    )
-    .min(1)
-    .refine(
-      (seeds) => new Set(seeds.map((seed) => seed.id)).size === seeds.length,
-      'seed ids must be unique',
-    ),
+  seeds: z.array(BaseSeed).min(1).refine(uniqueIds, 'seed ids must be unique'),
 });
 
 /** One fixture's entry in labels.json. `expected` is filled in by hand when the adapter is written. */

@@ -10,7 +10,8 @@
  *     values, csrf meta);
  *  2. learn display names (`Name <email>`, name/title/aria-label beside an email attribute, --names);
  *  3. replace --redact-selector text with fake phrases;
- *  4. scrub every text node and attribute: emails (plain, percent-encoded, inside base64 ids), phones, cards,
+ *  4. scrub every text node and attribute: query strings and parameter fragments anywhere (text, data-*,
+ *     meta content, relative URLs), then emails (plain, percent-encoded, inside base64 ids), phones, cards,
  *     money, street addresses, names, redacted literals;
  *  5. inject three seeded secrets into the main landmark for the no-leak test.
  * Roles, aria-*, data-*, ids, classes and structure are kept: adapters anchor on them.
@@ -99,6 +100,7 @@ function emptyStats(): SanitizeStats {
     phone: 0,
     card: 0,
     name: 0,
+    query: 0,
     strayAt: 0,
   };
 }

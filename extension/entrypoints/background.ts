@@ -3,8 +3,8 @@ import '../src/setup';
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 
-import { ensureAlarms, handleAlarm, resetAlarms } from '../src/background/alarms';
-import { handleInstalled } from '../src/background/install';
+import { ensureAlarms, handleAlarm } from '../src/background/alarms';
+import { onInstalled } from '../src/background/install';
 import { createHandlers } from '../src/background/router';
 import { listen } from '../src/bus/listen';
 import { log } from '../src/log';
@@ -17,11 +17,7 @@ export default defineBackground({
     listen(createHandlers());
 
     browser.runtime.onInstalled.addListener((details) => {
-      handleInstalled(details)
-        .then(() => resetAlarms())
-        .catch((error: unknown) => {
-          log.error('install.failed', { error });
-        });
+      void onInstalled(details);
     });
 
     browser.runtime.onStartup.addListener(() => {

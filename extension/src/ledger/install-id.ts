@@ -18,7 +18,9 @@ import { log } from '../log';
 export const InstallId = z.uuidv4().regex(/^[0-9a-f-]+$/, 'expected a lowercase UUID');
 export type InstallId = z.infer<typeof InstallId>;
 
-export type InstallIdErrorCode = 'read_failed' | 'write_failed';
+export const INSTALL_ID_ERROR_CODES = ['read_failed', 'write_failed'] as const;
+
+export type InstallIdErrorCode = (typeof INSTALL_ID_ERROR_CODES)[number];
 
 /** Storage failed underneath the install id. The cause is kept for debugging; its message is never logged. */
 export class InstallIdError extends Error {

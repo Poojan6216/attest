@@ -11,7 +11,15 @@
  */
 import { z } from 'zod';
 
-import { AdapterHealth, Claim, CoveragePing, IsoTs, Observation, Request } from '../ledger/types';
+import {
+  AdapterHealth,
+  Claim,
+  CoveragePing,
+  IsoTs,
+  Observation,
+  Request,
+  SCHEMA_LIMITS,
+} from '../ledger/types';
 
 /** The eight ledger tables (build_spec §6, sprint 0.6). `ledger.changed` names which ones moved. */
 export const LedgerTable = z.enum([
@@ -50,18 +58,18 @@ export const AdapterHealthMessage = z.strictObject({
 /** What an agent adapter extracted from one page read. */
 export const AdapterClaimsMessage = z.strictObject({
   type: z.literal('adapter.claims'),
-  adapterId: z.string().min(1),
-  version: z.string().min(1),
-  requests: z.array(Request),
-  claims: z.array(Claim),
+  adapterId: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  version: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  requests: z.array(Request).max(SCHEMA_LIMITS.BATCH),
+  claims: z.array(Claim).max(SCHEMA_LIMITS.BATCH),
 });
 
 /** What a Gmail/Calendar observer extracted from one page read (derived facts only). */
 export const ObserverObservationsMessage = z.strictObject({
   type: z.literal('observer.observations'),
-  observerId: z.string().min(1),
-  version: z.string().min(1),
-  observations: z.array(Observation),
+  observerId: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  version: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  observations: z.array(Observation).max(SCHEMA_LIMITS.BATCH),
 });
 
 /** What an observer could see, and when (Hard Rule 5). */
@@ -113,7 +121,7 @@ export const UiResultMessage = z.discriminatedUnion('ok', [
 /** The service worker wrote to the ledger; open UI pages re-query the tables they show. */
 export const LedgerChangedMessage = z.strictObject({
   type: z.literal('ledger.changed'),
-  tables: z.array(LedgerTable).min(1),
+  tables: z.array(LedgerTable).min(1).max(LedgerTable.options.length),
   at: IsoTs,
 });
 

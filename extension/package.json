@@ -14,19 +14,19 @@
     "build:release": "wxt zip",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/core/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/core/tsconfig.json && tsc --noEmit -p tests/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "wxt build && playwright test",
     "bench": "tsx ../bench/run_bench.ts",
     "capture": "tsx tests/tools/capture-fixture.ts",
     "attest": "tsx tests/tools/attest-cli.ts",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "test:tz": "TZ=Pacific/Kiritimati vitest run tests/unit/core tests/property tests/golden && TZ=America/St_Johns vitest run tests/unit/core tests/property tests/golden"
   },
   "dependencies": {
     "dexie": "4.4.6",
     "preact": "10.29.8",
-    "ulidx": "2.4.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

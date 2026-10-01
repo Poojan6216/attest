@@ -1,0 +1,181 @@
+/**
+ * The closed vocabulary of src/log.ts (Hard Rule 10: never log secrets or PII).
+ *
+ * The logger prints a free-form word only if it is listed here. Shape rules ("looks like an identifier")
+ * cannot tell plumbing from content: `bus.dropped` and `ottoline.vasquez` have the same shape. So:
+ *  - LOG_EVENTS is every event name the extension emits. `log.*` only accepts these (a type error
+ *    otherwise), and anything else reaching the logger is printed as its shape.
+ *  - LOG_VALUES is every word a field value may print as: enum values, error codes, reasons, table names,
+ *    alarm names, ids of our own adapters and observers. Any other string prints as `[redacted len=N]`
+ *    unless it is a ULID, a SHA-256, an ISO timestamp with offset, or a semver (see isSafeString).
+ *
+ * Adding a word here is a reviewed change: it must be a constant of ours, never something read from a page,
+ * a user, or storage. tests/unit/log-vocabulary.spec.ts checks that every enum the code logs is covered.
+ */
+
+export const LOG_EVENTS = [
+  'alarm.ensure_failed',
+  'alarm.fired',
+  'alarm.handler_failed',
+  'alarm.purge_pending_implementation',
+  'alarm.reset_failed',
+  'alarm.unknown',
+  'background.started',
+  'bus.dropped',
+  'bus.handler_failed',
+  'bus.listener_failed',
+  'bus.query_unavailable',
+  'bus.respond_failed',
+  'bus.send_failed',
+  'install.details_invalid',
+  'install.failed',
+  'install.handled',
+  'install.skipped',
+  'install_id.created',
+  'install_id.regenerated',
+  'install_id.reset',
+  'ledger.close_skipped',
+  'ledger.open_failed',
+  'ledger.row_invalid',
+  'ledger.row_replaced',
+  'ledger.shared_open_reset',
+  'options.install_id_read_failed',
+  'options.install_id_reset_failed',
+  'options.install_id_reset_rejected',
+  'ui.root_missing',
+] as const;
+
+export type LogEvent = (typeof LOG_EVENTS)[number];
+
+export const LOG_VALUES = [
+  // Bus message types (src/bus/messages.ts BusMessageType).
+  'adapter.health',
+  'adapter.claims',
+  'observer.observations',
+  'coverage.ping',
+  'ui.query',
+  'ui.result',
+  'ledger.changed',
+  // Bus drop reasons (src/bus/listen.ts DROP_REASONS) and query failures (src/bus/send.ts).
+  'foreign_sender',
+  'malformed',
+  'untrusted_context',
+  'no_handler',
+  'no_response',
+  'malformed_result',
+  'kind_mismatch',
+  // UI query kinds and result errors (src/bus/messages.ts).
+  'ledger.export',
+  'health.list',
+  'unknown_query',
+  'handler_failed',
+  'unavailable',
+  // Error codes: BusError, LedgerError, InstallIdError.
+  'invalid_outgoing',
+  'no_receiver',
+  'port_closed',
+  'context_invalidated',
+  'send_failed',
+  'invalid_result',
+  'invalid_input',
+  'id_conflict',
+  'invalid_migrations',
+  'open_failed',
+  'read_failed',
+  'write_failed',
+  // Install id states and runtime.onInstalled reasons.
+  'missing',
+  'corrupt',
+  'install',
+  'update',
+  'chrome_update',
+  'shared_module_update',
+  // Ledger tables as the logger prints them (src/ledger/db.ts logTableId).
+  'requests',
+  'claims',
+  'observations',
+  'grants',
+  'receipts',
+  'adapter_health',
+  'coverage',
+  'meta',
+  // Alarm names (src/config.ts ALARM_NAMES).
+  'attest.purge',
+  // Agents and observers: our own adapter and observer ids.
+  'muse',
+  'chatgpt',
+  'dots',
+  'claude',
+  'gmail',
+  'gcal',
+  // Grades, receipt states, health statuses.
+  'VERIFIED',
+  'PARTIAL',
+  'NOT_FOUND',
+  'UNASKED',
+  'OVER_SCOPE',
+  'UNVERIFIABLE',
+  'PENDING',
+  'FINAL',
+  'USER_OVERRIDDEN',
+  'OK',
+  'DEGRADED',
+  // Extension surfaces (src/ui/mount.ts).
+  'popup',
+  'sidepanel',
+  'options',
+] as const;
+
+/**
+ * Error class names that may be printed. Any other `error.name` prints as `Error`: a name is set by whoever
+ * threw, and a hostile or careless one can carry content.
+ */
+export const LOG_ERROR_NAMES = [
+  'Error',
+  'AggregateError',
+  'EvalError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'TypeError',
+  'URIError',
+  // DOMException names (IndexedDB, storage, messaging).
+  'AbortError',
+  'ConstraintError',
+  'DataCloneError',
+  'DataError',
+  'InvalidAccessError',
+  'InvalidStateError',
+  'NotAllowedError',
+  'NotFoundError',
+  'NotSupportedError',
+  'QuotaExceededError',
+  'ReadOnlyError',
+  'SecurityError',
+  'TimeoutError',
+  'TransactionInactiveError',
+  'UnknownError',
+  'VersionError',
+  // Dexie.
+  'BulkError',
+  'DatabaseClosedError',
+  'ForeignAwaitError',
+  'InternalError',
+  'InvalidArgumentError',
+  'InvalidTableError',
+  'MissingAPIError',
+  'ModifyError',
+  'NoSuchDatabaseError',
+  'OpenFailedError',
+  'PrematureCommitError',
+  'SchemaError',
+  'SubTransactionError',
+  'UnsupportedError',
+  'UpgradeError',
+  'VersionChangeError',
+  // Zod and Attest.
+  'ZodError',
+  'BusError',
+  'InstallIdError',
+  'LedgerError',
+] as const;

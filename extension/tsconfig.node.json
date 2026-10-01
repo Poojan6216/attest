@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["*.config.ts", "eslint-rules/*.d.ts", ".wxt/wxt.d.ts"]
+}

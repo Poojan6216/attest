@@ -5,9 +5,11 @@
  * side panel, an alarm firing) with Chromium's NetLog on, then asserts that every request the
  * extension or a page initiated went to an allowlisted host. In this sprint the allowlist is empty.
  * The negative control proves on every run that the guard sees a canary request from the service
- * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened.
+ * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened. (If
+ * Chromium's own start-up hangs, the launcher replaces the browser before the session starts; every attempt
+ * writes its own NetLog and every one is analysed: tests/e2e/support/extension.ts.)
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -18,7 +20,7 @@ import { NETWORK_ALLOWLIST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
 import { launchExtension, type LaunchedExtension } from './support/extension';
-import { parseNetLog, urlRequests } from './support/netlog';
+import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import {
   analyse,
   guardArgs,
@@ -41,33 +43,37 @@ interface GuardedSession {
   readonly extension: LaunchedExtension;
   readonly routeRecords: RouteRecord[];
   readonly consoleLines: string[];
-  readonly netLogPath: string;
+  /** Holds one NetLog per browser launch attempt (netlog-<n>.json); every one is analysed. */
   readonly dir: string;
 }
 
 async function startGuardedSession(): Promise<GuardedSession> {
   const server = await startFixtureServer();
   const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-netlog-'));
-  const netLogPath = path.join(dir, 'netlog.json');
-  const extension = await launchExtension({ extraArgs: guardArgs(netLogPath) });
-  const routeRecords = await installRouteGuard(extension.context, { fixtureOrigin: server.origin });
-  const consoleLines: string[] = [];
-  recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
-  return { server, extension, routeRecords, consoleLines, netLogPath, dir };
+  let extension: LaunchedExtension | undefined;
+  try {
+    extension = await launchExtension({ extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)) });
+    const routeRecords = await installRouteGuard(extension.context, { fixtureOrigin: server.origin });
+    const consoleLines: string[] = [];
+    recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
+    return { server, extension, routeRecords, consoleLines, dir };
+  } catch (error) {
+    // A failed start must not leave a browser or a server behind to block worker teardown (QA-V2).
+    await extension?.close();
+    await server.close();
+    rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 /** Closes the browser (which flushes NetLog), then analyses everything that was requested. */
 async function finishGuardedSession(session: GuardedSession): Promise<NetworkReport> {
   await session.extension.close();
   await session.server.close();
-  const report = analyse(
-    urlRequests(parseNetLog(readFileSync(session.netLogPath, 'utf8'))),
-    session.routeRecords,
-    {
-      fixtureOrigin: session.server.origin,
-      allowlist: ALLOWLIST,
-    },
-  );
+  const report = analyse(readNetLogRequests(session.dir), session.routeRecords, {
+    fixtureOrigin: session.server.origin,
+    allowlist: ALLOWLIST,
+  });
   rmSync(session.dir, { recursive: true, force: true });
   return report;
 }

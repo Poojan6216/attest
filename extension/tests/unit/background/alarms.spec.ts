@@ -1,10 +1,10 @@
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { browser } from 'wxt/browser';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureAlarms, handleAlarm, isAttestAlarm, resetAlarms } from '../../../src/background/alarms';
 import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES } from '../../../src/config';
-import { type LogRecord, setLogSink } from '../../../src/log';
+import { log, type LogRecord, setLogSink } from '../../../src/log';
 
 let records: LogRecord[] = [];
 let restore: () => void = () => undefined;
@@ -71,5 +71,23 @@ describe('handleAlarm', () => {
   it('ignores a foreign alarm without echoing its name', async () => {
     await handleAlarm({ name: 'evil.alarm' });
     expect(records).toEqual([{ level: 'warn', event: 'alarm.unknown', fields: {} }]);
+  });
+
+  // Added by the Sprint 0 QA review: the "never throws" contract had no test.
+  it('never rejects when a handler throws; logs the failure with the alarm name', async () => {
+    const info = log.info;
+    vi.spyOn(log, 'info').mockImplementation((event, fields) => {
+      if (event === 'alarm.purge_pending_implementation') throw new TypeError('handler blew up');
+      info(event, fields);
+    });
+    await expect(handleAlarm({ name: ALARM_NAMES.PURGE })).resolves.toBeUndefined();
+    expect(records).toEqual([
+      { level: 'info', event: 'alarm.fired', fields: { alarm: ALARM_NAMES.PURGE } },
+      {
+        level: 'error',
+        event: 'alarm.handler_failed',
+        fields: { alarm: ALARM_NAMES.PURGE, error: 'TypeError messageLength=15' },
+      },
+    ]);
   });
 });

@@ -272,6 +272,9 @@ describe('loadPolicy: malformed policies produce specific, path-named errors', (
 });
 
 describe('loadPolicy: properties', () => {
+  /** qa_tester rule 4: property tests over src/core run at least 1,000 examples each. */
+  const PROPERTY_RUNS = { numRuns: 1_000 };
+
   it('is total: any JSON value either loads or throws a PolicyError with issues', () => {
     fc.assert(
       fc.property(fc.jsonValue(), (raw) => {
@@ -282,6 +285,7 @@ describe('loadPolicy: properties', () => {
           expect(error instanceof PolicyError && error.issues.length > 0).toBe(true);
         }
       }),
+      PROPERTY_RUNS,
     );
   });
 
@@ -302,6 +306,7 @@ describe('loadPolicy: properties', () => {
           expect(issuesOf(variant(path, value))).toContain(`${where}: must be <= 1`);
         },
       ),
+      PROPERTY_RUNS,
     );
   });
 });

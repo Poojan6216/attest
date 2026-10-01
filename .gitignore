@@ -13,6 +13,7 @@ extension/test-results/
 extension/playwright-report/
 extension/coverage/
 extension/blob-report/
+extension/mandatory-report.json
 extension/.playwright-user-data/
 
 # python (telemetry-api)

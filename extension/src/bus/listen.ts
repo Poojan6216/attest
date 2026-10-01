@@ -12,7 +12,9 @@
  *  2. it parses as a `BusMessage`, else drop `malformed` (unknown types land here too);
  *  3. `ui.query` comes from an extension page, never a content script, else drop `untrusted_context`;
  *  4. a handler exists for its type, else drop `no_handler`.
- * A dropped message gets no response (the listener returns false) and one `bus.dropped` warning.
+ * A dropped message gets no response (the listener returns false) and one `bus.dropped` record: a warning,
+ * except `no_handler`, which is expected wherever several contexts listen (every open extension page sees
+ * every message) and is logged at debug.
  *
  * A handled message is always answered (classic protocol: return true, call `sendResponse` once the
  * handler settles), so the sender never sees a closed port for a message that was processed.
@@ -55,7 +57,9 @@ export type BusHandlers = { readonly [T in BusMessageType]?: BusHandler<T> };
 
 type SendResponse = (response?: unknown) => void;
 
-type DropReason = 'foreign_sender' | 'malformed' | 'untrusted_context' | 'no_handler';
+export const DROP_REASONS = ['foreign_sender', 'malformed', 'untrusted_context', 'no_handler'] as const;
+
+type DropReason = (typeof DROP_REASONS)[number];
 
 /** Message types that only an extension page (popup, side panel, options) may send. */
 const EXTENSION_PAGE_ONLY: ReadonlySet<BusMessageType> = new Set<BusMessageType>(['ui.query']);
@@ -65,10 +69,14 @@ function typeOf(raw: unknown): BusMessageType | undefined {
   return isBusMessageType(raw.type) ? raw.type : undefined;
 }
 
-/** Logs a drop. The type is logged only when it is one of ours; nothing else from the message is. */
+/**
+ * Logs a drop. The type is logged only when it is one of ours; nothing else from the message is.
+ * `no_handler` is routine (a page that does not handle `ledger.changed` still receives it), so it is debug.
+ */
 function drop(reason: DropReason, raw: unknown): false {
   const type = typeOf(raw);
-  log.warn('bus.dropped', type === undefined ? { reason } : { reason, type });
+  if (reason === 'no_handler') log.debug('bus.dropped', type === undefined ? { reason } : { reason, type });
+  else log.warn('bus.dropped', type === undefined ? { reason } : { reason, type });
   return false;
 }
 

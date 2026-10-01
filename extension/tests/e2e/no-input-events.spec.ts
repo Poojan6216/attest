@@ -1,0 +1,165 @@
+/**
+ * Hard Rule 3 (Attest never acts) at runtime: qa_tester rule 5 and build_spec §10 "E2E asserts no input
+ * events dispatched". Added by the Sprint 0 QA review as the rail later sprints extend.
+ *
+ * A recorder is installed in every page before any of its own code runs. It counts input events of every
+ * kind in the capture phase at `window`, whichever world dispatched them (a content script's isolated
+ * world shares the DOM). After the extension has had the pages open, every count must be zero and no page
+ * may have navigated. The negative control proves the recorder sees synthetic and trusted events.
+ *
+ * Sprint 0 ships no content scripts, so today this guards the harness pages only. Sprint 2 (observers)
+ * and Sprint 3 (adapters) must add their vendor fixture pages to FIXTURE_PAGES.
+ * Not detectable here, and left to the `attest/no-act` lint rule: `.value =` writes and `.focus()`
+ * (Playwright's own focus emulation produces focus events, so they are not counted).
+ */
+import type { BrowserContext, Page } from '@playwright/test';
+
+import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
+import { type LaunchedExtension, launchExtension } from './support/extension';
+import { expect, test } from './support/test';
+
+const FIXTURE_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
+const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
+const SETTLE_MS = 3_000;
+
+/** Every event a script could use to act on a page: pointer, mouse, keyboard, text, form, clipboard, drag. */
+const INPUT_EVENTS = [
+  'click',
+  'dblclick',
+  'auxclick',
+  'contextmenu',
+  'mousedown',
+  'mouseup',
+  'pointerdown',
+  'pointerup',
+  'touchstart',
+  'touchend',
+  'keydown',
+  'keyup',
+  'keypress',
+  'beforeinput',
+  'input',
+  'change',
+  'select',
+  'submit',
+  'reset',
+  'paste',
+  'cut',
+  'copy',
+  'dragstart',
+  'drop',
+] as const;
+
+interface Recorded {
+  readonly type: string;
+  readonly trusted: boolean;
+}
+
+async function installRecorder(context: BrowserContext): Promise<void> {
+  await context.addInitScript((types: readonly string[]) => {
+    const seen: { type: string; trusted: boolean }[] = [];
+    Object.defineProperty(window, '__attestInputEvents', { value: seen });
+    for (const type of types) {
+      window.addEventListener(
+        type,
+        (event) => {
+          seen.push({ type: event.type, trusted: event.isTrusted });
+        },
+        { capture: true },
+      );
+    }
+  }, INPUT_EVENTS);
+}
+
+async function recorded(page: Page): Promise<Recorded[]> {
+  const seen: unknown = await page.evaluate(() => {
+    const value: unknown = Reflect.get(window, '__attestInputEvents');
+    if (!Array.isArray(value)) throw new Error('input recorder not installed');
+    return Array.from(value as readonly unknown[]);
+  });
+  if (!Array.isArray(seen)) throw new Error('input recorder returned no list');
+  return seen.map((entry: unknown) => {
+    const type: unknown =
+      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'type') : undefined;
+    const trusted: unknown =
+      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'trusted') : undefined;
+    if (typeof type !== 'string' || typeof trusted !== 'boolean') throw new Error('malformed input record');
+    return { type, trusted };
+  });
+}
+
+interface Session {
+  readonly server: FixtureServer;
+  readonly extension: LaunchedExtension;
+  readonly pages: readonly { readonly url: string; readonly page: Page }[];
+}
+
+async function openFixtures(): Promise<Session> {
+  const server = await startFixtureServer();
+  const extension = await launchExtension();
+  await installRecorder(extension.context);
+  const pages: { url: string; page: Page }[] = [];
+  for (const fixture of FIXTURE_PAGES) {
+    const page = await extension.context.newPage();
+    const url = server.url(fixture);
+    await page.goto(url);
+    pages.push({ url, page });
+  }
+  return { server, extension, pages };
+}
+
+async function close(session: Session): Promise<void> {
+  await session.extension.close();
+  await session.server.close();
+}
+
+test.describe('the extension dispatches no input events on pages', () => {
+  test('fixture pages see zero input events and no navigation while the extension runs', async () => {
+    const session = await openFixtures();
+    try {
+      for (const name of EXTENSION_PAGES) await session.extension.openExtensionPage(name);
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+      // Reload each page so anything that runs at document load (content scripts, later) runs again.
+      for (const { page } of session.pages) await page.reload();
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+      for (const { url, page } of session.pages) {
+        expect(await recorded(page), url).toEqual([]);
+        expect(page.url()).toBe(url);
+      }
+    } finally {
+      await close(session);
+    }
+  });
+
+  test('negative control: the recorder sees synthetic and trusted input events', async () => {
+    const session = await openFixtures();
+    try {
+      const first = session.pages[0];
+      if (first === undefined) throw new Error('no fixture page opened');
+      await first.page.evaluate(() => {
+        document.body.click();
+        document.body.dispatchEvent(new Event('input', { bubbles: true }));
+        const form = document.createElement('form');
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+        });
+        document.body.append(form);
+        form.requestSubmit();
+      });
+      await first.page.keyboard.press('a');
+      const seen = await recorded(first.page);
+      // requestSubmit() yields a *trusted* submit event: isTrusted cannot tell a script's act from the
+      // user's, which is why the recorder counts every event whatever its isTrusted flag.
+      expect(seen).toEqual(
+        expect.arrayContaining([
+          { type: 'click', trusted: false },
+          { type: 'input', trusted: false },
+          { type: 'submit', trusted: true },
+          { type: 'keydown', trusted: true },
+        ]),
+      );
+    } finally {
+      await close(session);
+    }
+  });
+});

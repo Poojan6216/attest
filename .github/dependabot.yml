@@ -1,0 +1,18 @@
+# Proposes updates for the SHA-pinned CI actions and the npm dependencies (Hard Rule 9: supply chain).
+# Every update arrives as a PR that runs the full CI, the two @mandatory tests included.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /extension
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -138,6 +138,21 @@ describe('reads skip corrupt rows', () => {
     ]);
     expect(JSON.stringify(logs.records)).not.toContain(PASSPHRASE);
   });
+
+  // SECURITY-1: adapter, observer and meta ids are only checked as non-empty strings before logging, so the
+  // logger itself must refuse an identifier-shaped id that is not one of ours.
+  it('a corrupt adapterHealth, coverage or meta row keyed by content-shaped text never prints that key', async () => {
+    await writeRaw('adapterHealth', [{ adapterId: PASSPHRASE, status: 'MAYBE' }]);
+    await writeRaw('coverage', [{ ...toCoverageRow(makePing()), observerId: 'perpetua.villanueva', x: 1 }]);
+    await writeRaw('meta', [{ key: 'k7pq2vxw9mzr4tnb8hyd', value: { smuggled: true } }]);
+    await exportLedger(db, { exportedAt: '2026-10-01T12:00:00Z' });
+    const ids = events('ledger.row_invalid').map(([, id]) => id);
+    expect(ids).toEqual(['[redacted len=28]', '[redacted len=19]', '[redacted len=20]']);
+    const printed = JSON.stringify(logs.records);
+    for (const secret of [PASSPHRASE, 'perpetua.villanueva', 'k7pq2vxw9mzr4tnb8hyd']) {
+      expect(printed).not.toContain(secret);
+    }
+  });
 });
 
 describe('idempotent upserts never treat an unreadable row as already stored', () => {

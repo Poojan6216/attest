@@ -8,8 +8,9 @@
  */
 import { BASE64_RUN, fakeBase64Run, fakePercentEmail, PERCENT_EMAIL } from './capture-encoded';
 import { type Faker, matchCase } from './capture-fakes';
+import { stripQueryParts } from './capture-url';
 
-export type PiiKind = 'literal' | 'email' | 'address' | 'amount' | 'phone' | 'card' | 'name';
+export type PiiKind = 'literal' | 'email' | 'address' | 'amount' | 'phone' | 'card' | 'name' | 'query';
 
 /** Latin-script letters (accents included) and digits: `jöhn@exämple.de` is an address too. Needs the u flag. */
 const EMAIL_CHAR = String.raw`\p{Script=Latin}\p{M}\d`;
@@ -195,6 +196,7 @@ export class Scrubber {
     phone: 0,
     card: 0,
     name: 0,
+    query: 0,
     strayAt: 0,
   };
   readonly #faker: Faker;
@@ -215,8 +217,14 @@ export class Scrubber {
     this.#globalNames = termMatcher(options.globalNames);
   }
 
-  /** Scrubs one text node or attribute value. `localNames` are tokens learned from a nearby email element. */
-  scrub(text: string, localNames?: ReadonlySet<string>): string {
+  /**
+   * Scrubs one text node or attribute value. `localNames` are tokens learned from a nearby email element.
+   * Query strings and parameter fragments go first, whole, so no later span can keep part of a token.
+   */
+  scrub(original: string, localNames?: ReadonlySet<string>): string {
+    const stripped = stripQueryParts(original);
+    this.stats.query += stripped.removed;
+    const text = stripped.text;
     if (text.trim().length < 2) return this.#strayAts(text);
     const spans: Span[] = [];
     this.#collectLiterals(text, spans);

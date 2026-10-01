@@ -13,7 +13,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { BusMessageOf, BusMessageType } from '../../../src/bus/messages';
 import type { MessageSender } from '../../../src/bus/listen';
 import type { Claim, Observation, Request } from '../../../src/ledger/types';
-import { type LogLevel, type LogRecord, setLogSink } from '../../../src/log';
+import { type LogLevel, type LogRecord, setLogLevel, setLogSink } from '../../../src/log';
 
 /** A value a test seeds into a payload; it must never reach a log record (Hard Rule 10). */
 export const SECRET = 'SSN 078-05-1120 card 4111 1111 1111 1111 pass hunter2';
@@ -91,12 +91,15 @@ export function captureLogs(): LogRecord[] {
   let restore: () => void = () => undefined;
   beforeEach(() => {
     records.length = 0;
+    // Debug too: routine drops and broadcasts nobody hears are logged at debug (Decisions [0.close]).
+    setLogLevel('debug');
     restore = setLogSink((record) => {
       records.push(record);
     });
   });
   afterEach(() => {
     restore();
+    setLogLevel('info');
   });
   return records;
 }

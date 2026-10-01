@@ -8,6 +8,8 @@
  *   - a web origin               → a page (where content scripts run) or that page's own subresources
  *   - `not an origin`            → the browser process itself (component updater, sign-in, GCM, …)
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 export interface NetLogRequest {
   readonly url: string;
@@ -62,4 +64,26 @@ export function urlRequests(doc: NetLogDocument): NetLogRequest[] {
 
 export function isBrowserInitiated(request: NetLogRequest): boolean {
   return request.initiator === BROWSER_INITIATOR;
+}
+
+const NETLOG_FILE = /^netlog-\d+\.json$/;
+
+/**
+ * The NetLog file for one browser launch attempt in `dir`. The launcher may replace a start-up that hung
+ * (tests/e2e/support/extension.ts), so each attempt logs to its own file and none is overwritten.
+ */
+export function netLogPathFor(dir: string, attempt: number): string {
+  return path.join(dir, `netlog-${String(attempt)}.json`);
+}
+
+/**
+ * Every URL request in every attempt's NetLog in `dir`. Fails closed: no NetLog at all, or one that cannot
+ * be read, throws, so a hung start's requests can never go unexamined.
+ */
+export function readNetLogRequests(dir: string): NetLogRequest[] {
+  const files = readdirSync(dir)
+    .filter((file) => NETLOG_FILE.test(file))
+    .sort();
+  if (files.length === 0) throw new Error(`no NetLog was written in ${dir}`);
+  return files.flatMap((file) => urlRequests(parseNetLog(readFileSync(path.join(dir, file), 'utf8'))));
 }

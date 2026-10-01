@@ -1,7 +1,17 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { analyse, CHROMIUM_BACKGROUND_HOSTS } from '../../e2e/support/network-guard';
-import { isBrowserInitiated, parseNetLog, urlRequests } from '../../e2e/support/netlog';
+import {
+  isBrowserInitiated,
+  netLogPathFor,
+  parseNetLog,
+  readNetLogRequests,
+  urlRequests,
+} from '../../e2e/support/netlog';
 
 const EXT = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const FIXTURES = 'http://127.0.0.1:43123';
@@ -47,6 +57,31 @@ describe('parseNetLog / urlRequests', () => {
     expect(() => urlRequests(parseNetLog('{"constants":{"logEventTypes":{}},"events":[]}'))).toThrow(
       /URL_REQUEST_START_JOB/,
     );
+  });
+});
+
+describe('readNetLogRequests: one NetLog per launch attempt', () => {
+  it('reads every attempt, a hung (truncated) one included, and fails closed with none', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-netlog-unit-'));
+    try {
+      expect(() => readNetLogRequests(dir)).toThrow('no NetLog');
+      const hung = netLog([{ url: 'https://hung-attempt.example.com/', initiator: EXT }]);
+      writeFileSync(netLogPathFor(dir, 0), hung.slice(0, hung.lastIndexOf(']')));
+      writeFileSync(netLogPathFor(dir, 1), netLog([{ url: 'https://second.example.com/', initiator: EXT }]));
+      writeFileSync(path.join(dir, 'other.json'), 'not a netlog');
+      expect(readNetLogRequests(dir).map((r) => new URL(r.url).host)).toEqual([
+        'hung-attempt.example.com',
+        'second.example.com',
+      ]);
+      writeFileSync(netLogPathFor(dir, 2), '');
+      expect(() => readNetLogRequests(dir)).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('gives each attempt its own file', () => {
+    expect(netLogPathFor('/d', 0)).not.toBe(netLogPathFor('/d', 1));
   });
 });
 

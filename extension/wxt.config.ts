@@ -20,9 +20,8 @@ export default defineConfig({
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'none'",
     },
-    action: {
-      default_title: 'Attest: receipts for your AI agents',
-    },
+    // action.default_title comes from the <title> of entrypoints/popup/index.html: WXT rebuilds
+    // manifest.action from the popup entrypoint, so a title set here would be dropped (TECH-14).
   },
   zip: {
     artifactTemplate: '{{name}}-{{version}}.zip',
@@ -35,6 +34,9 @@ export default defineConfig({
     build: {
       // Readable output for store review (no obfuscation); source maps kept for CI artifacts.
       sourcemap: true,
+      // Vite's modulepreload polyfill contains a fetch(); Chrome >= 66 never needs it (we require 120), and the
+      // shipped bundle must grep clean for network calls (SECURITY-6, tests/e2e/built-bundle.spec.ts).
+      modulePreload: { polyfill: false },
     },
   }),
 });
