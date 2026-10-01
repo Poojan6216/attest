@@ -208,5 +208,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
     rules: { 'no-console': 'off' },
   },
+  {
+    // Playwright reads fixture dependencies from the first parameter's destructuring: `({}, use) => …`.
+    files: ['tests/e2e/**'],
+    rules: { 'no-empty-pattern': ['error', { allowObjectPatternsAsParameters: true }] },
+  },
   prettier,
 );

@@ -1,6 +1,7 @@
 {
   "name": "attest-workspace",
   "private": true,
+  "type": "module",
   "description": "Attest: receipts for your AI agents. Workspace root; the extension lives in extension/.",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.34.6",
@@ -12,9 +13,9 @@
     "dev": "pnpm --dir extension run dev",
     "build": "pnpm --dir extension run build",
     "build:release": "pnpm --dir extension run build:release",
-    "lint": "pnpm --dir extension run lint",
+    "lint": "pnpm --dir extension run lint && eslint . --max-warnings 0 && prettier --check .",
     "format": "pnpm --dir extension run format",
-    "typecheck": "pnpm --dir extension run typecheck",
+    "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "pnpm --dir extension run test",
     "e2e": "pnpm --dir extension run e2e",
     "bench": "pnpm --dir extension run bench",
@@ -25,6 +26,15 @@
     "pre-commit": "pnpm lint && pnpm typecheck"
   },
   "devDependencies": {
-    "simple-git-hooks": "2.14.0"
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.4",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "simple-git-hooks": "2.14.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0"
   }
 }

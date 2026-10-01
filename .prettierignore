@@ -1,0 +1,7 @@
+# Root Prettier covers root tooling only; extension/ runs its own check.
+extension/
+telemetry-api/
+node_modules/
+bench/results/
+pnpm-lock.yaml
+*.md
