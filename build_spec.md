@@ -484,6 +484,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 
 ```
 [2026-10-01] [0.1] Scaffolded the extension (WXT, Manifest V3, Preact, Tailwind, strict TypeScript), Apache-2.0 license, README with the limitations, changelog. It builds and loads in Chromium 153 with zero console errors. Not pushed: the GitHub repo does not exist yet (MANUAL.md).
+[2026-10-01] [0.2] Lint and format: ESLint strict (type-checked) + Prettier, the `attest/no-act` rule (no clicks, events, DOM writes, navigation or network in anything that reads a vendor page), a fence that keeps `src/core` pure, and a rule that keeps service-worker listeners top-level. Proven by 73 tests and by deliberate violations that fail. Pre-commit hook runs lint + typecheck.
 ```
 
 ---

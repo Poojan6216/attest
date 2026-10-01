@@ -107,7 +107,9 @@ function sanitizeValue(key: string, value: unknown): SafeValue {
 }
 
 function sanitizeKey(key: string, index: number): string {
-  return isIdentifier(key.toLowerCase()) || /^[a-z][A-Za-z0-9]{0,40}$/.test(key) ? key : `field${String(index)}`;
+  return isIdentifier(key.toLowerCase()) || /^[a-z][A-Za-z0-9]{0,40}$/.test(key)
+    ? key
+    : `field${String(index)}`;
 }
 
 /** Pure: turns an event + arbitrary fields into a record that is safe to print. */
@@ -122,8 +124,7 @@ export function buildRecord(level: LogLevel, event: string, fields: LogFields = 
 
 const consoleSink: LogSink = (record) => {
   const line = `[attest] ${JSON.stringify({ level: record.level, event: record.event, ...record.fields })}`;
-  // The single sanctioned console call site in the codebase.
-  // eslint-disable-next-line no-console
+  // The single sanctioned console call site in the codebase (no-console is off for this file only).
   console[record.level](line);
 };
 
