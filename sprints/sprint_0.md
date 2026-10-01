@@ -29,7 +29,7 @@
 
 [x] 0.11 | CI. `.github/workflows/ci.yml`: on push/PR → pnpm install (cached) → lint → typecheck → unit + property → build → E2E (Playwright, headless Chrome) including both `@mandatory` tests → upload `.output/` as artifact. Fail fast. Badge in README. | Read: agents/extension_engineer.md | Done when: CI green on main; a PR that breaks a mandatory test is red.
 
-[ ] 0.12 | Seed the ledgers of the project. `Decisions.md` with every §5 decision as an entry dated today and "locked by build_spec"; `MANUAL.md` with: create Chrome Web Store developer account ($5), get Dots access (Pro tier) and capture fixtures, confirm Muse web app host for host_permissions, read Meta/OpenAI/Anthropic/Google terms and log the reading. `CLAUDE.md` present. Progress Log in `build_spec.md` gets its first lines. | Read: agents/docs_writer.md | Done when: all three files exist with the listed content; Progress Log has one line per task 0.1–0.12.
+[x] 0.12 | Seed the ledgers of the project. `Decisions.md` with every §5 decision as an entry dated today and "locked by build_spec"; `MANUAL.md` with: create Chrome Web Store developer account ($5), get Dots access (Pro tier) and capture fixtures, confirm Muse web app host for host_permissions, read Meta/OpenAI/Anthropic/Google terms and log the reading. `CLAUDE.md` present. Progress Log in `build_spec.md` gets its first lines. | Read: agents/docs_writer.md | Done when: all three files exist with the listed content; Progress Log has one line per task 0.1–0.12.
 
 🔥 The scaffold is the easy part. 0.4 and 0.5 are the product: if "nothing leaves your browser" is not a test in week 1, it will never be true in week 8.
 🔥 Do not add a single host permission this sprint. The manifest's `host_permissions` is empty until Sprint 2.

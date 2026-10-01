@@ -28,6 +28,28 @@ Every decision the spec left open, or that changed a locked decision, goes here.
 - Sprints: 8, self-paced, each closed by QA → Security → Tech → Closer, outputs in `reviews/sprint_N/`.
 - Out of scope for v1 (do not build): accounts, sync, paid tier, mobile, Firefox/Safari, Gmail API, bank links, analytics SDKs, any acting feature, recovery actions.
 
+### Each §5 row, verbatim (2026-10-01)
+
+- 2026-10-01 Platform: Chrome extension, **Manifest V3**. Chromium-based browsers (Edge, Brave, Arc) get it for free. Firefox/Safari deferred. — locked by build_spec §5.
+- 2026-10-01 Language: **TypeScript 5.x, `strict: true`**, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`. No `any` in `src/core`. — locked by build_spec §5.
+- 2026-10-01 Framework: **WXT** (entrypoints, HMR, manifest generation, cross-browser later). — locked by build_spec §5.
+- 2026-10-01 UI: **Preact** + Tailwind for popup, side panel, options, digest. One component per file. — locked by build_spec §5.
+- 2026-10-01 Storage: **IndexedDB via Dexie**, schema versioned with migrations. `chrome.storage.local` only for small flags and the install id. — locked by build_spec §5.
+- 2026-10-01 Schemas: **Zod** for every stored type, every message between contexts, and the telemetry payload. Parse at every boundary. — locked by build_spec §5.
+- 2026-10-01 Tests: **Vitest** (unit + property via `fast-check`), **Playwright** for extension E2E against **fixture pages** served locally. — locked by build_spec §5.
+- 2026-10-01 Lint/format: ESLint (typescript-eslint strict) + Prettier. Custom lint rule: no `dispatchEvent`, `.click()`, `.submit()`, `fetch` to non-allowlisted hosts in `entrypoints/content/**` and `src/adapters/**`. — locked by build_spec §5.
+- 2026-10-01 Package manager: **pnpm**. Node 22 LTS. — locked by build_spec §5.
+- 2026-10-01 Optional matcher model: **Chrome built-in on-device model (Prompt API)** first, if available on the user's Chrome. **BYO key** (Anthropic or OpenAI) second. Both off by default, both advisory only (Hard Rule 4). — locked by build_spec §5.
+- 2026-10-01 Telemetry backend: **FastAPI + MongoDB** on Railway. One endpoint. Strict Pydantic schema. Rate-limited. Public aggregate stats later. — locked by build_spec §5.
+- 2026-10-01 Encryption at rest: Optional passphrase: WebCrypto AES-GCM, key from PBKDF2 (600k iterations). Off by default; on = ledger unreadable without the passphrase. — locked by build_spec §5.
+- 2026-10-01 Grading policy: `policy/default.json`, versioned. Thresholds and windows live here, never in code. — locked by build_spec §5.
+- 2026-10-01 License: **Apache-2.0**. — locked by build_spec §5.
+- 2026-10-01 Repo: `github.com/Poojan6216/attest`, public from the first commit. — locked by build_spec §5.
+- 2026-10-01 Versioning: SemVer. `0.1.0` is the store launch. CHANGELOG kept by hand. — locked by build_spec §5.
+- 2026-10-01 Commits: Conventional Commits. — locked by build_spec §5.
+- 2026-10-01 Adapters: **Fixture-driven.** Every adapter and observer is built and tested against sanitised saved DOM snapshots in `tests/fixtures/pages/<vendor>/<yyyy-mm-dd>/`. Live pages are for capture and smoke, never for unit tests. — locked by build_spec §5.
+- 2026-10-01 Repo visibility: superseded by the founder on 2026-10-01 (made private); see the Sprint log entry for [0.1].
+
 ## Open questions (resolve during the build; log the answer here)
 
 - Muse web app exact host for `host_permissions` → confirm in Sprint 2/3 (MANUAL.md).
