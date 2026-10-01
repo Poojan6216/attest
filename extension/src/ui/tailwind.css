@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+/* Dark mode follows the OS (prefers-color-scheme), Tailwind's default `dark:` variant. */
+:root {
+  color-scheme: light dark;
+}
+
+/* Visible focus on every interactive element (ux_engineer rule 10). */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

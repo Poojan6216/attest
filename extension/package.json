@@ -1,0 +1,53 @@
+{
+  "name": "attest",
+  "description": "Receipts for your AI agents. Checks agent claims against your own Gmail and Calendar tabs. Nothing leaves your browser.",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:release": "wxt zip",
+    "lint": "eslint . --max-warnings 0 && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "bench": "tsx ../bench/run_bench.ts",
+    "capture": "tsx tests/tools/capture-fixture.ts",
+    "attest": "tsx tests/tools/attest-cli.ts",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "dexie": "4.4.6",
+    "preact": "10.29.8",
+    "ulidx": "2.4.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "22.20.4",
+    "@vitest/coverage-v8": "5.0.3",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "fake-indexeddb": "6.2.5",
+    "fast-check": "4.10.2",
+    "globals": "17.13.0",
+    "happy-dom": "20.14.5",
+    "prettier": "3.9.9",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.2",
+    "vitest": "5.0.3",
+    "wxt": "0.21.4"
+  }
+}

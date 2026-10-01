@@ -1,0 +1,42 @@
+# Sprint 7 — Ship | Week 8 | Self-paced
+# Spec: build_spec.md §8 PHASE 7 and §10 (Definition of done). Read agents/launch_engineer.md and agents/docs_writer.md before 7.1.
+# 🔥 HARD RULE — EVERY NUMBER IN PUBLIC TRACES TO `RESULTS.md`. README, store listing, Show HN, Reddit, X: no figure
+#    that is not in a committed result file. No adjectives in place of numbers.
+# 🔥 LIMITATIONS BEFORE FEATURES. The README's first paragraph and the store description's fourth paragraph carry
+#    build_spec.md §11. The attacks-that-work link is above the fold.
+# 🔥 THE FOUNDER PRESSES SEND. Every launch asset is a file he can paste. Store submission and posting are MANUAL.md.
+# Goal: a store-ready zip, docs a sceptic trusts, and a launch kit that turns marketing into copy-paste.
+
+[ ] 7.0 | PREREQ — release build + RESULTS regeneration. `pnpm build:release` → `.output/attest-<version>.zip`, source maps retained in CI artifacts, version `0.1.0` in manifest and `package.json`, `CHANGELOG.md` moved from Unreleased to 0.1.0. `pnpm bench` regenerates `RESULTS.md` from every `bench/results/*-<date>.json` (adapters, observers, core perf, intel, red team, perf). `RESULTS.md` carries the generating command at the top and is never hand-edited (a CI check diffs it against a fresh run). | Read: agents/extension_engineer.md | Done when: zip installs on a clean Chrome profile; `RESULTS.md` diff-clean in CI; version tags consistent.
+
+[ ] 7.1 | README. Per `agents/docs_writer.md`: one-paragraph what-it-is with limitations in it; the §2 demo GIF (7.3); install (store link placeholder + unpacked steps); "nothing leaves your browser" with the test name and a link to the test file; grade table; what it cannot see; results table pulled from `RESULTS.md`; **attacks that still work** (link, prominent); prior art per `build_spec.md §3`; architecture SVG; contributing (how to capture a fixture, how to add an adapter); license. | Read: agents/docs_writer.md | Done when: `check-docs` green; a reader who only reads the first screen knows what Attest cannot do; no marketing words (copy test).
+
+[ ] 7.2 | Docs completion. `docs/grading.md`, `docs/adapters.md`, `docs/privacy-architecture.md`, `docs/threat-model.md`, `docs/attacks-that-work.md` final; `PRIVACY.md` published via GitHub Pages (MANUAL: enable Pages) and linked from the manifest `homepage_url` and the listing. | Read: agents/docs_writer.md | Done when: every doc has its two-line header; every link resolves; `PRIVACY.md` renders at a public URL or BLOCKED(MANUAL) with the exact click path.
+
+[ ] 7.3 | Demo recording. `scripts/record-demo.ts`: Playwright drives the §2 scenario against fixture pages with the extension, records video, converts to a 60-second GIF with captions (no voiceover), 1280×800. Committed under `launch/demo.gif` and embedded in README. | Read: agents/launch_engineer.md | Done when: the GIF shows request → claim → Gmail → Calendar → three receipts → digest, with fixture data only (no real names).
+
+[ ] 7.4 | Store listing. `launch/store-listing.md`: name "Attest — receipts for your AI agents"; 132-char summary; description in the order from `agents/launch_engineer.md` (privacy line → single purpose → what it checks → limitations); permission justifications (one line each, matching `Decisions.md`); category; five screenshot specs. `launch/screenshots/` generated at 1280×800 from fixture pages via Playwright (popup with mixed grades, side panel detail, options Grants, degraded banner, weekly digest). Promo tile 440×280. | Read: agents/launch_engineer.md | Done when: all assets exist; screenshots contain only fixture data (secret-seed grep); the listing's data-usage answers match the code (privacy reviewer re-check).
+
+[ ] 7.5 | Public aggregates endpoint. `telemetry-api`: `GET /v1/stats` returning per-agent verified/not-found/unasked rates and install count, computed from Mongo, no install ids, cached 1 h, returns 204 when n < 50 installs. Tests. | Read: agents/backend_engineer.md | Done when: tests green; the endpoint returns 204 on the current (small) dataset; the reliability-report template reads from it.
+
+[ ] 7.6 | Launch kit. In `launch/`: `show-hn.md` (title ≤ 80 chars; body per the role file; five pre-drafted comment replies), `reddit/` (three posts: r/privacy, r/OpenAI or r/ChatGPT, r/ClaudeAI; ≤ 200 words; end with a question), `dm-template.md` (80 words, one ask, no dashes), `weekly-posts.md` (four weeks, one post each: incident + receipt screenshot + one line), `alerts.md` (search strings + 3-line reply template), `reliability-report-v0.md` (template reading `/v1/stats`; never publish with n < 50), `launch-checklist.md` (hour-by-hour day-of sequence with MANUAL steps marked), `launch/README.md` indexing all with ready / needs-founder-edit status. | Read: agents/launch_engineer.md | Done when: every file exists; every number in them is in `RESULTS.md`; the copy test finds no banned words and no dashes in `dm-template.md`.
+
+[ ] 7.7 | Final privacy + security pass. Re-run `agents/privacy_reviewer.md` on the release zip and listing; re-run `agents/security_reviewer.md` on the release build; `scripts/audit-manifest.ts` green; `pnpm audit --prod` and `pip-audit` clean or logged. | Read: agents/privacy_reviewer.md | Done when: privacy verdict READY; zero CRITICAL/HIGH open; `reviews/sprint_7/privacy.md` and `security.md` written.
+
+[ ] 7.8 | Tag and release. `git tag v0.1.0`, GitHub Release with the zip, `RESULTS.md`, and `docs/attacks-that-work.md` attached; CHANGELOG link. `MANUAL.md` updated with the exact store submission steps (developer account, upload zip, fill data-usage form from `launch/store-listing.md`, submit) and the posting sequence from `launch/launch-checklist.md`. | Read: agents/launch_engineer.md | Done when: release page live; `MANUAL.md` is the only thing between the repo and the store.
+
+[ ] 7.9 | Final Report. Fill the **Final Report** section of `build_spec.md`: tasks completed/total, headline numbers with commands, attacks that still work and why, deviations and why, known issues, manual steps, local install steps. Then stop. | Read: agents/docs_writer.md | Done when: the section is complete and committed; the Progress Log's last line reads `[date] [7.9] Final Report written. Build complete. Waiting on MANUAL.md.`
+
+🔥 The Show HN title is the single highest-leverage string in the project. Draft five, pick the one that states the limitation ("…checks what your AI agent actually did (local-only, misses some)") over the one that sounds biggest.
+🔥 If `/v1/stats` has n < 50, the reliability report does not ship. A report with n = 7 is a lie with a chart.
+🔥 After launch the weekly loop is: one post, one alert reply, one selector repair. Put it in `launch/README.md` so the founder sees it from his phone.
+
+**Sprint end — run in this order, outputs to `reviews/sprint_7/`:**
+1. QA — Read agents/qa_tester.md, review against checklist, write and run tests for sprint 7 → `qa.md` (test results + gaps)
+2. Security — Read agents/security_reviewer.md and review all code written in this sprint against the security checklist → `security.md` (security gaps)
+3. Tech — Read agents/tech_reviewer.md, review code quality and architecture → `tech.md` (code quality gaps)
+4. Close — Read agents/sprint_closer.md. Here are the review outputs: [qa.md + security.md + tech.md + privacy.md]. Fix all gaps → `closed.md`
+
+**Gate:** release zip installs clean → `RESULTS.md` regenerated and diff-clean → README leads with limitations and the demo → docs complete and link-checked → store listing + screenshots + promo with fixture data only → launch kit complete with sourced numbers → `/v1/stats` tested → privacy READY, security clean → `v0.1.0` tagged with artifacts → `build_spec.md` Definition of done fully ticked → Final Report written → `closed.md` says VERIFIED CLEAN.
+
+📝 Out of scope (deferred to v0.2, logged in Decisions.md): onboarding tour; localisation; Instinct and Perplexity Computer adapters; Outlook observer; Android notification companion; one-click recovery actions (the painkiller test — only after the paid-tier signal exists).

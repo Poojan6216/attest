@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# build output
+extension/.output/
+extension/.wxt/
+extension/stats.html
+extension/stats-*.json
+extension/web-ext.config.ts
+
+# test output
+extension/test-results/
+extension/playwright-report/
+extension/coverage/
+extension/blob-report/
+extension/.playwright-user-data/
+
+# python (telemetry-api)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# logs
+*.log
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# local env
+.env
+.env.*

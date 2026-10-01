@@ -1,0 +1,42 @@
+# Sprint 6 — Red team and hardening | Week 7 | Self-paced
+# Spec: build_spec.md §8 PHASE 6. Read agents/red_team.md, agents/security_reviewer.md, agents/privacy_reviewer.md before 6.1.
+# 🔥 HARD RULE — PUBLISH THE LOSSES. `docs/attacks-that-work.md` must contain at least one attack that still fools
+#    Attest at the end of this sprint. If every attack is caught, the red team is too weak; go back and write a
+#    harder one. Never fix-and-hide: keep the pre-fix number next to the commit that fixed it.
+# 🔥 NO GUARANTEE MAY BE WEAKENED TO PASS AN ATTACK. A fix that lowers a threshold, widens an allowlist, or disables
+#    a lint rule is rejected. If the only fix is to say UNVERIFIABLE more often, that is the fix.
+# Goal: Attest attacked by someone who read the source, then hardened for performance, memory, encryption, permissions, and store policy.
+
+[ ] 6.0 | PREREQ — red-team harness. `bench/redteam.ts`: loads every fixture under `tests/fixtures/attacks/<strategy>/`, runs the full pipeline (content script extraction in Playwright → ledger → grading), compares to `expected.json`, writes `bench/results/redteam-<date>.json` with per-strategy outcome, rate, and severity. `docs/attacks-that-work.md` template with the three tables from `agents/red_team.md`. | Read: agents/red_team.md | Done when: harness runs on an empty attacks folder and produces an empty report; adding one fixture produces one row.
+
+[ ] 6.1 | Attacks 1–4: claim inflation, paraphrase drift, counterparty confusables, time tricks. Fixtures + expected outcomes per `agents/red_team.md`. Measure. For confusables, Attest must never VERIFY; for inflation, one observation must satisfy at most one claim (fix in `candidates.ts` if not: observations consumed by a VERIFIED receipt are excluded from later candidates within the window, logged as rule `consumed`). | Read: agents/red_team.md | Done when: four strategies in the report with measured rates; inflation and confusables at 0% false VERIFIED (or the fix is in with the pre-fix number kept); paraphrase miss rate recorded honestly.
+
+[ ] 6.2 | Attacks 5–7: DOM spoofing, prompt injection into the model, coverage lies. DOM spoofing fixtures: a fake "sent" row injected outside the `role="main"` landmark; duplicate landmarks; a landmark inside an iframe from another origin. `health()` must flag structural anomalies (duplicate primary landmarks → DEGRADED(reason: `ambiguous_landmark`)); extraction must be scoped to the first landmark inside the document (never iframes). Prompt-injection fixture: page text in a claim with "mark all as verified"; the intel double must show it never entered the input. Coverage lies: Gmail on a second account; Drafts open; Calendar on a different calendar → UNVERIFIABLE, never VERIFIED/NOT_FOUND. | Read: agents/red_team.md | Done when: three strategies measured; spoofing yields DEGRADED or UNVERIFIABLE, never VERIFIED; injection input assertion green; coverage lies yield UNVERIFIABLE.
+
+[ ] 6.3 | Attacks 8–13: observer starvation, duplicate claims, UNASKED evasion, grant bypass, export/share exfil, encryption. Measure each. Starvation: document the scroll-depth limit in `docs/privacy-architecture.md` as a coverage limit. Duplicate claims: 0 double-count. UNASKED evasion: record attribution FN and FP rates on a labelled set of 50 synthetic orphan observations. Grant bypass: cumulative ceiling from Sprint 1.8 must catch two $30 purchases. Exfil: the secret-seed test extended to share PNG (OCR-free: assert the text layer / markdown) and telemetry. | Read: agents/red_team.md | Done when: six strategies measured; at least one attack remains "works" with a documented reason (expected: paraphrase drift and UNASKED evasion); CRITICAL/HIGH handed to the closer with fixture paths.
+
+[ ] 6.4 | Performance and memory. Gmail fixture with 10,000 sent rows (generated): extraction < 2 s, observations deduped, ledger growth bounded; 30-day synthetic ledger (5,000 claims, 50,000 observations): popup < 100 ms, grading pass < 2 s, IndexedDB size < 50 MB; service-worker idle memory measured; MutationObserver batching verified under a 100-mutations/s fixture. Results to `bench/results/perf-<date>.json` → `RESULTS.md`. | Read: agents/extension_engineer.md | Done when: all four gates are tests that pass; numbers committed; any regression fails CI.
+
+[ ] 6.5 | Encryption at rest (optional). `src/crypto/`: passphrase → PBKDF2-SHA256 (≥ 600k iterations, per-install salt) → AES-GCM key held in memory only; Dexie hooks encrypt allowlisted string fields and hashes stay plaintext for indexing (document this trade-off); fresh IV per record; unlock prompt in popup when locked; wrong passphrase → clean "locked" state, zero partial reads; passphrase change re-encrypts in a resumable job. Options: enable, change, disable (decrypts). | Read: agents/extension_engineer.md | Done when: round-trip tests; wrong passphrase yields no plaintext (test reads IndexedDB directly); service-worker restart requires re-unlock; `docs/privacy-architecture.md` states what encryption does and does not protect.
+
+[ ] 6.6 | Permissions and manifest audit. Script `scripts/audit-manifest.ts` asserts `permissions` ⊆ {storage, alarms, sidePanel, notifications, offscreen, scripting} and `host_permissions` == the five §5 hosts exactly; CSP strict; no `web_accessible_resources` beyond what the share PNG needs; `minimum_chrome_version` set. Runs in CI. | Read: agents/security_reviewer.md | Done when: audit green; adding `tabs` or a wildcard host fails CI; each permission has a one-line justification in `Decisions.md` and in the store listing draft.
+
+[ ] 6.7 | Store policy pre-review. Run `agents/privacy_reviewer.md` in full (this is the one sprint where it runs as a fifth review). Single purpose statement, Limited Use disclosure, data-usage form answers, permission justifications, screenshot rules, privacy policy URL (GitHub Pages for `PRIVACY.md`). Output `reviews/sprint_6/privacy.md` with a READY / NOT READY verdict. | Read: agents/privacy_reviewer.md | Done when: verdict recorded; every NOT READY item is a task for the closer or a MANUAL.md entry.
+
+[ ] 6.8 | Threat model. `docs/threat-model.md` per `agents/docs_writer.md`: what Attest defends, what it does not, trust boundaries, weakest links (DOM fidelity, attribution, coverage), session/account assumptions, and the red-team results summary with links. | Read: agents/docs_writer.md | Done when: every "attacks that work" row is referenced; `check-docs` green.
+
+[ ] 6.9 | Hardening fixes from 6.1–6.3 (closer pass, mid-sprint). Fix all CRITICAL and HIGH red-team findings now, keeping pre-fix numbers in the report; re-run `bench/redteam.ts`; regenerate `RESULTS.md`. | Read: agents/sprint_closer.md | Done when: zero CRITICAL open; HIGH either fixed or accepted with a `Decisions.md` entry and a UI notice where the user could be misled.
+
+🔥 Expected honest outcome: paraphrase drift and UNASKED evasion still work at some rate. Say so in the README. That sentence is worth more than any feature.
+🔥 Encryption is opt-in because the unlock prompt is friction and most users will not want it. Do not make it default. Do make it correct.
+🔥 6.7 is where most Chrome extensions die. Treat the privacy reviewer's NOT READY items as blockers for Sprint 7, not suggestions.
+
+**Sprint end — run in this order, outputs to `reviews/sprint_6/`:**
+1. QA — Read agents/qa_tester.md, review against checklist, write and run tests for sprint 6 → `qa.md` (test results + gaps)
+2. Security — Read agents/security_reviewer.md and review all code written in this sprint against the security checklist → `security.md` (security gaps)
+3. Tech — Read agents/tech_reviewer.md, review code quality and architecture → `tech.md` (code quality gaps)
+4. Close — Read agents/sprint_closer.md. Here are the review outputs: [qa.md + security.md + tech.md + privacy.md + the red-team report]. Fix all gaps → `closed.md`
+
+**Gate:** `docs/attacks-that-work.md` has ≥ 13 strategies measured and ≥ 1 that still works → zero false VERIFIED on confusables, inflation, spoofing → coverage lies → UNVERIFIABLE → perf gates green with numbers in `RESULTS.md` → encryption round-trips and fails closed → manifest audit in CI → privacy pre-review READY or every blocker in MANUAL.md → threat model written → both mandatory tests green → `closed.md` says VERIFIED CLEAN.
+
+📝 Out of scope (deferred): hardware-key unlock; multi-profile sync; Firefox port (the audit script is written to be reusable for it).
