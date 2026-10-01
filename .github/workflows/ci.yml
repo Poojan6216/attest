@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    name: lint · typecheck · unit · build · e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit + property tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm --dir extension exec playwright install --with-deps chromium
+
+      # The two tests that define the product (Hard Rules 1, 2, 10). Never skipped, retried, or weakened.
+      - name: E2E (@mandatory)
+        run: pnpm --dir extension exec playwright test --grep @mandatory
+        env:
+          CI: 'true'
+
+      - name: E2E (rest)
+        run: pnpm --dir extension exec playwright test --grep-invert @mandatory
+        env:
+          CI: 'true'
+
+      - name: Upload build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-mv3
+          path: extension/.output/
+          if-no-files-found: error
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: extension/playwright-report/
+          if-no-files-found: ignore
