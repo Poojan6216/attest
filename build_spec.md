@@ -502,6 +502,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-01] [1.0] Canonical schemas now live in src/core/schema.ts (branded ids, hashes and timestamps; every object strict; length caps on every free-text field; the closed list of reason codes; receipt invariants such as 'an override exists only on an overridden receipt'). The ledger and the message bus use them; every schema has 5+ valid and 5+ invalid cases tested.
 [2026-10-01] [1.1] Normalisation: email addresses are kept exactly as read and lookalike characters are flagged (never 'cleaned' into a match); names, money (to exact integer cents, rejecting ambiguous inputs), subjects, and vendor-relative times ('Yesterday', 'Thu', '2:03 PM', '3 days ago') across midnight and daylight-saving changes. Hundreds of table cases including the nasty ones.
 [2026-10-02] [1.4] Match scoring: every feature (time, exact address, domain, name, subject overlap, amount, merchant) is an exact fraction, weights come only from the policy in basis points, and only the claim decides which features count. It reproduces every hand-computed score in the 77 golden scenarios exactly.
+[2026-10-02] [1.2] Redaction: everything Attest records from a page passes through one function that keeps only the allowlisted fields, computes the id and content hash itself (never trusting the page), and caps the subject hint at 80 characters. A 1,000-case test plants all 15 seeded secrets in extra fields and proves none ever comes out.
 ```
 
 ---
