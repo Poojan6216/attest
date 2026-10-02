@@ -505,6 +505,8 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-02] [1.2] Redaction: everything Attest records from a page passes through one function that keeps only the allowlisted fields, computes the id and content hash itself (never trusting the page), and caps the subject hint at 80 characters. A 1,000-case test plants all 15 seeded secrets in extra fields and proves none ever comes out.
 [2026-10-02] [1.3] Candidate matching: time windows (minute, hour or day precision, safe across midnight and daylight-saving days), finding each claim's candidate observations, and one-to-one assignment so one email can never verify two claims. Measured: 5,000 claims against 50,000 observations in 289.6 ms (limit 2,000 ms), via pnpm bench, in RESULTS.md.
 [2026-10-02] [1.6] Receipt state machine: regrade, user override (with a required reason, reversible), revert, and supersede for UNASKED receipts; every state/event pair is tested, and a receipt finalises to NOT_FOUND only after Attest has looked past the grace window, never before.
+[2026-10-02] [1.7] UNASKED detection: for an action nobody claimed, each agent gets its own score from session activity, user idleness (only with real evidence, never assumed), known signatures, and adjacent activity-log entries; UNASKED fires only above the policy threshold, and every sentence says 'likely' (a test checks no text ever states an agent did it as fact).
+[2026-10-02] [1.8] Spend and scope limits: claimed type not allowed, permissions observed beyond what was declared, a single purchase over the ceiling, and cumulative spend (two $30 purchases against a $50 ceiling: the second is OVER_SCOPE).
 ```
 
 ---
