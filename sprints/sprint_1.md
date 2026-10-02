@@ -29,7 +29,7 @@
 
 [x] 1.10 | The §2 demo as synthetic data. `tests/unit/core/demo.spec.ts`: construct the §2 scenario (one request, two claims, two observations, one orphan observation, coverage for Gmail and Calendar, a default grant) and assert exactly: email → VERIFIED (rule `verified`), calendar → NOT_FOUND after grace (rule `not_found`), orphan → UNASKED with ≥ 2 signals. Also the UNVERIFIABLE variant with Calendar coverage absent. | Read: agents/ledger_engineer.md | Done when: the test passes and is referenced from `docs/grading.md` as the canonical worked example.
 
-[ ] 1.11 | Docs for the core. `docs/grading.md` v1: every grade, every rule, every feature, the windows, the state machine (SVG), the 12 golden scenarios as worked examples, the replay procedure. | Read: agents/docs_writer.md | Done when: every rule id in `policy/default.json` appears in the doc; `scripts/check-docs.ts` passes.
+[x] 1.11 | Docs for the core. `docs/grading.md` v1: every grade, every rule, every feature, the windows, the state machine (SVG), the 12 golden scenarios as worked examples, the replay procedure. | Read: agents/docs_writer.md | Done when: every rule id in `policy/default.json` appears in the doc; `scripts/check-docs.ts` passes.
 
 🔥 60% of this sprint's effort is the golden suite and the property tests, not the code. Write scenarios first; make the code satisfy them.
 🔥 "UNVERIFIABLE beats a guess" is the rule that will be tempting to break when the numbers look bad. Don't. The honest number is the product.

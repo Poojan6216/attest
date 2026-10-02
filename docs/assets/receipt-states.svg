@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="title desc">
+  <title id="title">Receipt state machine (docs/grading.md §8)</title>
+  <desc id="desc">grade() creates a receipt as PENDING or FINAL, as isFinalizable decides. regrade replaces a PENDING receipt with grade()'s next receipt for the same subject, PENDING or FINAL. override moves PENDING or FINAL to USER_OVERRIDDEN and stores previousState; revert returns to previousState. supersede applies only to UNASKED receipts, from any state: the state is unchanged and supersededBy is set. Any other state and event pair throws IllegalTransitionError.</desc>
+  <!--
+    Legible on light and dark pages with no media query: the background is transparent and every colour is a
+    mid-tone with at least 4:1 contrast against both white (#ffffff) and GitHub dark (#0d1117). A media query
+    would follow the operating system, not the page, and fails when the two differ.
+  -->
+  <style>
+    .t { fill: #6e7781; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; }
+    .h { font-size: 18px; font-weight: 600; }
+    .state { font-size: 17px; font-weight: 700; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 600; }
+    .edge { fill: none; stroke: #6e7781; stroke-width: 1.6; }
+    .dashed { stroke-dasharray: 6 4; }
+    .group { fill: none; stroke: #6e7781; stroke-width: 1.2; stroke-dasharray: 3 5; }
+    .box { stroke-width: 2; fill-opacity: 0.12; }
+    .pending { fill: #a06c00; stroke: #a06c00; }
+    .final { fill: #238636; stroke: #238636; }
+    .overridden { fill: #8957e5; stroke: #8957e5; }
+    .superseded { fill: #6e7781; stroke: #6e7781; stroke-dasharray: 7 5; }
+    .label-pending { fill: #a06c00; }
+    .label-final { fill: #238636; }
+    .label-overridden { fill: #8957e5; }
+    .dot { fill: #6e7781; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6e7781"/>
+    </marker>
+  </defs>
+
+  <!-- Heading -->
+  <text class="t h" x="480" y="30" text-anchor="middle">Receipt states and events</text>
+  <text class="t" x="480" y="50" text-anchor="middle">grade() sets the first state; state.ts applies events to stored receipts and never decides finality</text>
+
+  <!-- Entry: grade() -->
+  <circle class="dot" cx="480" cy="98" r="7"/>
+  <text class="t code" x="480" y="82" text-anchor="middle">grade()</text>
+  <path class="edge" d="M473 102 C 410 118, 320 140, 280 205" marker-end="url(#arrow)"/>
+  <path class="edge" d="M487 102 C 550 118, 640 140, 680 205" marker-end="url(#arrow)"/>
+  <text class="t" x="386" y="112" text-anchor="end">isFinalizable: false</text>
+  <text class="t" x="574" y="112">isFinalizable: true</text>
+
+  <!-- The three states, inside the "any state" group -->
+  <rect class="group" x="40" y="138" width="880" height="328" rx="18"/>
+  <text class="t" x="60" y="454">any state</text>
+
+  <rect class="box pending" x="130" y="210" width="220" height="60" rx="10"/>
+  <text class="t state label-pending" x="240" y="236" text-anchor="middle">PENDING</text>
+  <text class="t" x="240" y="256" text-anchor="middle">shown as "checking"</text>
+
+  <rect class="box final" x="610" y="210" width="220" height="60" rx="10"/>
+  <text class="t state label-final" x="720" y="236" text-anchor="middle">FINAL</text>
+  <text class="t" x="720" y="256" text-anchor="middle">finalAt set; never regraded</text>
+
+  <rect class="box overridden" x="350" y="372" width="260" height="60" rx="10"/>
+  <text class="t state label-overridden" x="480" y="398" text-anchor="middle">USER_OVERRIDDEN</text>
+  <text class="t" x="480" y="418" text-anchor="middle">previousState stored; grade kept</text>
+
+  <!-- regrade -->
+  <path class="edge" d="M160 210 C 140 176, 225 176, 205 206" marker-end="url(#arrow)"/>
+  <text class="t code" x="182" y="160" text-anchor="middle">regrade</text>
+  <text class="t" x="182" y="176" text-anchor="middle">next is PENDING</text>
+  <path class="edge" d="M350 232 L 606 232" marker-end="url(#arrow)"/>
+  <text class="t code" x="480" y="224" text-anchor="middle">regrade</text>
+  <text class="t" x="480" y="252" text-anchor="middle">next is FINAL</text>
+  <text class="t" x="480" y="268" text-anchor="middle">(isFinalizable, §8 table)</text>
+
+  <!-- override and revert -->
+  <path class="edge" d="M185 270 L 346 398" marker-end="url(#arrow)"/>
+  <text class="t code" x="250" y="338" text-anchor="end">override</text>
+  <text class="t" x="250" y="354" text-anchor="end">grade, reason, at</text>
+  <path class="edge" d="M775 270 L 614 398" marker-end="url(#arrow)"/>
+  <text class="t code" x="710" y="338">override</text>
+  <text class="t" x="710" y="354">grade, reason, at</text>
+
+  <path class="edge dashed" d="M392 372 L 292 274" marker-end="url(#arrow)"/>
+  <text class="t code" x="352" y="314">revert</text>
+  <path class="edge dashed" d="M568 372 L 668 274" marker-end="url(#arrow)"/>
+  <text class="t code" x="608" y="314" text-anchor="end">revert</text>
+  <text class="t" x="480" y="340" text-anchor="middle">revert returns to previousState</text>
+
+  <!-- supersede -->
+  <path class="edge dashed" d="M480 466 L 480 512" marker-end="url(#arrow)"/>
+  <text class="t code" x="494" y="486">supersede(claimId)</text>
+  <text class="t" x="494" y="502">UNASKED receipts only, from any state</text>
+  <rect class="box superseded" x="290" y="516" width="380" height="58" rx="10"/>
+  <text class="t state" x="480" y="540" text-anchor="middle">superseded</text>
+  <text class="t" x="480" y="560" text-anchor="middle">a marker, not a state: state unchanged, supersededBy set</text>
+
+  <!-- Footnotes -->
+  <text class="t" x="480" y="604" text-anchor="middle">Any other (state, event) pair throws IllegalTransitionError. Superseded receipts are excluded from counts, alerts and the digest.</text>
+  <text class="t" x="480" y="624" text-anchor="middle">A PENDING UNASKED receipt whose next grade is not UNASKED is deleted by the caller, never regraded.</text>
+</svg>

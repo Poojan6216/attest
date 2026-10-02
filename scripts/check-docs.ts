@@ -1,0 +1,305 @@
+/**
+ * `pnpm exec tsx scripts/check-docs.ts [--root <dir>]` — the docs check (agents/docs_writer.md rule 4).
+ *
+ * Over docs/*.md, README.md and PRIVACY.md it verifies that:
+ * 1. every relative link resolves to a file or directory inside the repo, spelled with its exact letter case (as
+ *    GitHub resolves it, even on a case-insensitive file system), and every `#anchor` (in the same document or
+ *    in another Markdown file) names a heading or an HTML id there (GitHub's anchor rules);
+ * 2. every `pnpm <script>` quoted in code (inline code span or fenced block) names a script in package.json
+ *    or extension/package.json (pnpm's own commands such as `install` and `exec` need no script);
+ * 3. every rule id in policy/default.json appears in docs/grading.md as an inline code span (`verified`), so
+ *    a prose word such as "partial" or a JSON listing alone does not count as documenting a rule.
+ * It prints one line per problem (`file:line: message`) and exits 1 when there is any, 0 otherwise.
+ */
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { pnpmInvocations } from './check-docs-commands';
+import { scanMarkdown, segments, splitFences, type MarkdownScan } from './check-docs-markdown';
+
+export interface DocProblem {
+  /** Path relative to the root, with forward slashes. */
+  readonly file: string;
+  /** 1-based line, or 0 when the problem is about the file as a whole. */
+  readonly line: number;
+  readonly message: string;
+}
+
+export interface DocCheckResult {
+  readonly problems: readonly DocProblem[];
+  readonly files: number;
+  readonly links: number;
+  readonly commands: number;
+  readonly ruleIds: number;
+}
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const GRADING_DOC = 'docs/grading.md';
+const POLICY_FILE = 'policy/default.json';
+const PACKAGE_FILES = ['package.json', 'extension/package.json'];
+const ROOT_DOCS = ['README.md', 'PRIVACY.md'];
+const EXTERNAL = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|\/\/)/;
+
+type Report = (file: string, line: number, message: string) => void;
+
+function byCodeUnit(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/** The documents checked, relative to the root: docs/*.md (not recursive), README.md, PRIVACY.md. */
+export function docFiles(root: string): string[] {
+  const docsDir = path.join(root, 'docs');
+  const docs = existsSync(docsDir)
+    ? readdirSync(docsDir)
+        .filter((name) => name.endsWith('.md'))
+        .sort()
+        .map((name) => `docs/${name}`)
+    : [];
+  return [...docs, ...ROOT_DOCS];
+}
+
+function readText(root: string, file: string): string | null {
+  const full = path.join(root, file);
+  return existsSync(full) && statSync(full).isFile() ? readFileSync(full, 'utf8') : null;
+}
+
+function readJson(root: string, file: string): unknown {
+  const text = readText(root, file);
+  if (text === null) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Script names from package.json and extension/package.json. */
+function scriptNames(root: string, report: Report): Set<string> {
+  const names = new Set<string>();
+  for (const file of PACKAGE_FILES) {
+    const json = readJson(root, file);
+    const scripts = isRecord(json) ? json.scripts : undefined;
+    if (!isRecord(scripts)) {
+      report(file, 0, 'cannot read "scripts" from this package.json');
+      continue;
+    }
+    for (const name of Object.keys(scripts)) names.add(name);
+  }
+  return names;
+}
+
+/** Rule ids from policy/default.json, in policy order. */
+function policyRuleIds(root: string, report: Report): string[] {
+  const json = readJson(root, POLICY_FILE);
+  const rules = isRecord(json) ? json.rules : undefined;
+  const ids = Array.isArray(rules) ? rules.map((rule) => (isRecord(rule) ? rule.id : undefined)) : [];
+  if (!Array.isArray(rules) || ids.some((id) => typeof id !== 'string')) {
+    report(POLICY_FILE, 0, 'cannot read rule ids from "rules" (each rule needs a string "id")');
+  }
+  return ids.filter((id): id is string => typeof id === 'string');
+}
+
+/** Resolves a link target from a document; null when it leaves the root. */
+function resolveTarget(root: string, docFile: string, pathPart: string): string | null {
+  const base = pathPart.startsWith('/') ? root : path.join(root, path.dirname(docFile));
+  const resolved = path.resolve(base, `.${path.sep}${pathPart.replace(/^\/+/, '')}`);
+  const relative = path.relative(root, resolved);
+  const outside = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  return outside ? null : resolved;
+}
+
+/**
+ * The path as stored on disk when `relative` (an existing path under `root`) is spelled with different letter
+ * case, else null. GitHub and Linux compare paths case-sensitively, but a case-insensitive file system (the
+ * default on macOS and Windows) finds `docs/Grading.md` for `docs/grading.md`, so `existsSync` alone passes a
+ * link that is broken on GitHub.
+ */
+function caseMismatch(root: string, relative: string): string | null {
+  let dir = root;
+  let differs = false;
+  const actual: string[] = [];
+  for (const segment of relative.split(path.sep).filter((part) => part !== '')) {
+    const entries = readdirSync(dir);
+    const found = entries.includes(segment)
+      ? segment
+      : entries.find((entry) => entry.toLowerCase() === segment.toLowerCase());
+    if (found === undefined) return null;
+    differs ||= found !== segment;
+    actual.push(found);
+    dir = path.join(dir, found);
+  }
+  return differs ? actual.join('/') : null;
+}
+
+/** The problem with a link path that resolved inside the root, or null when it names an existing entry. */
+function pathProblem(root: string, target: string, pathPart: string, resolved: string): string | null {
+  const relative = path.relative(root, resolved);
+  const shown = relative.split(path.sep).join('/');
+  if (!existsSync(resolved)) return `broken link '${target}': ${shown} does not exist`;
+  const onDisk = caseMismatch(root, relative);
+  if (onDisk !== null) return `broken link '${target}': ${shown} differs in letter case from ${onDisk}`;
+  if (pathPart.endsWith('/') && !statSync(resolved).isDirectory()) {
+    return `broken link '${target}': ${shown} is a file, not a directory`;
+  }
+  return null;
+}
+
+function decode(text: string): string | null {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Anchors of a Markdown file, memoised per check. */
+type AnchorLookup = (file: string) => ReadonlySet<string>;
+
+/** The problem with one relative link, or null when it resolves. */
+function linkProblem(root: string, docFile: string, target: string, anchorsOf: AnchorLookup): string | null {
+  const hash = target.indexOf('#');
+  const rawPath = hash === -1 ? target : target.slice(0, hash);
+  const pathPart = decode(rawPath.split('?')[0] ?? '');
+  const anchor = hash === -1 ? undefined : decode(target.slice(hash + 1));
+  if (pathPart === null || anchor === null) return `link '${target}' is not valid percent-encoding`;
+  if (target === '') return 'empty link target';
+  let targetFile = docFile;
+  if (pathPart !== '') {
+    const resolved = resolveTarget(root, docFile, pathPart);
+    if (resolved === null) return `link '${target}' points outside the repository`;
+    const problem = pathProblem(root, target, pathPart, resolved);
+    if (problem !== null) return problem;
+    targetFile = path.relative(root, resolved).split(path.sep).join('/');
+  }
+  if (anchor === undefined || anchor === '' || !targetFile.endsWith('.md')) return null;
+  return anchorsOf(targetFile).has(anchor)
+    ? null
+    : `broken anchor '${target}': no heading '#${anchor}' in ${targetFile}`;
+}
+
+function checkLinks(root: string, file: string, scan: MarkdownScan, anchorsOf: AnchorLookup, report: Report) {
+  let count = 0;
+  for (const link of scan.links) {
+    if (EXTERNAL.test(link.target)) continue;
+    count += 1;
+    const problem = linkProblem(root, file, link.target, anchorsOf);
+    if (problem !== null) report(file, link.line, problem);
+  }
+  return count;
+}
+
+function checkCommands(file: string, scan: MarkdownScan, scripts: ReadonlySet<string>, report: Report) {
+  let count = 0;
+  for (const code of scan.code) {
+    for (const invocation of pnpmInvocations(code.text)) {
+      count += 1;
+      if (invocation.script !== null && !scripts.has(invocation.script)) {
+        const where = PACKAGE_FILES.join(' or ');
+        report(file, code.line, `'${invocation.text}': no script '${invocation.script}' in ${where}`);
+      }
+    }
+  }
+  return count;
+}
+
+/** Inline code span contents outside fenced blocks. */
+function inlineCodeSpans(source: string): Set<string> {
+  const spans = new Set<string>();
+  for (const line of splitFences(source).prose) {
+    for (const part of segments(line.text)) if (part.code) spans.add(part.text);
+  }
+  return spans;
+}
+
+function checkRuleIds(root: string, report: Report): number {
+  const ids = policyRuleIds(root, report);
+  const grading = readText(root, GRADING_DOC);
+  if (grading === null) {
+    report(GRADING_DOC, 0, 'missing: every rule id in policy/default.json must be documented here');
+    return ids.length;
+  }
+  const spans = inlineCodeSpans(grading);
+  for (const id of ids) {
+    if (!spans.has(id))
+      report(GRADING_DOC, 0, `rule id '${id}' from ${POLICY_FILE} does not appear as \`${id}\``);
+  }
+  return ids.length;
+}
+
+/** Runs every check under `root` and returns the problems, sorted by file, line and message. */
+export function checkDocs(root: string): DocCheckResult {
+  const problems: DocProblem[] = [];
+  const report: Report = (file, line, message) => problems.push({ file, line, message });
+  const scans = new Map<string, MarkdownScan>();
+  const scanOf = (file: string): MarkdownScan | null => {
+    const cached = scans.get(file);
+    if (cached !== undefined) return cached;
+    const text = readText(root, file);
+    if (text === null) return null;
+    const scan = scanMarkdown(text);
+    scans.set(file, scan);
+    return scan;
+  };
+  const anchorsOf: AnchorLookup = (file) => scanOf(file)?.anchors ?? new Set<string>();
+  const scripts = scriptNames(root, report);
+  const files = docFiles(root);
+  let links = 0;
+  let commands = 0;
+  for (const file of files) {
+    const scan = scanOf(file);
+    if (scan === null) {
+      report(file, 0, 'missing');
+      continue;
+    }
+    links += checkLinks(root, file, scan, anchorsOf, report);
+    commands += checkCommands(file, scan, scripts, report);
+  }
+  const ruleIds = checkRuleIds(root, report);
+  problems.sort((a, b) => byCodeUnit(a.file, b.file) || a.line - b.line || byCodeUnit(a.message, b.message));
+  return { problems, files: files.length, links, commands, ruleIds };
+}
+
+export interface CliOutput {
+  readonly log: (line: string) => void;
+  readonly error: (line: string) => void;
+}
+
+/** The command line: `[--root <dir>]`. Returns the exit code (0 clean, 1 problems, 2 usage). */
+export function runCli(argv: readonly string[], output: CliOutput, defaultRoot: string = REPO_ROOT): number {
+  let root = defaultRoot;
+  if (argv.length > 0) {
+    if (argv.length !== 2 || argv[0] !== '--root' || argv[1] === undefined) {
+      output.error('usage: tsx scripts/check-docs.ts [--root <dir>]');
+      return 2;
+    }
+    root = path.resolve(argv[1]);
+  }
+  const result = checkDocs(root);
+  for (const problem of result.problems)
+    output.error(`${problem.file}:${String(problem.line)}: ${problem.message}`);
+  const counts = `${String(result.files)} files, ${String(result.links)} relative links, ${String(result.commands)} pnpm commands, ${String(result.ruleIds)} rule ids`;
+  if (result.problems.length > 0) {
+    output.error(`check-docs: ${String(result.problems.length)} problem(s) (${counts})`);
+    return 1;
+  }
+  output.log(`check-docs: OK (${counts})`);
+  return 0;
+}
+
+const invokedAs = process.argv[1];
+if (invokedAs !== undefined && import.meta.url === pathToFileURL(path.resolve(invokedAs)).href) {
+  process.exitCode = runCli(process.argv.slice(2), {
+    log: (line) => {
+      console.log(line);
+    },
+    error: (line) => {
+      console.error(line);
+    },
+  });
+}
