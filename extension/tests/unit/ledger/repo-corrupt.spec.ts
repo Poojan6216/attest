@@ -25,6 +25,7 @@ import {
   upsertClaim,
   upsertObservation,
 } from '../../../src/ledger/repo';
+import { Claim, CoveragePing, Observation } from '../../../src/ledger/types';
 import type { LogRecord } from '../../../src/log';
 import {
   captureLogs,
@@ -63,8 +64,14 @@ async function seedObservations(): Promise<void> {
   const valid = makeObservation();
   await upsertObservation(db, valid);
   await writeRaw('observations', [
-    { ...toObservationRow(makeObservation({ id: ulid(2), contentHash: sha(2) })), body: SECRET },
-    { ...toObservationRow(makeObservation({ id: ulid(3), contentHash: sha(3) })), contentHash: 'zz' },
+    {
+      ...toObservationRow(Observation.parse(makeObservation({ id: ulid(2), contentHash: sha(2) }))),
+      body: SECRET,
+    },
+    {
+      ...toObservationRow(Observation.parse(makeObservation({ id: ulid(3), contentHash: sha(3) }))),
+      contentHash: 'zz',
+    },
   ]);
 }
 
@@ -121,13 +128,17 @@ describe('reads skip corrupt rows', () => {
   });
 
   it('a valid ping replaces a corrupt coverage row with a later lastSyncAt', async () => {
-    await writeRaw('coverage', [{ ...toCoverageRow(makePing()), lastSyncAt: '2099-01-01T00:00:00Z', x: 1 }]);
+    await writeRaw('coverage', [
+      { ...toCoverageRow(CoveragePing.parse(makePing())), lastSyncAt: '2099-01-01T00:00:00Z', x: 1 },
+    ]);
     expect(await putCoveragePing(db, makePing())).toEqual({ written: true });
     expect(await getCoveragePing(db, 'gmail', sha(900))).toEqual(makePing());
   });
 
   it('logs a malformed id as null, never echoing what a corrupt row holds in its id field', async () => {
-    await writeRaw('observations', [{ ...toObservationRow(makeObservation()), id: PASSPHRASE }]);
+    await writeRaw('observations', [
+      { ...toObservationRow(Observation.parse(makeObservation())), id: PASSPHRASE },
+    ]);
     await writeRaw('grants', [{ agent: PASSPHRASE, allowedTypes: 'all' }]);
     const exported = await exportLedger(db, { exportedAt: '2026-10-01T12:00:00Z' });
     expect(exported.tables.observations).toEqual([]);
@@ -143,7 +154,9 @@ describe('reads skip corrupt rows', () => {
   // logger itself must refuse an identifier-shaped id that is not one of ours.
   it('a corrupt adapterHealth, coverage or meta row keyed by content-shaped text never prints that key', async () => {
     await writeRaw('adapterHealth', [{ adapterId: PASSPHRASE, status: 'MAYBE' }]);
-    await writeRaw('coverage', [{ ...toCoverageRow(makePing()), observerId: 'perpetua.villanueva', x: 1 }]);
+    await writeRaw('coverage', [
+      { ...toCoverageRow(CoveragePing.parse(makePing())), observerId: 'perpetua.villanueva', x: 1 },
+    ]);
     await writeRaw('meta', [{ key: 'k7pq2vxw9mzr4tnb8hyd', value: { smuggled: true } }]);
     await exportLedger(db, { exportedAt: '2026-10-01T12:00:00Z' });
     const ids = events('ledger.row_invalid').map(([, id]) => id);
@@ -158,7 +171,9 @@ describe('reads skip corrupt rows', () => {
 describe('idempotent upserts never treat an unreadable row as already stored', () => {
   it('a valid observation replaces an unreadable row holding its contentHash', async () => {
     // An older build stored a row today's strict schema rejects (subjectHint over its 80-char cap).
-    await writeRaw('observations', [{ ...toObservationRow(makeObservation()), subjectHint: 'x'.repeat(81) }]);
+    await writeRaw('observations', [
+      { ...toObservationRow(Observation.parse(makeObservation())), subjectHint: 'x'.repeat(81) },
+    ]);
     const fresh = makeObservation({ id: ulid(2) });
     expect(await upsertObservation(db, fresh)).toEqual({ id: ulid(2), inserted: true });
     expect(await getObservation(db, ulid(2))).toEqual(fresh);
@@ -173,7 +188,7 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
   });
 
   it('a valid claim replaces an unreadable row holding its rawHash', async () => {
-    await writeRaw('claims', [{ ...toClaimRow(makeClaim()), agent: 'gemini' }]);
+    await writeRaw('claims', [{ ...toClaimRow(Claim.parse(makeClaim())), agent: 'gemini' }]);
     const fresh = makeClaim({ id: ulid(102) });
     expect(await upsertClaim(db, fresh)).toEqual({ id: ulid(102), inserted: true });
     expect(await getClaim(db, ulid(102))).toEqual(fresh);
@@ -182,7 +197,10 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
   });
 
   it('a valid write replaces an unreadable row under its own id instead of raising id_conflict', async () => {
-    const stale = { ...toObservationRow(makeObservation({ contentHash: sha(9) })), source: 'outlook' };
+    const stale = {
+      ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(9) }))),
+      source: 'outlook',
+    };
     await writeRaw('observations', [stale]);
     expect(await upsertObservation(db, makeObservation())).toEqual({ id: ulid(1), inserted: true });
     expect(await getObservation(db, ulid(1))).toEqual(makeObservation());

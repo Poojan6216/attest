@@ -3,8 +3,9 @@
  * singleton); runtime callers get the shared instance from `getLedger()`.
  *
  * Contract:
- *  - Writes Zod-parse their input first. Invalid input throws `LedgerError('invalid_input')` and writes
- *    nothing. Strict schemas reject unknown keys, so nothing outside the allowlist reaches disk (Hard Rule 2).
+ *  - Writes take the schemas' input types and Zod-parse them first (src/core/schema.ts). Invalid input throws
+ *    `LedgerError('invalid_input')` and writes nothing. Strict schemas reject unknown keys, so nothing outside
+ *    the allowlist reaches disk (Hard Rule 2). Reads return the parsed, branded domain types.
  *  - Observations and claims are idempotent: keyed on contentHash / rawHash inside one rw transaction.
  *    A repeat is a no-op that returns the stored id; it never overwrites a readable row and never leaks a
  *    ConstraintError. A stored row no read can return (it fails its schema) is replaced, not kept as a ghost.
@@ -42,6 +43,13 @@ import {
   Observation,
   Receipt,
   Request,
+  type AdapterHealthInput,
+  type ClaimInput,
+  type CoveragePingInput,
+  type GrantInput,
+  type ObservationInput,
+  type ReceiptInput,
+  type RequestInput,
 } from './types';
 
 export interface UpsertResult {
@@ -53,11 +61,6 @@ export interface UpsertResult {
 export interface WriteResult {
   /** False when the incoming report was older than the stored one and was ignored. */
   readonly written: boolean;
-}
-
-export interface ReceiptWriteOptions {
-  /** The receipt's agent. Receipt has no agent field; the repo stores it only for the [agent+date] index. */
-  readonly agent: AgentId;
 }
 
 /** `YYYY-MM-DD`, the `date` part of the `[agent+date]` indexes. */
@@ -140,7 +143,7 @@ function isOlder(incomingTs: string, storedTs: string): boolean {
 // ── Observations ────────────────────────────────────────────────────────────────────────────────
 
 /** Inserts an observation, or returns the existing id when its contentHash is already stored. */
-export async function upsertObservation(db: LedgerDb, input: Observation): Promise<UpsertResult> {
+export async function upsertObservation(db: LedgerDb, input: ObservationInput): Promise<UpsertResult> {
   const observation = parseInput('observations', Observation, input);
   const row = toObservationRow(observation);
   return insertUnlessHashExists(db, observationsByHash(db), observation.contentHash, row);
@@ -185,7 +188,7 @@ export async function observationsByCounterpartyToken(db: LedgerDb, token: strin
 // ── Claims ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Inserts a claim, or returns the existing id when its rawHash is already stored. */
-export async function upsertClaim(db: LedgerDb, input: Claim): Promise<UpsertResult> {
+export async function upsertClaim(db: LedgerDb, input: ClaimInput): Promise<UpsertResult> {
   const claim = parseInput('claims', Claim, input);
   return insertUnlessHashExists(db, claimsByHash(db), claim.rawHash, toClaimRow(claim));
 }
@@ -203,7 +206,7 @@ export async function claimsByAgentAndDate(db: LedgerDb, agent: AgentId, date: s
 // ── Requests ────────────────────────────────────────────────────────────────────────────────────
 
 /** Stores a request by id (a later put with the same id replaces it). */
-export async function putRequest(db: LedgerDb, input: Request): Promise<void> {
+export async function putRequest(db: LedgerDb, input: RequestInput): Promise<void> {
   const request = parseInput('requests', Request, input);
   await db.requests.put(toRequestRow(request));
 }
@@ -220,18 +223,19 @@ export async function requestsByAgentAndDate(db: LedgerDb, agent: AgentId, date:
 
 // ── Receipts ────────────────────────────────────────────────────────────────────────────────────
 
-/** Stores a receipt by id; a later put replaces it (PENDING → FINAL is the same receipt id). */
-export async function putReceipt(db: LedgerDb, input: Receipt, options: ReceiptWriteOptions): Promise<void> {
-  const receipt = parseInput('receipts', Receipt, input);
-  const agent = parseInput('receipts', AgentId, options.agent);
-  await db.receipts.put(toReceiptRow(receipt, agent));
+/**
+ * Stores a receipt by id; a later put replaces it (PENDING → FINAL is the same receipt id). The receipt's own
+ * `agent` field feeds the [agent+date] index.
+ */
+export async function putReceipt(db: LedgerDb, input: ReceiptInput): Promise<void> {
+  await db.receipts.put(toReceiptRow(parseInput('receipts', Receipt, input)));
 }
 
 export async function getReceipt(db: LedgerDb, id: string): Promise<Receipt | undefined> {
   return readRow('receipts', Receipt, await db.receipts.get(id));
 }
 
-/** Receipts by agent on a local date (`YYYY-MM-DD` of `computedAt`). */
+/** Receipts by their `agent` on a local date (`YYYY-MM-DD` of `computedAt`). */
 export async function receiptsByAgentAndDate(db: LedgerDb, agent: AgentId, date: string): Promise<Receipt[]> {
   const key = agentDateKey('receipts', agent, date);
   return readRows('receipts', Receipt, await db.receipts.where('[agent+date]').equals(key).toArray());
@@ -240,7 +244,7 @@ export async function receiptsByAgentAndDate(db: LedgerDb, agent: AgentId, date:
 // ── Grants ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Stores the grant for its agent (one grant per agent; a later put replaces it). */
-export async function putGrant(db: LedgerDb, input: Grant): Promise<void> {
+export async function putGrant(db: LedgerDb, input: GrantInput): Promise<void> {
   await db.grants.put(parseInput('grants', Grant, input));
 }
 
@@ -256,7 +260,7 @@ export async function listGrants(db: LedgerDb): Promise<Grant[]> {
 // ── Adapter health ──────────────────────────────────────────────────────────────────────────────
 
 /** Keeps the latest health report per adapter; a report older than the stored one is ignored. */
-export async function putAdapterHealth(db: LedgerDb, input: AdapterHealth): Promise<WriteResult> {
+export async function putAdapterHealth(db: LedgerDb, input: AdapterHealthInput): Promise<WriteResult> {
   const health = parseInput('adapterHealth', AdapterHealth, input);
   return db.transaction('rw', db.adapterHealth, async (): Promise<WriteResult> => {
     const stored = readRow('adapterHealth', AdapterHealth, await db.adapterHealth.get(health.adapterId));
@@ -278,7 +282,7 @@ export async function listAdapterHealth(db: LedgerDb): Promise<AdapterHealth[]> 
 // ── Coverage ────────────────────────────────────────────────────────────────────────────────────
 
 /** Keeps the latest ping per observer + account; a ping older than the stored one is ignored. */
-export async function putCoveragePing(db: LedgerDb, input: CoveragePing): Promise<WriteResult> {
+export async function putCoveragePing(db: LedgerDb, input: CoveragePingInput): Promise<WriteResult> {
   const ping = parseInput('coverage', CoveragePing, input);
   const row = toCoverageRow(ping);
   return db.transaction('rw', db.coverage, async (): Promise<WriteResult> => {

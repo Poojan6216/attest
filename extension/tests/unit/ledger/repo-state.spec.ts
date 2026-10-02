@@ -31,10 +31,24 @@ afterEach(() => {
 
 describe('putGrant / getGrant', () => {
   it('stores one grant per agent and reads it back exactly', async () => {
-    const grant = makeGrant({ spendCeilingCents: 5000, observedScopes: ['gmail.read'] });
+    const grant = makeGrant({
+      spendCeilingCents: 5000,
+      spendCurrency: 'USD',
+      observedScopes: ['gmail.read'],
+      accounts: { 'gmail.sent': [sha(1)] },
+    });
     await putGrant(db, grant);
     expect(await getGrant(db, 'muse')).toEqual(grant);
     expect(await getGrant(db, 'claude')).toBeUndefined();
+  });
+
+  it('rejects a spend ceiling without its currency, naming spendCurrency', async () => {
+    const error = await expectLedgerError(
+      putGrant(db, makeGrant({ spendCeilingCents: 5000 })),
+      'invalid_input',
+    );
+    expect(error.context).toMatchObject({ table: 'grants', paths: 'spendCurrency' });
+    expect(await db.grants.count()).toBe(0);
   });
 
   it('replaces the grant on a second put and rejects invalid input', async () => {

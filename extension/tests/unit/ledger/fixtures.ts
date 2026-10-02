@@ -1,6 +1,10 @@
 /**
  * Shared builders for the ledger specs. Every value is fixed (no clock, no randomness) so failures
  * reproduce. Import 'fake-indexeddb/auto' before this module (Dexie captures indexedDB at load).
+ *
+ * Builders return the schemas' *input* types (plain strings, no brands): that is what the repos accept, and
+ * it lets a test build an invalid value through an override. A test that needs the parsed, branded domain
+ * object (a row builder, a strict equality on a parse) parses the builder's result with the schema.
  */
 import 'fake-indexeddb/auto';
 
@@ -8,13 +12,13 @@ import { expect } from 'vitest';
 
 import { LedgerError, type LedgerErrorCode } from '../../../src/ledger/errors';
 import type {
-  AdapterHealth,
-  Claim,
-  CoveragePing,
-  Grant,
-  Observation,
-  Receipt,
-  Request,
+  AdapterHealthInput,
+  ClaimInput,
+  CoveragePingInput,
+  GrantInput,
+  ObservationInput,
+  ReceiptInput,
+  RequestInput,
 } from '../../../src/ledger/types';
 import { setLogSink, type LogRecord } from '../../../src/log';
 
@@ -36,7 +40,7 @@ export function uniqueDbName(prefix: string): string {
   return `attest-test-${prefix}-${String(dbCounter)}`;
 }
 
-export function makeObservation(overrides: Partial<Observation> = {}): Observation {
+export function makeObservation(overrides: Partial<ObservationInput> = {}): ObservationInput {
   return {
     id: ulid(1),
     source: 'gmail.sent',
@@ -50,7 +54,7 @@ export function makeObservation(overrides: Partial<Observation> = {}): Observati
   };
 }
 
-export function makeClaim(overrides: Partial<Claim> = {}): Claim {
+export function makeClaim(overrides: Partial<ClaimInput> = {}): ClaimInput {
   return {
     id: ulid(101),
     agent: 'muse',
@@ -59,6 +63,7 @@ export function makeClaim(overrides: Partial<Claim> = {}): Claim {
     counterparty: 'alice@example.com',
     subjectHint: 'Quarterly numbers',
     claimedAt: '2026-10-01T10:14:00-04:00',
+    claimedAtPrecision: 'minute',
     observedAt: '2026-10-01T10:30:00-04:00',
     sourceKind: 'activity_view',
     extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.9 },
@@ -67,7 +72,7 @@ export function makeClaim(overrides: Partial<Claim> = {}): Claim {
   };
 }
 
-export function makeRequest(overrides: Partial<Request> = {}): Request {
+export function makeRequest(overrides: Partial<RequestInput> = {}): RequestInput {
   return {
     id: ulid(201),
     agent: 'muse',
@@ -79,25 +84,27 @@ export function makeRequest(overrides: Partial<Request> = {}): Request {
   };
 }
 
-export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
+export function makeReceipt(overrides: Partial<ReceiptInput> = {}): ReceiptInput {
   return {
     id: ulid(301),
+    agent: 'muse',
     claimId: ulid(101),
     observationIds: [ulid(1)],
     requestId: ulid(201),
     grade: 'VERIFIED',
     confidence: 0.92,
     ruleId: 'verified',
-    reasons: ['Sent email found within the window'],
+    reasons: [{ code: 'match.best', params: { observationId: ulid(1) } }],
     signals: { timeProximity: 0.9, counterpartyExact: 1 },
     state: 'PENDING',
+    policyHash: sha(302),
     inputsHash: sha(301),
     computedAt: '2026-10-01T10:31:00-04:00',
     ...overrides,
   };
 }
 
-export function makeGrant(overrides: Partial<Grant> = {}): Grant {
+export function makeGrant(overrides: Partial<GrantInput> = {}): GrantInput {
   return {
     agent: 'muse',
     allowedTypes: ['email.sent', 'calendar.created'],
@@ -109,7 +116,7 @@ export function makeGrant(overrides: Partial<Grant> = {}): Grant {
   };
 }
 
-export function makeHealth(overrides: Partial<AdapterHealth> = {}): AdapterHealth {
+export function makeHealth(overrides: Partial<AdapterHealthInput> = {}): AdapterHealthInput {
   return {
     adapterId: 'muse',
     version: '1.0.0',
@@ -120,7 +127,7 @@ export function makeHealth(overrides: Partial<AdapterHealth> = {}): AdapterHealt
   };
 }
 
-export function makePing(overrides: Partial<CoveragePing> = {}): CoveragePing {
+export function makePing(overrides: Partial<CoveragePingInput> = {}): CoveragePingInput {
   return {
     observerId: 'gmail',
     accountHash: sha(900),

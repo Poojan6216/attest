@@ -9,6 +9,7 @@ import { BUS_ERROR_CODES, BusError, transportErrorCode } from '../../../src/bus/
 import { listen } from '../../../src/bus/listen';
 import { type BusMessage, BUS_MESSAGE_TYPES, type BusMessageType } from '../../../src/bus/messages';
 import { query, send } from '../../../src/bus/send';
+import type { IsoTs, Sha256 } from '../../../src/core/schema';
 import { CLAIM, captureLogs, connectAs, extensionPage, OBSERVATION, SECRET, TS, VALID } from './harness';
 
 const records = captureLogs();
@@ -18,8 +19,9 @@ beforeEach(() => {
 });
 
 /**
- * One invalid message per type that the compiler accepts: TypeScript cannot see string formats,
- * ranges, or extra fields carried by a variable. This is what `send()` exists to catch.
+ * One invalid message per type that the compiler accepts: TypeScript cannot see ranges or extra fields
+ * carried by a variable, and a branded format is only a cast away from any string. This is what `send()`
+ * exists to catch.
  */
 function typedButInvalid(): Record<BusMessageType, BusMessage> {
   const smuggledClaim = { ...CLAIM, body: SECRET };
@@ -27,14 +29,17 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
   return {
     'adapter.health': {
       type: 'adapter.health',
-      health: { ...VALID['adapter.health'].health, checkedAt: 'now' },
+      health: { ...VALID['adapter.health'].health, checkedAt: 'now' as IsoTs },
     },
     'adapter.claims': { ...VALID['adapter.claims'], claims: [smuggledClaim] },
     'observer.observations': { ...VALID['observer.observations'], observations: [smuggledObservation] },
-    'coverage.ping': { type: 'coverage.ping', ping: { ...VALID['coverage.ping'].ping, accountHash: SECRET } },
+    'coverage.ping': {
+      type: 'coverage.ping',
+      ping: { ...VALID['coverage.ping'].ping, accountHash: SECRET as Sha256 },
+    },
     'ui.query': { type: 'ui.query', query: { kind: 'health.list' }, ...{ extra: SECRET } },
     'ui.result': { type: 'ui.result', kind: 'health.list', ok: true, data: undefined },
-    'ledger.changed': { type: 'ledger.changed', tables: [], at: TS },
+    'ledger.changed': { type: 'ledger.changed', tables: [], at: TS as IsoTs },
   };
 }
 

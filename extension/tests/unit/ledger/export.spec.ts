@@ -51,7 +51,7 @@ async function populate(db: LedgerDb, reverse = false): Promise<void> {
     await upsertObservation(db, makeObservation({ id: ulid(n), contentHash: sha(n) }));
     await upsertClaim(db, makeClaim({ id: ulid(100 + n), rawHash: sha(100 + n) }));
     await putRequest(db, makeRequest({ id: ulid(200 + n) }));
-    await putReceipt(db, makeReceipt({ id: ulid(300 + n) }), { agent: n === 1 ? 'muse' : 'claude' });
+    await putReceipt(db, makeReceipt({ id: ulid(300 + n), agent: n === 1 ? 'muse' : 'claude' }));
   }
   for (const agent of order(['muse', 'chatgpt'] as const)) await putGrant(db, makeGrant({ agent }));
   for (const adapterId of order(['muse', 'gmail'])) await putAdapterHealth(db, makeHealth({ adapterId }));
@@ -108,16 +108,10 @@ describe('exportLedger', () => {
     await putReceipt(
       a,
       makeReceipt({ signals: { timeProximity: 0.9, counterpartyExact: 1, amountExact: 0 } }),
-      {
-        agent: 'muse',
-      },
     );
     await putReceipt(
       b,
       makeReceipt({ signals: { amountExact: 0, timeProximity: 0.9, counterpartyExact: 1 } }),
-      {
-        agent: 'muse',
-      },
     );
     const fromA = await exportLedger(a, { exportedAt: EXPORTED_AT });
     expect(JSON.stringify(await exportLedger(b, { exportedAt: EXPORTED_AT }))).toBe(JSON.stringify(fromA));
@@ -126,6 +120,36 @@ describe('exportLedger', () => {
       'counterpartyExact',
       'timeProximity',
     ]);
+  });
+
+  it('is deterministic for reason params and grant accounts too', async () => {
+    const a = await open('export-records-a');
+    const b = await open('export-records-b');
+    const params = (ceilingFirst: boolean) =>
+      ceilingFirst
+        ? { ceilingCents: 5_000, amountCents: 20_000 }
+        : { amountCents: 20_000, ceilingCents: 5_000 };
+    const ceiling = (ceilingFirst: boolean) =>
+      makeReceipt({
+        grade: 'OVER_SCOPE',
+        ruleId: 'over_ceiling',
+        reasons: [{ code: 'ceiling.exceeded', params: params(ceilingFirst) }],
+      });
+    const accounts = (calendarFirst: boolean) =>
+      calendarFirst
+        ? { 'gcal.event': [sha(7)], 'gmail.sent': [sha(8)] }
+        : { 'gmail.sent': [sha(8)], 'gcal.event': [sha(7)] };
+    await putReceipt(a, ceiling(true));
+    await putReceipt(b, ceiling(false));
+    await putGrant(a, makeGrant({ accounts: accounts(false) }));
+    await putGrant(b, makeGrant({ accounts: accounts(true) }));
+    const fromA = await exportLedger(a, { exportedAt: EXPORTED_AT });
+    expect(JSON.stringify(await exportLedger(b, { exportedAt: EXPORTED_AT }))).toBe(JSON.stringify(fromA));
+    expect(Object.keys(fromA.tables.receipts[0]?.reasons[0]?.params ?? {})).toEqual([
+      'amountCents',
+      'ceilingCents',
+    ]);
+    expect(Object.keys(fromA.tables.grants[0]?.accounts ?? {})).toEqual(['gcal.event', 'gmail.sent']);
   });
 
   it('exports an empty ledger and reports the migrated schema version', async () => {

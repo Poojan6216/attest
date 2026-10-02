@@ -1,21 +1,25 @@
 /**
  * Schema-level contract of the bus (sprint 0.7): one discriminated union on `type`, strict members,
- * payload items from the ledger schemas.
+ * payload items from the canonical core schemas (task 1.0).
  */
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  AdapterClaimsMessage,
+  AdapterHealthMessage,
   BUS_MESSAGE_TYPES,
   BusMessage,
   type BusMessageType,
   isBusMessageType,
   LedgerTable,
+  ObserverObservationsMessage,
   type UiQuery,
   type UiQueryKind,
   UiQueryKind as UiQueryKindSchema,
   UiResultMessage,
   uiFailure,
 } from '../../../src/bus/messages';
+import { Claim, HealthReport, Observation, Request } from '../../../src/core/schema';
 import { CLAIM, HASH, MALFORMED, OBSERVATION, REQUEST, SECRET, TS, VALID } from './harness';
 
 describe('BusMessage', () => {
@@ -95,6 +99,32 @@ describe('BusMessage', () => {
       { ...VALID['observer.observations'], version: '' },
     ];
     for (const raw of cases) expect(BusMessage.safeParse(raw).success).toBe(false);
+  });
+
+  it('carries the canonical core schemas, so the bus and grading agree on every field', () => {
+    expect(AdapterClaimsMessage.shape.claims.element).toBe(Claim);
+    expect(AdapterClaimsMessage.shape.requests.element).toBe(Request);
+    expect(ObserverObservationsMessage.shape.observations.element).toBe(Observation);
+    expect(AdapterHealthMessage.shape.health).toBe(HealthReport);
+  });
+
+  it('rejects payloads missing the Sprint 1 fields or breaking their formats', () => {
+    const noPrecision = Object.fromEntries(
+      Object.entries(CLAIM).filter(([key]) => key !== 'claimedAtPrecision'),
+    );
+    const cases: unknown[] = [
+      { ...VALID['adapter.claims'], claims: [noPrecision] },
+      { ...VALID['adapter.claims'], claims: [{ ...CLAIM, claimedAtPrecision: 'second' }] },
+      { ...VALID['adapter.claims'], claims: [{ ...CLAIM, targetAt: 'next Tuesday' }] },
+      { ...VALID['adapter.claims'], claims: [{ ...CLAIM, amountCents: -1 }] },
+      { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, rowKeyHash: 'row-17' }] },
+      { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, currency: 'usd' }] },
+    ];
+    for (const raw of cases) expect(BusMessage.safeParse(raw).success).toBe(false);
+    const withRowKey = { ...OBSERVATION, rowKeyHash: HASH, amountCents: 0, currency: 'USD' };
+    expect(
+      BusMessage.safeParse({ ...VALID['observer.observations'], observations: [withRowKey] }).success,
+    ).toBe(true);
   });
 
   it('accepts empty extraction batches (an adapter that found nothing still reports)', () => {

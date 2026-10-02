@@ -99,6 +99,12 @@ describe('stripIndexFields', () => {
     expect(Observation.safeParse(stripped).success).toBe(false);
   });
 
+  it("keeps a receipt's agent: it is a domain field, not a derived one", () => {
+    const row = toReceiptRow(Receipt.parse(makeReceipt({ agent: 'claude' })));
+    expect(INDEX_FIELDS.receipts).toEqual(['date']);
+    expect(stripIndexFields('receipts', row)).toEqual(makeReceipt({ agent: 'claude' }));
+  });
+
   it('passes non-objects through unchanged and declares fields for every table', () => {
     expect(stripIndexFields('meta', 'text')).toBe('text');
     expect(stripIndexFields('meta', null)).toBeNull();
@@ -108,11 +114,13 @@ describe('stripIndexFields', () => {
 
 describe('row builders', () => {
   it('derive the documented index fields', () => {
-    expect(toRequestRow(makeRequest()).date).toBe('2026-10-01');
-    expect(toClaimRow(makeClaim({ claimedAt: '2026-10-01T23:59:00-07:00' })).date).toBe('2026-10-01');
-    expect(toReceiptRow(makeReceipt(), 'claude')).toMatchObject({ agent: 'claude', date: '2026-10-01' });
-    expect(toCoverageRow(makePing()).accountKey).toBe(sha(900));
-    expect(toCoverageRow(omit(makePing(), 'accountHash')).accountKey).toBe('');
+    expect(toRequestRow(Request.parse(makeRequest())).date).toBe('2026-10-01');
+    const lateClaim = Claim.parse(makeClaim({ claimedAt: '2026-10-01T23:59:00-07:00' }));
+    expect(toClaimRow(lateClaim).date).toBe('2026-10-01');
+    const receipt = Receipt.parse(makeReceipt({ agent: 'claude' }));
+    expect(toReceiptRow(receipt)).toMatchObject({ agent: 'claude', date: '2026-10-01' });
+    expect(toCoverageRow(CoveragePing.parse(makePing())).accountKey).toBe(sha(900));
+    expect(toCoverageRow(CoveragePing.parse(omit(makePing(), 'accountHash'))).accountKey).toBe('');
     expect(accountKeyOf(undefined)).toBe('');
   });
 
@@ -130,22 +138,19 @@ describe('row builders', () => {
     fc.assert(
       fc.property(stamp, stamp, fc.integer({ min: 1, max: 1_000_000 }), (at, other, n) => {
         const [a, b] = [at.ts, other.ts];
-        const observation = makeObservation({
-          id: ulid(n),
-          occurredAt: a,
-          observedAt: b,
-          contentHash: sha(n),
-        });
-        const claim = makeClaim({ claimedAt: a, observedAt: b });
-        const request = makeRequest({ ts: a });
-        const receipt = makeReceipt({ computedAt: a });
-        const ping = makePing({ lastSyncAt: a });
+        const observation = Observation.parse(
+          makeObservation({ id: ulid(n), occurredAt: a, observedAt: b, contentHash: sha(n) }),
+        );
+        const claim = Claim.parse(makeClaim({ claimedAt: a, observedAt: b }));
+        const request = Request.parse(makeRequest({ ts: a }));
+        const receipt = Receipt.parse(makeReceipt({ computedAt: a }));
+        const ping = CoveragePing.parse(makePing({ lastSyncAt: a }));
         expect(Observation.parse(stripIndexFields('observations', toObservationRow(observation)))).toEqual(
           observation,
         );
         expect(Claim.parse(stripIndexFields('claims', toClaimRow(claim)))).toEqual(claim);
         expect(Request.parse(stripIndexFields('requests', toRequestRow(request)))).toEqual(request);
-        expect(Receipt.parse(stripIndexFields('receipts', toReceiptRow(receipt, 'muse')))).toEqual(receipt);
+        expect(Receipt.parse(stripIndexFields('receipts', toReceiptRow(receipt)))).toEqual(receipt);
         expect(CoveragePing.parse(stripIndexFields('coverage', toCoverageRow(ping)))).toEqual(ping);
         // The bucket is the instant's, whatever the offset; the date is the wall-clock date at that offset.
         expect(toObservationRow(observation).timeBucket).toBe(Math.floor(at.ms / BUCKET_MS));

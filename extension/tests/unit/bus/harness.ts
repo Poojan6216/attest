@@ -10,9 +10,19 @@
 import { afterEach, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
-import type { BusMessageOf, BusMessageType } from '../../../src/bus/messages';
+import {
+  AdapterClaimsMessage,
+  AdapterHealthMessage,
+  type BusMessageOf,
+  type BusMessageType,
+  CoveragePingMessage,
+  LedgerChangedMessage,
+  ObserverObservationsMessage,
+  UiQueryMessage,
+  UiResultMessage,
+} from '../../../src/bus/messages';
 import type { MessageSender } from '../../../src/bus/listen';
-import type { Claim, Observation, Request } from '../../../src/ledger/types';
+import { Claim, Observation, Request } from '../../../src/core/schema';
 import { type LogLevel, type LogRecord, setLogLevel, setLogSink } from '../../../src/log';
 
 /** A value a test seeds into a payload; it must never reach a log record (Hard Rule 10). */
@@ -108,16 +118,17 @@ export function eventsAt(records: readonly LogRecord[], level: LogLevel): LogRec
   return records.filter((record) => record.level === level);
 }
 
-export const REQUEST: Request = {
+/** Payloads are parsed, so they carry the schemas' brands exactly as a real sender's would. */
+export const REQUEST: Request = Request.parse({
   id: ULID_REQUEST,
   agent: 'muse',
   conversationId: 'conv-7',
   textHint: 'Email Sam that dinner moved to 8',
   textHash: HASH,
   ts: TS,
-};
+});
 
-export const CLAIM: Claim = {
+export const CLAIM: Claim = Claim.parse({
   id: ULID_CLAIM,
   agent: 'muse',
   requestId: ULID_REQUEST,
@@ -125,13 +136,14 @@ export const CLAIM: Claim = {
   counterparty: 'sam@example.com',
   subjectHint: 'Dinner moved to 8',
   claimedAt: TS,
+  claimedAtPrecision: 'minute',
   observedAt: TS_OFFSET,
   sourceKind: 'activity_view',
   extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.92 },
   rawHash: HASH,
-};
+});
 
-export const OBSERVATION: Observation = {
+export const OBSERVATION: Observation = Observation.parse({
   id: ULID_OBSERVATION,
   source: 'gmail.sent',
   type: 'email.sent',
@@ -140,11 +152,11 @@ export const OBSERVATION: Observation = {
   occurredAt: TS,
   observedAt: TS_OFFSET,
   contentHash: HASH,
-};
+});
 
 /** One valid message per type. The mapped type makes the compiler demand all seven. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
-  'adapter.health': {
+  'adapter.health': AdapterHealthMessage.parse({
     type: 'adapter.health',
     health: {
       adapterId: 'muse',
@@ -153,21 +165,21 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
       reasons: ['selector.missing'],
       checkedAt: TS,
     },
-  },
-  'adapter.claims': {
+  }),
+  'adapter.claims': AdapterClaimsMessage.parse({
     type: 'adapter.claims',
     adapterId: 'muse',
     version: '1.0.0',
     requests: [REQUEST],
     claims: [CLAIM],
-  },
-  'observer.observations': {
+  }),
+  'observer.observations': ObserverObservationsMessage.parse({
     type: 'observer.observations',
     observerId: 'gmail',
     version: '1.0.0',
     observations: [OBSERVATION],
-  },
-  'coverage.ping': {
+  }),
+  'coverage.ping': CoveragePingMessage.parse({
     type: 'coverage.ping',
     ping: {
       observerId: 'gmail',
@@ -177,10 +189,19 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
       windowEnd: TS,
       userActive: true,
     },
-  },
-  'ui.query': { type: 'ui.query', query: { kind: 'ledger.export' } },
-  'ui.result': { type: 'ui.result', kind: 'health.list', ok: true, data: [{ adapterId: 'muse' }] },
-  'ledger.changed': { type: 'ledger.changed', tables: ['claims', 'receipts'], at: TS_OFFSET },
+  }),
+  'ui.query': UiQueryMessage.parse({ type: 'ui.query', query: { kind: 'ledger.export' } }),
+  'ui.result': UiResultMessage.parse({
+    type: 'ui.result',
+    kind: 'health.list',
+    ok: true,
+    data: [{ adapterId: 'muse' }],
+  }),
+  'ledger.changed': LedgerChangedMessage.parse({
+    type: 'ledger.changed',
+    tables: ['claims', 'receipts'],
+    at: TS_OFFSET,
+  }),
 };
 
 /**

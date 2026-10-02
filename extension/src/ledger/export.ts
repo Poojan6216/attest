@@ -54,13 +54,27 @@ function byCodeUnit(a: string, b: string): number {
   return a < b ? -1 : 1;
 }
 
+/** A record with its keys in UTF-16 code-unit order. */
+function sortedRecord<V>(record: Readonly<Record<string, V>>): Record<string, V> {
+  return Object.fromEntries(Object.entries(record).sort(([a], [b]) => byCodeUnit(a, b)));
+}
+
 /**
- * `signals` is a record, and Zod keeps a record's keys in the order they were written, so two ledgers with
- * the same receipt could export different bytes. Sorting its keys keeps the export deterministic.
+ * Records (`signals`, each reason's `params`) keep the key order they were written in, so two ledgers with
+ * the same receipt could export different bytes. Sorting their keys keeps the export deterministic.
  */
 function canonicalReceipt(receipt: Receipt): Receipt {
-  const sorted = Object.entries(receipt.signals).sort(([a], [b]) => byCodeUnit(a, b));
-  return { ...receipt, signals: Object.fromEntries(sorted) };
+  return {
+    ...receipt,
+    reasons: receipt.reasons.map((reason) => ({ ...reason, params: sortedRecord(reason.params) })),
+    signals: sortedRecord(receipt.signals),
+  };
+}
+
+/** `accounts` is a record too: its sources export in sorted order. */
+function canonicalGrant(grant: Grant): Grant {
+  if (grant.accounts === undefined) return grant;
+  return { ...grant, accounts: sortedRecord(grant.accounts) };
 }
 
 export async function exportLedger(db: LedgerDb, options: ExportOptions): Promise<LedgerExport> {
@@ -78,7 +92,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       requests: readRows('requests', Request, await db.requests.toArray()),
       claims: readRows('claims', Claim, await db.claims.toArray()),
       observations: readRows('observations', Observation, await db.observations.toArray()),
-      grants: readRows('grants', Grant, await db.grants.toArray()),
+      grants: readRows('grants', Grant, await db.grants.toArray()).map(canonicalGrant),
       receipts: readRows('receipts', Receipt, await db.receipts.toArray()).map(canonicalReceipt),
       adapterHealth: readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()),
       coverage: readRows('coverage', CoveragePing, await db.coverage.toArray()),

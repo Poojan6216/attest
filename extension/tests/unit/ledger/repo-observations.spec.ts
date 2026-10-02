@@ -11,7 +11,7 @@ import {
   observationsByTypeAndBuckets,
   upsertObservation,
 } from '../../../src/ledger/repo';
-import type { ActionType, Observation } from '../../../src/ledger/types';
+import type { ActionType, ObservationInput } from '../../../src/ledger/types';
 import { expectLedgerError, makeObservation, omit, sha, ulid, uniqueDbName } from './fixtures';
 
 let db: LedgerDb;
@@ -92,8 +92,8 @@ describe('getObservation', () => {
 describe('observationsByTypeAndBuckets', () => {
   const base = timeBucketOf('2026-10-01T14:00:00Z');
 
-  async function seed(): Promise<Observation[]> {
-    const at = (n: number, minutes: number, type: ActionType = 'email.sent'): Observation =>
+  async function seed(): Promise<ObservationInput[]> {
+    const at = (n: number, minutes: number, type: ActionType = 'email.sent'): ObservationInput =>
       makeObservation({
         id: ulid(n),
         contentHash: sha(n),

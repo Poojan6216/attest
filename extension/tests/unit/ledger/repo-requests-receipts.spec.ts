@@ -76,61 +76,101 @@ describe('requestsByAgentAndDate', () => {
 });
 
 describe('putReceipt', () => {
-  it('stores a receipt with its agent for indexing, but reads back only the domain object', async () => {
-    const receipt = makeReceipt();
-    await putReceipt(db, receipt, { agent: 'muse' });
+  it('stores a receipt that reads back as the exact domain object, without its index date', async () => {
+    const receipt = makeReceipt({ agent: 'claude' });
+    await putReceipt(db, receipt);
     const stored = await getReceipt(db, receipt.id);
     expect(stored).toEqual(receipt);
-    expect(stored).not.toHaveProperty('agent');
+    expect(stored?.agent).toBe('claude');
     expect(stored).not.toHaveProperty('date');
   });
 
   it('replaces PENDING with FINAL under the same id and rejects invalid input or agent', async () => {
-    await putReceipt(db, makeReceipt(), { agent: 'muse' });
+    await putReceipt(db, makeReceipt());
     const final = makeReceipt({ state: 'FINAL', finalAt: '2026-10-01T11:01:00-04:00' });
-    await putReceipt(db, final, { agent: 'muse' });
+    await putReceipt(db, final);
     expect(await db.receipts.count()).toBe(1);
     expect(await getReceipt(db, final.id)).toEqual(final);
+    await expectLedgerError(putReceipt(db, makeReceipt({ id: ulid(9), confidence: 2 })), 'invalid_input');
     await expectLedgerError(
-      putReceipt(db, makeReceipt({ id: ulid(9), confidence: 2 }), { agent: 'muse' }),
+      putReceipt(db, makeReceipt({ id: ulid(9), agent: 'siri' as never })),
       'invalid_input',
     );
     await expectLedgerError(
-      putReceipt(db, makeReceipt({ id: ulid(9) }), { agent: 'siri' as never }),
+      putReceipt(db, omit(makeReceipt({ id: ulid(9) }), 'policyHash') as never),
       'invalid_input',
     );
     expect(await db.receipts.count()).toBe(1);
+  });
+
+  it('rejects a receipt that breaks a cross-field invariant, and names the field', async () => {
+    const error = await expectLedgerError(putReceipt(db, makeReceipt({ state: 'FINAL' })), 'invalid_input');
+    expect(error.context).toMatchObject({ table: 'receipts', paths: 'finalAt' });
+    expect(await db.receipts.count()).toBe(0);
   });
 });
 
 describe('getReceipt', () => {
-  it('returns an UNASKED receipt (no claimId) by id', async () => {
-    const unasked = omit(omit(makeReceipt({ grade: 'UNASKED', ruleId: 'unasked' }), 'claimId'), 'requestId');
-    await putReceipt(db, unasked, { agent: 'chatgpt' });
+  it('returns an UNASKED receipt (no claimId, attribution likely) by id', async () => {
+    const unasked = omit(
+      omit(
+        makeReceipt({
+          agent: 'chatgpt',
+          grade: 'UNASKED',
+          ruleId: 'unasked',
+          attribution: 'likely',
+          reasons: [],
+        }),
+        'claimId',
+      ),
+      'requestId',
+    );
+    await putReceipt(db, unasked);
     expect(await getReceipt(db, unasked.id)).toEqual(unasked);
   });
 
+  it('returns a USER_OVERRIDDEN receipt with its override beside the computed grade', async () => {
+    const override = {
+      grade: 'NOT_FOUND',
+      reason: 'I cancelled it',
+      at: '2026-10-01T12:00:00-04:00',
+    } as const;
+    const overridden = makeReceipt({
+      state: 'USER_OVERRIDDEN',
+      override: { ...override, previousState: 'PENDING' },
+    });
+    await putReceipt(db, overridden);
+    expect(await getReceipt(db, overridden.id)).toEqual(overridden);
+  });
+
   it('returns undefined for an unknown id', async () => {
-    await putReceipt(db, makeReceipt(), { agent: 'muse' });
+    await putReceipt(db, makeReceipt());
     expect(await getReceipt(db, ulid(77))).toBeUndefined();
   });
 });
 
 describe('receiptsByAgentAndDate', () => {
-  it('indexes by the given agent and the local date of computedAt', async () => {
+  it("indexes by the receipt's own agent and the local date of computedAt", async () => {
     const museToday = makeReceipt({ id: ulid(1) });
-    const claudeToday = makeReceipt({ id: ulid(2) });
+    const claudeToday = makeReceipt({ id: ulid(2), agent: 'claude' });
     const museTomorrow = makeReceipt({ id: ulid(3), computedAt: '2026-10-02T09:00:00-04:00' });
-    await putReceipt(db, museToday, { agent: 'muse' });
-    await putReceipt(db, claudeToday, { agent: 'claude' });
-    await putReceipt(db, museTomorrow, { agent: 'muse' });
+    await putReceipt(db, museToday);
+    await putReceipt(db, claudeToday);
+    await putReceipt(db, museTomorrow);
     expect(await receiptsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([museToday]);
     expect(await receiptsByAgentAndDate(db, 'claude', '2026-10-01')).toEqual([claudeToday]);
     expect(await receiptsByAgentAndDate(db, 'muse', '2026-10-02')).toEqual([museTomorrow]);
   });
 
+  it('a re-put under a new agent moves the receipt to that agent', async () => {
+    await putReceipt(db, makeReceipt());
+    await putReceipt(db, makeReceipt({ agent: 'dots' }));
+    expect(await receiptsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([]);
+    expect(await receiptsByAgentAndDate(db, 'dots', '2026-10-01')).toEqual([makeReceipt({ agent: 'dots' })]);
+  });
+
   it('returns nothing for a day with no receipts and rejects a malformed date', async () => {
-    await putReceipt(db, makeReceipt(), { agent: 'muse' });
+    await putReceipt(db, makeReceipt());
     expect(await receiptsByAgentAndDate(db, 'muse', '2026-09-30')).toEqual([]);
     await expectLedgerError(receiptsByAgentAndDate(db, 'muse', '2026-02-30'), 'invalid_input');
   });

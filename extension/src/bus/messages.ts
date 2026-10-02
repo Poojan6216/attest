@@ -2,24 +2,18 @@
  * Every message that crosses a context boundary (content script ↔ service worker ↔ UI page).
  *
  * One Zod discriminated union on `type`; every member is a strict object, so a sender cannot smuggle
- * a field the schema does not name (Hard Rule 2). Payload items reuse the ledger schemas, so the bus
- * and the ledger agree on what a Claim or an Observation is. `send()` validates before sending and
- * `listen()` validates on receive: parse at every boundary.
+ * a field the schema does not name (Hard Rule 2). Payload items are the canonical core schemas
+ * (src/core/schema.ts), so the bus, the ledger and grading agree on what a Claim or an Observation is; the
+ * coverage ping is the ledger's storage shape until Sprint 2.6 reworks coverage. `send()` validates before
+ * sending and `listen()` validates on receive: parse at every boundary.
  *
  * Chrome serialises runtime messages as JSON. Every value here must survive that: no `undefined`
  * inside arrays, no Dates, no Maps.
  */
 import { z } from 'zod';
 
-import {
-  AdapterHealth,
-  Claim,
-  CoveragePing,
-  IsoTs,
-  Observation,
-  Request,
-  SCHEMA_LIMITS,
-} from '../ledger/types';
+import { Claim, HealthReport, IsoTs, Observation, Request, SCHEMA_LIMITS } from '../core/schema';
+import { CoveragePing } from '../ledger/types';
 
 /** The eight ledger tables (build_spec §6, sprint 0.6). `ledger.changed` names which ones moved. */
 export const LedgerTable = z.enum([
@@ -52,7 +46,7 @@ export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...Bu
 /** A content script's adapter ran `health()` (Hard Rule 6: DEGRADED is reported, never hidden). */
 export const AdapterHealthMessage = z.strictObject({
   type: z.literal('adapter.health'),
-  health: AdapterHealth,
+  health: HealthReport,
 });
 
 /** What an agent adapter extracted from one page read. */

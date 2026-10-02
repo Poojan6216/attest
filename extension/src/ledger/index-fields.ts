@@ -13,7 +13,7 @@
  */
 import { LEDGER_TIME_BUCKET_MINUTES } from '../config';
 import { LedgerError } from './errors';
-import type { AgentId, Claim, CoveragePing, Observation, Receipt, Request } from './types';
+import type { Claim, CoveragePing, Observation, Receipt, Request } from './types';
 
 export const LEDGER_TABLE_NAMES = [
   'requests',
@@ -34,7 +34,8 @@ export const INDEX_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> 
   claims: ['date'],
   observations: ['timeBucket', 'counterpartyTokens'],
   grants: [],
-  receipts: ['agent', 'date'],
+  // `agent` is a Receipt field (docs/grading.md §14.3), so the [agent+date] index reads it from the domain.
+  receipts: ['date'],
   adapterHealth: [],
   coverage: ['accountKey'],
   meta: [],
@@ -46,7 +47,7 @@ export type ObservationRow = Observation & {
   readonly timeBucket: number;
   readonly counterpartyTokens: readonly string[];
 };
-export type ReceiptRow = Receipt & { readonly agent: AgentId; readonly date: string };
+export type ReceiptRow = Receipt & { readonly date: string };
 export type CoverageRow = CoveragePing & { readonly accountKey: string };
 
 const TIME_BUCKET_MS = LEDGER_TIME_BUCKET_MINUTES * 60_000;
@@ -91,7 +92,7 @@ export function normalizeToken(value: string): string {
  * replaces this function's body; the index name and its multiEntry shape stay. That replacement ships with a
  * migration that re-derives `counterpartyTokens` for stored observations (see the header).
  */
-export function counterpartyTokensOf(observation: Observation): string[] {
+export function counterpartyTokensOf(observation: Pick<Observation, 'counterparty' | 'merchant'>): string[] {
   const tokens = new Set<string>();
   const counterparty = normalizeToken(observation.counterparty ?? '');
   if (counterparty !== '') {
@@ -125,8 +126,8 @@ export function toObservationRow(observation: Observation): ObservationRow {
   };
 }
 
-export function toReceiptRow(receipt: Receipt, agent: AgentId): ReceiptRow {
-  return { ...receipt, agent, date: dateKey(receipt.computedAt) };
+export function toReceiptRow(receipt: Receipt): ReceiptRow {
+  return { ...receipt, date: dateKey(receipt.computedAt) };
 }
 
 export function toCoverageRow(ping: CoveragePing): CoverageRow {
