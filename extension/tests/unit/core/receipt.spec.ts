@@ -8,7 +8,9 @@ import { GradeError } from '../../../src/core/grade';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import {
   buildReceipt,
+  coverageHash,
   type GradeInputs,
+  grantHash,
   inputsHash,
   orderReasons,
   reasonCode,
@@ -110,29 +112,47 @@ describe('receiptId (§3)', () => {
   });
 });
 
-describe('inputsHash (§3, §10)', () => {
+/** §3 v1.4, written out from the contract: the grant and the coverage with every set-like array sorted. */
+function canonicalParts(input: GradeInputs) {
+  const { grant, coverage } = input;
+  return {
+    grant: {
+      ...grant,
+      allowedTypes: [...grant.allowedTypes].sort(),
+      counterpartyAllowlist: [...grant.counterpartyAllowlist].sort(),
+      declaredScopes: [...grant.declaredScopes].sort(),
+      observedScopes: [...(grant.observedScopes ?? [])].sort(),
+      accounts: { 'gmail.sent': [...(grant.accounts?.['gmail.sent'] ?? [])].sort() },
+    },
+    coverage: {
+      ...coverage,
+      // Entries ordered by source first (then the other fields): gcal.event before gmail.sent.
+      observers: [...coverage.observers].sort((a, b) => (a.source < b.source ? -1 : 1)),
+    },
+  };
+}
+
+describe('inputsHash (§3 v1.4, §10)', () => {
   const base = inputsHash(inputs());
 
-  it('is a SHA-256 of the canonical JSON of the six inputs', () => {
+  it('grantHash and coverageHash are the SHA-256 of the canonical grant and coverage', () => {
+    const parts = canonicalParts(inputs());
+    expect(grantHash(inputs().grant)).toBe(sha256Hex(canonicalJson(parts.grant)));
+    expect(coverageHash(inputs().coverage)).toBe(sha256Hex(canonicalJson(parts.coverage)));
+  });
+
+  it('is a SHA-256 of the canonical JSON of the claim, candidate refs, sub-hashes, policyHash and context', () => {
     expect(Sha256.safeParse(base).success).toBe(true);
-    const { grant, coverage, context } = inputs();
+    const { context } = inputs();
+    const parts = canonicalParts(inputs());
     const sorted = {
       claim: CLAIM,
-      candidates: [O1, O2].sort((a, b) => (a.id < b.id ? -1 : 1)),
-      grant: {
-        ...grant,
-        allowedTypes: [...grant.allowedTypes].sort(),
-        counterpartyAllowlist: [...grant.counterpartyAllowlist].sort(),
-        declaredScopes: [...grant.declaredScopes].sort(),
-        observedScopes: [...(grant.observedScopes ?? [])].sort(),
-        accounts: { 'gmail.sent': [...(grant.accounts?.['gmail.sent'] ?? [])].sort() },
-      },
+      candidates: [O1, O2]
+        .sort((a, b) => (a.id < b.id ? -1 : 1))
+        .map((o) => ({ id: o.id, contentHash: o.contentHash, observedAt: o.observedAt })),
+      grantHash: sha256Hex(canonicalJson(parts.grant)),
       policyHash: POLICY_HASH,
-      coverage: {
-        ...coverage,
-        // Entries ordered by source first (then the other fields): gcal.event before gmail.sent.
-        observers: [...coverage.observers].sort((a, b) => (a.source < b.source ? -1 : 1)),
-      },
+      coverageHash: sha256Hex(canonicalJson(parts.coverage)),
       context: {
         ...context,
         attribution: { ...context.attribution, signals: ['agentSessionActive', 'userIdle'] },
@@ -140,7 +160,78 @@ describe('inputsHash (§3, §10)', () => {
     };
     expect(base).toBe(sha256Hex(canonicalJson(sorted)));
   });
+
+  it('names a candidate by id, contentHash and observedAt: a re-sighting changes the hash', () => {
+    const seenLater = { ...O1, observedAt: IsoTs.parse('2026-10-06T14:59:00-04:00') };
+    expect(inputsHash(inputs({ candidates: [seenLater, O2] }))).not.toBe(base);
+    expect(inputsHash(inputs({ candidates: [{ ...O1 }, { ...O2 }] }))).toBe(base);
+  });
 });
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+type MutableGrant = Mutable<GradeInputs['grant']>;
+type MutableEntry = Mutable<GradeInputs['coverage']['observers'][number]>;
+
+describe('grantHash and coverageHash are remembered per object, never stale (§3: once per batch)', () => {
+  it('a grant edited in place hashes exactly like a fresh copy, edit after edit', () => {
+    const grant: MutableGrant = structuredClone(inputs().grant);
+    // [edit, whether it changes the grant as a set]: reordering a set-like array never changes the hash.
+    const edits: (readonly [(g: MutableGrant) => void, boolean])[] = [
+      [(g) => g.counterpartyAllowlist.push('raj@company.com'), true],
+      [(g) => (g.declaredScopes = ['gmail.send']), true],
+      [(g) => g.accounts?.['gmail.sent']?.reverse(), false],
+      [(g) => g.accounts?.['gmail.sent']?.pop(), true],
+      [(g) => (g.observedScopes = undefined), true],
+      [(g) => (g.spendCeilingCents = 500), true],
+      [(g) => (g.spendCurrency = 'USD'), true],
+    ];
+    let previous = grantHash(grant);
+    for (const [edit, changes] of edits) {
+      edit(grant);
+      const hash = grantHash(grant);
+      expect(hash).toBe(grantHash(structuredClone(grant)));
+      expect(hash).toBe(sha256Hex(canonicalJson({ ...grant, ...sortedSets(grant) })));
+      expect(hash !== previous).toBe(changes);
+      previous = hash;
+    }
+  });
+
+  it('a coverage whose entries are edited, added or removed in place hashes like a fresh copy', () => {
+    const coverage: Mutable<GradeInputs['coverage']> = structuredClone(inputs().coverage);
+    const entries: MutableEntry[] = coverage.observers;
+    const [first, second] = entries;
+    if (first === undefined || second === undefined) throw new Error('two entries expected');
+    const edits: (() => void)[] = [
+      () => (first.windowStart = IsoTs.parse('2026-10-06T11:00:00-04:00')),
+      () => (second.allCalendars = true),
+      () => entries.push({ ...first, observerId: 'second' }),
+      () => entries.pop(),
+      () => (coverage.evaluatedAt = IsoTs.parse('2026-10-06T15:30:00-04:00')),
+    ];
+    let previous = coverageHash(coverage);
+    for (const edit of edits) {
+      edit();
+      const hash = coverageHash(coverage);
+      expect(hash).toBe(coverageHash(structuredClone(coverage)));
+      expect(hash).not.toBe(previous);
+      previous = hash;
+    }
+  });
+});
+
+function sortedSets(grant: GradeInputs['grant']) {
+  return {
+    allowedTypes: [...new Set(grant.allowedTypes)].sort(),
+    counterpartyAllowlist: [...new Set(grant.counterpartyAllowlist)].sort(),
+    declaredScopes: [...new Set(grant.declaredScopes)].sort(),
+    observedScopes:
+      grant.observedScopes === undefined ? undefined : [...new Set(grant.observedScopes)].sort(),
+    accounts:
+      grant.accounts === undefined
+        ? undefined
+        : Object.fromEntries(Object.entries(grant.accounts).map(([k, v]) => [k, [...new Set(v)].sort()])),
+  };
+}
 
 describe('inputsHash: set-like arrays and sensitivity (§3)', () => {
   const base = inputsHash(inputs());

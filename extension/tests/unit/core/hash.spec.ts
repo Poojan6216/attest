@@ -29,6 +29,15 @@ describe('sha256Hex: FIPS 180-4 / NIST test vectors', () => {
     );
   });
 
+  it('a multi-byte code point at every offset of a three-block ASCII text matches Node', () => {
+    for (const special of ['é', '€', '𝐩', '\ud800', '\udc00']) {
+      for (let offset = 0; offset <= 192; offset += 1) {
+        const input = `${'x'.repeat(offset)}${special}${'y'.repeat(192 - offset)}`;
+        expect(sha256Hex(input)).toBe(createHash('sha256').update(input, 'utf8').digest('hex'));
+      }
+    }
+  });
+
   it.each([55, 56, 57, 63, 64, 65, 119, 120, 128])('padding boundary at %i bytes matches Node', (length) => {
     const input = 'x'.repeat(length);
     expect(sha256Hex(input)).toBe(createHash('sha256').update(input, 'utf8').digest('hex'));

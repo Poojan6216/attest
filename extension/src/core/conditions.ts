@@ -125,50 +125,60 @@ function once<A extends unknown[], T>(compute: (...args: A) => T): (...args: A) 
   return (...args) => (cache ??= { value: compute(...args) }).value;
 }
 
-/** A claim-bearing condition: not applicable to a claim-less grade (§6.1). */
-function withClaim<T>(claim: Claim | null, compute: (claim: Claim) => T): () => T | null {
-  return once(() => (claim === null ? null : compute(claim)));
-}
+/** A condition that does not apply to this grading (§6.1): shared, so a grading allocates nothing for it. */
+const NOT_APPLICABLE = (): null => null;
 
-/** A claim-less condition: not applicable when a claim is present (§6.1). */
-function withoutClaim<T>(claim: Claim | null, compute: () => T): () => T | null {
-  return once(() => (claim === null ? compute() : null));
-}
-
+/** The score conditions of a claim grading (claim-less, they do not apply). */
 function scoreConditions(facts: ConditionFacts): Pick<Conditions, 'bestScoreGte' | 'bestScoreLt'> {
-  const { claim, bestScore, policy } = facts;
+  const { bestScore, policy } = facts;
   const gte = (threshold: ThresholdName): boolean =>
     bestScore !== null && ratioGteBasisPoints(bestScore, policy.bp.thresholds[threshold]);
+  return { bestScoreGte: (threshold) => gte(threshold), bestScoreLt: (threshold) => !gte(threshold) };
+}
+
+/** Claim-less (§6.1): only `unaskedLikely` and `observedScopeExceedsDeclared` apply. */
+function claimlessConditions(facts: ConditionFacts): Conditions {
+  const { grant, policy, context } = facts;
   return {
-    bestScoreGte: (threshold) => (claim === null ? null : gte(threshold)),
-    bestScoreLt: (threshold) => (claim === null ? null : !gte(threshold)),
+    eligible: NOT_APPLICABLE,
+    unaskedLikely: once(() => unaskedLikely(context, policy)),
+    observedScopeExceedsDeclared: once(() => observedScopeExceedsDeclared(grant, context)),
+    typeNotInGrant: NOT_APPLICABLE,
+    counterpartyNotAllowed: NOT_APPLICABLE,
+    amountAboveCeiling: NOT_APPLICABLE,
+    cumulativeAboveCeiling: NOT_APPLICABLE,
+    targetMissing: NOT_APPLICABLE,
+    underspecified: NOT_APPLICABLE,
+    coverage: NOT_APPLICABLE,
+    graceElapsed: NOT_APPLICABLE,
+    bestScoreGte: NOT_APPLICABLE,
+    bestScoreLt: NOT_APPLICABLE,
+  };
+}
+
+/** With a claim (§6.1): every condition but the two claim-less ones applies. */
+function claimConditions(claim: Claim, facts: ConditionFacts): Conditions {
+  const { grant, policy, coverage, context, assigned } = facts;
+  const eligible = once(() => eligibleCoverage(claim, grant, coverage, policy));
+  return {
+    eligible,
+    unaskedLikely: NOT_APPLICABLE,
+    observedScopeExceedsDeclared: NOT_APPLICABLE,
+    typeNotInGrant: once(() => typeNotInGrant(claim, grant)),
+    counterpartyNotAllowed: once(() => counterpartyNotAllowed(claim, assigned, grant, policy)),
+    amountAboveCeiling: once(() => amountAboveCeiling(claim, assigned, grant, policy)),
+    cumulativeAboveCeiling: once(() => cumulativeAboveCeiling(claim, grant, context, policy)),
+    targetMissing: once(() => targetMissing(claim)),
+    underspecified: once(() => isUnderspecified(claim, policy)),
+    coverage: once(() => coverageFrom(eligible(), claimWindow(claim, policy))),
+    graceElapsed: once(() => syncedSources(eligible(), graceSyncMs(claim, policy))),
+    ...scoreConditions(facts),
   };
 }
 
 /** The §6.1 evaluators for one grading. */
 export function evaluateConditions(facts: ConditionFacts): Conditions {
-  const { claim, grant, policy, coverage, context, assigned } = facts;
-  const eligible = once((c: Claim) => eligibleCoverage(c, grant, coverage, policy));
-  return {
-    eligible: withClaim(claim, eligible),
-    unaskedLikely: withoutClaim(claim, () => unaskedLikely(context, policy)),
-    observedScopeExceedsDeclared: withoutClaim(claim, () => observedScopeExceedsDeclared(grant, context)),
-    typeNotInGrant: withClaim(claim, (c) => typeNotInGrant(c, grant)),
-    counterpartyNotAllowed: once(() =>
-      claim === null ? null : counterpartyNotAllowed(claim, assigned, grant, policy),
-    ),
-    amountAboveCeiling: once(() =>
-      claim === null ? null : amountAboveCeiling(claim, assigned, grant, policy),
-    ),
-    cumulativeAboveCeiling: once(() =>
-      claim === null ? null : cumulativeAboveCeiling(claim, grant, context, policy),
-    ),
-    targetMissing: withClaim(claim, targetMissing),
-    underspecified: withClaim(claim, (c) => isUnderspecified(c, policy)),
-    coverage: withClaim(claim, (c) => coverageFrom(eligible(c), claimWindow(c, policy))),
-    graceElapsed: withClaim(claim, (c) => syncedSources(eligible(c), graceSyncMs(c, policy))),
-    ...scoreConditions(facts),
-  };
+  return facts.claim === null ? claimlessConditions(facts) : claimConditions(facts.claim, facts);
 }
 
 /** A flag condition holds iff it is applicable and has the written value. */

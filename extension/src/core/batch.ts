@@ -23,20 +23,21 @@
 import { BatchError } from './batch-error';
 import { grantOf, grantsInForce } from './batch-grants';
 import { coveredObservations, visibleAt } from './batch-orphans';
+import { candidatesOfAll } from './batch-retrieve';
 import { attributor } from './attribution';
 import {
   assign,
-  candidates,
   exclusiveCandidates,
   type FixedPair,
   type ObservationIndex,
   type ScoredPair,
 } from './candidates';
 import { evaluateConditions, firstMatch } from './conditions';
-import { features, isAssignable } from './features';
+import { isAssignable, pairScorer } from './features';
 import { grade } from './grade';
 import { instantMs } from './normalize';
 import type { Policy, RuleOutcome } from './policy';
+import { scoreGteBasisPoints } from './ratio';
 import type {
   Activity,
   AgentId,
@@ -100,38 +101,43 @@ function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[]) {
   return { fixedPairs, taken };
 }
 
-/** §4.1 candidates of every assignable claim, read in claim order (sequentially: one read at a time). */
+/**
+ * §4.1 candidates of every assignable claim (batch-retrieve.ts: exactly `candidates()` per claim, read type by
+ * type over the union of the windows; one read at a time).
+ */
 async function retrieve(
   claims: readonly Claim[],
   index: ObservationIndex,
   policy: Policy,
 ): Promise<Retrieved[]> {
-  const retrieved: Retrieved[] = [];
-  for (const claim of claims) {
-    const assignable = isAssignable(claim, policy);
-    retrieved.push({
-      claim,
-      assignable,
-      candidates: assignable ? await candidates(claim, index, policy) : [],
-    });
-  }
-  return retrieved;
+  const assignable = claims.filter((claim) => isAssignable(claim, policy));
+  const found = await candidatesOfAll(assignable, index, policy);
+  return claims.map((claim) => {
+    const own = found.get(claim);
+    return { claim, assignable: own !== undefined, candidates: own ?? [] };
+  });
 }
 
 /**
- * Every (assignable claim, candidate) pair scored exactly (§5). Observations fixed to a claim or as taken are
- * left out: `assign` would never give them to another claim, and `grade` never sees them as candidates.
+ * Every (assignable claim, candidate) pair scored exactly (§5), each once (`pairScorer` remembers the score for
+ * `grade`'s best candidate). Observations fixed to a claim or as taken are left out: `assign` would never give
+ * them to another claim, and `grade` never sees them as candidates. So are pairs below `thresholds.partial`
+ * (exact, §5.3): `assign` drops them before anything else and they never consume anything (§4.3), so leaving them
+ * out cannot change the assignment.
  */
 function scorePairs(retrieved: readonly Retrieved[], batch: Batch): ScoredPair[] {
   const fixedObservations = new Set(batch.fixedPairs.map((pair) => pair.observationId));
+  const partialBp = batch.policy.bp.thresholds.partial;
   const pairs: ScoredPair[] = [];
   for (const { claim, assignable, candidates: found } of retrieved) {
     if (!assignable) continue;
     const claimedAtMs = instantMs(claim.claimedAt);
+    const scoreOf = pairScorer(claim, batch.policy);
     for (const observation of found) {
       if (fixedObservations.has(observation.id) || batch.taken.has(observation.id)) continue;
-      const { score } = features(claim, observation, batch.policy);
-      pairs.push({ claimId: claim.id, claimedAtMs, observationId: observation.id, score });
+      const score = scoreOf(observation);
+      if (!scoreGteBasisPoints(score, partialBp)) continue;
+      pairs.push({ claimId: claim.id, claimedAtMs, observationId: observation.id, score: score.ratio });
     }
   }
   return pairs;

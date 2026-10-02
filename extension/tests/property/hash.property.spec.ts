@@ -15,6 +15,20 @@ describe('hash (property)', () => {
     );
   });
 
+  it('sha256Hex equals Node crypto for long mostly-ASCII text, multi-byte code points at any block offset', () => {
+    // The fast path reads whole 64-byte ASCII blocks straight into words; a multi-byte code point or a lone
+    // surrogate anywhere shifts every later block off the boundary, and the path must resume after it.
+    const ascii = fc.string({ unit: 'grapheme-ascii', maxLength: 200 });
+    const other = fc.string({ unit: 'binary', minLength: 1, maxLength: 3 });
+    fc.assert(
+      fc.property(fc.array(fc.oneof(ascii, ascii, other), { maxLength: 12 }), (parts) => {
+        const text = parts.join('');
+        expect(sha256Hex(text)).toBe(createHash('sha256').update(text, 'utf8').digest('hex'));
+      }),
+      { numRuns: 1000 },
+    );
+  });
+
   it('canonicalJson is invariant under key order and parses back to the same value', () => {
     const json = fc.jsonValue({ maxDepth: 4 });
     fc.assert(

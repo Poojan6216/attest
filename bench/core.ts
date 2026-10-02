@@ -1,21 +1,24 @@
 /**
- * Core perf bench (sprint task 1.3; ledger_engineer rule 9; qa_tester rule 7): candidate lookup for 5,000
- * claims over 50,000 observations must take under 2 s in Node.
- *
- * The workload is synthetic and fully deterministic (a seeded mulberry32 generator, no Math.random), so the
- * gate test (extension/tests/unit/core/candidates-perf.spec.ts) and this bench measure the same thing. The
- * bench times only the lookup (index construction is reported separately), takes the median of 5 runs, and
- * writes bench/results/core-<yyyy-mm-dd>.json for `pnpm bench` to render into RESULTS.md (Hard Rule 12).
- * The gate is the wall-clock median; the lookup's CPU time (the clock the gate test uses inside a parallel
- * suite) is reported beside it.
+ * Core perf bench (sprint tasks 1.3 and 1.5; ledger_engineer rule 9; qa_tester rule 7): over 5,000 claims and
+ * 50,000 observations, candidate lookup and the whole `gradeBatch` must each take under 2 s in Node. Workloads
+ * are synthetic and deterministic (seeded mulberry32, no Math.random), so the gate tests (tests/unit/core/
+ * candidates-perf.spec.ts, batch-perf.spec.ts) measure what this bench measures. Each figure is the wall-clock
+ * median of 5 cold runs, with the CPU median beside it (the gates' clock inside a parallel suite), written to
+ * bench/results/core-<yyyy-mm-dd>.json for `pnpm bench` to render into RESULTS.md (Hard Rule 12). Grading reuses
+ * the lookup's observations and claim timings; a second seeded stream gives each claim an agent and an identity
+ * (40% restate a real observation, 10% are vague), plus one coverage pass per source per day, a grant per agent
+ * bound to one account, and modest agent activity, so some orphans become UNASKED.
  */
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { gradeBatch } from '../extension/src/core/batch';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../extension/src/core/candidates';
+import { idFromHash } from '../extension/src/core/hash';
 import { DEFAULT_POLICY } from '../extension/src/core/policy';
-import { type ActionType, Observation, type ClaimPrecision } from '../extension/src/core/schema';
+import { Activity, Claim, Coverage, Grant, Observation } from '../extension/src/core/schema';
+import type { ActionType, ClaimPrecision, Receipt } from '../extension/src/core/schema';
 import type { WindowClaim } from '../extension/src/core/window';
 
 export const OBSERVATION_COUNT = 50_000;
@@ -84,9 +87,12 @@ function sourceOf(type: ActionType): 'gmail.sent' | 'gmail.receipt' | 'gcal.even
   return type.startsWith('calendar.') ? 'gcal.event' : 'gmail.receipt';
 }
 
-/** A schema-valid id/hash from a counter: decimal digits are valid Crockford base32 and hex. */
-const idOf = (n: number): string => String(n).padStart(26, '0');
-const hashOf = (n: number): string => n.toString(16).padStart(64, '0');
+/**
+ * A schema-valid hash from a counter, and the id §10 derives from it (`Observation.id = idFromHash(contentHash)`).
+ * The counter fills the leading 128 bits (the ones `idFromHash` reads), so ids are distinct and ascend with it.
+ */
+const hashOf = (n: number): string => n.toString(16).padStart(32, '0').repeat(2);
+const idOf = (n: number): string => idFromHash(hashOf(n));
 
 function randomMs(random: () => number): number {
   return START_MS + Math.floor(random() * SPAN_DAYS * MS_PER_DAY);
@@ -160,6 +166,131 @@ export async function lookupAll(workload: CoreWorkload, index: ObservationIndex)
   return results;
 }
 
+// ── Grading workload (task 1.5) ──────────────────────────────────────────────────────────────────
+
+const AGENTS = ['muse', 'chatgpt', 'dots', 'claude'] as const;
+const SOURCES = ['gmail.sent', 'gmail.receipt', 'gcal.event'] as const;
+const MS_PER_HOUR = 3_600_000;
+/** Claim ids and raw hashes count up from here, clear of the observation counter. */
+const CLAIM_BASE = 10_000_000;
+const ACCOUNT = hashOf(0xacc0);
+const EVALUATED_MS = START_MS + (SPAN_DAYS + 1) * MS_PER_DAY;
+/** Shares of claims that restate a real observation and that are vague; activity sizes over the span. */
+const SHARES = { honest: 0.4, vague: 0.1 } as const;
+const ACTIVITY = { sessions: 960, idle: 60, entries: 480 } as const;
+
+export interface GradingWorkload {
+  readonly observations: readonly Observation[];
+  readonly claims: readonly Claim[];
+  readonly grants: readonly Grant[];
+  readonly coverage: Coverage;
+  readonly activity: Activity;
+}
+
+/** A claim restating observation `o` (same type, time and identity): what an honest agent reports. */
+function honestFields(o: Observation): Record<string, unknown> {
+  const { counterparty = o.merchant, amountCents, currency, subjectHint } = o;
+  const identity = Object.entries({ counterparty, amountCents, currency, subjectHint });
+  const timing = o.type.startsWith('calendar.') ? { claimedAt: o.observedAt, targetAt: o.occurredAt } : {};
+  const present = Object.fromEntries(identity.filter(([, value]) => value !== undefined));
+  return { type: o.type, claimedAt: o.occurredAt, ...timing, ...present };
+}
+
+/** A claim at a 1.3 claim timing naming a random counterparty (most match nothing in their window). */
+function randomFields(random: () => number, timing: WindowClaim): Record<string, unknown> {
+  const n = Math.floor(random() * OBSERVATION_COUNT);
+  const isReceipt = sourceOf(timing.type) === 'gmail.receipt';
+  return {
+    ...timing,
+    ...(isReceipt
+      ? { counterparty: `merchant ${String(n % 200)}`, amountCents: n % 10_000, currency: 'USD' }
+      : { counterparty: `person${String(n % 500)}@example${String(n % 7)}.com` }),
+    subjectHint: `subject ${String(n % 1_000)}`,
+  };
+}
+
+function gradingClaim(random: () => number, i: number, timing: WindowClaim, obs: readonly Observation[]) {
+  const roll = random();
+  const restated = obs[Math.floor(random() * obs.length)];
+  const fields =
+    roll < SHARES.honest && restated !== undefined
+      ? { claimedAtPrecision: 'minute', ...honestFields(restated) }
+      : roll < SHARES.honest + SHARES.vague
+        ? { ...timing }
+        : randomFields(random, timing);
+  const claimedAt = String(fields.claimedAt);
+  return Claim.parse({
+    id: idOf(CLAIM_BASE + i),
+    agent: pick(random, AGENTS),
+    ...fields,
+    observedAt: claimedAt,
+    sourceKind: 'activity_view',
+    extractor: { id: 'bench', version: '1', confidence: 1 },
+    rawHash: hashOf(CLAIM_BASE + i),
+  });
+}
+
+/** One pass per source per day, seeing that day plus an hour; the last day's pass is after evaluatedAt. */
+function gradingCoverage(): Coverage {
+  const observers = SOURCES.flatMap((source) =>
+    Array.from({ length: SPAN_DAYS + 1 }, (_, day) => {
+      const fromMs = START_MS + day * MS_PER_DAY;
+      const toMs = fromMs + MS_PER_DAY + MS_PER_HOUR;
+      const calendars = source === 'gcal.event' ? { allCalendars: true } : {};
+      const at = { lastSyncAt: isoAt(toMs, 0), windowStart: isoAt(fromMs, 0), windowEnd: isoAt(toMs, 0) };
+      return { observerId: source, source, ...at, accountHash: ACCOUNT, ...calendars };
+    }),
+  );
+  return Coverage.parse({ evaluatedAt: isoAt(EVALUATED_MS, 0), observers });
+}
+
+function gradingGrants(): Grant[] {
+  return AGENTS.map((agent) =>
+    Grant.parse({
+      agent,
+      allowedTypes: TYPE_MIX.map(([type]) => type),
+      counterpartyAllowlist: [],
+      spendCeilingCents: agent === 'muse' ? 500_000 : null,
+      ...(agent === 'muse' ? { spendCurrency: 'USD' } : {}),
+      declaredScopes: ['gmail.send'],
+      observedScopes: agent === 'dots' ? ['gmail.send', 'gmail.read'] : ['gmail.send'],
+      accounts: Object.fromEntries(SOURCES.map((source) => [source, [ACCOUNT]])),
+      updatedAt: isoAt(START_MS - MS_PER_DAY, 0),
+    }),
+  );
+}
+
+/** Session pings, idle spans of 5–60 minutes, activity-log entries, one adapter sync per agent. */
+function gradingActivity(random: () => number, claims: readonly Claim[]): Activity {
+  const agentAt = () => ({ agent: pick(random, AGENTS), at: isoAt(randomMs(random), 0) });
+  const idle = () => {
+    const fromMs = randomMs(random);
+    return { from: isoAt(fromMs, 0), to: isoAt(fromMs + (5 + Math.floor(random() * 55)) * MS_PER_MINUTE, 0) };
+  };
+  return Activity.parse({
+    sessions: Array.from({ length: ACTIVITY.sessions }, agentAt),
+    idle: Array.from({ length: ACTIVITY.idle }, idle),
+    entries: Array.from({ length: ACTIVITY.entries }, agentAt),
+    adapterSyncs: AGENTS.map((agent) => ({ agent, lastSyncAt: isoAt(EVALUATED_MS - MS_PER_HOUR, 0) })),
+    claims,
+  });
+}
+
+/** The deterministic grading workload: the 1.3 observations and claim timings, plus everything grading reads. */
+export function buildGradingWorkload(seed = SEED): GradingWorkload {
+  const core = buildCoreWorkload(seed);
+  const random = seededRandom(seed + 1);
+  const claims = core.claims.map((timing, i) => gradingClaim(random, i, timing, core.observations));
+  const activity = gradingActivity(random, claims);
+  return { ...core, claims, grants: gradingGrants(), coverage: gradingCoverage(), activity };
+}
+
+/** `gradeBatch` over the whole workload (every claim PENDING, nothing fixed), with the shipped policy. */
+export async function gradeAll(workload: GradingWorkload, index: ObservationIndex): Promise<Receipt[]> {
+  const { claims, grants, coverage, activity } = workload;
+  return gradeBatch(claims, index, grants, DEFAULT_POLICY, coverage, activity);
+}
+
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)] ?? Number.NaN;
@@ -172,45 +303,50 @@ function localDate(now: Date): string {
   return `${String(now.getFullYear())}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
 }
 
+interface Timed<T> {
+  readonly wallMs: number;
+  readonly cpuMs: number;
+  readonly result: T;
+}
+
+/** Wall and CPU time of `act` (user + system CPU of this process). */
+async function timed<T>(act: () => T | Promise<T>): Promise<Timed<T>> {
+  const cpuBefore = process.cpuUsage();
+  const startedAt = performance.now();
+  const result = await act();
+  const wallMs = performance.now() - startedAt;
+  const cpu = process.cpuUsage(cpuBefore);
+  return { wallMs, cpuMs: (cpu.user + cpu.system) / MICROSECONDS_PER_MS, result };
+}
+
 /**
  * Each run rebuilds the (identical, seeded) workload as fresh objects, so no run reuses parses memoised by
  * an earlier one: every run's build and lookup are cold.
  */
 async function measure(): Promise<Record<string, number | string | boolean>> {
   const builds: number[] = [];
-  const lookups: number[] = [];
-  const lookupCpus: number[] = [];
-  const totals = new Set<number>();
-  const sizes = { observations: 0, claims: 0 };
+  const lookups: Timed<Observation[][]>[] = [];
   for (let run = 0; run < RUNS; run += 1) {
     const workload = buildCoreWorkload();
-    sizes.observations = workload.observations.length;
-    sizes.claims = workload.claims.length;
-    const builtAt = performance.now();
-    const index = buildIndex(workload);
-    const cpuBefore = process.cpuUsage();
-    const lookedUpAt = performance.now();
-    const results = await lookupAll(workload, index);
-    const doneAt = performance.now();
-    const cpu = process.cpuUsage(cpuBefore);
-    builds.push(lookedUpAt - builtAt);
-    lookups.push(doneAt - lookedUpAt);
-    lookupCpus.push((cpu.user + cpu.system) / MICROSECONDS_PER_MS);
-    totals.add(results.reduce((sum, list) => sum + list.length, 0));
+    const built = await timed(() => buildIndex(workload));
+    builds.push(built.wallMs);
+    lookups.push(await timed(() => lookupAll(workload, built.result)));
   }
+  const totals = new Set(lookups.map(({ result }) => result.reduce((sum, list) => sum + list.length, 0)));
   if (totals.size !== 1) throw new Error('core bench: runs disagree on the candidate count');
-  const lookupMedianMs = round(median(lookups));
+  const walls = lookups.map((lookup) => lookup.wallMs);
+  const lookupMedianMs = round(median(walls));
   return {
-    observations: sizes.observations,
-    claims: sizes.claims,
+    observations: OBSERVATION_COUNT,
+    claims: CLAIM_COUNT,
     runs: RUNS,
     bucketMinutes: BUCKET_MINUTES,
     lookupMedianMs,
-    lookupMinMs: round(Math.min(...lookups)),
-    lookupMaxMs: round(Math.max(...lookups)),
-    lookupCpuMedianMs: round(median(lookupCpus)),
+    lookupMinMs: round(Math.min(...walls)),
+    lookupMaxMs: round(Math.max(...walls)),
+    lookupCpuMedianMs: round(median(lookups.map((lookup) => lookup.cpuMs))),
     indexBuildMedianMs: round(median(builds)),
-    buildPlusLookupMedianMs: round(median(builds.map((build, i) => build + (lookups[i] ?? Number.NaN)))),
+    buildPlusLookupMedianMs: round(median(builds.map((build, i) => build + (walls[i] ?? Number.NaN)))),
     candidatesReturned: [...totals][0] ?? 0,
     gateMs: GATE_MS,
     gatePassed: lookupMedianMs < GATE_MS,
@@ -218,15 +354,45 @@ async function measure(): Promise<Record<string, number | string | boolean>> {
   };
 }
 
+/** Receipt counts by kind, so a run that grades nothing (a vacuous fast path) shows in the result file. */
+function receiptCounts(receipts: readonly Receipt[]): Record<string, number> {
+  const count = (grade: Receipt['grade']) => receipts.filter((r) => r.grade === grade).length;
+  const verified = { gradingVerified: count('VERIFIED'), gradingNotFound: count('NOT_FOUND') };
+  return { gradingReceipts: receipts.length, ...verified, gradingUnasked: count('UNASKED') };
+}
+
+/** `gradeBatch` over the grading workload: median of RUNS cold runs (fresh objects and index each run). */
+async function measureGrading(): Promise<Record<string, number | boolean>> {
+  const runs: Timed<Receipt[]>[] = [];
+  for (let run = 0; run < RUNS; run += 1) {
+    const workload = buildGradingWorkload();
+    const index = createMemoryIndex(workload.observations, BUCKET_MINUTES);
+    runs.push(await timed(() => gradeAll(workload, index)));
+  }
+  const counts = runs.map(({ result }) => receiptCounts(result));
+  const agree = new Set(counts.map((c) => JSON.stringify(c))).size === 1;
+  if (!agree) throw new Error('core bench: grading runs disagree on the receipts');
+  const walls = runs.map((graded) => graded.wallMs);
+  const gradingMedianMs = round(median(walls));
+  return {
+    gradingMedianMs,
+    gradingMinMs: round(Math.min(...walls)),
+    gradingMaxMs: round(Math.max(...walls)),
+    gradingCpuMedianMs: round(median(runs.map((graded) => graded.cpuMs))),
+    ...counts[0],
+    gradingGateMs: GATE_MS,
+    gradingGatePassed: gradingMedianMs < GATE_MS,
+  };
+}
+
 /** Runs the bench and writes bench/results/core-<date>.json. */
 export async function runCoreBench(): Promise<void> {
-  const metrics = await measure();
+  const metrics = { ...(await measure()), ...(await measureGrading()) };
   const date = localDate(new Date());
   const resultsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'results');
   const file = path.join(resultsDir, `core-${date}.json`);
   const result = { bench: 'core', date, command: 'pnpm bench', metrics };
   writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
-  console.log(
-    `core: lookup median ${String(metrics.lookupMedianMs)} ms → ${path.relative(process.cwd(), file)}`,
-  );
+  const summary = `lookup median ${String(metrics.lookupMedianMs)} ms, grading median ${String(metrics.gradingMedianMs)} ms`;
+  console.log(`core: ${summary} → ${path.relative(process.cwd(), file)}`);
 }

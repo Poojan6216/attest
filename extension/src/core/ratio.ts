@@ -49,6 +49,18 @@ const BASIS_POINTS_BIG = BigInt(BASIS_POINTS);
 export const RATIO_ZERO: Ratio = Object.freeze({ num: ZERO, den: ONE });
 export const RATIO_ONE: Ratio = Object.freeze({ num: ONE, den: ONE });
 
+/**
+ * An exact value `num / den` held as two JS numbers, for `weightedScoreOf`: feature values are small integers
+ * (milliseconds, token counts), so most scores never need a BigInt until the result. Not necessarily reduced.
+ */
+export interface NumberRatio {
+  readonly num: number;
+  readonly den: number;
+}
+
+export const NUMBER_RATIO_ZERO: NumberRatio = Object.freeze({ num: 0, den: 1 });
+export const NUMBER_RATIO_ONE: NumberRatio = Object.freeze({ num: 1, den: 1 });
+
 function toBigInt(value: bigint | number, code: RatioErrorCode): bigint {
   if (typeof value === 'bigint') return value;
   if (!Number.isSafeInteger(value)) throw new RatioError(code);
@@ -137,6 +149,139 @@ export function weightedScore(terms: readonly WeightedTerm[]): Ratio {
   }
   if (total === ZERO) throw new RatioError('zero_weight_sum');
   return ratio(num, den * total);
+}
+
+/** A non-negative safe integer: an operand the Number path can multiply and add exactly. */
+function isCount(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Greatest common divisor of two non-negative safe integers (Euclid; `%` on safe integers is exact). */
+function gcdNumber(a: number, b: number): number {
+  let x = a;
+  let y = b;
+  while (y !== 0) {
+    const rest = x % y;
+    x = y;
+    y = rest;
+  }
+  return x;
+}
+
+/**
+ * An exact score (§5.3): a reduced rational, held as two safe integers when its reduced numerator and denominator
+ * both are (`num`, `den`: the Number fast path), else as a Ratio alone (`num` and `den` NaN, which no fast check
+ * accepts). The Ratio is made on first use and kept, so a score always yields the same Ratio object.
+ */
+export class Score {
+  #ratio: Ratio | undefined;
+
+  private constructor(
+    readonly num: number,
+    readonly den: number,
+    ratio: Ratio | undefined,
+  ) {
+    this.#ratio = ratio;
+  }
+
+  /** A reduced `num / den` of safe integers (`den > 0`); callers guarantee both. */
+  static ofReduced(num: number, den: number): Score {
+    return new Score(num, den, undefined);
+  }
+
+  static ofRatio(ratio: Ratio): Score {
+    return new Score(Number.NaN, Number.NaN, ratio);
+  }
+
+  get ratio(): Ratio {
+    this.#ratio ??= Object.freeze({ num: BigInt(this.num), den: BigInt(this.den) });
+    return this.#ratio;
+  }
+}
+
+/**
+ * `weightedScore` in Number: null as soon as an operand is not a non-negative safe integer (a denominator must be
+ * positive) or a running value exceeds 2^53 − 1. The sum Σ wᵢ·pᵢ/qᵢ is kept over the plain product of the
+ * denominators and reduced once, at the end (one gcd instead of one per term; a reduced Ratio has one form, so
+ * the result is the one `weightedScore` reduces to). Every product and sum is of non-negative integers and none
+ * exceeds the running numerator or denominator it feeds, which are checked after each term: a value at or below
+ * `Number.MAX_SAFE_INTEGER` is exact, and one above it is detected (rounding is monotonic and 2^53 is
+ * representable), never used.
+ */
+function numberScore(weights: readonly number[], values: readonly NumberRatio[]): Score | null {
+  if (weights.length !== values.length) return null;
+  const max = Number.MAX_SAFE_INTEGER;
+  let num = 0;
+  let den = 1;
+  let total = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const weight = weights[i] ?? -1;
+    const value = values[i] ?? NUMBER_RATIO_ZERO;
+    if (!isCount(weight) || !isCount(value.num) || !isCount(value.den) || value.den === 0) return null;
+    total += weight;
+    if (value.den === 1) {
+      num += weight * value.num * den;
+    } else {
+      num = num * value.den + weight * value.num * den;
+      den *= value.den;
+    }
+    if (num > max || den > max || total > max) return null;
+  }
+  const whole = den * total;
+  if (total === 0 || whole > max) return null;
+  const divisor = gcdNumber(num, whole);
+  return Score.ofReduced(num / divisor, whole / divisor);
+}
+
+/**
+ * `weightedScore` over weights and values given as numbers (§5.3), as a `Score`: computed in Number while every
+ * operand and intermediate is a safe integer (so every step is exact), and otherwise recomputed in BigInt by
+ * `weightedScore`, which also throws for an invalid weight or value exactly as it always has. Never a rounding:
+ * the two paths compute the same rational, and a reduced Ratio has one representation.
+ */
+export function weightedScoreExact(weights: readonly number[], values: readonly NumberRatio[]): Score {
+  const fast = numberScore(weights, values);
+  if (fast !== null) return fast;
+  return Score.ofRatio(
+    weightedScore(
+      values.map((value, i) => ({ weightBp: weights[i] ?? Number.NaN, value: ratio(value.num, value.den) })),
+    ),
+  );
+}
+
+/** `weightedScoreExact` as a Ratio. */
+export function weightedScoreOf(weights: readonly number[], values: readonly NumberRatio[]): Ratio {
+  return weightedScoreExact(weights, values).ratio;
+}
+
+/**
+ * `compareRatio` of two scores: by cross-multiplication in Number when both products are at most 2^53 − 1
+ * (exact: a product above it is detected, never used), else in BigInt.
+ */
+export function compareScores(a: Score, b: Score): -1 | 0 | 1 {
+  const left = a.num * b.den;
+  const right = b.num * a.den;
+  if (left <= Number.MAX_SAFE_INTEGER && right <= Number.MAX_SAFE_INTEGER) {
+    if (left === right) return 0;
+    return left < right ? -1 : 1;
+  }
+  return compareRatio(a.ratio, b.ratio);
+}
+
+/** `ratioGteBasisPoints` of a score: in Number when both products are at most 2^53 − 1, else in BigInt. */
+export function scoreGteBasisPoints(score: Score, bp: number): boolean {
+  const left = score.num * BASIS_POINTS;
+  const right = bp * score.den;
+  if (isCount(bp) && left <= Number.MAX_SAFE_INTEGER && right <= Number.MAX_SAFE_INTEGER)
+    return left >= right;
+  return ratioGteBasisPoints(score.ratio, bp);
+}
+
+/** A Number-held value as a reduced Ratio (throws like `ratio` for anything but integers over a non-zero one). */
+export function ratioOf(value: NumberRatio): Ratio {
+  if (value === NUMBER_RATIO_ZERO) return RATIO_ZERO;
+  if (value === NUMBER_RATIO_ONE) return RATIO_ONE;
+  return ratio(value.num, value.den);
 }
 
 /**

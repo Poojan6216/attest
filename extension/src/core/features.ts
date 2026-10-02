@@ -12,31 +12,53 @@
  * `counterpartyName`. A missing or empty field on the OBSERVATION scores 0 and is never "not applicable", so
  * no observation can make a claim easier to match by omitting data.
  *
- * A claim's facts and an observation's parsed fields are memoised per object (features-memo.ts), each entry used
- * only while the fields it was read from are unchanged: a batch scores each pair twice and shares observations
- * across claims. A memo saves work and never changes a result.
+ * Speed (the task 1.5 grading perf gate scores every (claim, candidate) pair of a batch): what a claim says is
+ * read once into a plan (its window, prepared address, token sets, the applicable features and their weights;
+ * features-memo.ts), what an observation says once per object (features-observed.ts), and each pair's values and
+ * exact score once (`pairScorer`, shared with `features`): a batch asks for every pair's score in assignment and
+ * again in `grade`'s best candidate, and for the best one's display signals. Feature values are held as integer
+ * pairs and summed in Number only while provably exact (ratio.ts `weightedScoreOf`). Every memo is used only
+ * while every input it was computed from is unchanged, so a memo saves work and never changes a result.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
-import { addressFeatures, type AddressFeatures, nameFeature, observedAddress } from './features-counterparty';
 import {
-  amountExact,
-  type MerchantName,
-  merchantMatchName,
-  merchantName,
+  jaccardOf,
+  merchantMatchOf,
   type Money,
-  subjectTokenSet,
-  tokenOverlap,
+  type PreparedMerchant,
+  prepareMerchant,
+  sameMoney,
+  stopWordSet,
+  subjectTokensWithout,
 } from './features-content';
+import {
+  type AddressVerdict,
+  addressVerdict,
+  nameMatches,
+  type PreparedAddress,
+  prepareAddress,
+} from './features-counterparty';
 import { type Memo, memoised } from './features-memo';
-import { timeProximityAt } from './features-time';
-import { counterparty, type EmailAddress, instantMs } from './normalize';
+import { type FeatureObservation, type ObservedFacts, observedFacts } from './features-observed';
+import { timeProximityValue } from './features-time';
+import { counterparty } from './normalize';
 import type { FeatureName, Policy } from './policy';
-import { RATIO_ZERO, type Ratio, toDisplay, weightedScore } from './ratio';
+import {
+  NUMBER_RATIO_ONE,
+  NUMBER_RATIO_ZERO,
+  type NumberRatio,
+  type Ratio,
+  ratioOf,
+  type Score,
+  toDisplay,
+  weightedScoreExact,
+} from './ratio';
 import type { ActionType, ReasonCode } from './schema';
 import { claimWindow, type ClaimWindow, type WindowClaim } from './window';
 
 export type { CounterpartyReason } from './features-counterparty';
+export type { FeatureObservation } from './features-observed';
 
 /**
  * The claim fields features read: its timing as window.ts reads it, its money, its counterparty and its
@@ -46,14 +68,6 @@ export type { CounterpartyReason } from './features-counterparty';
 export interface FeatureClaim extends Money, WindowClaim {
   readonly counterparty?: string | undefined;
   readonly subjectHint?: string | undefined;
-}
-
-/** The observation fields features read. A parsed `Observation` satisfies it. */
-export interface FeatureObservation extends Money {
-  readonly counterparty?: string | undefined;
-  readonly merchant?: string | undefined;
-  readonly subjectHint?: string | undefined;
-  readonly occurredAt: string;
 }
 
 /** The policy fields features read. A loaded `Policy` satisfies it. */
@@ -71,52 +85,23 @@ export interface FeatureResult {
   readonly reasonCodes: readonly ReasonCode[];
 }
 
-/** What the claim alone says, computed once per call (§5.2: applicability reads only these). */
+/** What the claim alone says (§5.2: applicability reads only these). */
 interface ClaimFacts {
   readonly window: ClaimWindow | null;
-  readonly address: EmailAddress | null;
+  readonly address: PreparedAddress | null;
   readonly nameTokens: readonly string[];
-  readonly subject: readonly string[];
-  readonly merchant: MerchantName | null;
-  readonly hasAmount: boolean;
+  readonly subject: ReadonlySet<string>;
+  readonly merchant: PreparedMerchant | null;
+  readonly money: Money;
 }
 
-const CLAIM_FACTS: Memo<FeatureClaim, ClaimFacts> = new WeakMap();
-const OCCURRED_MS: Memo<FeatureObservation, number> = new WeakMap();
-const OBSERVED_ADDRESS: Memo<FeatureObservation, EmailAddress | null> = new WeakMap();
-const OBSERVED_SUBJECT: Memo<FeatureObservation, readonly string[]> = new WeakMap();
-const OBSERVED_MERCHANT: Memo<FeatureObservation, MerchantName | null> = new WeakMap();
-
-/**
- * The claim's facts, computed once per claim object while every field and policy part they read is unchanged
- * (features-memo.ts): `gradeBatch` scores each claim against every candidate, twice.
- */
-function claimFacts(claim: FeatureClaim, policy: FeaturePolicy): ClaimFacts {
-  const inputs = [
-    policy.windows,
-    policy.normalize.stopWords,
-    claim.type,
-    claim.claimedAt,
-    claim.claimedAtPrecision,
-    claim.claimedAtEnd,
-    claim.targetAt,
-    claim.counterparty,
-    claim.subjectHint,
-    claim.amountCents,
-  ];
-  return memoised(CLAIM_FACTS, claim, inputs, () => computeClaimFacts(claim, policy));
-}
-
-function computeClaimFacts(claim: FeatureClaim, policy: FeaturePolicy): ClaimFacts {
-  const party = counterparty(claim.counterparty);
-  return {
-    window: claimWindow(claim, policy),
-    address: party?.kind === 'address' ? party : null,
-    nameTokens: party?.kind === 'name' ? party.tokens : [],
-    subject: subjectTokenSet(claim.subjectHint, policy.normalize.stopWords),
-    merchant: merchantName(claim.counterparty),
-    hasAmount: claim.amountCents !== undefined,
-  };
+/** A claim's facts under one policy, with its applicable features (policy order) and their weights. */
+interface ClaimPlan {
+  readonly facts: ClaimFacts;
+  readonly applicable: readonly FeatureName[];
+  readonly weights: readonly number[];
+  /** `counterpartyExact` or `counterpartyDomain` applies: each pair compares addresses once. */
+  readonly usesAddress: boolean;
 }
 
 /** §5.2: whether the claim has the field a feature reads (with at least one token where it has tokens). */
@@ -125,20 +110,85 @@ const APPLICABLE: Readonly<Record<FeatureName, (facts: ClaimFacts) => boolean>> 
   counterpartyExact: (facts) => facts.address !== null,
   counterpartyDomain: (facts) => facts.address !== null,
   counterpartyName: (facts) => facts.nameTokens.length > 0,
-  subjectOverlap: (facts) => facts.subject.length > 0,
-  amountExact: (facts) => facts.hasAmount,
+  subjectOverlap: (facts) => facts.subject.size > 0,
+  amountExact: (facts) => facts.money.amountCents !== undefined,
   merchantMatch: (facts) => facts.merchant !== null,
   /** Reserved for Sprint 5 (§5.1): never applicable in Sprint 1. */
   modelScore: () => false,
 });
 
-function applicableFrom(facts: ClaimFacts, listed: readonly FeatureName[]): FeatureName[] {
-  return listed.filter((feature) => APPLICABLE[feature](facts));
+const COUNTERPARTY_FEATURES: readonly FeatureName[] = [
+  'counterpartyExact',
+  'counterpartyDomain',
+  'counterpartyName',
+];
+const NO_TOKENS: ReadonlySet<string> = new Set();
+
+/**
+ * The facts the features listed for the claim's type read (§5.2 decides applicability from these alone): a fact
+ * no listed feature reads is left empty, since only listed features are ever checked or valued.
+ */
+function computeFacts(claim: FeatureClaim, policy: FeaturePolicy): ClaimFacts {
+  const listed = policy.featuresByType[claim.type];
+  const party = COUNTERPARTY_FEATURES.some((feature) => listed.includes(feature))
+    ? counterparty(claim.counterparty)
+    : null;
+  return {
+    window: claimWindow(claim, policy),
+    address: party?.kind === 'address' ? prepareAddress(party) : null,
+    nameTokens: party?.kind === 'name' ? party.tokens : [],
+    subject: listed.includes('subjectOverlap')
+      ? subjectTokensWithout(claim.subjectHint, stopWordSet(policy.normalize.stopWords))
+      : NO_TOKENS,
+    merchant: listed.includes('merchantMatch') ? prepareMerchant(claim.counterparty) : null,
+    money: { amountCents: claim.amountCents, currency: claim.currency },
+  };
+}
+
+function computePlan(claim: FeatureClaim, policy: FeaturePolicy): ClaimPlan {
+  const facts = computeFacts(claim, policy);
+  const applicable = policy.featuresByType[claim.type].filter((feature) => APPLICABLE[feature](facts));
+  return {
+    facts,
+    applicable,
+    weights: applicable.map((feature) => policy.bp.features[feature]),
+    usesAddress: applicable.includes('counterpartyExact') || applicable.includes('counterpartyDomain'),
+  };
+}
+
+const CLAIM_PLANS: Memo<FeatureClaim, ClaimPlan> = new WeakMap();
+
+/**
+ * The claim's plan, computed once per claim object while every claim field and policy part it reads is unchanged
+ * (features-memo.ts): `gradeBatch` scores each claim against every candidate.
+ */
+function claimPlan(claim: FeatureClaim, policy: FeaturePolicy): ClaimPlan {
+  const inputs = [
+    policy.windows,
+    policy.normalize.stopWords,
+    policy.featuresByType[claim.type],
+    policy.bp.features,
+    claim.type,
+    claim.claimedAt,
+    claim.claimedAtPrecision,
+    claim.claimedAtEnd,
+    claim.targetAt,
+    claim.counterparty,
+    claim.subjectHint,
+    claim.amountCents,
+    claim.currency,
+  ];
+  return memoised(CLAIM_PLANS, claim, inputs, () => computePlan(claim, policy));
 }
 
 /** §5.2: the features of `policy.featuresByType[claim.type]` that apply to this claim, in policy order. */
 export function applicableFeatures(claim: FeatureClaim, policy: FeaturePolicy): FeatureName[] {
-  return applicableFrom(claimFacts(claim, policy), policy.featuresByType[claim.type]);
+  return [...claimPlan(claim, policy).applicable];
+}
+
+function underspecifiedFrom(plan: ClaimPlan, type: ActionType, policy: FeaturePolicy): boolean {
+  const identity = policy.identityFeatures[type];
+  return identity.length > 0 && !identity.some((feature) => plan.applicable.includes(feature));
 }
 
 /**
@@ -146,14 +196,7 @@ export function applicableFeatures(claim: FeatureClaim, policy: FeaturePolicy): 
  * email."). Graded by rule `underspecified`, never matched on time alone.
  */
 export function isUnderspecified(claim: FeatureClaim, policy: FeaturePolicy): boolean {
-  return underspecifiedFrom(claimFacts(claim, policy), claim.type, policy);
-}
-
-function underspecifiedFrom(facts: ClaimFacts, type: ActionType, policy: FeaturePolicy): boolean {
-  const identity = policy.identityFeatures[type];
-  if (identity.length === 0) return false;
-  const applicable = new Set(applicableFrom(facts, policy.featuresByType[type]));
-  return !identity.some((feature) => applicable.has(feature));
+  return underspecifiedFrom(claimPlan(claim, policy), claim.type, policy);
 }
 
 /**
@@ -162,83 +205,111 @@ function underspecifiedFrom(facts: ClaimFacts, type: ActionType, policy: Feature
  */
 export function isAssignable(claim: FeatureClaim, policy: FeaturePolicy): boolean {
   if (policy.sourcesByType[claim.type].length === 0) return false;
-  const facts = claimFacts(claim, policy);
-  return facts.window !== null && !underspecifiedFrom(facts, claim.type, policy);
+  const plan = claimPlan(claim, policy);
+  return plan.facts.window !== null && !underspecifiedFrom(plan, claim.type, policy);
 }
 
-/** The observation's `occurredAt` instant, parsed once per object and text. */
-function occurredMsOf(observation: FeatureObservation): number {
-  const { occurredAt } = observation;
-  return memoised(OCCURRED_MS, observation, [occurredAt], () => instantMs(occurredAt));
+/** One pair's feature values (in `plan.applicable` order), exact score and `cp.*` reason. */
+interface PairValues {
+  readonly observed: ObservedFacts;
+  readonly values: readonly NumberRatio[];
+  readonly score: Score;
+  readonly reason: ReasonCode | undefined;
 }
 
-/** The observation's counterparty read through `email()` (§5.1), once per object and text. */
-function addressOf(observation: FeatureObservation): EmailAddress | null {
-  const raw = observation.counterparty;
-  return memoised(OBSERVED_ADDRESS, observation, [raw], () => observedAddress(raw));
-}
+const ONE_IF = (holds: boolean): NumberRatio => (holds ? NUMBER_RATIO_ONE : NUMBER_RATIO_ZERO);
 
-/** The observation's §11 subject tokens, once per object, text and stop-word list. */
-function subjectOf(observation: FeatureObservation, stopWords: readonly string[]): readonly string[] {
-  const raw = observation.subjectHint;
-  return memoised(OBSERVED_SUBJECT, observation, [raw, stopWords], () => subjectTokenSet(raw, stopWords));
-}
-
-/** The observation's merchant read as a name (§5.1), once per object and text. */
-function merchantOf(observation: FeatureObservation): MerchantName | null {
-  const raw = observation.merchant;
-  return memoised(OBSERVED_MERCHANT, observation, [raw], () => merchantName(raw));
-}
-
-/** The values one pair needs, with the address comparison done once for both address features. */
-interface Pair {
-  readonly facts: ClaimFacts;
-  readonly claim: FeatureClaim;
-  readonly observation: FeatureObservation;
-  readonly policy: FeaturePolicy;
-  readonly address: AddressFeatures | null;
-}
-
-function valueOf(feature: FeatureName, pair: Pair): Ratio {
-  const { facts, observation, policy } = pair;
+function valueOf(
+  feature: FeatureName,
+  facts: ClaimFacts,
+  observed: ObservedFacts,
+  verdict: AddressVerdict | null,
+  policy: FeaturePolicy,
+): NumberRatio {
   switch (feature) {
     case 'timeProximity':
       return facts.window === null
-        ? RATIO_ZERO
-        : timeProximityAt(facts.window, occurredMsOf(observation), policy.windows.toleranceMin);
+        ? NUMBER_RATIO_ZERO
+        : timeProximityValue(facts.window, observed.occurredMs, policy.windows.toleranceMin);
     case 'counterpartyExact':
-      return pair.address?.counterpartyExact ?? RATIO_ZERO;
+      return ONE_IF(verdict?.exact === true);
     case 'counterpartyDomain':
-      return pair.address?.counterpartyDomain ?? RATIO_ZERO;
+      return ONE_IF(verdict?.domain === true);
     case 'counterpartyName':
-      return nameFeature(facts.nameTokens, addressOf(observation));
+      return ONE_IF(nameMatches(facts.nameTokens, observed.address));
     case 'subjectOverlap':
-      return tokenOverlap(facts.subject, subjectOf(observation, policy.normalize.stopWords));
+      return facts.subject.size === 0 ? NUMBER_RATIO_ZERO : jaccardOf(facts.subject, observed.subject);
     case 'amountExact':
-      return amountExact(pair.claim, observation);
+      return ONE_IF(sameMoney(facts.money, observed));
     case 'merchantMatch':
-      return facts.merchant === null
-        ? RATIO_ZERO
-        : merchantMatchName(facts.merchant, merchantOf(observation));
+      return merchantMatchOf(facts.merchant, observed.merchantName);
     case 'modelScore':
-      return RATIO_ZERO;
+      return NUMBER_RATIO_ZERO;
   }
 }
 
-function addressPair(
-  facts: ClaimFacts,
-  applicable: readonly FeatureName[],
-  observation: FeatureObservation,
+/** Values one pair: the address comparison once for both address features, then each applicable feature. */
+function pairValues(plan: ClaimPlan, observed: ObservedFacts, policy: FeaturePolicy): PairValues {
+  const { facts } = plan;
+  const verdict =
+    plan.usesAddress && facts.address !== null
+      ? addressVerdict(facts.address, observed.address, policy.commonDomains)
+      : null;
+  const values = plan.applicable.map((feature) => valueOf(feature, facts, observed, verdict, policy));
+  return { observed, values, score: weightedScoreExact(plan.weights, values), reason: verdict?.reason };
+}
+
+/** One claim's valued pairs, kept while the plan and the policy parts beside it are unchanged. */
+interface ClaimPairs {
+  readonly plan: ClaimPlan;
+  readonly policy: Pick<FeaturePolicy, 'windows' | 'commonDomains'>;
+  readonly pairs: WeakMap<FeatureObservation, PairValues>;
+}
+
+const CLAIM_PAIRS = new WeakMap<FeatureClaim, ClaimPairs>();
+
+function claimPairs(claim: FeatureClaim, plan: ClaimPlan, policy: FeaturePolicy): ClaimPairs {
+  const held = CLAIM_PAIRS.get(claim);
+  const { windows, commonDomains } = policy;
+  if (held?.plan === plan && held.policy.windows === windows && held.policy.commonDomains === commonDomains) {
+    return held;
+  }
+  const fresh: ClaimPairs = { plan, policy: { windows, commonDomains }, pairs: new WeakMap() };
+  CLAIM_PAIRS.set(claim, fresh);
+  return fresh;
+}
+
+/**
+ * The pair's values, computed at most once while the claim plan and the observation's fields are unchanged (a
+ * remembered pair is checked against the observation itself, `ObservedFacts.matches`).
+ */
+function valuedPair(held: ClaimPairs, observation: FeatureObservation, policy: FeaturePolicy): PairValues {
+  const { stopWords } = policy.normalize;
+  const cached = held.pairs.get(observation);
+  if (cached?.observed.matches(observation, stopWords) === true) return cached;
+  const valued = pairValues(held.plan, observedFacts(observation, stopWords), policy);
+  held.pairs.set(observation, valued);
+  return valued;
+}
+
+/**
+ * `(observation) => features(claim, observation, policy).score` for one claim, as an exact `Score` (ratio.ts: Number
+ * fast paths, the Ratio on demand), its plan read once: each pair is valued at most once (the values are
+ * remembered per claim and observation object, and reused by `features`). The claim is read when the scorer is
+ * made; make another after editing it. Call it for assignable claims (`isAssignable`): with no weighted
+ * applicable feature, `RatioError('zero_weight_sum')` is thrown.
+ */
+export function pairScorer(
+  claim: FeatureClaim,
   policy: FeaturePolicy,
-): AddressFeatures | null {
-  const used = applicable.includes('counterpartyExact') || applicable.includes('counterpartyDomain');
-  if (!used || facts.address === null) return null;
-  return addressFeatures(facts.address, addressOf(observation), policy.commonDomains);
+): (observation: FeatureObservation) => Score {
+  const held = claimPairs(claim, claimPlan(claim, policy), policy);
+  return (observation) => valuedPair(held, observation, policy).score;
 }
 
 /**
  * Scores one (claim, observation) pair (§5). Call it for assignable claims (`isAssignable`): when no
- * applicable feature has weight, the score is undefined and `weightedScore` throws
+ * applicable feature has weight, the score is undefined and the weighted mean throws
  * `RatioError('zero_weight_sum')` rather than inventing one.
  */
 export function features(
@@ -246,22 +317,13 @@ export function features(
   observation: FeatureObservation,
   policy: FeaturePolicy,
 ): FeatureResult {
-  const facts = claimFacts(claim, policy);
-  const applicable = applicableFrom(facts, policy.featuresByType[claim.type]);
-  const pair: Pair = {
-    facts,
-    claim,
-    observation,
-    policy,
-    address: addressPair(facts, applicable, observation, policy),
-  };
-  const values = applicable.map((feature) => [feature, valueOf(feature, pair)] as const);
-  const score = weightedScore(
-    values.map(([feature, value]) => ({ weightBp: policy.bp.features[feature], value })),
-  );
+  const plan = claimPlan(claim, policy);
+  const { values, score, reason } = valuedPair(claimPairs(claim, plan, policy), observation, policy);
   const signals: Record<string, number> = {};
-  for (const [feature, value] of values) signals[feature] = toDisplay(value);
-  signals.score = toDisplay(score);
-  const reason = pair.address?.reason;
-  return { score, signals, reasonCodes: reason === undefined ? [] : [reason] };
+  plan.applicable.forEach((feature, i) => {
+    signals[feature] = toDisplay(ratioOf(values[i] ?? NUMBER_RATIO_ZERO));
+  });
+  const exact = score.ratio;
+  signals.score = toDisplay(exact);
+  return { score: exact, signals, reasonCodes: reason === undefined ? [] : [reason] };
 }

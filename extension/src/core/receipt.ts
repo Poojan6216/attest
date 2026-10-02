@@ -4,7 +4,8 @@
  *  - `receiptId(subject)`: stable per subject, never per input: `idFromHash(sha256Hex(canonicalJson(K)))` with
  *    `K = {k:'claim', claimId}`, `{k:'unasked', observationId}` or `{k:'scope', agent, scope}`. A regrade
  *    replaces the PENDING row with the same id (idempotent).
- *  - `inputsHash(inputs)` (receipt-hash.ts): what replay proves.
+ *  - `inputsHash(inputs)` (receipt-hash.ts): what replay proves; `grantHash` and `coverageHash` are its per-batch
+ *    sub-hashes (§3 v1.4).
  *  - `buildReceipt(parts)`: assembles a Receipt whose §8 invariants hold by construction: `state` is FINAL iff
  *    the parts say final, and then `finalAt = computedAt` (the evaluatedAt of the grading that met the FINAL
  *    condition); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no `override` and no
@@ -26,7 +27,15 @@ import {
   Ulid,
 } from './schema';
 
-export { type GradeInputs, inputsHash, uniqueById } from './receipt-hash';
+export {
+  coverageHash,
+  type GradeInputs,
+  grantHash,
+  inputsHash,
+  rememberById,
+  uniqueById,
+  uniqueRows,
+} from './receipt-hash';
 
 /** What a receipt is about (§3): its id derives from this alone. */
 export type ReceiptSubject =

@@ -80,13 +80,24 @@ function preferred(held: Observation, next: Observation): Observation {
   return order <= 0 ? held : next;
 }
 
+interface Keyed {
+  readonly observation: Observation;
+  readonly atMs: number;
+}
+
 /** (`occurredAt` instant, id, `contentHash`): the candidate order of §4.1, total after dedupe. */
-function compareObservations(a: Observation, b: Observation): number {
+function compareKeyed(a: Keyed, b: Keyed): number {
   return (
-    compareNumbers(occurredMs(a), occurredMs(b)) ||
-    compareText(a.id, b.id) ||
-    compareText(a.contentHash, b.contentHash)
+    compareNumbers(a.atMs, b.atMs) ||
+    compareText(a.observation.id, b.observation.id) ||
+    compareText(a.observation.contentHash, b.observation.contentHash)
   );
+}
+
+/** The observations in candidate order, each instant read once (not once per comparison). */
+function inCandidateOrder(observations: Iterable<Observation>): Observation[] {
+  const keyed = [...observations].map((observation) => ({ observation, atMs: occurredMs(observation) }));
+  return keyed.sort(compareKeyed).map(({ observation }) => observation);
 }
 
 /** Observations of `type` from `source` that lie in one of `windows`, read window by window. */
@@ -128,5 +139,5 @@ export async function coveredObservations(
       }
     }
   }
-  return [...byHash.values()].sort(compareObservations);
+  return inCandidateOrder(byHash.values());
 }
