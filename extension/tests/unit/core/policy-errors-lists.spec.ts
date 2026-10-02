@@ -42,8 +42,10 @@ function issuesOf(raw: unknown): readonly string[] {
 const quoted = (values: readonly string[]): string => values.map((v) => JSON.stringify(v)).join(', ');
 const MULTIPLE = 'must be a multiple of 0.0001';
 const DOMAIN = 'must be a lowercase ASCII domain name';
-const MERCHANT = 'must be a normalised merchant name (lowercase, trimmed, single-spaced)';
-const STOP_WORD = 'must be one lowercase token of letters and digits (NFKC)';
+const MERCHANT =
+  'must be a normalised merchant name (its own name(): lowercase, trimmed, single-spaced, folded)';
+const STOP_WORD = 'must be one lowercase token of letters, digits and marks (NFKC)';
+const PENDING_ONLY = 'PENDING is allowed only on the rule with id "pending"';
 const SIGNATURE = 'must contain a letter or digit';
 const LONG_ID = `r${'_x'.repeat(32)}`;
 
@@ -98,6 +100,16 @@ const LIST_CASES: readonly Case[] = [
     ['ama\u200Bzon'],
     `receiptMerchants[0]: ${MERCHANT}`,
   ),
+  // §6.1 v1.2: a purchase is covered only when name(counterparty) is listed, so an entry name() would change
+  // could never match: a diacritic name() folds, a fullwidth name NFKC folds, a superscript name() does not read.
+  one('merchant with a diacritic', ['receiptMerchants'], ['caf\u00E9'], `receiptMerchants[0]: ${MERCHANT}`),
+  one('merchant in fullwidth', ['receiptMerchants'], ['\uFF41cme'], `receiptMerchants[0]: ${MERCHANT}`),
+  one(
+    'merchant with a superscript',
+    ['receiptMerchants'],
+    ['acme\u00B2'],
+    `receiptMerchants[0]: ${MERCHANT}`,
+  ),
   one(
     'duplicate merchant',
     ['receiptMerchants'],
@@ -135,6 +147,13 @@ const LIST_CASES: readonly Case[] = [
     'normalize.stopWords[1]: duplicate "a" (first at [0])',
   ),
   one('missing stop words', ['normalize', 'stopWords'], REMOVE, 'normalize.stopWords: is required'),
+  // §11 v1.2: subjects lose zero-width marks before they are split, so a stop word holding one never matches.
+  one(
+    'stop word holding a combining grapheme joiner',
+    ['normalize', 'stopWords', 5],
+    'o\u034Ff',
+    `normalize.stopWords[5]: ${STOP_WORD}`,
+  ),
 ];
 
 const RULE_CASES: readonly Case[] = [
@@ -194,6 +213,9 @@ const RULE_CASES: readonly Case[] = [
     'rules[9].when.bestScoreGte: must be one of "verified", "partial"',
   ),
   one('no rules', ['rules'], [], 'rules: must not be empty'),
+  // §5.3 v1.2: a rule may conclude PENDING only if its id is `pending`.
+  one('PENDING on another rule', ['rules', 12, 'then'], 'PENDING', `rules[12].then: ${PENDING_ONLY}`),
+  one('the pending rule renamed', ['rules', 11, 'id'], 'waiting', `rules[11].then: ${PENDING_ONLY}`),
 ];
 
 const UNASKED_AND_FIELD_CASES: readonly Case[] = [
@@ -289,6 +311,8 @@ describe('loadPolicy: malformed lists, rules, unasked and fields name their path
       'normalize.stopWords',
       'rules.8',
       'rules.3',
+      'rules.11',
+      'rules.12',
       'unasked.windows',
       'unasked.signatures',
       'allowlistedFields.gmail.sent',
@@ -298,6 +322,15 @@ describe('loadPolicy: malformed lists, rules, unasked and fields name their path
         key,
       ).toBe(true);
     }
+  });
+
+  it('a stop word with a combining mark loads (subject tokens keep marks), and pending may conclude otherwise', () => {
+    // "İ" lowercases to i + U+0307, which NFKC cannot compose: one subject token, so one stop word.
+    const stopWords = [...policyJson.normalize.stopWords, 'i\u0307stanbul'];
+    expect(loadPolicy(edited([['normalize', 'stopWords'], stopWords])).normalize.stopWords).toEqual(
+      stopWords,
+    );
+    expect(loadPolicy(edited([['rules', 11, 'then'], 'UNVERIFIABLE'])).rules[11]?.then).toBe('UNVERIFIABLE');
   });
 
   it('real domains with a numeric label or a punycode TLD still load', () => {

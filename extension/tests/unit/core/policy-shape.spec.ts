@@ -180,6 +180,12 @@ describe('policy schema: vocabularies match the document', () => {
   });
 });
 
+/**
+ * A generous budget for the heavy property below (1,000 full loads, parse + SHA-256): under 1 s alone, but the
+ * whole suite runs files in parallel, and a timeout under load is not a failure of the loader.
+ */
+const PROPERTY_TIMEOUT_MS = 30_000;
+
 /** Any weight on the basis-point grid. */
 const weight = fc.integer({ min: 0, max: BASIS_POINTS }).map((k) => k / BASIS_POINTS);
 const weights = (keys: readonly string[]) => fc.record(Object.fromEntries(keys.map((key) => [key, weight])));
@@ -201,44 +207,53 @@ const windows = fc
       .map((toleranceMin) => ({ ...w, toleranceMin })),
   );
 
-/** True iff every type that lists features gives them a positive total weight. */
+/**
+ * True iff every type that lists features gives them a positive total weight, and every identity feature
+ * has a weight above 0 (§5.3 v1.2).
+ */
 function listedWeightsPositive(features: Record<string, number>): boolean {
   return ActionType.options.every((type) => {
     const listed: readonly string[] = policyJson.featuresByType[type];
-    return listed.length === 0 || listed.some((feature) => (features[feature] ?? 0) > 0);
+    const identity: readonly string[] = policyJson.identityFeatures[type];
+    const positive = (feature: string): boolean => (features[feature] ?? 0) > 0;
+    return (listed.length === 0 || listed.some(positive)) && identity.every(positive);
   });
 }
 
 describe('policy schema: the whole valid domain loads unchanged', () => {
-  it('any version >= 1, valid windows, ordered grid thresholds and grid weights are accepted', () => {
-    fc.assert(
-      fc.property(
-        fc.integer({ min: 1, max: 1_000_000 }),
-        windows,
-        fc.uniqueArray(fc.integer({ min: 0, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
-        weights(Object.keys(policyJson.features)).filter(listedWeightsPositive),
-        weights(Object.keys(policyJson.unasked.signals)),
-        weight,
-        (version, windowValues, [a = 0, b = 0], features, signals, threshold) => {
-          const doc = {
-            ...structuredClone(policyJson),
-            version,
-            windows: windowValues,
-            thresholds: { verified: Math.max(a, b) / BASIS_POINTS, partial: Math.min(a, b) / BASIS_POINTS },
-            features,
-            unasked: { ...structuredClone(policyJson.unasked), signals, threshold },
-          };
-          const { bp, policyHash, ...loaded } = loadPolicy(doc);
-          expect(loaded).toEqual(doc);
-          expect(policyHash).toMatch(/^[0-9a-f]{64}$/);
-          expect(bp.thresholds).toEqual({ verified: Math.max(a, b), partial: Math.min(a, b) });
-          expect(bp.unasked.threshold).toBe(Math.round(threshold * BASIS_POINTS));
-        },
-      ),
-      // qa_tester rule 4: property tests over src/core run at least 1,000 examples each.
-      { numRuns: 1_000 },
-    );
-  });
+  it(
+    'any version >= 1, valid windows, ordered grid thresholds and grid weights are accepted',
+    () => {
+      fc.assert(
+        fc.property(
+          fc.integer({ min: 1, max: 1_000_000 }),
+          windows,
+          fc.uniqueArray(fc.integer({ min: 0, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
+          weights(Object.keys(policyJson.features)).filter(listedWeightsPositive),
+          weights(Object.keys(policyJson.unasked.signals)),
+          weight,
+          (version, windowValues, [a = 0, b = 0], features, signals, threshold) => {
+            const doc = {
+              ...structuredClone(policyJson),
+              version,
+              windows: windowValues,
+              thresholds: { verified: Math.max(a, b) / BASIS_POINTS, partial: Math.min(a, b) / BASIS_POINTS },
+              features,
+              unasked: { ...structuredClone(policyJson.unasked), signals, threshold },
+            };
+            const { bp, policyHash, ...loaded } = loadPolicy(doc);
+            expect(loaded).toEqual(doc);
+            expect(policyHash).toMatch(/^[0-9a-f]{64}$/);
+            expect(bp.thresholds).toEqual({ verified: Math.max(a, b), partial: Math.min(a, b) });
+            expect(bp.unasked.threshold).toBe(Math.round(threshold * BASIS_POINTS));
+          },
+        ),
+        // qa_tester rule 4: property tests over src/core run at least 1,000 examples each.
+        { numRuns: 1_000 },
+      );
+    },
+    PROPERTY_TIMEOUT_MS,
+  );
 });
 
 /** Applies one change in place; a path that an earlier change removed or retyped is skipped. */

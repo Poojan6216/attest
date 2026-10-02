@@ -13,9 +13,14 @@ import { z } from 'zod';
 
 import {
   attributionProblems,
+  claimProblems,
   coverageProblems,
   intervalProblems,
+  REASON_CODES,
+  REASON_PARAM_KINDS,
+  type ReasonParamKind,
   receiptProblems,
+  refineReasonParams,
   refineWith,
 } from './schema-checks';
 import { BASIS_POINTS } from './units';
@@ -26,7 +31,7 @@ export const SCHEMA_LIMITS = Object.freeze({
   COUNTERPARTY: 320,
   MERCHANT: 120,
   CONVERSATION_ID: 128,
-  /** Adapter, observer, extractor and rule ids; versions; signal and param names; reason param values. */
+  /** Adapter, observer, extractor and rule ids; versions; signal names. */
   ID: 64,
   /** One human-readable reason, scope, allowlist entry, or override reason. */
   ITEM: 120,
@@ -50,8 +55,6 @@ export const SCHEMA_LIMITS = Object.freeze({
   AMOUNT_CENTS: 1_000_000_000_000,
   /** Account hashes bound to one source in a grant. */
   ACCOUNTS: 32,
-  /** Params on one reason. */
-  REASON_PARAMS: 8,
   /** Coverage entries in one grading input; items in each Activity list. */
   GRADING_INPUT: 10_000,
 });
@@ -64,11 +67,6 @@ const ULID_UPPER = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const RULE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]*$/;
-/**
- * Characters of ids, hashes, ISO timestamps and enum values: no '@' and no space, so no address, full name or
- * formatted local time. A shape cannot stop one bare word (`priya`), so only the §15 params are ever emitted.
- */
-const TOKEN = /^[A-Za-z0-9_.:+-]+$/;
 /** A visible character: not whitespace and not an invisible format mark (zero-width space, bidi, BOM). */
 const VISIBLE = /[^\s\p{Cf}]/u;
 
@@ -119,36 +117,7 @@ export const UnaskedSignal = z.enum([
 ]);
 
 /** Closed, in docs/grading.md §15 table order (reasons are emitted in this order within each group). */
-export const ReasonCode = z.enum([
-  'match.best',
-  'match.none',
-  'cp.plus_tag',
-  'cp.confusable',
-  'cp.non_ascii',
-  'claim.too_vague',
-  'claim.no_target',
-  'coverage.none',
-  'coverage.partial',
-  'coverage.account_unbound',
-  'coverage.calendars_hidden',
-  'coverage.multiple_accounts',
-  'coverage.no_account',
-  'coverage.never_completed',
-  'grace.waiting',
-  'scope.type_not_allowed',
-  'scope.counterparty_not_allowed',
-  'allowlist.unchecked',
-  'ceiling.exceeded',
-  'ceiling.cumulative_exceeded',
-  'ceiling.currency_mismatch',
-  'scope.observed_not_declared',
-  'unasked.session',
-  'unasked.idle',
-  'unasked.signature',
-  'unasked.adjacent',
-  'override.user',
-  'superseded',
-]);
+export const ReasonCode = z.enum(REASON_CODES);
 
 // ── Agent side ──────────────────────────────────────────────────────────────────────────────────
 
@@ -161,30 +130,37 @@ export const Request = z.strictObject({
   ts: IsoTs,
 });
 
-export const Claim = z.strictObject({
-  id: Ulid,
-  agent: AgentId,
-  requestId: Ulid.optional(),
-  type: ActionType,
-  counterparty: z.string().max(L.COUNTERPARTY).optional(),
-  amountCents: AmountCents.optional(),
-  currency: Currency.optional(),
-  subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
-  /** When the agent says it acted, read at `claimedAtPrecision`. */
-  claimedAt: IsoTs,
-  claimedAtPrecision: ClaimPrecision,
-  /** The claimed event start of a calendar claim (§4.1); a calendar claim without it is graded `no_target`. */
-  targetAt: IsoTs.optional(),
-  /** When Attest read the claim. */
-  observedAt: IsoTs,
-  sourceKind: SourceKind,
-  extractor: z.strictObject({
-    id: z.string().max(L.ID),
-    version: z.string().max(L.ID),
-    confidence: UnitInterval,
-  }),
-  rawHash: Sha256,
-});
+export const Claim = z
+  .strictObject({
+    id: Ulid,
+    agent: AgentId,
+    requestId: Ulid.optional(),
+    type: ActionType,
+    counterparty: z.string().max(L.COUNTERPARTY).optional(),
+    amountCents: AmountCents.optional(),
+    currency: Currency.optional(),
+    subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
+    /** When the agent says it acted, read at `claimedAtPrecision`. */
+    claimedAt: IsoTs,
+    claimedAtPrecision: ClaimPrecision,
+    /**
+     * The end of the precision unit, strictly after `claimedAt` (§4.1). Adapters set it for `day` precision to
+     * the next local midnight, because a local day on a DST change is 23 or 25 hours long.
+     */
+    claimedAtEnd: IsoTs.optional(),
+    /** The claimed event start of a calendar claim (§4.1); a calendar claim without it is graded `no_target`. */
+    targetAt: IsoTs.optional(),
+    /** When Attest read the claim. */
+    observedAt: IsoTs,
+    sourceKind: SourceKind,
+    extractor: z.strictObject({
+      id: z.string().max(L.ID),
+      version: z.string().max(L.ID),
+      confidence: UnitInterval,
+    }),
+    rawHash: Sha256,
+  })
+  .superRefine(refineWith(claimProblems));
 
 // ── Evidence side ───────────────────────────────────────────────────────────────────────────────
 
@@ -260,16 +236,39 @@ export const Grant = z
 
 // ── Receipts ────────────────────────────────────────────────────────────────────────────────────
 
-export const Reason = z.strictObject({
-  code: ReasonCode,
-  /** Ids, ISO timestamps, numbers and enum values only: never an address, a name or a subject (§6.4). */
-  params: z
-    .record(
-      Key,
-      z.union([z.string().max(L.ID).regex(TOKEN, 'expected an id, time or enum value'), z.number()]),
-    )
-    .refine((params) => Object.keys(params).length <= L.REASON_PARAMS, `at most ${L.REASON_PARAMS} params`),
-});
+/** The schema of each kind of reason param (§15): ids, hashes, enum values and integers, nothing else. */
+const PARAM_KIND_SCHEMAS: Readonly<Record<ReasonParamKind, z.ZodType>> = {
+  ulid: Ulid,
+  sha256: Sha256,
+  'source?': ObservationSource.optional(),
+  actionType: ActionType,
+  agent: AgentId,
+  grade: Grade,
+  cents: AmountCents,
+  /** A sum of capped amounts, like GradeContext.priorSpendCents: not itself capped at 10^12. */
+  priorSpend: z.number().int().min(0),
+  currency: Currency,
+};
+
+/** The strict params schema of each ReasonCode (§15, closed): a code with no params accepts only `{}`. */
+export const ReasonParams: ReadonlyMap<ReasonCode, z.ZodType> = new Map(
+  ReasonCode.options.map((code) => [
+    code,
+    z.strictObject(
+      Object.fromEntries(
+        Object.entries(REASON_PARAM_KINDS[code]).map(([param, kind]) => [param, PARAM_KIND_SCHEMAS[kind]]),
+      ),
+    ),
+  ]),
+);
+
+/**
+ * `params` are exactly the ones §15 lists for `code`, so a reason can never carry an address, a name, a
+ * subject or a formatted local time (§6.4, Hard Rules 2 and 10); the UI renders the words.
+ */
+export const Reason = z
+  .strictObject({ code: ReasonCode, params: z.record(Key, z.union([z.string(), z.number()])) })
+  .superRefine(refineReasonParams((code) => ReasonParams.get(code)));
 
 /** A user override sits beside the computed grade and never replaces it (§8). */
 export const ReceiptOverride = z.strictObject({

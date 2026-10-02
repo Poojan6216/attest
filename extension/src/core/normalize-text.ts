@@ -34,9 +34,10 @@ const WHITESPACE_RUN = /[\s\p{White_Space}]+/gu;
 const BIDI_OVERRIDE = /[\u202D\u202E]/u;
 /**
  * Superscript, subscript, circled and fraction digits (`\p{No}`): NFKC turns them into plain digits, so
- * "$9⁹⁹" (nine dollars ninety-nine) would read as "$999" and "5² min ago" as "52 min ago".
+ * "$9⁹⁹" (nine dollars ninety-nine) would read as "$999", "5² min ago" as "52 min ago" and "Priya²" as
+ * "priya2". A `\p{No}` character NFKC leaves alone (Ethiopic ፲, Bengali ৴) reads as it displays.
  */
-const OTHER_NUMBER = /\p{No}/u;
+const OTHER_NUMBER = /\p{No}/gu;
 
 /** Characters that can never appear in an unquoted address (RFC 5322 specials, whitespace, controls). */
 const ADDRESS_FORBIDDEN = /[\s\p{Cc}()<>[\]\\,;:"]/u;
@@ -48,8 +49,8 @@ const ADDRESS_MARKERS = /[@<>]/;
 
 /** Name tokens: runs of letters, digits and the (spacing or enclosing) marks left after diacritic folding. */
 const NAME_TOKEN_SEPARATOR = /[^\p{L}\p{N}\p{M}]+/u;
-/** Subject tokens, exactly per §11. */
-const SUBJECT_TOKEN_SEPARATOR = /[^\p{L}\p{N}]+/u;
+/** Subject tokens, exactly per §11: a combining mark NFKC cannot compose (İ → i + U+0307) never splits a word. */
+const SUBJECT_TOKEN_SEPARATOR = /[^\p{L}\p{N}\p{M}]+/u;
 const REPLY_PREFIXES: ReadonlySet<string> = new Set(['re', 'fw', 'fwd']);
 
 /** Lowercases ASCII A–Z only; every other code unit (including K U+212A and İ U+0130) is left as is. */
@@ -63,12 +64,13 @@ export function stripInvisible(text: string): string {
 }
 
 /**
- * True when `text` cannot be read as the user sees it: it holds a bidi override (its display order differs
- * from its stored order) or a `\p{No}` digit that NFKC would turn into a different number. Amounts, times and
- * name counterparties in such text are rejected rather than guessed (Hard Rule 5).
+ * True when `text` cannot be read as the user sees it (§11): it holds a bidi override (its display order
+ * differs from its stored order) or a `\p{No}` digit that NFKC would turn into a different number. Amounts,
+ * times and names in such text are rejected rather than guessed (Hard Rule 5).
  */
 export function readsDifferently(text: string): boolean {
-  return BIDI_OVERRIDE.test(text) || OTHER_NUMBER.test(text);
+  if (BIDI_OVERRIDE.test(text)) return true;
+  return (text.match(OTHER_NUMBER) ?? []).some((digit) => digit.normalize('NFKC') !== digit);
 }
 
 export interface EmailAddress {
@@ -165,9 +167,11 @@ export function sameAddress(a: EmailAddress, b: EmailAddress): AddressComparison
 
 /**
  * A display name folded for matching: invisible marks removed, NFKC, lowercased, diacritics folded (NFD, then
- * nonspacing marks removed, then NFC), Unicode whitespace collapsed. Idempotent.
+ * nonspacing marks removed, then NFC), Unicode whitespace collapsed. Idempotent. Text that reads differently
+ * from how it displays (`readsDifferently`) folds to '' and so has no tokens: "\u202Eayirp" shows "priya".
  */
 export function name(raw: string): string {
+  if (readsDifferently(raw)) return '';
   const compatible = stripInvisible(stripInvisible(raw).normalize('NFKC'));
   const folded = compatible.toLowerCase().normalize('NFD').replace(NONSPACING_MARK, '').normalize('NFC');
   return folded.replace(WHITESPACE_RUN, ' ').trim();
@@ -189,23 +193,27 @@ export function nameTokens(raw: string): string[] {
 /**
  * A claim's or observation's counterparty: an address when `raw` holds one, else a name (its tokens may be
  * empty). Null when there is nothing; when the text was meant as an address (`@`, `<`, `>`) but is not a
- * valid one (a broken address must never be matched as a name); or when the name holds a bidi override, so
- * the user would see one name ("priya") while Attest matched another ("ayirp").
+ * valid one (a broken address must never be matched as a name); or when the name reads differently from how
+ * it displays (a bidi override, a superscript digit), so the user would see one name ("priya") while Attest
+ * matched another ("ayirp").
  */
 export function counterparty(raw: string | undefined): Counterparty | null {
   if (raw === undefined || raw.trim() === '') return null;
   const address = email(raw);
   if (address !== null) return { kind: 'address', ...address };
-  if (ADDRESS_MARKERS.test(raw.normalize('NFKC')) || BIDI_OVERRIDE.test(raw)) return null;
+  if (ADDRESS_MARKERS.test(raw.normalize('NFKC')) || readsDifferently(raw)) return null;
   return { kind: 'name', tokens: nameTokens(raw) };
 }
 
 /**
- * §11 subject tokens: NFKC → lowercase → split on non-letter/digit runs → drop empty → strip leading `re`,
- * `fw`, `fwd` tokens repeatedly → drop stop words → a set, returned sorted by code unit (deterministic).
+ * §11 subject tokens: remove zero-width and bidi marks → NFKC → lowercase → split on runs of characters that
+ * are not letters, digits or marks → drop empty → strip leading `re`, `fw`, `fwd` tokens repeatedly → drop stop
+ * words → a set, returned sorted by code unit (deterministic). "Inv\u200Boice" is one token, "İstanbul" is
+ * one token, and a subject holding a bidi override has none (its displayed words are not its stored ones).
  */
 export function subjectTokens(raw: string, stopWords: readonly string[]): string[] {
-  const tokens = raw
+  if (BIDI_OVERRIDE.test(raw)) return [];
+  const tokens = stripInvisible(raw)
     .normalize('NFKC')
     .toLowerCase()
     .split(SUBJECT_TOKEN_SEPARATOR)

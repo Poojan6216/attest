@@ -36,9 +36,11 @@ function walk(schema: z.core.$ZodType, found: Walk): void {
   }
 }
 
+/** Every exported schema, plus the per-code Reason params schemas (a Map, so not a ZodType export). */
 function walkExports(): Walk {
   const found: Walk = { objects: new Set(), unknownKinds: new Set() };
   for (const value of Object.values(core)) if (value instanceof z.ZodType) walk(value, found);
+  for (const params of core.ReasonParams.values()) walk(params, found);
   return found;
 }
 
@@ -47,8 +49,9 @@ describe('core schemas are strict everywhere', () => {
     const { objects, unknownKinds } = walkExports();
     expect([...unknownKinds]).toEqual([]);
     // Request, Claim + extractor, Observation, ObserverCoverage, Coverage, HealthReport, Grant, Reason,
-    // ReceiptOverride, Receipt, Attribution, GradeContext + scope, Activity + its four element shapes.
-    expect(objects.size).toBe(19);
+    // ReceiptOverride, Receipt, Attribution, GradeContext + scope, Activity + its four element shapes,
+    // and one params object per ReasonCode (§15).
+    expect(objects.size).toBe(19 + core.ReasonCode.options.length);
   });
 
   it('every object, nested ones included, rejects unknown keys', () => {

@@ -236,6 +236,8 @@ const COUNTERPARTY_ROWS: [string, object][] = [
   ['Priya Shah', { kind: 'name', tokens: ['priya', 'shah'] }],
   [`\u200FPri${ZWSP}y\u00E1\u200E`, { kind: 'name', tokens: ['priya'] }], // RLM/LRM and ZWSP are stripped
   ['\u2067Priya\u2069', { kind: 'name', tokens: ['priya'] }], // an isolate does not reorder letters
+  ['Priya \u1372', { kind: 'name', tokens: ['priya', '\u1372'] }], // a \p{No} that NFKC keeps reads as shown
+  ['priya\u00B2@company.com', { kind: 'address', confusable: true }], // addresses are never folded
   [ZWSP, { kind: 'name', tokens: [] }],
   ['!!!', { kind: 'name', tokens: [] }],
 ];
@@ -253,6 +255,9 @@ const NO_COUNTERPARTY: (string | undefined)[] = [
   `${RLO}ayirp${PDF}`,
   `${LRO}Priya${PDF}`,
   `${RLO}Pri${ZWSP}y\u00E1`,
+  // A \p{No} digit NFKC would change shows one name and matches another ("Priya²" would be "priya2").
+  'Priya\u00B2',
+  '\u2460 Priya',
 ];
 
 describe('counterparty(): address, name, or nothing', () => {

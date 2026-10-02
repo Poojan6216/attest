@@ -242,13 +242,18 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
     }
   });
 
-  it('property: k / 10,000 loads as exactly k basis points at any weight', () => {
+  it('property: k / 10,000 loads as exactly k basis points at any weight (identity features above 0)', () => {
     const paths = [
       ...FeatureName.options.map((key) => ['features', key] as const),
       ...SignalName.options.map((key) => ['unasked', 'signals', key] as const),
     ];
+    const identity = new Set<string>(Object.values(policyJson.identityFeatures).flat());
+    const grid = fc.integer({ min: 0, max: BASIS_POINTS });
+    const named = fc
+      .tuple(fc.constantFrom(...paths), grid)
+      .filter(([where, k]) => k > 0 || where[0] !== 'features' || !identity.has(where[1]));
     fc.assert(
-      fc.property(fc.constantFrom(...paths), fc.integer({ min: 0, max: BASIS_POINTS }), (where, k) => {
+      fc.property(named, ([where, k]) => {
         const doc = structuredClone(policyJson);
         if (where[0] === 'features') doc.features[where[1]] = k / BASIS_POINTS;
         else doc.unasked.signals[where[2]] = k / BASIS_POINTS;

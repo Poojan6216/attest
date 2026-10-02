@@ -2,6 +2,7 @@
  * SCHEMA_LIMITS boundaries for the core schemas (SECURITY-4, Hard Rule 2; Decisions [0.close], task 1.0): for
  * every capped string, array, record and amount, a value at the cap parses and one over it is rejected, at
  * the capped field's path. So no email body rides in `counterparty`, and no input grows without bound.
+ * Reason params need no cap of their own: §15 closes them per code (schema-reasons.spec.ts).
  */
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -17,7 +18,6 @@ import {
   IsoTs,
   Observation,
   ObserverCoverage,
-  Reason,
   Receipt,
   ReceiptOverride,
   Request,
@@ -223,27 +223,6 @@ const CASES: readonly Case[] = [
     (n) => ({ ...HEALTH, reasons: many(n, 'r') }),
     L.REASONS,
     ['reasons'],
-  ],
-  [
-    'Reason.params',
-    Reason,
-    (n) => ({ code: 'match.none', params: keyed(n, 1) }),
-    L.REASON_PARAMS,
-    ['params'],
-  ],
-  [
-    'Reason.params key',
-    Reason,
-    (n) => ({ code: 'match.none', params: { [x(n)]: 1 } }),
-    L.ID,
-    ['params', x(L.ID + 1)],
-  ],
-  [
-    'Reason.params value',
-    Reason,
-    (n) => ({ code: 'match.none', params: { id: x(n) } }),
-    L.ID,
-    ['params', 'id'],
   ],
   ['ReceiptOverride.reason', ReceiptOverride, (n) => ({ ...OVERRIDE, reason: x(n) }), L.ITEM, ['reason']],
   ['Receipt.ruleId', Receipt, (n) => ({ ...RECEIPT, ruleId: x(n) }), L.ID, ['ruleId']],

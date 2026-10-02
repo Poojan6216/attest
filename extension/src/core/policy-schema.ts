@@ -10,6 +10,7 @@
  */
 import { z } from 'zod';
 
+import { name } from './normalize';
 import { ActionType, AgentId, Grade, Observation, ObservationSource, RuleId, UnaskedSignal } from './schema';
 import { BASIS_POINTS, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
@@ -35,13 +36,22 @@ export const RuleOutcome = z.enum([...Grade.options, 'PENDING']);
 export const TERMINAL_RULE_ID = 'default_unverifiable';
 
 /**
+ * The only rule that may conclude PENDING (§5.3). A receipt whose rule outcome is PENDING carries this ruleId
+ * and the UNVERIFIABLE placeholder grade (§2), and finalises by time as `pending` (§8), so another id with a
+ * PENDING outcome would be a "checking" receipt no finality rule knows.
+ */
+export const PENDING_RULE_ID = 'pending';
+
+/**
  * Lowercase ASCII host name with at least two labels; no label starts or ends with a hyphen, and the
  * top-level label starts with a letter (RFC 3696 §2), so an IPv4 literal such as 127.0.0.1 is not a domain.
  */
 const DOMAIN_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z](?:[a-z0-9-]*[a-z0-9])?$/;
 
-/** One subject token (§11: subjects split on every run of non-letters and non-digits). */
-const TOKEN_PATTERN = /^[\p{L}\p{N}]+$/u;
+/** One subject token (§11: subjects split on every run of characters that are not letters, digits or marks). */
+const TOKEN_PATTERN = /^[\p{L}\p{N}\p{M}]+$/u;
+/** Removed from a subject before it is split (§11), so a stop word holding one could never match. */
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/u;
 
 /** Tokens separated by single spaces, no other whitespace and no invisible format characters (§11 names). */
 const NAME_PATTERN = /^[^\s\p{Cf}]+(?: [^\s\p{Cf}]+)*$/u;
@@ -137,22 +147,28 @@ const PerActionType = <Item extends z.ZodType>(item: Item) => z.record(ActionTyp
 const Domain = z.string().regex(DOMAIN_PATTERN, 'must be a lowercase ASCII domain name');
 
 /**
- * A §11 normalised name as far as the loader can tell without normalising: lowercase, single-spaced,
- * trimmed, no invisible format characters. A name that is not normalised could never match a claim.
+ * A §11 normalised name: exactly what `name()` makes of itself (lowercase, single-spaced, trimmed, no invisible
+ * character, diacritics folded, NFKC). A purchase claim is covered only when `name(counterparty)` is in this
+ * list (§6.1, v1.2), so an entry that is not its own `name()` ("café", "ａｃｍｅ") could never match: it is
+ * rejected at load instead of silently covering nothing (Hard Rule 6).
  */
 const MerchantName = z
   .string()
   .refine(
-    (value) => NAME_PATTERN.test(value) && value.toLowerCase() === value,
-    'must be a normalised merchant name (lowercase, trimmed, single-spaced)',
+    (value) => NAME_PATTERN.test(value) && name(value) === value,
+    'must be a normalised merchant name (its own name(): lowercase, trimmed, single-spaced, folded)',
   );
 
-/** A stop word must be something `subjectTokens` can produce: one NFKC, lowercase letter/digit token. */
+/**
+ * A stop word must be something `subjectTokens` can produce: one NFKC, lowercase token of letters, digits and
+ * marks, with no invisible character (subjects lose those before they are split).
+ */
 const StopWord = z
   .string()
   .refine(
-    (value) => TOKEN_PATTERN.test(value) && value.normalize('NFKC').toLowerCase() === value,
-    'must be one lowercase token of letters and digits (NFKC)',
+    (value) =>
+      TOKEN_PATTERN.test(value) && !INVISIBLE.test(value) && value.normalize('NFKC').toLowerCase() === value,
+    'must be one lowercase token of letters, digits and marks (NFKC)',
   );
 
 /** A signature matches subjects case-insensitively; one without a letter or digit would match noise. */
@@ -185,11 +201,21 @@ const RuleCondition = z
 export const ConditionName = RuleCondition.keyof();
 
 /** A rule id is a receipt's `ruleId`, so it is exactly what the Receipt schema accepts. */
-const Rule = z.strictObject({
-  id: RuleId,
-  when: RuleCondition,
-  then: RuleOutcome,
-});
+const Rule = z
+  .strictObject({
+    id: RuleId,
+    when: RuleCondition,
+    then: RuleOutcome,
+  })
+  .superRefine((rule, ctx) => {
+    if (rule.then === 'PENDING' && rule.id !== PENDING_RULE_ID) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['then'],
+        message: `PENDING is allowed only on the rule with id "${PENDING_RULE_ID}"`,
+      });
+    }
+  });
 
 /** First match wins, so order matters and every id must be unique (a receipt names its rule). */
 const Rules = z

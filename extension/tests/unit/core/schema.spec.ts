@@ -2,7 +2,8 @@
  * Task 1.0: the canonical object schemas (src/core/schema.ts, docs/grading.md §3, §7, §13, §15). For every
  * schema, at least five valid cases (each parses to exactly itself) and five invalid ones, each rejected at
  * one specific path. Grading-input schemas are in schema-grading.spec.ts, primitives and enums in
- * schema-primitives.spec.ts, caps in schema-limits.spec.ts.
+ * schema-primitives.spec.ts, caps in schema-limits.spec.ts, Reason and its closed params in
+ * schema-reasons.spec.ts.
  */
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -12,7 +13,6 @@ import {
   Grant,
   HealthReport,
   Observation,
-  Reason,
   Receipt,
   ReceiptOverride,
   Request,
@@ -105,7 +105,7 @@ const UNASKED = {
   grade: 'UNASKED',
   ruleId: 'unasked',
   attribution: 'likely',
-  reasons: [{ code: 'unasked.session', params: {} }],
+  reasons: [{ code: 'unasked.session', params: { agent: 'muse' } }],
 };
 
 const TABLES: readonly Table[] = [
@@ -143,8 +143,44 @@ const TABLES: readonly Table[] = [
       },
       { ...CLAIM, type: 'purchase.made', amountCents: 0, currency: 'JPY', claimedAtPrecision: 'hour' },
       { ...CLAIM, type: 'purchase.made', amountCents: 1e12, currency: 'USD', sourceKind: 'chat' },
+      // v1.2 §4.1: the local day of the US fall-back is 25 hours, so its end is the next local midnight.
+      {
+        ...CLAIM,
+        claimedAt: '2026-11-01T00:00:00-04:00',
+        claimedAtPrecision: 'day',
+        claimedAtEnd: '2026-11-02T00:00:00-05:00',
+      },
+      // 09:02Z then 10:00Z: after as instants although the strings sort the other way.
+      { ...CLAIM, claimedAt: '2026-10-06T14:02:00+05:00', claimedAtEnd: '2026-10-06T10:00:00Z' },
+      // The US spring-forward day is 23 hours: it ends at the next local midnight, in the summer offset.
+      {
+        ...CLAIM,
+        claimedAt: '2026-03-08T00:00:00-05:00',
+        claimedAtPrecision: 'day',
+        claimedAtEnd: '2026-03-09T00:00:00-04:00',
+      },
+      { ...CLAIM, claimedAtEnd: '2026-10-06T18:03:00Z' }, // the end of the minute, written in UTC
+      { ...CLAIM, claimedAtEnd: '2026-10-06T14:02:00.001-04:00' }, // one millisecond is strictly after
     ],
     invalid: [
+      ['a claimedAtEnd equal to claimedAt', { ...CLAIM, claimedAtEnd: T0 }, ['claimedAtEnd']],
+      [
+        'a claimedAtEnd at the same instant in another offset',
+        { ...CLAIM, claimedAtEnd: '2026-10-06T18:02:00Z' },
+        ['claimedAtEnd'],
+      ],
+      [
+        'a claimedAtEnd before claimedAt',
+        { ...CLAIM, claimedAtEnd: '2026-10-06T14:01:59-04:00' },
+        ['claimedAtEnd'],
+      ],
+      // 18:02Z then 10:00Z: before as instants although the string sorts after.
+      [
+        'a claimedAtEnd that only sorts after',
+        { ...CLAIM, claimedAtEnd: '2026-10-06T15:00:00+05:00' },
+        ['claimedAtEnd'],
+      ],
+      ['a claimedAtEnd without offset', { ...CLAIM, claimedAtEnd: '2026-10-07T00:00:00' }, ['claimedAtEnd']],
       ['a missing claimedAtPrecision', without(CLAIM, 'claimedAtPrecision'), ['claimedAtPrecision']],
       ['a precision of second', { ...CLAIM, claimedAtPrecision: 'second' }, ['claimedAtPrecision']],
       ['a date-only targetAt', { ...CLAIM, targetAt: '2026-10-09' }, ['targetAt']],
@@ -191,6 +227,9 @@ const TABLES: readonly Table[] = [
       ['a smuggled body', { ...OBSERVATION, body: 'Hi Priya, the code is 7731' }, []],
       ['an occurredAt without offset', { ...OBSERVATION, occurredAt: '2026-10-06T14:02' }, ['occurredAt']],
       ['a subjectHint over 80', { ...OBSERVATION, subjectHint: x(81) }, ['subjectHint']],
+      // v1.2 §10: every currency is a 3-letter uppercase ISO 4217 code, so equal currencies compare equal.
+      ['a lowercase currency', { ...OBSERVATION, amountCents: 1250, currency: 'usd' }, ['currency']],
+      ['a currency symbol', { ...OBSERVATION, amountCents: 1250, currency: 'US$' }, ['currency']],
     ],
   },
   {
@@ -217,6 +256,11 @@ const TABLES: readonly Table[] = [
       ],
       ['a missing ceiling', without(GRANT, 'spendCeilingCents'), ['spendCeilingCents']],
       ['a currency name', { ...GRANT, spendCurrency: 'dollars' }, ['spendCurrency']],
+      [
+        'a lowercase spendCurrency',
+        { ...GRANT, spendCeilingCents: 5000, spendCurrency: 'usd' },
+        ['spendCurrency'],
+      ],
       ['accounts for an unknown source', { ...GRANT, accounts: { outlook: [HASH] } }, ['accounts']],
       [
         'an account that is not a hash',
@@ -244,35 +288,6 @@ const TABLES: readonly Table[] = [
       ['a reason over 120', { ...HEALTH, reasons: [x(121)] }, ['reasons', 0]],
       ['a checkedAt of now', { ...HEALTH, checkedAt: 'now' }, ['checkedAt']],
       ['a smuggled dom', { ...HEALTH, dom: '<div>' }, []],
-    ],
-  },
-  {
-    name: 'Reason',
-    schema: Reason,
-    valid: [
-      { code: 'match.best', params: { observationId: ULID } },
-      { code: 'match.none', params: {} },
-      { code: 'ceiling.exceeded', params: { amountCents: 20000, ceilingCents: 5000 } },
-      { code: 'grace.waiting', params: { source: 'gmail.sent', until: '2026-10-06T15:17:00-04:00' } },
-      { code: 'scope.observed_not_declared', params: { scopeHash: HASH } },
-      { code: 'override.user', params: { grade: 'NOT_FOUND' } },
-    ],
-    invalid: [
-      ['an unknown code', { code: 'match.maybe', params: {} }, ['code']],
-      ['missing params', { code: 'match.none' }, ['params']],
-      [
-        'an address param',
-        { code: 'match.best', params: { counterparty: 'priya@company.com' } },
-        ['params', 'counterparty'],
-      ],
-      ['a name with a space', { code: 'match.best', params: { name: 'Priya Shah' } }, ['params', 'name']],
-      [
-        'a key that is not an identifier',
-        { code: 'match.best', params: { 'first name': 1 } },
-        ['params', 'first name'],
-      ],
-      ['a boolean param', { code: 'match.best', params: { flag: true } }, ['params', 'flag']],
-      ['a smuggled text', { code: 'match.none', params: {}, text: 'Sent email to Priya' }, []],
     ],
   },
   {

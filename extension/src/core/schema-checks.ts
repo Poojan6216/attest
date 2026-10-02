@@ -1,8 +1,9 @@
 /**
- * Cross-field invariants of the core schemas (docs/grading.md §3, §7, §8), kept apart so schema.ts stays one
- * readable page. A leaf module: it imports nothing from ./schema, so the two never form an import cycle.
- * Each check returns the problems it found as `[field, message]`; `refineWith` turns them into Zod issues
- * whose path names the offending field. PURE (Hard Rule 4).
+ * Cross-field invariants of the core schemas (docs/grading.md §3, §4.1, §7, §8, §15), kept apart so schema.ts
+ * stays one readable page. A leaf module: it imports nothing from ./schema, so the two never form an import
+ * cycle. Each check returns the problems it found as `[field, message]`; `refineWith` turns them into Zod
+ * issues whose path names the offending field. The closed reason vocabulary lives here too: a reason's params
+ * depend on its code, which is a cross-field rule (§15). PURE (Hard Rule 4).
  */
 import type { z } from 'zod';
 
@@ -17,9 +18,17 @@ export function refineWith<T>(
   };
 }
 
-/** Epoch ms of a parsed IsoTs. It always carries an offset, so this never reads the host time zone. */
+/** `Z` or `±hh:mm` at the end: the only timestamps whose instant does not depend on the host's time zone. */
+const EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Epoch ms of an IsoTs, or NaN for a string without an explicit offset. Zod runs these checks even when a
+ * field failed its own IsoTs check (already reported at that field), and `Date` reads an offset-less string
+ * in the host's time zone, so such a string is never read (Hard Rule 4). Every check treats NaN as "nothing
+ * to compare", so a bad timestamp is reported once, at its own path, the same way in every time zone.
+ */
 export function instantMs(isoTs: string): number {
-  return new Date(isoTs).getTime();
+  return EXPLICIT_OFFSET.test(isoTs) ? new Date(isoTs).getTime() : Number.NaN;
 }
 
 type State = 'PENDING' | 'FINAL' | 'USER_OVERRIDDEN';
@@ -105,4 +114,123 @@ export function attributionProblems(attribution: { readonly signals: readonly st
 /** An idle interval is a real interval. */
 export function intervalProblems(interval: { readonly from: string; readonly to: string }): Problem[] {
   return instantMs(interval.to) < instantMs(interval.from) ? [['to', 'must not be before from']] : [];
+}
+
+/** `claimedAtEnd`, when an adapter sets it, ends the claim's precision unit strictly after `claimedAt` (§4.1). */
+export function claimProblems(claim: {
+  readonly claimedAt: string;
+  readonly claimedAtEnd?: string | undefined;
+}): Problem[] {
+  if (claim.claimedAtEnd === undefined) return [];
+  const start = instantMs(claim.claimedAt);
+  const end = instantMs(claim.claimedAtEnd);
+  // NaN: a field that is not an IsoTs, already reported at its own path; there is nothing to compare.
+  if (Number.isNaN(start) || Number.isNaN(end) || end > start) return [];
+  return [['claimedAtEnd', 'must be after claimedAt']];
+}
+
+// ── Reasons (§15) ───────────────────────────────────────────────────────────────────────────────
+
+/** The closed ReasonCode vocabulary, in docs/grading.md §15 table order (reasons are emitted in this order). */
+export const REASON_CODES = [
+  'match.best',
+  'match.none',
+  'cp.plus_tag',
+  'cp.confusable',
+  'cp.non_ascii',
+  'claim.too_vague',
+  'claim.no_target',
+  'coverage.none',
+  'coverage.partial',
+  'coverage.account_unbound',
+  'coverage.calendars_hidden',
+  'coverage.multiple_accounts',
+  'coverage.no_account',
+  'coverage.never_completed',
+  'grace.waiting',
+  'scope.type_not_allowed',
+  'scope.counterparty_not_allowed',
+  'allowlist.unchecked',
+  'ceiling.exceeded',
+  'ceiling.cumulative_exceeded',
+  'ceiling.currency_mismatch',
+  'scope.observed_not_declared',
+  'unasked.session',
+  'unasked.idle',
+  'unasked.signature',
+  'unasked.adjacent',
+  'override.user',
+  'superseded',
+] as const;
+
+/**
+ * What one reason param holds; schema.ts gives each kind its schema. Every kind is an id, a hash, an enum
+ * value or an integer, so no param can carry an address, a name, a subject or a formatted local time.
+ * `source?` may be omitted (a type with no sources has none to name); every other param is required.
+ */
+export type ReasonParamKind =
+  'ulid' | 'sha256' | 'source?' | 'actionType' | 'agent' | 'grade' | 'cents' | 'priorSpend' | 'currency';
+
+type ParamKinds = Readonly<Record<string, ReasonParamKind>>;
+
+const NO_PARAMS = {} as const;
+const SOURCE = { source: 'source?' } as const;
+const AGENT = { agent: 'agent' } as const;
+
+/** §15 "Params per code (closed)": exactly these params, by name and kind; a code listed with none takes `{}`. */
+export const REASON_PARAM_KINDS: Readonly<Record<(typeof REASON_CODES)[number], ParamKinds>> = Object.freeze({
+  'match.best': { observationId: 'ulid' },
+  'match.none': NO_PARAMS,
+  'cp.plus_tag': NO_PARAMS,
+  'cp.confusable': NO_PARAMS,
+  'cp.non_ascii': NO_PARAMS,
+  'claim.too_vague': NO_PARAMS,
+  'claim.no_target': NO_PARAMS,
+  'coverage.none': SOURCE,
+  'coverage.partial': SOURCE,
+  'coverage.account_unbound': SOURCE,
+  'coverage.calendars_hidden': SOURCE,
+  'coverage.multiple_accounts': SOURCE,
+  'coverage.no_account': SOURCE,
+  'coverage.never_completed': NO_PARAMS,
+  'grace.waiting': SOURCE,
+  'scope.type_not_allowed': { type: 'actionType' },
+  'scope.counterparty_not_allowed': NO_PARAMS,
+  'allowlist.unchecked': NO_PARAMS,
+  'ceiling.exceeded': { amountCents: 'cents', ceilingCents: 'cents' },
+  'ceiling.cumulative_exceeded': {
+    priorSpendCents: 'priorSpend',
+    amountCents: 'cents',
+    ceilingCents: 'cents',
+  },
+  'ceiling.currency_mismatch': { currency: 'currency', spendCurrency: 'currency' },
+  'scope.observed_not_declared': { scopeHash: 'sha256' },
+  'unasked.session': AGENT,
+  'unasked.idle': AGENT,
+  'unasked.signature': AGENT,
+  'unasked.adjacent': AGENT,
+  'override.user': { grade: 'grade' },
+  superseded: { claimId: 'ulid' },
+});
+
+/**
+ * A Zod `superRefine` callback that checks a reason's params against its code's own schema (`paramsOf`) and
+ * reports each problem at `params.<name>`: a missing param, a bad value, or a param the code does not have.
+ * Zod runs it only once `code` is a known ReasonCode and `params` is a record of strings and numbers.
+ */
+export function refineReasonParams<T extends { readonly code: string; readonly params: unknown }>(
+  paramsOf: (code: T['code']) => z.ZodType | undefined,
+): (reason: T, ctx: z.RefinementCtx<T>) => void {
+  return (reason, ctx) => {
+    const result = paramsOf(reason.code)?.safeParse(reason.params);
+    for (const issue of result?.error?.issues ?? []) {
+      if (issue.code === 'unrecognized_keys') {
+        for (const key of issue.keys) {
+          ctx.addIssue({ code: 'custom', path: ['params', key], message: `not a param of ${reason.code}` });
+        }
+      } else {
+        ctx.addIssue({ code: 'custom', path: ['params', ...issue.path], message: issue.message });
+      }
+    }
+  };
 }

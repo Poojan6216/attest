@@ -2,6 +2,9 @@
  * Task 1.1 properties (fast-check, ≥ 1,000 runs each): amount() only ever returns exact, non-negative, safe
  * integers and round-trips; asciiLower changes A–Z and nothing else; addresses are never normalised; the
  * address comparison is symmetric and consistent; name() is idempotent; IDN decoding agrees with WHATWG.
+ * v1.2 §11: subjects drop zero-width and bidi marks before splitting and keep combining marks inside tokens;
+ * text that displays differently from how it is stored (a bidi override, a \p{No} digit NFKC changes) gives no
+ * name tokens and no counterparty, and a subject with a bidi override gives no tokens.
  */
 import { domainToASCII, domainToUnicode } from 'node:url';
 
@@ -11,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amount,
   asciiLower,
+  counterparty,
   email,
   type EmailAddress,
   isCurrencyCode,
@@ -243,6 +247,79 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
         expect(new Set(tokens).size).toBe(tokens.length);
         expect(tokens.filter((token) => token === '' || STOP_WORDS.includes(token))).toEqual([]);
         expect(subjectTokens(`Re: Fwd: ${raw}`, STOP_WORDS)).toEqual(subjectTokens(`Re: ${raw}`, STOP_WORDS));
+      }),
+      RUNS,
+    );
+  });
+});
+
+/** Any text, and `mark` inserted into `raw` at a position chosen by `at` (v1.2 \u00A711 properties below). */
+const anyText = fc.string({ unit: 'grapheme', maxLength: 40 });
+const insert = (raw: string, mark: string, at: number): string => {
+  const position = at % (raw.length + 1);
+  return `${raw.slice(0, position)}${mark}${raw.slice(position)}`;
+};
+
+describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks (property)', () => {
+  /** Zero-width characters, bidi marks and isolates, the BOM, a soft hyphen, a variation selector. */
+  const INVISIBLE = [
+    '\u200B',
+    '\u200C',
+    '\u200D',
+    '\u200E',
+    '\u200F',
+    '\u2066',
+    '\u2069',
+    '\uFEFF',
+    '\u00AD',
+    '\uFE0F',
+  ];
+
+  it('an invisible mark anywhere in a subject changes none of its tokens', () => {
+    fc.assert(
+      fc.property(anyText, fc.constantFrom(...INVISIBLE), fc.nat(), (raw, mark, at) => {
+        expect(subjectTokens(insert(raw, mark, at), STOP_WORDS)).toEqual(subjectTokens(raw, STOP_WORDS));
+      }),
+      RUNS,
+    );
+  });
+
+  it('subject tokens are runs of letters, digits and marks only, with no invisible character', () => {
+    fc.assert(
+      fc.property(anyText, (raw) => {
+        for (const token of subjectTokens(raw, STOP_WORDS)) {
+          expect(token).toMatch(/^[\p{L}\p{N}\p{M}]+$/u);
+          expect(token).not.toMatch(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u);
+        }
+      }),
+      RUNS,
+    );
+  });
+});
+
+describe('v1.2 \u00A711: text that reads differently from how it is stored gives no tokens (property)', () => {
+  /** Bidi overrides, and \p{No} digits NFKC turns into other digits. */
+  const OVERRIDES = ['\u202D', '\u202E'];
+  const NFKC_DIGITS = ['\u00B2', '\u2079', '\u2080', '\u2460', '\u00BD', '\u2155', '\u3280'];
+
+  it('a bidi override anywhere leaves a subject with no tokens, and a name with none either', () => {
+    fc.assert(
+      fc.property(anyText, fc.constantFrom(...OVERRIDES), fc.nat(), (raw, mark, at) => {
+        const spoiled = insert(raw, mark, at);
+        expect(subjectTokens(spoiled, STOP_WORDS)).toEqual([]);
+        expect(nameTokens(spoiled)).toEqual([]);
+        expect(name(spoiled)).toBe('');
+      }),
+      RUNS,
+    );
+  });
+
+  it('a \\p{No} digit NFKC would change leaves a name with no tokens and no name counterparty', () => {
+    fc.assert(
+      fc.property(anyText, fc.constantFrom(...NFKC_DIGITS), fc.nat(), (raw, digit, at) => {
+        const spoiled = insert(raw, digit, at);
+        expect(nameTokens(spoiled)).toEqual([]);
+        expect(counterparty(spoiled)?.kind).not.toBe('name');
       }),
       RUNS,
     );

@@ -11,9 +11,11 @@ import type { z } from 'zod';
 import {
   Activity,
   Attribution,
+  Claim,
   Coverage,
   Grant,
   GradeContext,
+  IsoTs,
   ObserverCoverage,
   Receipt,
 } from '../../../src/core/schema';
@@ -269,7 +271,7 @@ describe('cross-field refinements', () => {
   it('never throw on malformed input: safeParse always answers (property)', () => {
     // The ledger reads untrusted rows with safeParse and skips the bad ones; a throwing refinement would
     // turn one corrupt row into a failed read of the whole table (Hard Rule 6).
-    const refined = [Receipt, Grant, ObserverCoverage, Coverage, Attribution, GradeContext, Activity];
+    const refined = [Receipt, Grant, ObserverCoverage, Coverage, Attribution, GradeContext, Activity, Claim];
     const malformed = fc.oneof(
       fc.anything(),
       fc.record({
@@ -284,6 +286,9 @@ describe('cross-field refinements', () => {
         from: fc.anything(),
         to: fc.anything(),
       }),
+      fc
+        .record({ claimedAt: fc.anything(), claimedAtEnd: fc.anything() })
+        .map((times) => ({ ...CLAIM, ...times })),
     );
     fc.assert(
       fc.property(malformed, (value) => {
@@ -291,5 +296,42 @@ describe('cross-field refinements', () => {
       }),
       { numRuns: 1_000 },
     );
+  });
+});
+
+describe('cross-field refinements on timestamps', () => {
+  it('report a bad timestamp once, at its own path, in every host time zone', () => {
+    // Zod runs a refinement even after a field failed its IsoTs check, and Date reads an offset-less string in
+    // the host's zone. Such a string is never compared, or the issues would depend on where Attest runs: each
+    // offset-less value below is earlier than its partner in every zone from −12:00 to +14:00.
+    const DAY_BEFORE = '2026-10-05T00:00:00';
+    const cases: readonly (readonly [z.ZodType, unknown, Path])[] = [
+      [Claim, { ...CLAIM, claimedAtEnd: DAY_BEFORE }, ['claimedAtEnd']],
+      [Claim, { ...CLAIM, claimedAt: 'not a time', claimedAtEnd: T1 }, ['claimedAt']],
+      [ObserverCoverage, { ...GMAIL, windowEnd: DAY_BEFORE }, ['windowEnd']],
+      [Activity, { ...EMPTY_ACTIVITY, idle: [{ from: T0, to: DAY_BEFORE }] }, ['idle', 0, 'to']],
+    ];
+    for (const [schema, value, path] of cases) {
+      const result = schema.safeParse(value);
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((issue) => issue.path)).toEqual([path]);
+    }
+  });
+
+  it('compare every timestamp IsoTs accepts: an end at the same instant is always rejected (property)', () => {
+    // The offset guard above must never skip a real IsoTs, or a claimedAtEnd before claimedAt would pass.
+    const zone = fc.constantFrom('Z', '+00:00', '-04:00', '+05:30', '+0400', '+04', '');
+    const fraction = fc.constantFrom('', '.5', '.123', '.1234567');
+    let compared = 0;
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 23 }), fraction, zone, (hour, digits, offset) => {
+        const at = `2026-10-06T${String(hour).padStart(2, '0')}:02:00${digits}${offset}`;
+        if (!IsoTs.safeParse(at).success) return;
+        compared += 1;
+        expect(issuePaths(Claim, { ...CLAIM, claimedAt: at, claimedAtEnd: at })).toEqual([['claimedAtEnd']]);
+      }),
+      { numRuns: 1_000 },
+    );
+    expect(compared).toBeGreaterThan(100);
   });
 });

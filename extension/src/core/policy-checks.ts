@@ -45,8 +45,10 @@ function thresholdIssues({ thresholds }: PolicyDocument): PolicyIssue[] {
 }
 
 /**
- * §5.2, §5.3: a type that lists features must give them a positive total weight (the score divides by
- * it), and its identity features must be among them (identity decides which features a claim needs).
+ * §5.2, §5.3: a type that lists features must give them a positive total weight (the score divides by it),
+ * and its identity features must be among them with a weight above 0. Identity decides that a claim is not
+ * underspecified, so every such claim then has Σw > 0 and a zero weight can never make a claim matchable
+ * on time alone.
  */
 function featureIssues({ features, featuresByType, identityFeatures }: PolicyDocument): PolicyIssue[] {
   return ActionType.options.flatMap((type) => {
@@ -60,11 +62,12 @@ function featureIssues({ features, featuresByType, identityFeatures }: PolicyDoc
       });
     }
     identityFeatures[type].forEach((feature, index) => {
+      const path = ['identityFeatures', type, index];
       if (!listed.includes(feature)) {
-        issues.push({
-          path: ['identityFeatures', type, index],
-          message: `"${feature}" is not listed in featuresByType["${type}"]`,
-        });
+        issues.push({ path, message: `"${feature}" is not listed in featuresByType["${type}"]` });
+      }
+      if (roundedBasisPoints(features[feature]) === 0) {
+        issues.push({ path, message: `"${feature}" has weight 0 in features` });
       }
     });
     return issues;

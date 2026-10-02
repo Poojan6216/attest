@@ -41,6 +41,10 @@ function issuesOf(raw: unknown): readonly string[] {
 
 const MULTIPLE = 'must be a multiple of 0.0001';
 const ZERO_SUM = 'the weights of the listed features must sum to more than 0';
+const zeroIdentity = (type: string, index: number, feature: string): string =>
+  `identityFeatures${/^[a-z]+$/.test(type) ? `.${type}` : `["${type}"]`}[${index}]: "${feature}" has weight 0 in features`;
+const PURCHASE_LIKE = ['purchase.made', 'subscription.changed', 'listing.posted'];
+const CALENDAR = ['calendar.created', 'calendar.updated', 'calendar.deleted'];
 
 type Case = readonly [name: string, edits: readonly Edit[], expected: readonly string[]];
 const one = (name: string, path: readonly Segment[], value: unknown, ...expected: string[]): Case => [
@@ -199,13 +203,45 @@ const PER_TYPE_CASES: readonly Case[] = [
     `featuresByType.other: ${ZERO_SUM}`,
   ),
   [
+    // Also zeroes identity features: calendar subjects, purchase amounts and merchants (§5.3 v1.2).
     'every purchase-like feature weighted 0',
     ['timeProximity', 'amountExact', 'merchantMatch', 'subjectOverlap'].map(
       (f) => [['features', f], 0] as const,
     ),
-    ['purchase.made', 'subscription.changed', 'listing.posted'].map(
-      (t) => `featuresByType["${t}"]: ${ZERO_SUM}`,
-    ),
+    [
+      ...CALENDAR.map((t) => zeroIdentity(t, 0, 'subjectOverlap')),
+      ...PURCHASE_LIKE.flatMap((t) => [
+        `featuresByType["${t}"]: ${ZERO_SUM}`,
+        zeroIdentity(t, 0, 'amountExact'),
+        zeroIdentity(t, 1, 'merchantMatch'),
+      ]),
+    ],
+  ],
+  // §5.3 v1.2: an identity feature of weight 0 would let a claim count as specific while scoring Σw = 0
+  // (or on time alone), so the loader rejects it wherever it is named.
+  one(
+    'identity feature weighted 0',
+    ['features', 'counterpartyName'],
+    0,
+    zeroIdentity('email.sent', 1, 'counterpartyName'),
+    ...CALENDAR.map((t) => zeroIdentity(t, 2, 'counterpartyName')),
+  ),
+  one(
+    'identity feature weighted -0',
+    ['features', 'amountExact'],
+    -0,
+    ...PURCHASE_LIKE.map((t) => zeroIdentity(t, 0, 'amountExact')),
+  ),
+  [
+    'zero-weight feature listed for its type and named as identity',
+    [
+      [
+        ['featuresByType', 'other'],
+        ['timeProximity', 'modelScore'],
+      ],
+      [['identityFeatures', 'other'], ['modelScore']],
+    ],
+    [zeroIdentity('other', 0, 'modelScore')],
   ],
   one(
     'identity feature not listed for its type',
@@ -266,7 +302,33 @@ describe('loadPolicy: malformed windows, weights and per-type maps name their pa
   });
 });
 
-describe('loadPolicy: the edges of the valid domain, and how problems are reported', () => {
+describe('loadPolicy: the edges of the valid domain', () => {
+  it('zeroing any identity feature rejects exactly the identityFeatures entries that name it', () => {
+    const byType: Readonly<Record<string, readonly string[]>> = policyJson.identityFeatures;
+    const identity = [...new Set(Object.values(byType).flat())];
+    expect(identity.sort()).toEqual([
+      'amountExact',
+      'counterpartyExact',
+      'counterpartyName',
+      'merchantMatch',
+      'subjectOverlap',
+    ]);
+    for (const feature of identity) {
+      const expected = Object.entries(byType).flatMap(([type, named]) => {
+        const index = named.indexOf(feature);
+        return index < 0 ? [] : [zeroIdentity(type, index, feature)];
+      });
+      const issues = issuesOf(edited([['features', feature], 0]));
+      expect(issues.filter((issue) => issue.startsWith('identityFeatures'))).toEqual(expected);
+    }
+  });
+
+  it('a zero weight is fine on a feature no type names as identity', () => {
+    const policy = loadPolicy(edited([['features', 'counterpartyDomain'], 0]));
+    expect(policy.bp.features.counterpartyDomain).toBe(0);
+    expect(policy.identityFeatures['email.sent']).not.toContain('counterpartyDomain');
+  });
+
   it('tolerance one minute inside calendarDays still loads (the conversion is exact)', () => {
     const doc = edited(
       [['windows', 'beforeClaimMin'], 5000],
@@ -290,7 +352,9 @@ describe('loadPolicy: the edges of the valid domain, and how problems are report
     expect(windows.calendarDays * MS_PER_DAY).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
     expect(windows.graceMin * MS_PER_MINUTE).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
   });
+});
 
+describe('loadPolicy: how problems are reported', () => {
   it.each([
     [null, 'null'],
     [[], 'array'],

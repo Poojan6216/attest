@@ -36,6 +36,7 @@ export {
   FeatureName,
   isBasisPointMultiple,
   ObservationFieldName,
+  PENDING_RULE_ID,
   RuleOutcome,
   SignalName,
   TERMINAL_RULE_ID,
