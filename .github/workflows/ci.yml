@@ -1,7 +1,9 @@
 name: ci
 
 on:
+  # Pushes to main, and every pull request (one run per PR, not one per push plus one per PR).
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
