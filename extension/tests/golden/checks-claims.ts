@@ -38,3 +38,41 @@ export function claimProblems(scenario: Scenario, policy: PolicyView): string[] 
   }
   return problems;
 }
+
+/** §6.1: a purchase-like type is one whose only source is the receipt observer. */
+export function receiptOnlyType(type: string, policy: PolicyView): boolean {
+  const sources = policy.sourcesByType?.[type] ?? [];
+  return sources.length === 1 && sources[0] === 'gmail.receipt';
+}
+
+/**
+ * §6.1 (v1.3): a purchase-like claim with no counterparty, or whose normalised counterparty is not in
+ * `policy.receiptMerchants`, has no parser: its coverage is at most partial (reason coverage.no_parser). The
+ * files keep merchant names to plain ASCII words, so lowercasing and collapsing spaces is the whole of name().
+ */
+export function hasNoParser(claim: ScenarioClaim, policy: PolicyView): boolean {
+  if (!receiptOnlyType(claim.type, policy)) return false;
+  if (claim.counterparty === undefined) return true;
+  const normalised = claim.counterparty.toLowerCase().split(/\s+/u).filter(Boolean).join(' ');
+  return !(policy.receiptMerchants ?? []).includes(normalised);
+}
+
+/**
+ * §6.1 / §15 (v1.3): a claim no parser can see is never NOT_FOUND (Hard Rule 5), and a `partial_coverage`
+ * receipt names `coverage.no_parser` exactly when the claim has no parser (the emission table already keeps the
+ * code off every other rule).
+ */
+export function noParserProblems(scenario: Scenario, policy: PolicyView): string[] {
+  const problems: string[] = [];
+  for (const e of scenario.expect.filter((x) => subjectKind(x) === 'claim')) {
+    const claim = scenario.input.claims.find((c) => c.ref === e.ref);
+    if (claim === undefined) continue;
+    const noParser = hasNoParser(claim, policy);
+    if (noParser && e.grade === 'NOT_FOUND') problems.push(`${claim.ref}: no parser, so never NOT_FOUND`);
+    const named = e.reasonCodes.includes('coverage.no_parser');
+    if (e.ruleId === 'partial_coverage' && named !== noParser)
+      problems.push(`${claim.ref}: coverage.no_parser must be ${String(noParser)}`);
+    if (named && !noParser) problems.push(`${claim.ref}: coverage.no_parser on a claim a parser covers`);
+  }
+  return problems;
+}

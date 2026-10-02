@@ -33,7 +33,12 @@ export const PolicyView = z.looseObject({
   sourcesByType: z.record(z.string(), z.array(z.string())).optional(),
   allowlistTypes: z.array(z.string()).optional(),
   receiptMerchants: z.array(z.string()).optional(),
-  windows: z.looseObject({ beforeClaimMin: z.number(), afterClaimMin: z.number() }),
+  windows: z.looseObject({
+    beforeClaimMin: z.number(),
+    afterClaimMin: z.number(),
+    graceMin: z.number(),
+    calendarDays: z.number(),
+  }),
   unasked: z.looseObject({ threshold: z.number(), windows: z.looseObject({ sessionMin: z.number() }) }),
 });
 export type PolicyView = z.infer<typeof PolicyView>;
@@ -53,8 +58,17 @@ export function mergePatch(target: unknown, patch: unknown): unknown {
   return merged;
 }
 
+/** §15: an `accountHash` (or `accounts` entry) label becomes the SHA-256 of the label. */
 export function labelHash(label: string): string {
   return sha256Hex(label);
+}
+
+/**
+ * §10 (v1.3): `rowKeyHash = sha256Hex(canonicalJson(rowKey))`, so two row keys that differ only in a lone
+ * surrogate never share a hash. Claims (rawHash) and observations (contentHash) both use it.
+ */
+export function rowKeyHashOf(rowKey: string): string {
+  return hashCanonical(rowKey);
 }
 
 /** Copy the keys of `source` that are present (exactOptionalPropertyTypes: never write `undefined`). */
@@ -80,7 +94,7 @@ export function buildClaim(claim: ScenarioClaim): Claim {
   const rawHash = hashCanonical({
     agent: claim.agent,
     sourceKind,
-    rowKeyHash: claim.rowKey === undefined ? null : labelHash(claim.rowKey),
+    rowKeyHash: claim.rowKey === undefined ? null : rowKeyHashOf(claim.rowKey),
     text: claim.text ?? claim.ref,
     claimedAt: truncateIso(claim.claimedAt, precision),
   });
@@ -109,7 +123,11 @@ const CONTENT_FIELDS = [
   'occurredAt',
 ] as const;
 
-/** §10: SHA-256 of {source, type, ...allowlisted content fields}, rowKeyHash included whenever present. */
+/**
+ * §10 (v1.3): SHA-256 of {source, type, ...the content fields (counterparty, merchant, amountCents, currency,
+ * subjectHint, occurredAt) that allowlistedFields[source] names and the row supplies}, plus rowKeyHash when the
+ * observer has one. The derived markers (rowKeyHash, contentHash) are never content fields.
+ */
 export function contentHashOf(
   observation: ScenarioObservation,
   rowKeyHash: string | undefined,
@@ -144,7 +162,7 @@ export function buildObservation(
   evaluatedAt: string,
   policy: PolicyView,
 ): Observation {
-  const rowKeyHash = observation.rowKey === undefined ? undefined : labelHash(observation.rowKey);
+  const rowKeyHash = observation.rowKey === undefined ? undefined : rowKeyHashOf(observation.rowKey);
   const allowlisted = policy.allowlistedFields[observation.source] ?? [];
   const contentHash = contentHashOf(observation, rowKeyHash, allowlisted);
   const input: ObservationInput = {

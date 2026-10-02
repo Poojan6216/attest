@@ -79,12 +79,13 @@ const EXPECTATION_MUTATIONS: readonly (readonly [string, Partial<ExpectedReceipt
   ],
   ['a PARTIAL score at or above thresholds.verified', { grade: 'PARTIAL', ruleId: 'partial' }],
   [
-    'allowlist.unchecked next to coverage.never_completed (an open reading)',
+    'allowlist.unchecked before coverage.never_completed, the pending rule code (v1.3 order)',
     {
       ...PENDING_MATCH_NONE,
-      reasonCodes: ['coverage.never_completed', 'allowlist.unchecked', 'match.none'],
+      reasonCodes: ['allowlist.unchecked', 'coverage.never_completed', 'match.none'],
     },
   ],
+  ['the no-parser cap outside partial_coverage', { reasonCodes: ['coverage.no_parser', 'match.best'] }],
   [
     'a pending outcome whose best score the partial rule would have matched first',
     {
@@ -112,8 +113,10 @@ describe('checks.ts catches broken expectations', () => {
   it.each(EXPECTATION_MUTATIONS)('%s', (_, change) => {
     expect(expectationProblems({ ...base, ...change }, BASE_POLICY)).not.toEqual([]);
   });
+});
 
-  it('flags reason lists out of the v1.2 order, and accepts the v1.2 order', () => {
+describe('checks.ts reason order (§15 v1.3)', () => {
+  it('flags reason lists out of the v1.3 order, and accepts the v1.3 order', () => {
     expect(reasonOrderProblems(['match.none', 'coverage.account_unbound'])).not.toEqual([]);
     expect(reasonOrderProblems(['unasked.idle', 'unasked.session'])).not.toEqual([]);
     expect(
@@ -126,8 +129,16 @@ describe('checks.ts catches broken expectations', () => {
     expect(reasonOrderProblems(['coverage.partial', 'allowlist.unchecked', 'coverage.no_account'])).toEqual(
       [],
     );
+    expect(
+      reasonOrderProblems(['coverage.partial', 'coverage.no_parser', 'coverage.no_account']),
+    ).not.toEqual([]);
+    expect(reasonOrderProblems(['coverage.never_completed', 'allowlist.unchecked', 'match.none'])).toEqual(
+      [],
+    );
   });
+});
 
+describe('checks.ts claim-less and subject checks', () => {
   it('flags an UNASKED receipt below the threshold', () => {
     const unasked = expectation('07', 'o1');
     expect(expectationProblems({ ...unasked, attributionScore: '1/2' }, BASE_POLICY)).not.toEqual([]);
@@ -367,7 +378,7 @@ const counterparty = (ref: string, value: string) => (s: Scenario) => ({
   },
 });
 
-describe('v12-rules.ts proofs for 75-77 need the rule they prove', () => {
+describe('v12-rules.ts proofs for 75 and 77 need the rule they prove', () => {
   it.each([
     [
       'name_local_part_ascii_only',
@@ -376,8 +387,6 @@ describe('v12-rules.ts proofs for 75-77 need the rule they prove', () => {
     ],
     ['name_local_part_ascii_only', '75', (s: Scenario) => withExpect(s, 'c1', { grade: 'PARTIAL' })],
     ['name_bidi_override', '75', counterparty('c4', 'Priya')],
-    ['purchase_coverage_by_name', '76', counterparty('c1', 'acme')],
-    ['purchase_no_counterparty_none', '76', (s: Scenario) => withExpect(s, 'c2', { ruleId: 'not_found' })],
     ['prior_spend_reads_final_claims', '77', (s: Scenario) => ({ ...s, input: { ...s.input, fixed: [] } })],
   ] as const)('%s (%s) fails on a copy without it', (tag, prefix, change) => {
     expect(proves(tag, prefix)).toBe(true);

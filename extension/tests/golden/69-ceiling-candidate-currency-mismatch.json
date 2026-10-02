@@ -1,13 +1,19 @@
 {
   "name": "claim without a currency, receipt in CAD against a USD ceiling: OVER_SCOPE that waits like PARTIAL",
-  "covers": ["contract:ceiling_candidate_currency", "edge:currency_mismatch"],
+  "covers": [
+    "contract:ceiling_candidate_currency",
+    "contract:amount_exact_currency_missing",
+    "edge:currency_mismatch"
+  ],
   "mode": "batch",
-  "policyPatch": { "receiptMerchants": ["acme"] },
+  "policyPatch": {
+    "receiptMerchants": ["acme"]
+  },
   "notes": [
     "Grant ceiling 5000 USD. Both claims say 'bought it at Acme for 30' with no currency; both receipts say 3000 CAD. receiptMerchants is patched to ['acme'] so the receipt observer covers these purchases (§6.1).",
     "Applicable features (amount and counterparty, no subject): timeProximity 2500, amountExact 2500, merchantMatch 2000; Σw = 7000.",
-    "c1 × o1: tp 1; amountExact 0 (§5.1: both currencies must be present and equal, the claim has none); merchantMatch 1 ('acme' = normalised 'Acme'). S = 4500/7000 = 9/14 ≥ 1/2 → assigned.",
-    "amountAboveCeiling (§6.1 v1.2): spend type, ceiling set, amount known. Amount = the claim's 3000; the candidate's 3000 is ignored (CAD ≠ spendCurrency) → 3000 ≤ 5000, not exceeded. But the claim has no currency and the assigned candidate's currency CAD is present and ≠ USD → true, reason ceiling.currency_mismatch alone {currency: CAD, spendCurrency: USD} → rule over_ceiling, ahead of no_coverage and partial.",
+    "c1 × o1: tp 1; amountExact is applicable (the claim has amountCents, §5.1 v1.3) and scores 0 (the claim has no currency: a currency missing on either side scores 0); merchantMatch 1 ('acme' = normalised 'Acme'). S = 4500/7000 = 9/14 ≥ 1/2 → assigned. (Dropping amountExact as not applicable would give 4500/4500 = 1/1.)",
+    "amountAboveCeiling (§6.1 v1.3): spend type, ceiling set, amount known. Amount = the claim's 3000 (its currency is absent, so it counts); the candidate's 3000 is ignored (CAD ≠ spendCurrency) → 3000 ≤ 5000, not exceeded. But the assigned candidate's currency CAD is present and ≠ USD (whatever the claim's currency) → true, reason ceiling.currency_mismatch alone {currency: CAD (the claim has none, so the candidate's), spendCurrency: USD} → rule over_ceiling, ahead of no_coverage and partial.",
     "The candidate case finalises like PARTIAL (§6.1, §8): graceElapsed needs a gmail.receipt sync ≥ end + 30 and ≥ end + 45. c1 (10:02, end 10:03): 14:30 ≥ 10:48 → FINAL. c2 (14:02, end 14:03): 14:30 < 14:48 → PENDING, so a better match in USD may still correct it.",
     "o1 is outside c2's window [14:00, 14:48] and o2 outside c1's [10:00, 10:48]."
   ],
@@ -51,7 +57,13 @@
         "occurredAt": "2026-10-06T14:02:00-04:00"
       }
     ],
-    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "grants": [
+      {
+        "agent": "muse",
+        "spendCeilingCents": 5000,
+        "spendCurrency": "USD"
+      }
+    ],
     "coverage": [
       {
         "source": "gmail.receipt",
@@ -72,8 +84,13 @@
       "score": "9/14",
       "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
       "reasonParams": {
-        "ceiling.currency_mismatch": { "currency": "CAD", "spendCurrency": "USD" },
-        "match.best": { "observationId": "o1" }
+        "ceiling.currency_mismatch": {
+          "currency": "CAD",
+          "spendCurrency": "USD"
+        },
+        "match.best": {
+          "observationId": "o1"
+        }
       }
     },
     {
@@ -85,8 +102,13 @@
       "score": "9/14",
       "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
       "reasonParams": {
-        "ceiling.currency_mismatch": { "currency": "CAD", "spendCurrency": "USD" },
-        "match.best": { "observationId": "o2" }
+        "ceiling.currency_mismatch": {
+          "currency": "CAD",
+          "spendCurrency": "USD"
+        },
+        "match.best": {
+          "observationId": "o2"
+        }
       }
     }
   ]

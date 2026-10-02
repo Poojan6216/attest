@@ -3,7 +3,7 @@
   "covers": ["contract:subject_zero_width", "contract:subject_bidi_override", "edge:subject_normalisation"],
   "mode": "batch",
   "notes": [
-    "§11 (v1.2) subjects: remove zero-width and bidi marks → NFKC → lowercase → split on [^\\p{L}\\p{N}\\p{M}]+ → drop empty → strip leading re/fw/fwd → drop stop words. A subject holding a bidi override (U+202D, U+202E) yields no tokens. The invisible characters below are written as JSON \\u escapes.",
+    "§11 (v1.2) subjects: remove zero-width and bidi marks → NFKC → lowercase → split on [^\\p{L}\\p{N}\\p{M}]+ → drop empty → strip leading re/fw/fwd → drop stop words. A subject holding a bidi override (U+202D, U+202E) yields no tokens; v1.3 adds the embeddings (U+202A, U+202B), which 84 covers, and leaves this file unchanged. The invisible characters below are written as JSON \\u escapes.",
     "Address claims, exact recipient, exact time: S = (2500 + 3500 + 1500 + 1500·so)/9000.",
     "c1 'Invoice' × o1 'In<U+200B ZERO WIDTH SPACE>voice': the mark is removed first → {invoice} → so 1 → S = 1/1 → verified. Splitting at the mark instead gives {in, voice}, 'in' is a stop word → {voice} → so 0 → 5/6, PARTIAL.",
     "c2 'Q3 deck' × o2 'Q3 <U+202E RIGHT-TO-LEFT OVERRIDE>deck<U+202C>': the observation subject holds an override → no tokens → so 0 (an observation with no tokens scores 0, §5.1) → S = 7500/9000 = 5/6 → partial. Stripping the override would read {q3, deck} and verify a subject that displays differently from how it is stored.",

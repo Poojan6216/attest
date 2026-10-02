@@ -1,0 +1,131 @@
+{
+  "name": "allowlist and a subject-only calendar claim: unchecked without evidence, checked on the evidence's address",
+  "covers": [
+    "contract:allowlist_subject_only_unchecked",
+    "contract:never_completed_before_unchecked",
+    "edge:allowlist_name_unchecked",
+    "edge:allowlist_from_evidence",
+    "edge:finalize_never_completed"
+  ],
+  "mode": "batch",
+  "notes": [
+    "muse: allowlist ['company.com'], gcal.event bound to acct-a (so NOT_FOUND carries no coverage.account_unbound). One gcal.event entry E1 (acct-a, allCalendars) saw [10-01, 11-01] and last synced 10-07 09:00; evaluatedAt is 10-08 15:00.",
+    "Every claim is calendar.created with a subject and a targetAt but no counterparty: applicable timeProximity 2500 and subjectOverlap 1500; Σw = 4000; the window is targetAt ± 3 days.",
+    "counterpartyNotAllowed (§6.1 v1.3): a claim with no address of its own (a name, or no counterparty) and no assigned candidate → not applicable, reason allowlist.unchecked; with an assigned candidate, that candidate's address is checked.",
+    "c1 'Budget sync' targetAt 10-09 10:00, claimed 10-06 14:02: no observation in [10-06 10:00, 10-12 10:00] → no candidate → allowlist.unchecked. Window ⊆ E1 (bound account, all calendars) → full; graceElapsed (calendar: E1 10-07 09:00 ≥ end(14:03) + 30) → rule not_found, FINAL. Reasons: allowlist.unchecked, match.none.",
+    "c2 'Offsite plan' targetAt 10-10 10:00, claimed 10-07 14:02: no candidate; coverage full, but no sync ≥ end(10-07 14:03) + 30 → rule pending; evaluatedAt 10-08 15:00 ≥ end + 24 h = 10-08 14:03 → FINAL as UNVERIFIABLE (ruleId pending). §15 v1.3: coverage.never_completed is the pending rule's own code once it finalises (it replaces grace.waiting), so it comes first, then allowlist.unchecked, then match.none.",
+    "c3 'Q3 review' targetAt 10-20 14:00, claimed 10-06 16:02 × o3 'Q3 review' with priya@company.com at 10-20 14:00 (first seen 10-07 09:00 ≥ start(16:02) − 2 min): tp 1, subject 1 → 4000/4000 = 1/1 → assigned. The candidate's address is on the allowlist (domain company.com) → condition false, so neither OVER_SCOPE nor allowlist.unchecked → verified, FINAL (E1 ≥ end(16:03) + 30).",
+    "c4 'Vendor demo' targetAt 10-24 11:00, claimed 10-06 18:02 × o4 'Vendor demo' with sales@vendor.example at 10-24 11:00: 1/1 → assigned; vendor.example matches no entry → rule over_allowlist, OVER_SCOPE. It depended on the candidate's address → finalises like PARTIAL: graceElapsed (E1 ≥ end(18:03) + 30) → FINAL.",
+    "Windows: c3 [10-17 14:00, 10-23 14:00], c4 [10-21 11:00, 10-27 11:00]: o3 (10-20) is outside c4's and o4 (10-24) outside c3's; neither is in c1's or c2's window."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-08T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Budget sync",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-09T10:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Offsite plan",
+        "claimedAt": "2026-10-07T14:02:00-04:00",
+        "targetAt": "2026-10-10T10:00:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T16:02:00-04:00",
+        "targetAt": "2026-10-20T14:00:00-04:00"
+      },
+      {
+        "ref": "c4",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Vendor demo",
+        "claimedAt": "2026-10-06T18:02:00-04:00",
+        "targetAt": "2026-10-24T11:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-20T14:00:00-04:00"
+      },
+      {
+        "ref": "o4",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "counterparty": "sales@vendor.example",
+        "subjectHint": "Vendor demo",
+        "occurredAt": "2026-10-24T11:00:00-04:00"
+      }
+    ],
+    "grants": [
+      { "agent": "muse", "counterpartyAllowlist": ["company.com"], "accounts": { "gcal.event": ["acct-a"] } }
+    ],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-07T09:00:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["allowlist.unchecked", "match.none"],
+      "reasonParams": { "allowlist.unchecked": {}, "match.none": {} }
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.never_completed", "allowlist.unchecked", "match.none"],
+      "reasonParams": { "coverage.never_completed": {}, "allowlist.unchecked": {}, "match.none": {} }
+    },
+    {
+      "ref": "c3",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o3"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o3" } }
+    },
+    {
+      "ref": "c4",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_allowlist",
+      "state": "FINAL",
+      "observationRefs": ["o4"],
+      "score": "1/1",
+      "reasonCodes": ["scope.counterparty_not_allowed", "match.best"],
+      "reasonParams": { "scope.counterparty_not_allowed": {}, "match.best": { "observationId": "o4" } }
+    }
+  ]
+}

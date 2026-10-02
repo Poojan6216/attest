@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { hashCanonical, idFromHash, sha256Hex } from '../../src/core/hash';
-import { buildScenario, contentHashOf, defaultObservedAt, mergePatch } from './load';
+import { canonicalJson, hashCanonical, idFromHash, sha256Hex } from '../../src/core/hash';
+import { buildScenario, contentHashOf, defaultObservedAt, mergePatch, rowKeyHashOf } from './load';
 import {
   ExpectedReceipt,
   parseFraction,
@@ -83,7 +83,7 @@ describe('golden loader defaults (§15): claims and observations', () => {
     });
     expect(obs?.contentHash).toBe(contentHash);
     expect(obs?.id).toBe(idFromHash(contentHash));
-    const keyed = contentHashOf({ ...SENT, rowKey: 'send-1' }, sha256Hex('send-1'), ['counterparty']);
+    const keyed = contentHashOf({ ...SENT, rowKey: 'send-1' }, rowKeyHashOf('send-1'), ['counterparty']);
     expect(keyed).not.toBe(contentHashOf(SENT, undefined, ['counterparty']));
   });
 });
@@ -233,5 +233,62 @@ describe('golden loader (v1.2): claimedAtEnd and reason params', () => {
     delete codesOnly.reasonParams;
     const without = buildScenario('codes.json', { ...DAY_CLAIM, expect: [codesOnly] });
     expect(without.expected[0]?.reasons).toBeUndefined();
+  });
+});
+
+describe('golden loader (v1.3): row keys and scope hashes', () => {
+  const KEYED = Scenario.parse({
+    ...MINIMAL,
+    input: {
+      ...MINIMAL.input,
+      claims: [{ ...MINIMAL.input.claims[0], rowKey: 'line-1' }],
+      observations: [{ ...SENT, rowKey: 'send-1' }],
+    },
+    expect: [
+      {
+        scope: { agent: 'muse', scope: 'gmail.read' },
+        grade: 'OVER_SCOPE',
+        ruleId: 'over_scope_observed',
+        state: 'FINAL',
+        observationRefs: [],
+        score: null,
+        reasonCodes: ['scope.observed_not_declared'],
+        reasonParams: { 'scope.observed_not_declared': { scopeHash: 'gmail.read' } },
+        agent: 'muse',
+      },
+    ],
+  });
+  const loaded = buildScenario('keyed.json', KEYED);
+
+  it('hashes a row key as sha256Hex(canonicalJson(rowKey)), never the bare text (§10 v1.3)', () => {
+    expect(rowKeyHashOf('send-1')).toBe(sha256Hex(canonicalJson('send-1')));
+    expect(rowKeyHashOf('send-1')).not.toBe(sha256Hex('send-1'));
+    expect(loaded.observations.get('o1')?.rowKeyHash).toBe(rowKeyHashOf('send-1'));
+    const rawHash = hashCanonical({
+      agent: 'muse',
+      sourceKind: 'activity_view',
+      rowKeyHash: rowKeyHashOf('line-1'),
+      text: 'c1',
+      claimedAt: '2026-10-06T14:02:00-04:00',
+    });
+    expect(loaded.claims.get('c1')?.rawHash).toBe(rawHash);
+  });
+
+  it('keeps contentHash to the content fields plus rowKeyHash (§10 v1.3)', () => {
+    const contentHash = hashCanonical({
+      source: 'gmail.sent',
+      type: 'email.sent',
+      counterparty: 'priya@company.com',
+      subjectHint: 'Q3 deck',
+      occurredAt: '2026-10-06T14:02:00-04:00',
+      rowKeyHash: rowKeyHashOf('send-1'),
+    });
+    expect(loaded.observations.get('o1')?.contentHash).toBe(contentHash);
+  });
+
+  it('writes a scopeHash param as the scope and stores sha256Hex(scope) (§15 v1.3)', () => {
+    expect(loaded.expected[0]?.reasons).toEqual([
+      { code: 'scope.observed_not_declared', params: { scopeHash: sha256Hex('gmail.read') } },
+    ]);
   });
 });

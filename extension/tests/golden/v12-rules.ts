@@ -1,31 +1,21 @@
 /**
- * The contract v1.2 rules the golden suite must prove (docs/grading.md v1.2; Decisions [1.contract] v1.2).
- * Each entry is a `contract:<tag>` that some scenario must carry, and a predicate that the tagged scenario
- * really exercises the rule, so a mistagged or weakened file fails scenarios.spec.ts instead of passing.
+ * The contract v1.2 rules the golden suite must prove (docs/grading.md v1.2; Decisions [1.contract] v1.2), as
+ * they still read in v1.3. Each entry is a `contract:<tag>` that some scenario must carry, and a predicate that
+ * the tagged scenario really exercises the rule, so a mistagged or weakened file fails scenarios.spec.ts instead
+ * of passing. The two purchase-coverage rules changed meaning in v1.3 and live in v13-rules.ts.
  */
 import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../../src/core/units';
-import { type PolicyView } from './build';
-import {
-  type ExpectedReceipt,
-  REASON_PARAMS,
-  type Scenario,
-  type ScenarioObservation,
-} from './scenario-schema';
+import { ASCII_ONLY, claimOf, evidenceOf, type Proof } from './proof-helpers';
+import { REASON_PARAMS, type Scenario } from './scenario-schema';
 import { instantMs, truncateIso } from './time';
+
+export type { Proof } from './proof-helpers';
 
 /** A zero-width character between two letters: inside a word. */
 const ZERO_WIDTH_IN_WORD = /\p{L}[\u200B-\u200D\u2060\uFEFF]\p{L}/u;
-const ASCII_ONLY = /^[\x20-\x7E]+$/;
 /** A bidi override (§11 v1.2), and every embedding/override control including the terminator U+202C. */
 const BIDI_OVERRIDE = /[\u202D\u202E]/u;
 const BIDI_EMBEDDING = /[\u202A-\u202E]/gu;
-
-type Proof = (scenario: Scenario, policy: PolicyView) => boolean;
-
-const claimOf = (s: Scenario, e: ExpectedReceipt): Scenario['input']['claims'][number] | undefined =>
-  s.input.claims.find((c) => c.ref === e.ref);
-const evidenceOf = (s: Scenario, e: ExpectedReceipt): ScenarioObservation | undefined =>
-  s.input.observations.find((o) => o.ref === e.observationRefs[0]);
 
 /** §4.1: a 25-hour local day, and evidence later than start + 24 h + afterClaimMin, still graded as found. */
 const dayEndOnDst: Proof = (s, policy) =>
@@ -115,7 +105,7 @@ const silentOrphan: Proof = (s, policy) => {
 const unassignedBest: Proof = (s) =>
   s.expect.some((e) => e.reasonCodes.includes('match.best') && e.observationRefs.length === 0);
 
-/** §15: every code that carries params (except the scope hash, see README) has its params asserted somewhere. */
+/** §15 (v1.3): every code that carries params has its params asserted somewhere (scopeHash included). */
 export function paramCodesAsserted(scenarios: readonly Scenario[]): string[] {
   const asserted = new Set(
     scenarios.flatMap((s) =>
@@ -127,7 +117,7 @@ export function paramCodesAsserted(scenarios: readonly Scenario[]): string[] {
     ),
   );
   return Object.entries(REASON_PARAMS)
-    .filter(([code, params]) => Object.keys(params).length > 0 && code !== 'scope.observed_not_declared')
+    .filter(([, params]) => Object.keys(params).length > 0)
     .map(([code]) => code)
     .filter((code) => !asserted.has(code));
 }
@@ -184,39 +174,6 @@ const nameBidiOverride: Proof = (s) =>
     return isName(name) && BIDI_OVERRIDE.test(name) && e.ruleId === 'underspecified';
   });
 
-const receiptOnly = (s: Scenario, policy: PolicyView, e: ExpectedReceipt): boolean => {
-  const type = claimOf(s, e)?.type;
-  const sources = type === undefined ? [] : (policy.sourcesByType?.[type] ?? []);
-  return sources.length === 1 && sources[0] === 'gmail.receipt';
-};
-
-/** §6.1: receiptMerchants is matched by the claim's normalised name, not by its text as written. */
-const purchaseCoverageByName: Proof = (s, policy) =>
-  s.expect.some((e) => {
-    const merchants = policy.receiptMerchants ?? [];
-    const name = claimOf(s, e)?.counterparty ?? '';
-    const normalisedOnly = !merchants.includes(name) && merchants.includes(name.toLowerCase());
-    return receiptOnly(s, policy, e) && normalisedOnly && e.ruleId !== 'no_coverage';
-  });
-
-/** §6.1: a purchase claim with no counterparty has coverage none even inside a receipt interval. */
-const purchaseNoCounterparty: Proof = (s, policy) =>
-  s.expect.some((e) => {
-    const claim = claimOf(s, e);
-    if (claim === undefined || claim.counterparty !== undefined || !receiptOnly(s, policy, e)) return false;
-    const unit = instantMs(truncateIso(claim.claimedAt, 'minute'));
-    const from = unit - policy.windows.beforeClaimMin * MS_PER_MINUTE;
-    const to = unit + MS_PER_MINUTE + policy.windows.afterClaimMin * MS_PER_MINUTE;
-    const seen = s.input.coverage.some(
-      (c) =>
-        c.source === 'gmail.receipt' &&
-        c.accountHash !== undefined &&
-        instantMs(c.windowStart) <= from &&
-        to <= instantMs(c.windowEnd),
-    );
-    return claim.claimedAtPrecision === undefined && seen && e.ruleId === 'no_coverage';
-  });
-
 /** §3: priorSpendCents counts claims that already hold a FINAL receipt (fixed), not only the batch. */
 const priorSpendFromFinal: Proof = (s) => {
   const fixed = new Set((s.input.fixed ?? []).flatMap((pair) => pair.claim ?? []));
@@ -236,8 +193,6 @@ const priorSpendFromFinal: Proof = (s) => {
 export const V12_RULES: readonly (readonly [tag: string, proof: Proof])[] = [
   ['name_local_part_ascii_only', nameLocalPartAsciiOnly],
   ['name_bidi_override', nameBidiOverride],
-  ['purchase_coverage_by_name', purchaseCoverageByName],
-  ['purchase_no_counterparty_none', purchaseNoCounterparty],
   ['prior_spend_reads_final_claims', priorSpendFromFinal],
   ['claimed_at_end_dst', dayEndOnDst],
   ['ceiling_candidate_currency', candidateCurrency],

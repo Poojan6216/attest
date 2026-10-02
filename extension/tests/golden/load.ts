@@ -2,19 +2,21 @@
  * Golden scenario loader (docs/grading.md §15). Reads tests/golden/NN-slug.json, applies the documented
  * defaults, computes every id and hash with src/core/hash.ts (no id or hash is ever typed by hand), and
  * parses every built object with the core schemas, so what it returns is exactly what grade()/gradeBatch()
- * accept. The runner (a later wave) calls the core with these objects; this file never grades anything.
+ * accept. The runner (runner.ts) calls the core with these objects; this file never grades anything.
  *
  * Defaults (§15): claim extractor {golden, 1, 1}, sourceKind activity_view, claimedAtPrecision minute,
  * observedAt = claimedAt, text = ref; observation observedAt = the earliest lastSyncAt ≤ evaluatedAt among
  * its source's coverage entries whose window contains occurredAt, else evaluatedAt; grant: every type, no
  * allowlist, no ceiling, no scopes, no accounts, updatedAt = evaluatedAt − 1 day; activity: empty lists and
- * every scenario claim. Labels (accountHash, accounts, rowKey) become SHA-256(label).
+ * every scenario claim. Account labels (accountHash, accounts) become SHA-256(label); a rowKey label
+ * becomes rowKeyHash = sha256Hex(canonicalJson(rowKey)) (§10 v1.3). A `scopeHash` reason param is written
+ * as the observed scope and stored as sha256Hex(scope) (§15 v1.3).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import defaultPolicyJson from '../../../policy/default.json';
-import { hashCanonical, idFromHash } from '../../src/core/hash';
+import { hashCanonical, idFromHash, sha256Hex } from '../../src/core/hash';
 import {
   Activity,
   type AgentId,
@@ -46,6 +48,7 @@ export {
   labelHash,
   mergePatch,
   PolicyView,
+  rowKeyHashOf,
 } from './build';
 
 export const GOLDEN_DIR = import.meta.dirname;
@@ -156,7 +159,10 @@ function subjectOfRef(built: Built, ref: string): ReceiptSubject {
     : { k: 'unasked', observationId: observationId(built, ref) };
 }
 
-/** One reason with its params resolved: observation and claim refs become ids; other values pass through. */
+/**
+ * One reason with its params resolved: observation and claim refs become ids, a scope becomes its scopeHash
+ * (`sha256Hex(scope)`, the observed scope exactly as stored, §15 v1.3); other values pass through.
+ */
 function buildReason(
   built: Built,
   code: ReasonCode,
@@ -167,6 +173,7 @@ function buildReason(
     const kind = REASON_PARAMS[code][name];
     if (kind === 'observationRef') params[name] = observationId(built, String(value));
     else if (kind === 'claimRef') params[name] = claimId(built, String(value));
+    else if (kind === 'scopeHash') params[name] = sha256Hex(String(value));
     else params[name] = value;
   }
   return Reason.parse({ code, params });

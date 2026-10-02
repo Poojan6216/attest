@@ -1,8 +1,9 @@
 /**
- * The golden scenario files (docs/grading.md v1.2 §15): every file parses strictly, every ref resolves, every
+ * The golden scenario files (docs/grading.md v1.3 §15): every file parses strictly, every ref resolves, every
  * expectation obeys the contract's emission, ordering and params rules, together they cover the mandatory
- * list, the §2 demo, every policy rule, every ReasonCode, the hardened edge cases and the v1.2 rules, and the
- * loader turns each into schema-valid core inputs with stable ids. checks.spec.ts proves the checks bite.
+ * list, the §2 demo, every policy rule, every ReasonCode, the hardened edge cases and the v1.2 rules (the v1.3
+ * rules: v13-rules.spec.ts), and the loader turns each into schema-valid core inputs with stable ids.
+ * checks.spec.ts proves the checks bite.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -14,10 +15,18 @@ import { canonicalJson, idFromHash, sha256Hex } from '../../src/core/hash';
 import { loadPolicy } from '../../src/core/policy';
 import * as core from '../../src/core/schema';
 import { accountBindingProblems, expectationProblems, inputProblems, refProblems } from './checks';
-import { claimProblems } from './checks-claims';
+import { claimProblems, noParserProblems } from './checks-claims';
 import { allowlistUncheckedProblems, reasonParamProblems, scenarioParamProblems } from './checks-reasons';
 import { formatIds, IDS_SNAPSHOT, scenarioIds } from './ids';
-import { loadScenario, PolicyView, readScenario, receiptIdFor, SCENARIO_FILE, scenarioFiles } from './load';
+import {
+  GOLDEN_DIR,
+  loadScenario,
+  PolicyView,
+  readScenario,
+  receiptIdFor,
+  SCENARIO_FILE,
+  scenarioFiles,
+} from './load';
 import {
   ACTION_TYPES,
   AGENT_IDS,
@@ -115,6 +124,11 @@ describe('golden scenario files', () => {
     expect(() => readScenario(file)).not.toThrow();
   });
 
+  it.each(FILES)('%s writes invisible characters as \\u escapes, never raw (README)', (file) => {
+    const raw = readFileSync(path.join(GOLDEN_DIR, file), 'utf8');
+    expect(raw.match(/\p{Cf}/gu) ?? []).toEqual([]);
+  });
+
   it.each(SCENARIOS)('%s: refs resolve, one expectation per graded subject, one-to-one evidence', (_, s) => {
     expect(refProblems(s)).toEqual([]);
   });
@@ -127,6 +141,7 @@ describe('golden scenario files', () => {
       expect(accountBindingProblems(s, policy)).toEqual([]);
       expect(allowlistUncheckedProblems(s, policy)).toEqual([]);
       expect(claimProblems(s, policy)).toEqual([]);
+      expect(noParserProblems(s, policy)).toEqual([]);
     },
   );
 
@@ -250,7 +265,7 @@ describe('golden coverage: the contract v1.2 rules', () => {
     expect(files.some(([file, s]) => proves(s, policyOf(file)))).toBe(true);
   });
 
-  it('every reason code that carries params has them asserted (except the open scopeHash reading)', () => {
+  it('every reason code that carries params has them asserted (scopeHash included, v1.3)', () => {
     expect(paramCodesAsserted(SCENARIOS.map(([, s]) => s))).toEqual([]);
   });
 

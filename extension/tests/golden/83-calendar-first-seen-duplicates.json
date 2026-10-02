@@ -1,0 +1,114 @@
+{
+  "name": "calendar.created first-seen: the earliest sighting of a duplicate counts, measured from the unit start",
+  "covers": [
+    "contract:calendar_first_seen_duplicates",
+    "contract:first_seen_unit_start",
+    "edge:calendar_preexisting_event",
+    "edge:duplicate_observation_dedupe_tie"
+  ],
+  "mode": "batch",
+  "notes": [
+    "§4.1 (v1.3): a calendar.created candidate needs observedAt ≥ start(p,t) − beforeClaimMin, comparing the earliest observedAt of all observations sharing its contentHash; duplicates count once, keeping the lowest id, then the earliest observedAt.",
+    "Subject-only calendar claims: applicable timeProximity 2500, subjectOverlap 1500; Σw = 4000; window targetAt ± 3 days. The grant binds gcal.event to acct-a; three passes (acct-a, all calendars) saw [10-01, 11-01], synced 09:00, 14:00:15 and 14:40.",
+    "c1 'Q3 review' targetAt 10-08 14:00, claimed 14:02. o1 and o2 are the same event row (same content, no row key → same contentHash, same id: assertIds), seen at 09:00 (o1) and again at 14:40 (o2). The group's earliest observedAt is 09:00 < start(14:02) − 2 min = 14:00 → the event was already on the calendar → not a candidate. Window ⊆ coverage → full; graceElapsed (14:40 ≥ end(14:03) + 30) → not_found, FINAL, no account_unbound (bound). Checking the later sighting alone (14:40 ≥ 14:00) would give VERIFIED 1/1.",
+    "c2 'Budget sync' targetAt 10-14 10:00, claimed 14:02:30 (minute precision: unit [14:02:00, 14:03:00]) × o3 'Budget sync' at 10-14 10:00, first seen 14:00:15. Bound: start(p,t) − 2 min = 14:00:00 ≤ 14:00:15 → a candidate. tp 1 (Δ 0), subject 1 → 1/1 → verified, FINAL (14:40 ≥ end(14:03) + 30). Measuring from the raw claimedAt (14:00:30) would reject o3 → not_found.",
+    "o1/o2 (10-08) lie outside c2's window [10-11 10:00, 10-17 10:00] and o3 (10-14) outside c1's [10-05 14:00, 10-11 14:00]. The duplicate is an orphan with no activity → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Budget sync",
+        "claimedAt": "2026-10-06T14:02:30-04:00",
+        "targetAt": "2026-10-14T10:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "observedAt": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Budget sync",
+        "occurredAt": "2026-10-14T10:00:00-04:00",
+        "observedAt": "2026-10-06T14:00:15-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:00:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:00:15-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "assertIds": { "equal": [["o1", "o2"]] },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"],
+      "reasonParams": { "match.none": {} }
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o3"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o3" } }
+    }
+  ]
+}

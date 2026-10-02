@@ -2,11 +2,13 @@
   "name": "a purchase in another currency than the ceiling is OVER_SCOPE",
   "covers": ["edge:currency_mismatch"],
   "mode": "batch",
-  "policyPatch": { "receiptMerchants": ["acme"] },
+  "policyPatch": {
+    "receiptMerchants": ["acme"]
+  },
   "notes": [
     "Grant ceiling 5000 USD. c1 claims 3000 EUR; o1 is an Acme receipt for 3000 EUR.",
     "c1 × o1: tp 1, amountExact 1 (3000 = 3000, EUR = EUR), merchantMatch 1 → S = 7000/7000 = 1/1 → assigned.",
-    "amountAboveCeiling (§6.1): the candidate's amount is ignored (EUR ≠ spendCurrency); 3000 ≤ 5000, but the claim's currency EUR is present and ≠ USD → true, reason ceiling.currency_mismatch (§6.1 v1.2: it replaces ceiling.exceeded, since no amount in spendCurrency exceeds the ceiling) → rule over_ceiling. Params {currency: EUR, spendCurrency: USD}.",
+    "amountAboveCeiling (§6.1 v1.3): an amount is known (the claim's and the candidate's 3000). The Amount counts the claim's amount only when its currency is absent or USD (EUR: no) and the candidate's only when it is in USD (EUR: no), so nothing exceeds the ceiling; but the claim's currency EUR is present and ≠ USD (and so is the candidate's) → true, reason ceiling.currency_mismatch alone (it replaces ceiling.exceeded, since no Amount exceeds the ceiling) → rule over_ceiling. Params {currency: EUR (the claim's, present), spendCurrency: USD}.",
     "FINAL at once: the claim's currency is a claim-only fact."
   ],
   "input": {
@@ -33,7 +35,13 @@
         "occurredAt": "2026-10-06T14:02:00-04:00"
       }
     ],
-    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "grants": [
+      {
+        "agent": "muse",
+        "spendCeilingCents": 5000,
+        "spendCurrency": "USD"
+      }
+    ],
     "coverage": [
       {
         "source": "gmail.receipt",
@@ -54,8 +62,13 @@
       "score": "1/1",
       "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
       "reasonParams": {
-        "ceiling.currency_mismatch": { "currency": "EUR", "spendCurrency": "USD" },
-        "match.best": { "observationId": "o1" }
+        "ceiling.currency_mismatch": {
+          "currency": "EUR",
+          "spendCurrency": "USD"
+        },
+        "match.best": {
+          "observationId": "o1"
+        }
       }
     }
   ]

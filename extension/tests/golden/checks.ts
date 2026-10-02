@@ -34,16 +34,18 @@ export function atLeast(score: string, bp: number): boolean {
 }
 
 /**
- * §15 (v1.2) order groups: the rule's own code first, then `allowlist.unchecked` if emitted, then coverage
+ * §15 (v1.3) order groups: the rule's own code first, then `allowlist.unchecked` if emitted, then coverage
  * reasons, then match and counterparty reasons, then `override.user` and `superseded`; each group in table
  * order. The rule's own codes are the rule codes of the table (claim.*, coverage.none/partial, grace.waiting,
- * coverage.never_completed, scope.*, ceiling.*) and, on UNASKED receipts, the fired unasked.* signals.
+ * scope.*, ceiling.*), `coverage.never_completed` (the `pending` rule's own code once it finalises by time,
+ * v1.3) and, on UNASKED receipts, the fired unasked.* signals.
  */
 const COVERAGE_GROUP: readonly ReasonCode[] = [
   'coverage.account_unbound',
   'coverage.calendars_hidden',
   'coverage.multiple_accounts',
   'coverage.no_account',
+  'coverage.no_parser',
 ];
 const COVERAGE_CAPS = COVERAGE_GROUP.slice(1);
 const EVENT_GROUP: readonly ReasonCode[] = ['override.user', 'superseded'];
@@ -72,7 +74,7 @@ export function reasonOrderProblems(codes: readonly ReasonCode[]): string[] {
 const RULE_REASONS: Readonly<Record<string, readonly (readonly ReasonCode[])[]>> = {
   over_scope: [['scope.type_not_allowed']],
   over_allowlist: [['scope.counterparty_not_allowed']],
-  // §6.1 v1.2: currency_mismatch replaces exceeded unless the amount also exceeds the ceiling in spendCurrency.
+  // §6.1 v1.3: currency_mismatch replaces exceeded unless the §6.1 Amount also exceeds the ceiling.
   over_ceiling: [
     ['ceiling.exceeded'],
     ['ceiling.currency_mismatch'],
@@ -230,10 +232,6 @@ function emissionProblems(e: ExpectedReceipt): string[] {
     problems.push('account_unbound only on NOT_FOUND');
   if (has('allowlist.unchecked') && e.grade === 'OVER_SCOPE')
     problems.push('allowlist.unchecked on OVER_SCOPE');
-  if (has('allowlist.unchecked') && has('coverage.never_completed'))
-    problems.push(
-      'allowlist.unchecked with coverage.never_completed: their order is an open reading (README)',
-    );
   if (has('override.user') !== (e.state === 'USER_OVERRIDDEN'))
     problems.push('override.user ⇔ USER_OVERRIDDEN');
   if ((e.override === undefined) !== (e.state !== 'USER_OVERRIDDEN'))

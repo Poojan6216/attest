@@ -1,0 +1,155 @@
+{
+  "name": "no receipt parser caps purchase coverage at partial: a seen receipt verifies, a missing one is never NOT_FOUND",
+  "covers": [
+    "contract:purchase_no_parser_verifies",
+    "contract:no_parser_partial_coverage",
+    "contract:purchase_no_counterparty_capped",
+    "ledger_engineer:purchase_no_parser"
+  ],
+  "mode": "batch",
+  "notes": [
+    "The shipped policy: receiptMerchants is [] (no parser yet), so every purchase claim here has no parser (§6.1 v1.3): coverage is at most partial, reason coverage.no_parser, while a receipt the observer did see still verifies. The grant has no ceiling and binds no account.",
+    "One gmail.receipt entry (acct-a, the only account hash) saw [10-06 07:00, 10-07 10:00] and synced 10-07 10:00 = evaluatedAt. It contains every claim window, so without the cap coverage would be full; with it, partial. graceElapsed holds for every claim (10-07 10:00 ≥ each end + 45 min).",
+    "c1 3000 USD, no counterparty (10-06 09:02) × o1 receipt 'Acme' 3000 USD (09:02): applicable timeProximity 2500 and amountExact 2500 (merchantMatch needs the claim's counterparty, no subject); Σw = 5000. tp 1, amountExact 1 → S = 5000/5000 = 1/1 → assigned → no_coverage does not fire (coverage partial, not none) → verified. FINAL (§8): a receipt sync 10-07 10:00 ≥ end(09:03) + 30. v1.2 graded it no_coverage while consuming the receipt; NOT_FOUND is never possible.",
+    "c2 'Corner Shop' 1250 USD (11:02) × o2 receipt 'Corner Shop' 1250 USD (11:02): applicable timeProximity 2500, amountExact 2500, merchantMatch 2000; Σw = 7000; all 1 → 1/1 → verified, FINAL. name('Corner Shop') = 'corner shop' ∉ receiptMerchants: the cap does not stop positive evidence.",
+    "c3 'Corner Shop' 990 USD (13:02), no receipt in [13:00, 13:48] → no candidate; graceElapsed → pending does not fire → rule partial_coverage → UNVERIFIABLE, reasons coverage.partial, coverage.no_parser, match.none. PENDING (§8): 10-07 10:00 < end(13:03) + 24 h = 10-07 13:03.",
+    "c4 4200 USD, no counterparty (08:02), no receipt in [08:00, 08:48] → rule partial_coverage as c3, but FINAL: 10-07 10:00 ≥ end(08:03) + 24 h = 10-07 08:03.",
+    "c5 'Corner Shop' 2000 USD (15:02) × o5 receipt 'Other Mart' 1500 USD (15:02): tp 1; amountExact 0 (2000 ≠ 1500); merchantMatch: names differ, Jaccard {corner, shop} vs {other, mart} = 0 → S = 2500/7000 = 5/14 < 1/2 → not assigned, named by match.best (§8). Coverage partial and best below partial → rule partial_coverage, PENDING (10-07 10:00 < 10-07 15:03): never not_found, which needs full coverage.",
+    "Each observation lies only in its own claim's window (two hours apart). o5 is an orphan with no activity → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T10:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T09:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Corner Shop",
+        "amountCents": 1250,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T11:02:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Corner Shop",
+        "amountCents": 990,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T13:02:00-04:00"
+      },
+      {
+        "ref": "c4",
+        "agent": "muse",
+        "type": "purchase.made",
+        "amountCents": 4200,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T08:02:00-04:00"
+      },
+      {
+        "ref": "c5",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Corner Shop",
+        "amountCents": 2000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T15:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T09:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Corner Shop",
+        "amountCents": 1250,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T11:02:00-04:00"
+      },
+      {
+        "ref": "o5",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Other Mart",
+        "amountCents": 1500,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T15:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-07T10:00:00-04:00",
+        "windowStart": "2026-10-06T07:00:00-04:00",
+        "windowEnd": "2026-10-07T10:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } }
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c3",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.none"]
+    },
+    {
+      "ref": "c4",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.none"]
+    },
+    {
+      "ref": "c5",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": "5/14",
+      "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.best"]
+    }
+  ]
+}

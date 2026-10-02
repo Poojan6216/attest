@@ -1,17 +1,20 @@
 {
-  "name": "purchase coverage reads the claim's normalised counterparty; a purchase with no counterparty is never covered",
+  "name": "purchase coverage reads the claim's normalised counterparty; a purchase with no counterparty is capped at partial",
   "covers": [
     "contract:purchase_coverage_by_name",
-    "contract:purchase_no_counterparty_none",
+    "contract:purchase_no_counterparty_capped",
     "edge:purchase_features"
   ],
   "mode": "batch",
-  "policyPatch": { "receiptMerchants": ["acme"] },
+  "policyPatch": {
+    "receiptMerchants": ["acme"]
+  },
   "notes": [
-    "§6.1 (v1.2) coverage 'none': a purchase-like type (sources ['gmail.receipt']) whose normalised counterparty (name(), §11) is not in policy.receiptMerchants, or which has no counterparty, has coverage none. receiptMerchants is patched to ['acme']; one gmail.receipt entry (acct-a) saw [09:00, 15:00] and synced 15:00.",
-    "c1 'ACME' 3000 USD (10:02) × o1 merchant 'Acme' 3000 USD (10:02): name('ACME') = 'acme' ∈ receiptMerchants, so coverage comes from the intervals: [10:00, 10:48] ⊆ [09:00, 15:00] → full. Applicable: timeProximity 2500, amountExact 2500, merchantMatch 2000 (no subject); Σw = 7000. tp 1; amountExact 1 (3000 USD both); merchantMatch 1 (normalised 'acme' = 'acme') → S = 7000/7000 = 1/1 → verified, FINAL (15:00 ≥ end + 30 = 10:33). Comparing the raw 'ACME' with the list instead would make it no_coverage.",
-    "c2 3000 USD with no counterparty (12:02): identity amountExact is applicable → not underspecified, and the claim is assignable, but nothing is in its window [12:00, 12:48] → match.none. Coverage is none although the receipt interval contains the window (no parser can be known to have seen it) → rule no_coverage, reason coverage.none {source: gmail.receipt}. PENDING (§8): 15:00 < end + finalizeUnverifiableHours = 10-07 12:03. Reading the interval alone would give full coverage, graceElapsed (15:00 ≥ 12:48) → a false NOT_FOUND.",
-    "o1 is outside c2's window. No activity → no orphan receipts."
+    "§6.1 (v1.3): a purchase-like type (sources ['gmail.receipt']) whose normalised counterparty (name(), §11) is not in policy.receiptMerchants, or which has no counterparty, has coverage at most partial (reason coverage.no_parser). receiptMerchants is patched to ['acme']; one gmail.receipt entry (acct-a, one account) saw [09:00, 15:00] and synced 15:00; the grant binds no account.",
+    "c1 'ACME' 3000 USD (10:02) × o1 merchant 'Acme' 3000 USD (10:02): name('ACME') = 'acme' ∈ receiptMerchants → coverage from the intervals alone: [10:00, 10:48] ⊆ [09:00, 15:00] → full. Applicable: timeProximity 2500, amountExact 2500, merchantMatch 2000 (no subject); Σw = 7000. tp 1; amountExact 1 (3000 USD both); merchantMatch 1 (normalised 'acme' = 'acme') → S = 7000/7000 = 1/1 → verified, FINAL (15:00 ≥ end + 30 = 10:33).",
+    "c2 3000 USD with no counterparty (12:02): identity amountExact is applicable → not underspecified, and the claim is assignable, but nothing is in its window [12:00, 12:48] → match.none. No counterparty → no parser → coverage capped at partial although the receipt interval contains the window. graceElapsed (15:00 ≥ 12:33 and ≥ 12:48) → pending does not fire → rule partial_coverage, reasons coverage.partial {source: gmail.receipt}, coverage.no_parser, match.none. PENDING (§8): 15:00 < end + 24 h = 10-07 12:03. Reading the interval alone would give a false NOT_FOUND; v1.2's no_coverage is gone.",
+    "c3 'ACME' 2500 USD (13:02), no receipt in its window [13:00, 13:48]: name('ACME') ∈ receiptMerchants → not capped → full coverage; graceElapsed (15:00 ≥ 13:48) → rule not_found, FINAL; the grant binds no gmail.receipt account → coverage.account_unbound {source: gmail.receipt}. Comparing the raw 'ACME' with the list would cap it at partial → partial_coverage instead: this claim is the one the normalised-name rule decides.",
+    "o1 is outside the windows of c2 and c3. No activity → no orphan receipts."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T15:00:00-04:00",
@@ -32,6 +35,15 @@
         "amountCents": 3000,
         "currency": "USD",
         "claimedAt": "2026-10-06T12:02:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "ACME",
+        "amountCents": 2500,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T13:02:00-04:00"
       }
     ],
     "observations": [
@@ -45,7 +57,11 @@
         "occurredAt": "2026-10-06T10:02:00-04:00"
       }
     ],
-    "grants": [{ "agent": "muse" }],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
     "coverage": [
       {
         "source": "gmail.receipt",
@@ -65,17 +81,42 @@
       "observationRefs": ["o1"],
       "score": "1/1",
       "reasonCodes": ["match.best"],
-      "reasonParams": { "match.best": { "observationId": "o1" } }
+      "reasonParams": {
+        "match.best": {
+          "observationId": "o1"
+        }
+      }
     },
     {
       "ref": "c2",
       "grade": "UNVERIFIABLE",
-      "ruleId": "no_coverage",
+      "ruleId": "partial_coverage",
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"],
-      "reasonParams": { "coverage.none": { "source": "gmail.receipt" }, "match.none": {} }
+      "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.none"],
+      "reasonParams": {
+        "coverage.partial": {
+          "source": "gmail.receipt"
+        },
+        "coverage.no_parser": {},
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c3",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"],
+      "reasonParams": {
+        "coverage.account_unbound": {
+          "source": "gmail.receipt"
+        },
+        "match.none": {}
+      }
     }
   ]
 }

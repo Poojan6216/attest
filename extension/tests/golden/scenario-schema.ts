@@ -24,6 +24,7 @@ export const REASON_CODES = [
   'coverage.calendars_hidden',
   'coverage.multiple_accounts',
   'coverage.no_account',
+  'coverage.no_parser',
   'coverage.never_completed',
   'grace.waiting',
   'scope.type_not_allowed',
@@ -46,7 +47,9 @@ export type ReasonCode = z.infer<typeof ReasonCode>;
 
 /**
  * What one reason param holds (§15 "Params per code (closed)"). Ids are written in scenario files as refs
- * (`o1`, `c1`) and resolved by the loader; everything else is written as the value itself.
+ * (`o1`, `c1`) and resolved by the loader; a `scopeHash` is written as the observed scope itself and the
+ * loader stores `sha256Hex(scope)` (§15 v1.3), so no hash is typed by hand; everything else is written as the
+ * value itself.
  */
 export type ParamKind =
   | 'observationRef'
@@ -63,7 +66,7 @@ const NO_PARAMS = {} as const;
 const SOURCE = { source: 'source' } as const;
 const AGENT = { agent: 'agent' } as const;
 
-/** §15 params per code, written from the contract. `source` is omitted for a type with no sources. */
+/** §15 (v1.3) params per code, written from the contract. `source` is omitted for a type with no sources. */
 export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, ParamKind>>>> = {
   'match.best': { observationId: 'observationRef' },
   'match.none': NO_PARAMS,
@@ -78,6 +81,8 @@ export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, 
   'coverage.calendars_hidden': SOURCE,
   'coverage.multiple_accounts': SOURCE,
   'coverage.no_account': SOURCE,
+  // §15 v1.3 lists no params for coverage.no_parser ("every other code has no params"): see README, readings.
+  'coverage.no_parser': NO_PARAMS,
   'coverage.never_completed': NO_PARAMS,
   'grace.waiting': SOURCE,
   'scope.type_not_allowed': { type: 'actionType' },

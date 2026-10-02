@@ -6,8 +6,8 @@
     "§5.2 identity: calendar.* = subjectOverlap, counterpartyExact or counterpartyName; purchase.made = amountExact or merchantMatch. Applicability is decided by the claim alone.",
     "c1 calendar.created with targetAt but no subject and no counterparty: only timeProximity is applicable → no identity feature → underspecified (no_target does not fire: targetAt is set) → UNVERIFIABLE, claim.too_vague, FINAL at once (§8). Never scored (§4.3) → match.none; o1 (inside its window) is not consumed and, with no activity, yields no receipt.",
     "c2 purchase.made with a subject but no amount and no counterparty: subjectOverlap is applicable but is not a purchase identity feature → underspecified, FINAL at once. A ceiling cannot apply (none set).",
-    "c3 purchase.made with an amount (4999 USD) but no counterparty: amountExact is applicable → not underspecified. receiptMerchants is [] → coverage 'none' (§6.1) → rule no_coverage, PENDING until end(14:03) + 24 h = 10-07 14:03.",
-    "c4 calendar.created with targetAt Fri 10-09 10:00 and a counterparty but no subject: applicable timeProximity 2500, counterpartyExact 3500, counterpartyDomain 1500; Σw = 7500. o2 (event at 10-09 10:00 with priya@company.com, first seen 14:40 ≥ claimedAt − 2 min) → tp 1, ce 1, cd 1 → S = 1/1 → verified. FINAL: a gcal.event sync at 14:40 ≥ end(14:03) + 30 = 14:33.",
+    "c3 purchase.made with an amount (4999 USD) but no counterparty: amountExact is applicable → not underspecified. §6.1 (v1.3): a purchase with no counterparty has no parser → coverage at most partial (coverage.no_parser); the gmail.receipt entry (acct-a) contains its window [14:00, 14:48] → partial. No purchase observation → no candidate; graceElapsed (receipt sync 15:00 ≥ 14:48) → rule partial_coverage, reasons coverage.partial, coverage.no_parser, match.none. PENDING until end(14:03) + 24 h = 10-07 14:03. (v1.2: no_coverage.)",
+    "c4 calendar.created with targetAt Fri 10-09 10:00 and a counterparty but no subject: applicable timeProximity 2500, counterpartyExact 3500, counterpartyDomain 1500; Σw = 7500. o2 (event at 10-09 10:00 with priya@company.com, first seen 14:40 ≥ start(p,t) − 2 min = 14:00, §4.1 v1.3) → tp 1, ce 1, cd 1 → S = 1/1 → verified. FINAL: a gcal.event sync at 14:40 ≥ end(14:03) + 30 = 14:33.",
     "c4 × o1 (10-08 14:00, no counterparty): Δ = 72 000 000 ms → tp = 187 200 000/259 140 000; ce 0, cd 0 (missing on the observation scores 0) → S = tp·2500/7500 < 1/2 → not assigned. c1's window [10-05 14:00, 10-11 14:00] holds both o1 and o2, but c1 is not assignable, so o2 goes to c4 and o1 stays an orphan (no activity → no receipt)."
   ],
   "input": {
@@ -61,7 +61,11 @@
         "occurredAt": "2026-10-09T10:00:00-04:00"
       }
     ],
-    "grants": [{ "agent": "muse" }],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
     "coverage": [
       {
         "source": "gcal.event",
@@ -102,11 +106,11 @@
     {
       "ref": "c3",
       "grade": "UNVERIFIABLE",
-      "ruleId": "no_coverage",
+      "ruleId": "partial_coverage",
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"]
+      "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.none"]
     },
     {
       "ref": "c4",

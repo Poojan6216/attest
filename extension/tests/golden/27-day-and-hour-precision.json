@@ -7,7 +7,8 @@
     "c2 'around 4pm' has precision hour: unit [16:00, 17:00]; o2 at 16:40 → tp 1 → 1/1.",
     "Cross pair c1 × o2 (o2 is inside c1's day): ce 0, cd 1, tp 1, so 0 ({q3, deck} vs {budget}) → 4/9 < 1/2, never assigned. o1 is outside c2's window.",
     "Both FINAL: the sync at 10-06 09:00 ≥ end + 30 for each (10-06 00:30 and 10-05 17:30).",
-    "No claimedAtEnd (§4.1 v1.2): 10-05 is not a DST day in -04:00, so end = start + 24 h is the next local midnight; 68 covers the 23- and 25-hour days."
+    "No claimedAtEnd (§4.1 v1.2): 10-05 is not a DST day in -04:00, so end = start + 24 h is the next local midnight; 68 covers the 23- and 25-hour days.",
+    "§4.1 v1.3: adapters write claimedAt at the unit start for hour and day precision (10-05 00:00 -04:00 here). c1 keeps a mid-day claimedAt on purpose: the core must take start(p,t) from the unit containing t, never trust claimedAt as the start (a core that did would put the unit at [10-05 12:00, 10-06 12:00], miss o1 at 08:15, and leave c1 pending: its window would run past the 10-06 09:00 sync). The id is unchanged either way: rawHash reads the truncated claimedAt (§10)."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T09:00:00-04:00",

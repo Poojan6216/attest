@@ -1,5 +1,5 @@
 /**
- * §15 reason rules that need more than one expectation to check: the closed params per code (v1.2) and the
+ * §15 reason rules that need more than one expectation to check: the closed params per code (v1.3) and the
  * `allowlist.unchecked` emission rule (§6.1). Like checks.ts, every function returns the problems it found in
  * the scenario files themselves ([] = consistent with docs/grading.md); no core code runs here.
  */
@@ -27,7 +27,8 @@ const KIND_CHECKS: Readonly<Record<ParamKind, (value: Value) => boolean>> = {
   actionType: (v) => (ACTION_TYPES as readonly Value[]).includes(v),
   cents: (v) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0,
   currency: (v) => typeof v === 'string' && /^[A-Z]{3}$/.test(v),
-  scopeHash: (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v),
+  // Written as the observed scope; the loader stores sha256Hex(scope) (§15 v1.3).
+  scopeHash: (v) => typeof v === 'string' && v.trim().length > 0,
   agent: (v) => (AGENT_IDS as readonly Value[]).includes(v),
   grade: (v) => v === 'VERIFIED' || v === 'NOT_FOUND',
 };
@@ -86,6 +87,9 @@ function paramAgreementProblems(
   const mismatch = p['ceiling.currency_mismatch'];
   if (mismatch !== undefined && mismatch.currency === mismatch.spendCurrency)
     problems.push('ceiling.currency_mismatch needs two different currencies');
+  const scope = p['scope.observed_not_declared'];
+  if (scope !== undefined && scope.scopeHash !== e.scope?.scope)
+    problems.push('scope.observed_not_declared.scopeHash hashes the receipt scope, exactly as stored');
   return problems;
 }
 
@@ -101,18 +105,19 @@ export function reasonParamProblems(e: ExpectedReceipt): string[] {
 }
 
 /**
- * §6.1 Amount: the larger of the claim's amount and the assigned candidate's amount when that candidate is in
- * spendCurrency. Undefined when no amount is known, or when the claim's own amount is in another currency
- * (whether that amount counts is an open reading, README).
+ * §6.1 (v1.3) Amount: the larger of the claim's amount (counted only when the claim's currency is absent or
+ * equals spendCurrency) and the assigned candidate's amount when that candidate is in spendCurrency. Undefined
+ * when neither counts.
  */
 function ceilingAmount(
   claim: ScenarioClaim,
   evidence: ScenarioObservation | undefined,
   spendCurrency: string | undefined,
 ): number | undefined {
-  if (claim.currency !== undefined && claim.currency !== spendCurrency) return undefined;
+  const claimCounts = claim.currency === undefined || claim.currency === spendCurrency;
+  const fromClaim = claimCounts ? claim.amountCents : undefined;
   const fromEvidence = evidence?.currency === spendCurrency ? evidence?.amountCents : undefined;
-  const known = [claim.amountCents, fromEvidence].flatMap((amount) => amount ?? []);
+  const known = [fromClaim, fromEvidence].flatMap((amount) => amount ?? []);
   return known.length === 0 ? undefined : Math.max(...known);
 }
 
@@ -161,10 +166,9 @@ export function scenarioParamProblems(scenario: Scenario, policy: PolicyView): s
 }
 
 /**
- * §6.1 / §15: `allowlist.unchecked` appears iff the claim's type is an allowlist type, its grant has a
- * non-empty allowlist, the claim names a person (no address of its own), nothing was assigned to it, and the
- * receipt is not OVER_SCOPE by another rule. Every scenario stays on that settled ground (no allowlist with a
- * claim that has no counterparty at all: README, readings).
+ * §6.1 / §15 (v1.3): `allowlist.unchecked` appears iff the claim's type is an allowlist type, its grant has a
+ * non-empty allowlist, the claim has no address of its own (a name, or no counterparty at all), nothing was
+ * assigned to it, and the receipt is not OVER_SCOPE by another rule.
  */
 export function allowlistUncheckedProblems(scenario: Scenario, policy: PolicyView): string[] {
   const problems: string[] = [];
@@ -174,12 +178,10 @@ export function allowlistUncheckedProblems(scenario: Scenario, policy: PolicyVie
     if (claim === undefined) continue;
     const listed = (policy.allowlistTypes ?? []).includes(claim.type);
     const allowlist = grant?.counterpartyAllowlist ?? [];
-    if (listed && allowlist.length > 0 && claim.counterparty === undefined)
-      problems.push(`${claim.ref}: allowlist with no counterparty is an open reading`);
     const unchecked =
       listed &&
       allowlist.length > 0 &&
-      claim.counterparty?.includes('@') === false &&
+      claim.counterparty?.includes('@') !== true &&
       e.observationRefs.length === 0 &&
       e.grade !== 'OVER_SCOPE';
     if (unchecked !== e.reasonCodes.includes('allowlist.unchecked'))

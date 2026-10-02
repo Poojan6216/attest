@@ -4,7 +4,7 @@
   "mode": "batch",
   "notes": [
     "calendar.* claims with a subject and no counterparty: applicable timeProximity 2500, subjectOverlap 1500; Σw = 4000. The window is targetAt ± 3 days.",
-    "c1 'Q3 review' targetAt Thu 10-08 14:00 × o1 (event at 10-08 14:00, first seen 14:40 ≥ claimedAt − 2 min = 14:00): Δ = 0 → tp 1, so 1 → S = 1/1 → verified. FINAL: a gcal.event sync at 14:40 ≥ end(14:03) + 30 = 14:33.",
+    "c1 'Q3 review' targetAt Thu 10-08 14:00 × o1 (event at 10-08 14:00, first seen 14:40 ≥ start(p,t) − 2 min = 14:00, the earliest observedAt of its contentHash group, §4.1 v1.3): Δ = 0 → tp 1, so 1 → S = 1/1 → verified. FINAL: a gcal.event sync at 14:40 ≥ end(14:03) + 30 = 14:33.",
     "c2 'Budget sync' targetAt Wed 10-14 10:00: o2 is that event, but it was already on the calendar at 09:00 < 14:00 → not a candidate for calendar.created (§4.1). Window [10-11 10:00, 10-17 10:00] ⊆ coverage (one account, allCalendars) → full; grace 14:40 ≥ 14:33 → not_found, FINAL. o1 lies outside c2's window and o2 outside c1's.",
     "o2 is an orphan with no activity → no receipt."
   ],
