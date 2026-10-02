@@ -30,6 +30,21 @@ const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
  */
 const CORE_ALLOWED_LITERALS: ReadonlySet<number> = new Set([0, 1]);
 
+/**
+ * The only src/core files that may hold other integer literals, each because it implements a published
+ * algorithm or names units and schema limits, never a threshold, window or weight. Every other core file
+ * imports these names (docs/grading.md §13–14, Decisions.md [1.contract]). The policy-fraction rule
+ * above still applies to these files: no exemption from it exists anywhere.
+ */
+const CORE_LITERAL_EXEMPT: Readonly<Record<string, string>> = {
+  [path.join('src', 'core', 'sha256.ts')]: 'FIPS 180-4 constants and rotations; RFC 3629 UTF-8 encoding',
+  [path.join('src', 'core', 'base32.ts')]: 'Crockford base32 alphabet width and the 26-character ULID form',
+  [path.join('src', 'core', 'punycode.ts')]: 'RFC 3492 bootstring parameters',
+  [path.join('src', 'core', 'units.ts')]:
+    'named unit conversions: ms per minute/hour/day, cents, basis points',
+  [path.join('src', 'core', 'schema.ts')]: 'SCHEMA_LIMITS length caps and build_spec §7 field limits',
+};
+
 interface NumericLiteral {
   readonly file: string;
   readonly line: number;
@@ -157,10 +172,22 @@ describe('no policy value is hardcoded in code', () => {
     expect(offenders.map(describeHit)).toEqual([]);
   });
 
-  it('src/core contains no numeric literal other than 0 and 1', () => {
+  it('src/core contains no numeric literal other than 0 and 1 (outside the named exemptions)', () => {
     expect(CORE_FILES.length).toBeGreaterThan(0);
-    const offenders = scan(CORE_FILES).filter((hit) => !CORE_ALLOWED_LITERALS.has(hit.value));
+    const checked = CORE_FILES.filter(
+      (file) => !(path.relative(EXTENSION_ROOT, file) in CORE_LITERAL_EXEMPT),
+    );
+    const offenders = scan(checked).filter((hit) => !CORE_ALLOWED_LITERALS.has(hit.value));
     expect(offenders.map(describeHit)).toEqual([]);
+  });
+
+  it('every literal exemption names a reason and lives directly in src/core', () => {
+    for (const [file, reason] of Object.entries(CORE_LITERAL_EXEMPT)) {
+      expect(path.dirname(file)).toBe(path.join('src', 'core'));
+      expect(reason.length).toBeGreaterThan(20);
+    }
+    expect(Object.keys(CORE_LITERAL_EXEMPT)).not.toContain(path.join('src', 'core', 'grade.ts'));
+    expect(Object.keys(CORE_LITERAL_EXEMPT)).not.toContain(path.join('src', 'core', 'features.ts'));
   });
 
   it('the core rule would catch a magic integer or fraction', () => {
