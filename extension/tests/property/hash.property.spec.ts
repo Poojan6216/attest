@@ -3,7 +3,58 @@ import { createHash } from 'node:crypto';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { canonicalJson, sha256Hex } from '../../src/core/hash';
+import { IdError } from '../../src/core/base32';
+import { canonicalJson, idFromHash, sha256Hex } from '../../src/core/hash';
+
+/** The §10 definition, as `idFromHash` computed it before it dropped BigInt: the reference it must equal. */
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function idFromHashBigInt(hex: string): string {
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new IdError();
+  let value = BigInt(`0x${hex.slice(0, 32)}`);
+  let id = '';
+  for (let i = 0; i < 26; i += 1) {
+    id = (CROCKFORD[Number(value & 31n)] ?? '0') + id;
+    value >>= 5n;
+  }
+  return id;
+}
+
+const hexDigit = fc.constantFrom(...Array.from('0123456789abcdef'));
+
+describe('idFromHash (property)', () => {
+  it('equals the BigInt definition for random hashes and for hashes of random text', () => {
+    const randomHex = fc.array(hexDigit, { minLength: 64, maxLength: 64 }).map((digits) => digits.join(''));
+    const hashed = fc.string({ unit: 'binary', maxLength: 100 }).map((text) => sha256Hex(text));
+    fc.assert(
+      fc.property(fc.oneof(randomHex, hashed), (hex) => {
+        expect(idFromHash(hex)).toBe(idFromHashBigInt(hex));
+      }),
+      { numRuns: 5000 },
+    );
+  });
+
+  it('refuses exactly what the BigInt definition refuses (length, case, any non-hex digit anywhere)', () => {
+    const anyUnit = fc.string({ unit: 'binary', minLength: 1, maxLength: 1 });
+    const corrupted = fc
+      .tuple(fc.array(hexDigit, { minLength: 64, maxLength: 64 }), fc.nat(63), anyUnit)
+      .map(([digits, at, unit]) => [...digits.slice(0, at), unit, ...digits.slice(at + 1)].join(''));
+    const anyText = fc.string({ unit: 'binary', maxLength: 70 });
+    fc.assert(
+      fc.property(fc.oneof(corrupted, anyText), (text) => {
+        const reference = (() => {
+          try {
+            return idFromHashBigInt(text);
+          } catch (error) {
+            return error instanceof IdError ? 'IdError' : 'other';
+          }
+        })();
+        if (reference === 'IdError') expect(() => idFromHash(text)).toThrow(IdError);
+        else expect(idFromHash(text)).toBe(reference);
+      }),
+      { numRuns: 5000 },
+    );
+  });
+});
 
 describe('hash (property)', () => {
   it('sha256Hex equals Node crypto for any string, including lone surrogates and astral characters', () => {

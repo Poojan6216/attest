@@ -18,38 +18,29 @@
  * (`grantsInForce`). The output is ordered by receipt id, so it never depends on input order or index return
  * order. It stores nothing: the caller replaces each subject's row (§3).
  *
+ * Speed (the task 1.5 grading perf gate): each type's rows are read once into a table (batch-retrieve.ts,
+ * batch-table.ts), every pair is scored once (batch-score.ts), and each claim's evidence (best candidate,
+ * `candidatesHash`, coverage) is derived from those tables and handed to `gradeClaim`, which decides exactly as
+ * `grade` does (batch-grade.ts; the gate and batch-tables.spec.ts check receipts against `grade`). Claims are read
+ * through copies of one object shape (`uniformClaim`), so the code reading them is compiled for one shape.
+ *
  * PURE: no I/O but the injected index, no clock, no logging (Hard Rule 4). Async only because the index is.
  */
 import { BatchError } from './batch-error';
+import { BatchEvidence, claimReceipts } from './batch-grade';
 import { grantOf, grantsInForce } from './batch-grants';
-import { coveredObservations, visibleAt } from './batch-orphans';
+import { coveredObservations, type Keyed, visibleAt } from './batch-orphans';
 import { candidatesOfAll } from './batch-retrieve';
+import { assignablePairs, type ScoredClaim, scoreClaim } from './batch-score';
 import { attributor } from './attribution';
-import {
-  assign,
-  exclusiveCandidates,
-  type FixedPair,
-  type ObservationIndex,
-  type ScoredPair,
-} from './candidates';
-import { evaluateConditions, firstMatch } from './conditions';
-import { isAssignable, pairScorer } from './features';
-import { grade } from './grade';
+import { assign, type FixedPair, type ObservationIndex } from './candidates';
+import { evaluateConditions, firstMatch, observedScopeExceedsDeclared, unaskedLikely } from './conditions';
+import { isAssignable, planClaims, TextFacts } from './features';
+import { grade, gradeOrphan } from './grade';
 import { instantMs } from './normalize';
 import type { Policy, RuleOutcome } from './policy';
-import { scoreGteBasisPoints } from './ratio';
-import type {
-  Activity,
-  AgentId,
-  Claim,
-  Coverage,
-  GradeContext,
-  Grant,
-  Observation,
-  Receipt,
-  Ulid,
-} from './schema';
-import { priorSpendCents, scopeSubjects } from './scope';
+import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, Receipt, Ulid } from './schema';
+import { scopeSubjects, spendIndex } from './scope';
 
 export { BatchError, type BatchErrorCode } from './batch-error';
 
@@ -62,13 +53,6 @@ export interface BatchFixed {
   readonly claimId: Ulid | null;
 }
 
-/** One graded claim's retrieval: its candidates (empty when it is not assignable). */
-interface Retrieved {
-  readonly claim: Claim;
-  readonly assignable: boolean;
-  readonly candidates: readonly Observation[];
-}
-
 /** The batch facts every stage reads, computed once. */
 interface Batch {
   readonly policy: Policy;
@@ -76,11 +60,61 @@ interface Batch {
   readonly grants: ReadonlyMap<AgentId, Grant>;
   readonly fixedPairs: readonly FixedPair[];
   readonly taken: ReadonlySet<Ulid>;
+  /** Claim-less outcomes by the two conditions that apply claim-less (`claimlessOutcome`). */
+  readonly claimless: Map<number, RuleOutcome | null>;
 }
 
 function compareText(a: string, b: string): number {
   if (a === b) return 0;
   return a < b ? -1 : 1;
+}
+
+/** The keys of the Claim schema (a strict object), in schema order. */
+const CLAIM_KEYS: ReadonlySet<string> = new Set([
+  'id',
+  'agent',
+  'requestId',
+  'type',
+  'counterparty',
+  'amountCents',
+  'currency',
+  'subjectHint',
+  'claimedAt',
+  'claimedAtPrecision',
+  'claimedAtEnd',
+  'targetAt',
+  'observedAt',
+  'sourceKind',
+  'extractor',
+  'rawHash',
+]);
+
+/**
+ * The claim with every schema key present (an absent optional one `undefined`), in schema order: every value
+ * reads the same, and canonical JSON (which drops `undefined`) writes it the same, but every claim of a batch then
+ * has one object shape, so the code that reads claims runs (and is compiled) for one shape instead of one per
+ * combination of optional fields. A claim holding any other key is graded as given.
+ */
+function uniformClaim(claim: Claim): Claim {
+  for (const key of Object.keys(claim)) if (!CLAIM_KEYS.has(key)) return claim;
+  return {
+    id: claim.id,
+    agent: claim.agent,
+    requestId: claim.requestId,
+    type: claim.type,
+    counterparty: claim.counterparty,
+    amountCents: claim.amountCents,
+    currency: claim.currency,
+    subjectHint: claim.subjectHint,
+    claimedAt: claim.claimedAt,
+    claimedAtPrecision: claim.claimedAtPrecision,
+    claimedAtEnd: claim.claimedAtEnd,
+    targetAt: claim.targetAt,
+    observedAt: claim.observedAt,
+    sourceKind: claim.sourceKind,
+    extractor: claim.extractor,
+    rawHash: claim.rawHash,
+  };
 }
 
 /** Fixed pairs and taken observations, after checking no graded claim is also fixed (it is FINAL). */
@@ -103,102 +137,76 @@ function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[]) {
 
 /**
  * §4.1 candidates of every assignable claim (batch-retrieve.ts: exactly `candidates()` per claim, read type by
- * type over the union of the windows; one read at a time).
+ * type over the union of the windows, one read at a time), each scored against every candidate exactly once (§5,
+ * batch-score.ts). Observations fixed to a claim or taken are not scored: `assign` would never give them to another
+ * claim, and `grade` never sees them as candidates.
  */
-async function retrieve(
+async function retrieveAndScore(
   claims: readonly Claim[],
   index: ObservationIndex,
-  policy: Policy,
-): Promise<Retrieved[]> {
-  const assignable = claims.filter((claim) => isAssignable(claim, policy));
-  const found = await candidatesOfAll(assignable, index, policy);
-  return claims.map((claim) => {
-    const own = found.get(claim);
-    return { claim, assignable: own !== undefined, candidates: own ?? [] };
-  });
-}
-
-/**
- * Every (assignable claim, candidate) pair scored exactly (§5), each once (`pairScorer` remembers the score for
- * `grade`'s best candidate). Observations fixed to a claim or as taken are left out: `assign` would never give
- * them to another claim, and `grade` never sees them as candidates. So are pairs below `thresholds.partial`
- * (exact, §5.3): `assign` drops them before anything else and they never consume anything (§4.3), so leaving them
- * out cannot change the assignment.
- */
-function scorePairs(retrieved: readonly Retrieved[], batch: Batch): ScoredPair[] {
-  const fixedObservations = new Set(batch.fixedPairs.map((pair) => pair.observationId));
-  const partialBp = batch.policy.bp.thresholds.partial;
-  const pairs: ScoredPair[] = [];
-  for (const { claim, assignable, candidates: found } of retrieved) {
-    if (!assignable) continue;
-    const claimedAtMs = instantMs(claim.claimedAt);
-    const scoreOf = pairScorer(claim, batch.policy);
-    for (const observation of found) {
-      if (fixedObservations.has(observation.id) || batch.taken.has(observation.id)) continue;
-      const score = scoreOf(observation);
-      if (!scoreGteBasisPoints(score, partialBp)) continue;
-      pairs.push({ claimId: claim.id, claimedAtMs, observationId: observation.id, score: score.ratio });
-    }
-  }
-  return pairs;
-}
-
-/** Each agent's claims from `activity.claims`: `priorSpendCents` reads only the claim's own agent (§6.3). */
-function claimsByAgent(claims: readonly Claim[]): ReadonlyMap<AgentId, readonly Claim[]> {
-  const byAgent = new Map<AgentId, Claim[]>();
-  for (const claim of claims) {
-    const held = byAgent.get(claim.agent);
-    if (held === undefined) byAgent.set(claim.agent, [claim]);
-    else held.push(claim);
-  }
-  return byAgent;
-}
-
-/** One receipt per claim (§3, §4.3, §6.3). */
-function claimReceipts(
-  retrieved: readonly Retrieved[],
-  assignment: ReadonlyMap<Ulid, Ulid>,
-  activity: Activity,
   batch: Batch,
-): Receipt[] {
-  const history = claimsByAgent(activity.claims);
-  return retrieved.map(({ claim, candidates: found }) => {
-    const own = exclusiveCandidates(claim.id, found, assignment, batch.taken);
-    const priorSpend = priorSpendCents(claim, history.get(claim.agent) ?? [], batch.policy);
-    const grant = grantOf(batch.grants, claim.agent);
-    return grade(claim, own, grant, batch.policy, batch.coverage, { priorSpendCents: priorSpend });
-  });
+): Promise<Map<Claim, ScoredClaim>> {
+  const { policy } = batch;
+  const texts = new TextFacts(policy.normalize.stopWords);
+  planClaims(claims, policy, texts);
+  const assignable: Claim[] = [];
+  for (const claim of claims) if (isAssignable(claim, policy)) assignable.push(claim);
+  const found = await candidatesOfAll(assignable, index, policy, texts);
+  const fixedObservations = new Set(batch.fixedPairs.map((pair) => pair.observationId));
+  const blocked = fixedObservations.size > 0 || batch.taken.size > 0;
+  const skip = blocked ? (id: Ulid): boolean => fixedObservations.has(id) || batch.taken.has(id) : null;
+  const scored = new Map<Claim, ScoredClaim>();
+  for (const claim of assignable) {
+    const own = found.get(claim);
+    if (own !== undefined) scored.set(claim, scoreClaim(claim, own, policy, skip));
+  }
+  return scored;
 }
+
+/** The values a condition can take: holds, does not hold, not applicable. */
+const CONDITION_VALUES: readonly (boolean | null)[] = [true, false, null];
 
 /**
  * The outcome `grade` reaches for a claim-less subject, from the same evaluators and the same first match, without
- * building a receipt. Claim-less, only `unaskedLikely` and `observedScopeExceedsDeclared` are applicable (§6.1),
- * so this reads the context and the grant alone; a batch uses it to skip hashing receipts it would drop (§3).
- * Null when no rule matches (terminal `default_unverifiable`).
+ * building a receipt. Claim-less, only `unaskedLikely` and `observedScopeExceedsDeclared` are applicable (§6.1), so
+ * the first match is a function of their two values alone: it is found once per pair of values and batch. A batch
+ * uses it to skip hashing receipts it would drop (§3). Null when no rule matches (terminal `default_unverifiable`).
  */
 function claimlessOutcome(grant: Grant, context: GradeContext, batch: Batch): RuleOutcome | null {
   const { policy, coverage } = batch;
-  const facts = { claim: null, grant, policy, coverage, context, bestScore: null, assigned: null };
-  return firstMatch(policy.rules, evaluateConditions(facts))?.then ?? null;
+  const unasked = CONDITION_VALUES.indexOf(unaskedLikely(context, policy));
+  const scope = CONDITION_VALUES.indexOf(observedScopeExceedsDeclared(grant, context));
+  const key = unasked * CONDITION_VALUES.length + scope;
+  if (!batch.claimless.has(key)) {
+    const facts = { claim: null, grant, policy, coverage, context, bestScore: null, assigned: null };
+    batch.claimless.set(key, firstMatch(policy.rules, evaluateConditions(facts))?.then ?? null);
+  }
+  return batch.claimless.get(key) ?? null;
 }
 
-/** UNASKED receipts for the orphans (§4.3, §7): covered, visible, assigned to no claim, not taken. */
+/**
+ * UNASKED receipts for the orphans (§4.3, §7): covered, visible, assigned to no claim, not taken. Each is
+ * `grade(null, [orphan], …)` with the evidence the batch shares (`gradeOrphan`): the orphans were read through
+ * `visibleAt`, so each was first seen by `evaluatedAt`, as `grade` would require.
+ */
 function unaskedReceipts(
-  covered: readonly Observation[],
+  covered: readonly Keyed[],
   assignment: ReadonlyMap<Ulid, Ulid>,
   activity: Activity,
   batch: Batch,
+  evidence: BatchEvidence,
 ): Receipt[] {
-  const attribute = attributor(activity, batch.policy, batch.coverage.evaluatedAt);
+  const { policy, coverage } = batch;
+  const attribute = attributor(activity, policy, coverage.evaluatedAt);
   const receipts: Receipt[] = [];
-  for (const orphan of covered) {
+  for (const { observation: orphan, atMs } of covered) {
     if (assignment.has(orphan.id) || batch.taken.has(orphan.id)) continue;
-    const attribution = attribute(orphan);
+    const attribution = attribute(orphan, atMs);
     if (attribution === null) continue;
     const grant = grantOf(batch.grants, attribution.agent);
     const context = { priorSpendCents: 0, attribution };
     if (claimlessOutcome(grant, context, batch) !== 'UNASKED') continue;
-    receipts.push(grade(null, [orphan], grant, batch.policy, batch.coverage, context));
+    receipts.push(gradeOrphan(orphan, evidence.shared(grant), grant, policy, context));
   }
   return receipts;
 }
@@ -216,12 +224,16 @@ function scopeReceipts(batch: Batch): Receipt[] {
   return receipts;
 }
 
+function compareIds(a: Receipt, b: Receipt): number {
+  return compareText(a.id, b.id);
+}
+
 /** Ordered by receipt id; two receipts with one id are a corrupt batch (`duplicate_receipt`). */
 function byReceiptId(receipts: readonly Receipt[]): Receipt[] {
-  const sorted = [...receipts].sort((a, b) => compareText(a.id, b.id));
-  sorted.forEach((receipt, i) => {
-    if (i > 0 && sorted[i - 1]?.id === receipt.id) throw new BatchError('duplicate_receipt');
-  });
+  const sorted = [...receipts].sort(compareIds);
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i - 1]?.id === sorted[i]?.id) throw new BatchError('duplicate_receipt');
+  }
   return sorted;
 }
 
@@ -244,14 +256,29 @@ export async function gradeBatch(
 ): Promise<Receipt[]> {
   const evaluatedMs = instantMs(coverage.evaluatedAt);
   const { fixedPairs, taken } = splitFixed(claims, fixed);
-  const batch: Batch = { policy, coverage, grants: grantsInForce(grants, evaluatedMs), fixedPairs, taken };
+  const uniform = new Map<Claim, Claim>();
+  const graded: Claim[] = [];
+  for (const claim of claims) {
+    const copy = uniformClaim(claim);
+    uniform.set(claim, copy);
+    graded.push(copy);
+  }
+  const history: Claim[] = [];
+  for (const claim of activity.claims) history.push(uniform.get(claim) ?? uniformClaim(claim));
+  const read: Activity = { ...activity, claims: history };
+  const inForce = grantsInForce(grants, evaluatedMs);
+  const batch: Batch = { policy, coverage, grants: inForce, fixedPairs, taken, claimless: new Map() };
   const visible = visibleAt(index, evaluatedMs);
-  const retrieved = await retrieve(claims, visible, policy);
-  const assignment = assign(scorePairs(retrieved, batch), policy, fixedPairs, taken);
+  const scored = await retrieveAndScore(graded, visible, batch);
+  const pairs = assignablePairs([...scored.values()], policy.bp.thresholds.partial);
+  const assignment = assign(pairs, policy, fixedPairs, taken);
   const covered = await coveredObservations(visible, coverage, policy);
+  const priorSpend = spendIndex(read.claims, policy);
+  const receiptBatch = { policy, coverage, grants: inForce, assignment, taken, priorSpend };
+  const evidence = new BatchEvidence(receiptBatch);
   return byReceiptId([
-    ...claimReceipts(retrieved, assignment, activity, batch),
-    ...unaskedReceipts(covered, assignment, activity, batch),
+    ...claimReceipts(graded, scored, receiptBatch, evidence),
+    ...unaskedReceipts(covered, assignment, read, batch, evidence),
     ...scopeReceipts(batch),
   ]);
 }

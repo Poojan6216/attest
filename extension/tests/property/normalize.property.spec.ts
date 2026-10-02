@@ -25,6 +25,8 @@ import {
   subjectTokens,
   toUnicodeDomain,
 } from '../../src/core/normalize';
+import { readsDifferently, stripInvisible } from '../../src/core/normalize-text';
+import { isAceLabel } from '../../src/core/punycode';
 import { CURRENCY_MINOR_UNITS } from '../../src/core/units';
 
 const RUNS = { numRuns: 2_000 };
@@ -232,6 +234,107 @@ describe('email() and sameAddress() (property)', () => {
       RUNS,
     );
   }, 60_000);
+});
+
+/**
+ * name(), nameTokens() and subjectTokens() as §11 defines them for any text (the implementation before the ASCII
+ * fast path): the reference both paths must equal.
+ */
+function referenceName(raw: string): string {
+  if (readsDifferently(raw)) return '';
+  const compatible = stripInvisible(stripInvisible(raw).normalize('NFKC'));
+  const folded = compatible
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Mn}/gu, '')
+    .normalize('NFC');
+  return folded.replace(/[\s\p{White_Space}]+/gu, ' ').trim();
+}
+function referenceNameTokens(raw: string): string[] {
+  return [
+    ...new Set(
+      referenceName(raw)
+        .split(/[^\p{L}\p{N}\p{M}]+/u)
+        .filter((token) => token !== ''),
+    ),
+  ];
+}
+function referenceSubjectTokens(raw: string, stopWords: readonly string[]): string[] {
+  if (/[\u202A\u202B\u202D\u202E]/u.test(raw)) return [];
+  const tokens = stripInvisible(raw)
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}\p{M}]+/u)
+    .filter((token) => token !== '');
+  const first = tokens.findIndex((token) => !['re', 'fw', 'fwd'].includes(token));
+  const body = first < 0 ? [] : tokens.slice(first);
+  const stop = new Set(stopWords.map((word) => word.normalize('NFKC').toLowerCase()));
+  return [...new Set(body.filter((token) => !stop.has(token)))].sort();
+}
+
+describe('name(), nameTokens(), subjectTokens(): the ASCII path equals the general folding (property)', () => {
+  const asciiText = fc.oneof(
+    fc.string({ unit: 'binary-ascii', maxLength: 60 }),
+    fc.string({
+      unit: fc.constantFrom(...Array.from('Re: FW fwd Priya.SHAH_x-1 \t\n\u000b\f\r\u0000\u001f\u007f')),
+      maxLength: 40,
+    }),
+  );
+  const anyText = fc.oneof(asciiText, fc.string({ unit: 'binary', maxLength: 40 }));
+  const stopWords = fc.array(fc.oneof(fc.constantFrom('the', 'RE', 'invoice'), fc.string({ maxLength: 6 })), {
+    maxLength: 4,
+  });
+
+  it('gives the reference result for ASCII and for any other text', () => {
+    fc.assert(
+      fc.property(anyText, stopWords, (raw, stop) => {
+        expect(name(raw)).toBe(referenceName(raw));
+        expect(nameTokens(raw)).toEqual(referenceNameTokens(raw));
+        expect(subjectTokens(raw, stop)).toEqual(referenceSubjectTokens(raw, stop));
+      }),
+      { numRuns: 5_000 },
+    );
+  });
+});
+
+/** email() as §11 defines it (dot-atom parts checked by splitting), the reference for the faster checks. */
+function referenceEmail(raw: string): EmailAddress | null {
+  const text = raw.trim();
+  let address: string | null = text;
+  if (text.endsWith('>')) {
+    const open = text.lastIndexOf('<');
+    const display = open < 0 ? '<' : text.slice(0, open).replace(/"(?:[^"\\]|\\.)*"/gu, '');
+    address = /[<>]/.test(display) ? null : text.slice(open + 1, -1).trim();
+  }
+  if (address === null || /[\s\p{Cc}()<>[\]\\,;:"]/u.test(address)) return null;
+  const at = address.indexOf('@');
+  if (at < 0 || at !== address.lastIndexOf('@')) return null;
+  const [local, domain] = [address.slice(0, at), address.slice(at + 1)];
+  const dotted = (part: string) => part.split('.').every((piece) => piece !== '');
+  if (!dotted(local) || !dotted(domain) || !domain.includes('.')) return null;
+  const confusable = /\P{ASCII}/u.test(address) || domain.split('.').some(isAceLabel);
+  const plus = local.indexOf('+', 1);
+  if (plus < 0) return { address, local, domain, baseLocal: local, confusable };
+  return {
+    address,
+    local,
+    domain,
+    baseLocal: local.slice(0, plus),
+    plusTag: local.slice(plus + 1),
+    confusable,
+  };
+}
+
+describe('email(): the dot-atom check equals splitting on dots (property)', () => {
+  it('gives the reference result for address-shaped text', () => {
+    const shaped = fc.string({ unit: fc.constantFrom(...Array.from('ab.@+x-<> "Z\u00e9')), maxLength: 24 });
+    fc.assert(
+      fc.property(fc.oneof(shaped, fc.string({ maxLength: 24 })), (raw) => {
+        expect(email(raw)).toEqual(referenceEmail(raw));
+      }),
+      { numRuns: 5_000 },
+    );
+  });
 });
 
 describe('name(), nameTokens(), subjectTokens() (property)', () => {

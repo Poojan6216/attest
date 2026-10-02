@@ -8,6 +8,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { VITEST_INCLUDE } from '../../vitest.config';
+import { VITEST_PERF_INCLUDE } from '../../vitest.perf.config';
 
 const TESTS = path.resolve(import.meta.dirname, '..');
 const TEST_FILE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
@@ -28,6 +29,13 @@ function walk(dir: string): string[] {
 describe('vitest test layout', () => {
   it('includes .spec.ts and .spec.tsx under unit, property and golden', () => {
     expect(VITEST_INCLUDE).toBe('tests/{unit,property,golden}/**/*.spec.{ts,tsx}');
+  });
+
+  it('perf gates live in tests/perf and run in their own serial pass', () => {
+    expect(VITEST_PERF_INCLUDE).toBe('tests/perf/**/*.perf.spec.ts');
+    const perf = walk(path.join(TESTS, 'perf')).filter((file) => TEST_FILE.test(file));
+    expect(perf.length).toBeGreaterThanOrEqual(2);
+    for (const file of perf) expect(path.relative(TESTS, file)).toMatch(/\.perf\.spec\.ts$/);
   });
 
   it('every test-named file under those folders is a .spec.ts or .spec.tsx', () => {

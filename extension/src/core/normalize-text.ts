@@ -48,6 +48,14 @@ const ANGLE_BRACKET = /[<>]/;
 /** After NFKC, a counterparty containing one of these was meant as an address; if it is not one, it is nothing. */
 const ADDRESS_MARKERS = /[@<>]/;
 
+/**
+ * ASCII text, which every folding below leaves as it is but for case: it has no invisible, bidi or `\p{No}`
+ * character, NFKC, NFD and NFC are identities on it, and its only letters, digits and whitespace are `[A-Za-z]`,
+ * `[0-9]` and `[\t\n\v\f\r ]`. Names and subjects take the plain path for it (a property test pins the two).
+ */
+const ASCII_ONLY = /^\p{ASCII}*$/u;
+const ASCII_NON_TOKEN = /[^a-z0-9]+/;
+const ASCII_WHITESPACE_RUN = /[\t\n\v\f\r ]+/g;
 /** Name tokens: runs of letters, digits and the (spacing or enclosing) marks left after diacritic folding. */
 const NAME_TOKEN_SEPARATOR = /[^\p{L}\p{N}\p{M}]+/u;
 /** Subject tokens, exactly per §11: a combining mark NFKC cannot compose (İ → i + U+0307) never splits a word. */
@@ -122,9 +130,9 @@ function extractAddress(raw: string): string | null {
   return ANGLE_BRACKET.test(displayName) ? null : text.slice(open + 1, -1).trim();
 }
 
-/** Dot-separated, non-empty parts: no leading, trailing or doubled dot. */
+/** Dot-separated, non-empty parts: no leading, trailing or doubled dot (and not empty). */
 function dotSeparated(text: string): boolean {
-  return text.split('.').every((part) => part !== '');
+  return text !== '' && !text.startsWith('.') && !text.endsWith('.') && !text.includes('..');
 }
 
 /**
@@ -172,6 +180,7 @@ export function sameAddress(a: EmailAddress, b: EmailAddress): AddressComparison
  * from how it displays (`readsDifferently`) folds to '' and so has no tokens: "\u202Eayirp" shows "priya".
  */
 export function name(raw: string): string {
+  if (ASCII_ONLY.test(raw)) return raw.toLowerCase().replace(ASCII_WHITESPACE_RUN, ' ').trim();
   if (readsDifferently(raw)) return '';
   const compatible = stripInvisible(stripInvisible(raw).normalize('NFKC'));
   const folded = compatible.toLowerCase().normalize('NFD').replace(NONSPACING_MARK, '').normalize('NFC');
@@ -184,9 +193,10 @@ function unique(values: readonly string[]): string[] {
 
 /** The distinct tokens of `name(raw)`, in order of first appearance. */
 export function nameTokens(raw: string): string[] {
+  const separator = ASCII_ONLY.test(raw) ? ASCII_NON_TOKEN : NAME_TOKEN_SEPARATOR;
   return unique(
     name(raw)
-      .split(NAME_TOKEN_SEPARATOR)
+      .split(separator)
       .filter((token) => token !== ''),
   );
 }
@@ -214,12 +224,12 @@ export function counterparty(raw: string | undefined): Counterparty | null {
  * stored ones).
  */
 export function subjectTokens(raw: string, stopWords: readonly string[]): string[] {
-  if (BIDI_REORDER.test(raw)) return [];
-  const tokens = stripInvisible(raw)
-    .normalize('NFKC')
-    .toLowerCase()
-    .split(SUBJECT_TOKEN_SEPARATOR)
-    .filter((token) => token !== '');
+  const ascii = ASCII_ONLY.test(raw);
+  if (!ascii && BIDI_REORDER.test(raw)) return [];
+  const words = ascii
+    ? raw.toLowerCase().split(ASCII_NON_TOKEN)
+    : stripInvisible(raw).normalize('NFKC').toLowerCase().split(SUBJECT_TOKEN_SEPARATOR);
+  const tokens = words.filter((token) => token !== '');
   const first = tokens.findIndex((token) => !REPLY_PREFIXES.has(token));
   const body = first < 0 ? [] : tokens.slice(first);
   const stop = new Set(stopWords.map((word) => word.normalize('NFKC').toLowerCase()));

@@ -8,11 +8,14 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import {
+  compareFractions,
   compareRatio,
+  fractionGteBasisPoints,
   ratio,
   type Ratio,
   ratioGteBasisPoints,
   toDisplay,
+  toDisplayOf,
   weightedScore,
   type WeightedTerm,
 } from '../../src/core/ratio';
@@ -103,6 +106,60 @@ describe('compareRatio() is an exact total order', () => {
         expect(ratioGteBasisPoints(value, bp)).toBe(compareRatio(value, ratio(bp, BASIS_POINTS)) >= 0);
       }),
       RUNS,
+    );
+  });
+});
+
+/** Non-negative safe integers: small ones, ones near 2^53, and everything between. */
+const count = fc.oneof(
+  fc.integer({ min: 0, max: 1_000 }),
+  fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER }),
+  fc.integer({ min: Number.MAX_SAFE_INTEGER - 1_000, max: Number.MAX_SAFE_INTEGER }),
+);
+const positive = count.map((value) => Math.max(value, 1));
+
+describe('compareFractions() is compareRatio() in Number, exactly (§5.3)', () => {
+  it('agrees with BigInt cross-multiplication on any safe operands, near 2^53 included', () => {
+    fc.assert(
+      fc.property(count, positive, count, positive, (a, b, c, d) => {
+        expect(compareFractions(a, b, c, d)).toBe(compareRatio(ratio(a, b), ratio(c, d)));
+      }),
+      { numRuns: 20_000 },
+    );
+  });
+
+  it('calls equal values equal however they are written, and orders a value against its neighbours', () => {
+    fc.assert(
+      fc.property(count, positive, fc.integer({ min: 1, max: 1_000_000 }), (n, d, k) => {
+        const [num, den] = [n % (d + 1), d];
+        if (num * k > Number.MAX_SAFE_INTEGER || den * k > Number.MAX_SAFE_INTEGER) return;
+        expect(compareFractions(num, den, num * k, den * k)).toBe(0);
+        if (num + 1 <= Number.MAX_SAFE_INTEGER) expect(compareFractions(num, den, num + 1, den)).toBe(-1);
+        if (den + 1 <= Number.MAX_SAFE_INTEGER)
+          expect(compareFractions(num, den + 1, num, den)).toBe(num === 0 ? 0 : -1);
+      }),
+      RUNS,
+    );
+  });
+
+  it('fractionGteBasisPoints(n, d, bp) is ratioGteBasisPoints(n/d, bp)', () => {
+    fc.assert(
+      fc.property(count, positive, fc.integer({ min: 0, max: BASIS_POINTS }), (n, d, bp) => {
+        expect(fractionGteBasisPoints(n, d, bp)).toBe(ratioGteBasisPoints(ratio(n, d), bp));
+      }),
+      { numRuns: 10_000 },
+    );
+  });
+});
+
+describe('toDisplayOf() is toDisplay() of the same rational, in Number where exact', () => {
+  it('equals toDisplay(ratio(n, d)) for any safe operands, small, large and near 2^53', () => {
+    fc.assert(
+      fc.property(count, positive, (n, d) => {
+        expect(toDisplayOf(n, d)).toBe(toDisplay(ratio(n, d)));
+        expect(toDisplayOf(n % (d + 1), d)).toBe(toDisplay(ratio(n % (d + 1), d)));
+      }),
+      { numRuns: 10_000 },
     );
   });
 });

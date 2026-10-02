@@ -507,6 +507,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-02] [1.6] Receipt state machine: regrade, user override (with a required reason, reversible), revert, and supersede for UNASKED receipts; every state/event pair is tested, and a receipt finalises to NOT_FOUND only after Attest has looked past the grace window, never before.
 [2026-10-02] [1.7] UNASKED detection: for an action nobody claimed, each agent gets its own score from session activity, user idleness (only with real evidence, never assumed), known signatures, and adjacent activity-log entries; UNASKED fires only above the policy threshold, and every sentence says 'likely' (a test checks no text ever states an agent did it as fact).
 [2026-10-02] [1.8] Spend and scope limits: claimed type not allowed, permissions observed beyond what was declared, a single purchase over the ceiling, and cumulative spend (two $30 purchases against a $50 ceiling: the second is OVER_SCOPE).
+[2026-10-02] [1.5] Grading is done and fast: grade() decides every receipt by the policy rules (same inputs give the same receipt, proven over 5,000 random cases twice), all 84 golden scenarios pass through the real code, and grading 5,000 claims against 50,000 observations takes about 1.0 s (limit 2 s; it was 23 s before two optimisation passes, with receipts proven identical before and after).
 ```
 
 ---

@@ -16,6 +16,8 @@ export const BASIS_POINTS = 10_000;
 
 /** Calendar units for reading vendor-relative times (normalize-relative.ts): "Thu" is at most a week back. */
 export const DAYS_PER_WEEK = 7;
+/** The Gregorian year: ISO months are 01–12. */
+export const MONTHS_PER_YEAR = 12;
 /** The 12-hour clock: "2:03 PM" is 14:03, "12:00 AM" is 00:00. */
 export const HOURS_PER_HALF_DAY = 12;
 /** Positional notation: minor units are major × DECIMAL_RADIX^exponent; ISO fields are zero-padded decimals. */

@@ -168,6 +168,17 @@ function sourceEntries(
   });
 }
 
+/**
+ * Everything `eligibleCoverage` reads of a claim, as one key: its type and, only when a relevant source is
+ * `gmail.receipt` (the one source the no-parser cap applies to), whether it has a receipt parser. Two claims with
+ * one key have the same eligible coverage under one grant, coverage and policy.
+ */
+export function eligibilityKey(claim: Claim, policy: CoveragePolicy): string {
+  const parsed =
+    policy.sourcesByType[claim.type].includes('gmail.receipt') && hasReceiptParser(claim, policy);
+  return parsed ? `${claim.type} parser` : claim.type;
+}
+
 /** §6.1 eligibility of every entry for `claim`, grouped by relevant source. */
 export function eligibleCoverage(
   claim: Claim,
@@ -202,28 +213,42 @@ function sourceCoverage(
   window: ClaimWindow | null,
 ): SourceCoverage {
   if (window === null) return { source, level: 'none', caps: [] };
-  const overlapping = entries.filter((entry) => entry.startMs <= window.toMs && entry.endMs >= window.fromMs);
+  const overlapping: EligibleEntry[] = [];
+  const uncapped: EligibleEntry[] = [];
+  for (const entry of entries) {
+    if (entry.startMs > window.toMs || entry.endMs < window.fromMs) continue;
+    overlapping.push(entry);
+    if (entry.caps.length === 0) uncapped.push(entry);
+  }
   if (overlapping.length === 0) return { source, level: 'none', caps: [] };
-  const uncapped = overlapping.filter((entry) => entry.caps.length === 0);
   if (covers(uncapped, window.fromMs, window.toMs)) return { source, level: 'full', caps: [] };
-  const present = new Set(overlapping.flatMap((entry) => entry.caps));
+  const present = new Set<CoverageCap>();
+  for (const entry of overlapping) for (const cap of entry.caps) present.add(cap);
   return { source, level: 'partial', caps: CAP_ORDER.filter((cap) => present.has(cap)) };
 }
 
 function combinedLevel(sources: readonly SourceCoverage[]): CoverageLevel {
-  if (sources.length > 0 && sources.every((source) => source.level === 'full')) return 'full';
-  if (sources.every((source) => source.level === 'none')) return 'none';
-  return 'partial';
+  let full = sources.length > 0;
+  let none = true;
+  for (const source of sources) {
+    if (source.level !== 'full') full = false;
+    if (source.level !== 'none') none = false;
+  }
+  if (full) return 'full';
+  return none ? 'none' : 'partial';
 }
 
 /** §6.1 coverage of the claim window from its eligible entries (a calendar claim with no target has none). */
 export function coverageFrom(eligible: EligibleCoverage, window: ClaimWindow | null): CoverageResult {
-  const sources = eligible.sources.map((source) =>
-    sourceCoverage(source, eligible.entries.get(source) ?? [], window),
-  );
-  const capReasons = CAP_ORDER.flatMap((code) =>
-    sources.filter((source) => source.caps.includes(code)).map((source) => ({ code, source: source.source })),
-  );
+  const sources: SourceCoverage[] = [];
+  for (const source of eligible.sources) {
+    sources.push(sourceCoverage(source, eligible.entries.get(source) ?? [], window));
+  }
+  const capReasons: CapReason[] = [];
+  for (const code of CAP_ORDER) {
+    for (const source of sources)
+      if (source.caps.includes(code)) capReasons.push({ code, source: source.source });
+  }
   return { level: combinedLevel(sources), sources, capReasons };
 }
 
@@ -251,10 +276,18 @@ export function graceSyncMs(claim: Claim, policy: CoveragePolicy): number {
 
 /** For each relevant source: has an eligible entry (capped or not) synced at or after `syncMs`? */
 export function syncedSources(eligible: EligibleCoverage, syncMs: number): SourceGrace[] {
-  return eligible.sources.map((source) => ({
-    source,
-    elapsed: (eligible.entries.get(source) ?? []).some((entry) => entry.syncMs >= syncMs),
-  }));
+  const out: SourceGrace[] = [];
+  for (const source of eligible.sources) {
+    let elapsed = false;
+    for (const entry of eligible.entries.get(source) ?? []) {
+      if (entry.syncMs >= syncMs) {
+        elapsed = true;
+        break;
+      }
+    }
+    out.push({ source, elapsed });
+  }
+  return out;
 }
 
 /** True iff every relevant source has synced at or after `syncMs`; vacuously true with no sources. */

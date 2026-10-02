@@ -17,12 +17,15 @@ import { features, isAssignable, pairScorer } from './features';
 import { instantMs } from './normalize';
 import type { Policy } from './policy';
 import { compareScores, type Ratio, ratioGteBasisPoints, type Score } from './ratio';
-import { rememberById, uniqueRows } from './receipt';
+import { uniqueRows } from './receipt';
 import type { Claim, Coverage, Observation, ObserverCoverage, ReasonCode } from './schema';
 
 export interface VisibleInputs {
   readonly coverage: Coverage;
+  /** One per id, in (`occurredAt` instant, id) order. */
   readonly candidates: readonly Observation[];
+  /** The same candidates in id order (as `inputsHash` names them, §3). */
+  readonly byId: readonly Observation[];
 }
 
 export interface BestCandidate {
@@ -67,7 +70,7 @@ function sameFilterInputs(coverage: Coverage, held: VisibleCoverage): boolean {
 }
 
 /** §3: the coverage entries synced by `evaluatedAt`, as one object per input coverage (see above). */
-function visibleCoverage(coverage: Coverage): Coverage {
+export function visibleCoverage(coverage: Coverage): Coverage {
   const held = VISIBLE_COVERAGE.get(coverage);
   if (held !== undefined && sameFilterInputs(coverage, held)) return held.visible;
   const evaluatedMs = instantMs(coverage.evaluatedAt);
@@ -109,18 +112,17 @@ function byOccurrence(rows: Observation[]): Observation[] {
 }
 
 /**
- * §3: the inputs as of `coverage.evaluatedAt`, candidates de-duplicated by id and in (occurredAt, id) order. The
- * candidates are sorted by id once, to find repeated ids; when there are none, the id-sorted list is recorded for
- * `inputsHash` (receipt-hash.ts `rememberById`) against the frozen candidate list returned here.
+ * §3: the inputs as of `coverage.evaluatedAt`, candidates de-duplicated by id, in (occurredAt, id) order and in id
+ * order. The candidates are sorted by id once, to find repeated ids (`uniqueRows` keeps one row per id).
  */
 export function visibleInputs(candidates: readonly Observation[], coverage: Coverage): VisibleInputs {
   const evaluatedMs = instantMs(coverage.evaluatedAt);
   const seen = candidates.filter((candidate) => observedMs(candidate) <= evaluatedMs);
-  const byId = [...seen].sort(compareIds);
-  const unique = !repeatsId(byId);
-  const ordered = Object.freeze(byOccurrence(unique ? seen : uniqueRows(seen)));
-  if (unique) rememberById(ordered, byId);
-  return { coverage: visibleCoverage(coverage), candidates: ordered };
+  const sorted = [...seen].sort(compareIds);
+  const unique = !repeatsId(sorted);
+  const kept = unique ? seen : uniqueRows(seen);
+  const byId = unique ? sorted : [...kept].sort(compareIds);
+  return { coverage: visibleCoverage(coverage), candidates: byOccurrence(kept), byId };
 }
 
 /** The best so far: the higher exact score, ties to the lower observation id (§4.3's tie-break). */

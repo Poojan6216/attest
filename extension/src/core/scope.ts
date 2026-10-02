@@ -121,6 +121,99 @@ export function priorSpendCents(
 }
 
 /**
+ * One agent's claims in one currency (or none) whose type is a spend type, in (`claimedAt` ms, id) order, with the
+ * running sum of their amounts (`sums[i]` is the total of the first i). Regular when every `claimedAt` parses,
+ * every amount is a non-negative safe integer, no id repeats and the whole total is a safe integer: then the
+ * total over any run of entries is one exact subtraction. Anything else is answered by `priorSpendCents` itself.
+ */
+interface SpendRun {
+  readonly ms: readonly number[];
+  readonly ids: readonly string[];
+  readonly sums: readonly number[];
+}
+
+/**
+ * A repeated id makes a run irregular wherever its copies sit: `priorSpendCents` counts an id once (at its largest
+ * qualifying amount), and copies of one id need not be neighbours in (ms, id) order (one claim read at 14:02:10
+ * and again at 14:02:50 shares its id, §10, with another claim between them), so every id is checked, not only
+ * adjacent ones.
+ */
+function buildRun(priors: readonly SpendClaim[]): SpendRun | null {
+  const entries: { ms: number; id: string; amount: number }[] = [];
+  const seen = new Set<string>();
+  for (const prior of priors) {
+    const amount = prior.amountCents ?? 0;
+    if (!Number.isSafeInteger(amount) || amount < 0 || seen.has(prior.id)) return null;
+    seen.add(prior.id);
+    try {
+      entries.push({ ms: claimedMs(prior), id: prior.id, amount });
+    } catch {
+      return null;
+    }
+  }
+  entries.sort((a, b) => a.ms - b.ms || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const sums = [0];
+  for (const [i, entry] of entries.entries()) sums.push((sums[i] ?? 0) + entry.amount);
+  if ((sums[entries.length] ?? 0) > Number.MAX_SAFE_INTEGER) return null;
+  return { ms: entries.map((entry) => entry.ms), ids: entries.map((entry) => entry.id), sums };
+}
+
+/** The number of leading entries of `run` before (`ms`, `id`) in (ms, id) order (`strictly` excludes ties). */
+function countBefore(run: SpendRun, ms: number, id: string | null): number {
+  let low = 0;
+  let high = run.ms.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    const at = run.ms[middle] ?? 0;
+    const before = at < ms || (id !== null && at === ms && (run.ids[middle] ?? '') < id);
+    if (before) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/**
+ * `priorSpendCents(claim, claims, policy)` for any number of claims against one history (`claims`), the history
+ * read once: per agent and currency, its spend claims sorted with running sums, so each claim's total is two binary
+ * searches and a subtraction. A run that is not regular (`buildRun`) is answered by `priorSpendCents` over the
+ * agent's history, so every result and every error is exactly `priorSpendCents`'s.
+ */
+export function spendIndex(
+  claims: readonly SpendClaim[],
+  policy: SpendPolicy,
+): (claim: SpendClaim) => number {
+  const spendTypes: ReadonlySet<ActionType> = new Set(policy.spendTypes);
+  const byAgent = new Map<AgentId, SpendClaim[]>();
+  for (const claim of claims) {
+    const held = byAgent.get(claim.agent);
+    if (held === undefined) byAgent.set(claim.agent, [claim]);
+    else held.push(claim);
+  }
+  const runs = new Map<string, SpendRun | null>();
+  const runOf = (agent: AgentId, currency: string | undefined): SpendRun | null => {
+    const key = `${agent} ${currency ?? ''} ${String(currency === undefined)}`;
+    if (!runs.has(key)) {
+      const priors = (byAgent.get(agent) ?? []).filter(
+        (prior) => prior.currency === currency && spendTypes.has(prior.type),
+      );
+      runs.set(key, buildRun(priors));
+    }
+    return runs.get(key) ?? null;
+  };
+  return (claim) => {
+    if (!spendTypes.has(claim.type)) return 0;
+    const run = runOf(claim.agent, claim.currency);
+    if (run === null) return priorSpendCents(claim, byAgent.get(claim.agent) ?? [], policy);
+    const claimMs = claimedMs(claim);
+    const fromMs = claimMs - policy.windows.spendWindowDays * MS_PER_DAY;
+    if (!Number.isSafeInteger(fromMs)) throw new ScopeError('unsafe_window');
+    const from = countBefore(run, fromMs, null);
+    const to = countBefore(run, claimMs, claim.id);
+    return to > from ? (run.sums[to] ?? 0) - (run.sums[from] ?? 0) : 0;
+  };
+}
+
+/**
  * §6.1: the scopes the vendor's settings page shows (`observedScopes`) that the user did not declare
  * (`declaredScopes`), compared exactly as stored, de-duplicated and sorted by UTF-16 code unit. Each one is
  * the subject of one claim-less `over_scope_observed` receipt (`{k: 'scope', agent, scope}`, §3). A grant

@@ -81,8 +81,11 @@ export interface AttributionActivity {
 /** The policy fields attribution reads. A loaded `Policy` satisfies it. */
 export type AttributionPolicy = Pick<Policy, 'bp' | 'unasked'>;
 
-/** Attributes one orphan observation; built once per activity by `attributor`. */
-export type Attributor = (orphan: AttributionOrphan) => Attribution | null;
+/**
+ * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller already
+ * has it, is `instantMs(orphan.occurredAt)` (a batch has every orphan's instant from its index).
+ */
+export type Attributor = (orphan: AttributionOrphan, occurredMs?: number) => Attribution | null;
 
 /** Each fired signal's reason code (§15), in the table order reasons are emitted in. */
 export const SIGNAL_REASON: Readonly<Record<UnaskedSignal, ReasonCode>> = Object.freeze({
@@ -118,19 +121,18 @@ interface WindowsMs {
   readonly adjacent: number;
 }
 
-/** What attribution reads from the orphan, computed once per orphan. */
-interface OrphanFacts {
-  readonly type: ActionType;
-  readonly occurredMs: number;
-  /** The subject hint, ASCII-lowercased ('' without one, or when no agent has a signature). */
-  readonly subject: string;
-  readonly idle: boolean;
-}
-
-interface Candidate {
-  readonly agent: AgentId;
-  readonly scoreBp: number;
-  readonly signals: readonly UnaskedSignal[];
+/**
+ * The best candidate for one orphan so far (its agent is `weigh`'s result): its capped score, number of fired
+ * signals and which of its own
+ * signals fired (`userIdle` is the orphan's, the same for every agent). Reused for every orphan of one attributor
+ * (reset per orphan; everything here is synchronous), so attributing an orphan allocates only its result.
+ */
+interface Best {
+  scoreBp: number;
+  count: number;
+  session: boolean;
+  signature: boolean;
+  adjacent: boolean;
 }
 
 /**
@@ -160,15 +162,17 @@ function indexActivity(
   const sessions = indexBy(activity.sessions, (item) => item.agent, at);
   const entries = indexBy(activity.entries, (item) => item.agent, at);
   const lastSync = latestSyncs(activity.adapterSyncs, evaluatedAt);
+  const claimsOf = new Map<AgentId, AttributionClaim[]>();
+  for (const claim of activity.claims) {
+    const held = claimsOf.get(claim.agent);
+    if (held === undefined) claimsOf.set(claim.agent, [claim]);
+    else held.push(claim);
+  }
   const agents = AgentId.options.map((agent): AgentIndex => ({
     agent,
     sessions: sessions.get(agent),
     entries: entries.get(agent),
-    claims: indexBy(
-      activity.claims.filter((claim) => claim.agent === agent),
-      (claim) => claim.type,
-      precisionBounds,
-    ),
+    claims: indexBy(claimsOf.get(agent) ?? [], (claim) => claim.type, precisionBounds),
     signatures: policy.unasked.signatures[agent].map(asciiLower),
     lastSync: lastSync.get(agent),
   }));
@@ -198,56 +202,74 @@ function near(index: IntervalIndex | undefined, ms: number, radius: number): boo
   return index?.exists(checkedSafe(ms + radius), checkedSafe(ms - radius)) ?? false;
 }
 
-function score(signals: readonly UnaskedSignal[], policy: AttributionPolicy): number {
-  const total = signals.reduce((sum, signal) => sum + policy.bp.unasked.signals[signal], 0);
-  return Math.min(total, BASIS_POINTS);
-}
-
-/**
- * The agent's candidacy: its fired signals in UnaskedSignal order (session, idle, signature, adjacent; also the
- * §15 reason order) and their capped score, or null when no agent-specific signal fired.
- */
-function candidateOf(
-  agent: AgentIndex,
-  orphan: OrphanFacts,
-  windows: WindowsMs,
-  policy: AttributionPolicy,
-): Candidate | null {
-  const { occurredMs } = orphan;
-  const session = near(agent.sessions, occurredMs, windows.session);
-  const signature = agent.signatures.some((text) => orphan.subject.includes(text));
-  const adjacent =
-    near(agent.entries, occurredMs, windows.adjacent) &&
-    !near(agent.claims.get(orphan.type), occurredMs, windows.adjacent);
-  if (!session && !signature && !adjacent) return null;
-  const signals: UnaskedSignal[] = [];
-  if (session) signals.push('agentSessionActive');
-  if (orphan.idle) signals.push('userIdle');
-  if (signature) signals.push('agentSignature');
-  if (adjacent) signals.push('activityLogAdjacent');
-  return { agent: agent.agent, scoreBp: score(signals, policy), signals };
-}
-
 /** Signals in the schema's order (also the §15 reason order): session, idle, signature, adjacent. */
 function inSignalOrder(signals: readonly UnaskedSignal[]): UnaskedSignal[] {
   return UnaskedSignal.options.filter((signal) => signals.includes(signal));
 }
 
-/** Higher score, then more fired signals, then the lower agent id (§7). */
-function better(a: Candidate, b: Candidate): boolean {
-  if (a.scoreBp !== b.scoreBp) return a.scoreBp > b.scoreBp;
-  if (a.signals.length !== b.signals.length) return a.signals.length > b.signals.length;
-  return a.agent < b.agent;
+/** Whether the ASCII-lowercased subject contains one of the agent's signatures (`agentSignature`). */
+function signed(signatures: readonly string[], subject: string): boolean {
+  for (const text of signatures) if (subject.includes(text)) return true;
+  return false;
 }
 
-function orphanFacts(orphan: AttributionOrphan, index: ActivityIndex, windows: WindowsMs): OrphanFacts {
-  const occurredMs = instantMs(orphan.occurredAt);
-  return {
-    type: orphan.type,
-    occurredMs,
-    subject: index.anySignature && orphan.subjectHint !== undefined ? asciiLower(orphan.subjectHint) : '',
-    idle: index.idle.exists(checkedSafe(occurredMs - windows.idle), occurredMs),
-  };
+/** What weighing reads besides the agent: the orphan's facts and the attributor's own. */
+interface Weighing {
+  readonly windows: WindowsMs;
+  readonly policy: AttributionPolicy;
+  readonly best: Best;
+  type: ActionType;
+  occurredMs: number;
+  /** The subject hint, ASCII-lowercased ('' without one, or when no agent has a signature). */
+  subject: string;
+  idle: boolean;
+}
+
+/**
+ * Weighs `agent` for the orphan (§7) and keeps it in `best` when it beats `held`, the best so far (returns the
+ * best after it): a higher score (the sum
+ * of its fired signals' weights, `userIdle` included, capped at BASIS_POINTS), then more fired signals, then the
+ * lower agent id. An agent with no agent-specific signal is no candidate.
+ */
+function weigh(agent: AgentIndex, w: Weighing, held: AgentIndex | null): AgentIndex | null {
+  const { windows, best, occurredMs, idle } = w;
+  const session = near(agent.sessions, occurredMs, windows.session);
+  const signature = signed(agent.signatures, w.subject);
+  const adjacent =
+    near(agent.entries, occurredMs, windows.adjacent) &&
+    !near(agent.claims.get(w.type), occurredMs, windows.adjacent);
+  if (!session && !signature && !adjacent) return held;
+  const weights = w.policy.bp.unasked.signals;
+  const total =
+    (session ? weights.agentSessionActive : 0) +
+    (idle ? weights.userIdle : 0) +
+    (signature ? weights.agentSignature : 0) +
+    (adjacent ? weights.activityLogAdjacent : 0);
+  const scoreBp = Math.min(total, BASIS_POINTS);
+  const count = Number(session) + Number(idle) + Number(signature) + Number(adjacent);
+  if (held !== null) {
+    const loses =
+      scoreBp !== best.scoreBp
+        ? scoreBp < best.scoreBp
+        : count !== best.count
+          ? count < best.count
+          : agent.agent >= held.agent;
+    if (loses) return held;
+  }
+  best.scoreBp = scoreBp;
+  best.count = count;
+  best.session = session;
+  best.signature = signature;
+  best.adjacent = adjacent;
+  return agent;
+}
+
+/** The attribution of the best candidate (§7): its fired signals in UnaskedSignal order, `adapterLastSyncAt`. */
+function attributionOf(best: Best, agent: AgentIndex, idle: boolean): Attribution {
+  const fired = [best.session, idle, best.signature, best.adjacent];
+  const signals = UnaskedSignal.options.filter((_, i) => fired[i] === true);
+  const attribution: Attribution = { agent: agent.agent, scoreBp: best.scoreBp, signals };
+  return agent.lastSync === undefined ? attribution : { ...attribution, adapterLastSyncAt: agent.lastSync };
 }
 
 /**
@@ -261,22 +283,16 @@ export function attributor(
 ): Attributor {
   const index = indexActivity(activity, policy, evaluatedAt);
   const windows = windowsMs(policy);
-  return (orphan) => {
-    const facts = orphanFacts(orphan, index, windows);
-    let best: Candidate | null = null;
-    let bestIndex: AgentIndex | null = null;
-    for (const agent of index.agents) {
-      const candidate = candidateOf(agent, facts, windows, policy);
-      if (candidate !== null && (best === null || better(candidate, best))) {
-        best = candidate;
-        bestIndex = agent;
-      }
-    }
-    if (best === null || bestIndex === null) return null;
-    const attribution: Attribution = { agent: best.agent, scoreBp: best.scoreBp, signals: [...best.signals] };
-    return bestIndex.lastSync === undefined
-      ? attribution
-      : { ...attribution, adapterLastSyncAt: bestIndex.lastSync };
+  const best: Best = { scoreBp: 0, count: 0, session: false, signature: false, adjacent: false };
+  const w: Weighing = { windows, policy, best, type: 'other', occurredMs: 0, subject: '', idle: false };
+  return (orphan, occurredMs = instantMs(orphan.occurredAt)) => {
+    w.subject = index.anySignature && orphan.subjectHint !== undefined ? asciiLower(orphan.subjectHint) : '';
+    w.idle = index.idle.exists(checkedSafe(occurredMs - windows.idle), occurredMs);
+    w.type = orphan.type;
+    w.occurredMs = occurredMs;
+    let winner: AgentIndex | null = null;
+    for (const agent of index.agents) winner = weigh(agent, w, winner);
+    return winner === null ? null : attributionOf(best, winner, w.idle);
   };
 }
 

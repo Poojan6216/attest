@@ -6,15 +6,13 @@
  * vectors and against Node's `crypto` in tests/unit/core/hash.spec.ts and the hash property test.
  * This file is exempt from the core no-literal rule: the numbers below are the algorithm's constants.
  *
- * Speed (the task 1.5 grading perf gate hashes every receipt's inputs): a `Sha256Writer` encodes text in a
- * single pass straight into its 64-byte block (or, for a whole block of ASCII starting on a block boundary,
- * straight into the schedule's first 16 words) and compresses each block as soon as it is full, so no byte
- * array, padded copy or per-block schedule is ever allocated, and a long message can be written piece by piece
- * without ever being built as one string. Each writer owns its chaining state and block; the only shared buffer
- * is the message schedule, which one compression fills and consumes before returning (everything here is
- * synchronous and calls nothing that could re-enter it), so no hash ever sees another's words. Words are read
- * from the block with shifts, and all arithmetic is 32-bit (`| 0`), exactly the modular arithmetic FIPS 180-4
- * specifies.
+ * Speed (the task 1.5 grading perf gate hashes every receipt's inputs): a `Sha256Writer` encodes text in one pass
+ * straight into its 64-byte block, four ASCII code units to a word, and compresses each block as soon as it is
+ * full, so no byte array or padded copy is ever allocated and a long message is never built as one string.
+ * `sha256OfDigests` hashes a concatenation of 32-byte digests (§3 v1.5 `candidatesHash`) straight from a table of
+ * digest words. The only shared buffers (the message schedule, the one-shot writer, the digest block) are filled
+ * and consumed within one synchronous call that calls nothing that could re-enter it, so no hash ever sees
+ * another's words. All arithmetic is 32-bit (`| 0`), exactly the modular arithmetic FIPS 180-4 specifies.
  */
 
 /** FIPS 180-4 §4.2.2: the first 32 bits of the fractional parts of the cube roots of the first 64 primes. */
@@ -35,9 +33,10 @@ const H0 = Int32Array.from([
 ]);
 
 const BLOCK_BYTES = 64;
-const DIGEST_BYTES = 32;
-/** The length field: the last 8 bytes of the final block (FIPS 180-4 §5.1.1). */
-const LENGTH_OFFSET = BLOCK_BYTES - 8;
+/** A digest's 32 bytes as big-endian 32-bit words (`Sha256Writer.words()`). */
+export const DIGEST_WORDS = 8;
+/** The length field: the last 8 bytes (two words) of the final block (FIPS 180-4 §5.1.1). */
+const LENGTH_WORD = (BLOCK_BYTES - 8) / 4;
 const WORDS = 64;
 const REPLACEMENT_CHARACTER = 0xfffd;
 /** 2^32: the message bit length is written as two 32-bit words. */
@@ -116,14 +115,6 @@ function combine(high: number, low: number): number {
   return 0x10000 + ((high - 0xd800) << 10) + (low - 0xdc00);
 }
 
-function isHighSurrogate(unit: number): boolean {
-  return unit >= 0xd800 && unit <= 0xdbff;
-}
-
-function isLowSurrogate(unit: number): boolean {
-  return unit >= 0xdc00 && unit <= 0xdfff;
-}
-
 /** The number of UTF-8 bytes of a code point. */
 function utf8Length(code: number): number {
   if (code < 0x80) return 1;
@@ -131,10 +122,25 @@ function utf8Length(code: number): number {
   return code < 0x10000 ? 3 : 4;
 }
 
+/** The lead-byte marks of 2-, 3- and 4-byte UTF-8 sequences, by length. */
+const UTF8_LEAD = [0, 0, 0xc0, 0xe0, 0xf0];
+
+/** Hands `put` the UTF-8 bytes of a code point (RFC 3629), lead byte first. */
+function encodeCodePoint(code: number, put: (byte: number) => void): void {
+  const length = utf8Length(code);
+  if (length === 1) {
+    put(code);
+    return;
+  }
+  const lead = UTF8_LEAD[length] ?? 0;
+  put(lead | (code >> (6 * (length - 1))));
+  for (let shift = 6 * (length - 2); shift >= 0; shift -= 6) put(0x80 | ((code >> shift) & 0x3f));
+}
+
 /**
  * SHA-256 of the UTF-8 encoding of everything written, in order: `write(a); write(b)` hashes exactly what
  * `write(a + b)` hashes, a surrogate pair split between two writes included (a lone surrogate is U+FFFD). `hex()`
- * finishes the hash; nothing may be written after it.
+ * or `words()` finishes the hash (either may be read again); nothing may be written after it.
  *
  * The pending block is kept as the big-endian words of the writer's own message schedule, so four ASCII code
  * units (four UTF-8 bytes) are stored as one word wherever the block stands on a word boundary, and a long
@@ -148,11 +154,12 @@ export class Sha256Writer {
   #bytes = 0;
   /** A high surrogate that ended the last write, waiting for the next code unit; -1 when there is none. */
   #high = -1;
-  #digest: string | null = null;
+  /** The message has been padded and its final block compressed: nothing more may be written. */
+  #done = false;
 
   /** Writes `text` from code unit `start` on. */
   write(text: string, start = 0): void {
-    if (this.#digest !== null) throw new RangeError('sha256: write after hex()');
+    if (this.#done) throw new RangeError('sha256: write after hex()');
     let i = this.#resume(text, start);
     while (i < text.length) {
       i = this.#ascii(text, i);
@@ -160,33 +167,83 @@ export class Sha256Writer {
     }
   }
 
-  /** Writes raw bytes (no UTF-8 encoding). */
-  writeBytes(bytes: Uint8Array): void {
-    if (this.#digest !== null) throw new RangeError('sha256: write after hex()');
-    for (const byte of bytes) this.#put(byte);
-    this.#bytes += bytes.length;
+  /**
+   * Writes `count` 32-bit words of `words` from index `from` on as raw bytes, each word as its four big-endian
+   * bytes (a digest from `words()` is its 32 bytes): straight into the block's words while the block stands on a
+   * word boundary, byte by byte otherwise. A high surrogate left by the last `write` is lone: U+FFFD first.
+   */
+  writeWords(words: Int32Array, from: number, count: number): void {
+    if (this.#done) throw new RangeError('sha256: write after hex()');
+    if (this.#high >= 0) this.#putCodePoint(REPLACEMENT_CHARACTER);
+    this.#high = -1;
+    const end = from + count;
+    if ((this.#pos & 3) === 0) {
+      const [w, h] = [this.#w, this.#h];
+      let pos = this.#pos;
+      for (let i = from; i < end; i += 1) {
+        w[pos >> 2] = words[i] ?? 0;
+        pos += 4;
+        if (pos === BLOCK_BYTES) {
+          rounds(h, w);
+          pos = 0;
+        }
+      }
+      this.#pos = pos;
+    } else {
+      for (let i = from; i < end; i += 1) {
+        const word = words[i] ?? 0;
+        for (let shift = 24; shift >= 0; shift -= 8) this.#put((word >>> shift) & 0xff);
+      }
+    }
+    this.#bytes += count * 4;
+  }
+
+  /** Starts a new message: the writer as freshly made. */
+  reset(): this {
+    this.#h.set(H0);
+    [this.#pos, this.#bytes, this.#high, this.#done] = [0, 0, -1, false];
+    return this;
   }
 
   /** The digest in lowercase hex. */
   hex(): string {
-    if (this.#digest !== null) return this.#digest;
+    return hexOf(this.#finish());
+  }
+
+  /** The digest as its 32 raw bytes, held as 8 big-endian 32-bit words (a fresh array on every call). */
+  words(): Int32Array {
+    return this.#finish().slice();
+  }
+
+  /** Writes the digest's 8 words into `out` from index `at`. */
+  wordsInto(out: Int32Array, at: number): void {
+    out.set(this.#finish(), at);
+  }
+
+  /**
+   * Ends the message once (FIPS 180-4 §5.1.1 padding: 0x80, zeros up to the length field, then the length in bits
+   * as a 64-bit big-endian, here two words); returns the final chaining state, the digest's words. The word that
+   * holds the 0x80 has zeros after it (the first byte written into a word clears it), so padding is whole words.
+   */
+  #finish(): Int32Array {
+    if (this.#done) return this.#h;
     if (this.#high >= 0) this.#putCodePoint(REPLACEMENT_CHARACTER);
     this.#high = -1;
-    // FIPS 180-4 §5.1.1: 0x80, zeros up to the length field, then the length in bits as a 64-bit big-endian.
     const bits = this.#bytes * 8;
     this.#put(0x80);
-    while (this.#pos !== LENGTH_OFFSET) this.#put(0);
-    const high = Math.floor(bits / TWO_POW_32);
-    const low = bits >>> 0;
-    for (const word of [high, low])
-      for (let shift = 24; shift >= 0; shift -= 8) this.#put((word >>> shift) & 0xff);
-    let hex = '';
-    for (const word of this.#h) {
-      hex += `${HEX[(word >>> 24) & 0xff] ?? ''}${HEX[(word >>> 16) & 0xff] ?? ''}`;
-      hex += `${HEX[(word >>> 8) & 0xff] ?? ''}${HEX[word & 0xff] ?? ''}`;
+    const w = this.#w;
+    let next = (this.#pos + 3) >> 2;
+    if (next > LENGTH_WORD) {
+      w.fill(0, next);
+      rounds(this.#h, w);
+      next = 0;
     }
-    this.#digest = hex;
-    return hex;
+    w.fill(0, next, LENGTH_WORD);
+    w[LENGTH_WORD] = Math.floor(bits / TWO_POW_32);
+    w[LENGTH_WORD + 1] = bits >>> 0;
+    rounds(this.#h, w);
+    this.#done = true;
+    return this.#h;
   }
 
   /** Completes a high surrogate left by the last write, if any; returns where this write continues. */
@@ -195,7 +252,7 @@ export class Sha256Writer {
     const high = this.#high;
     this.#high = -1;
     const next = text.charCodeAt(start);
-    if (!isLowSurrogate(next)) {
+    if (!(next >= 0xdc00 && next <= 0xdfff)) {
       this.#putCodePoint(REPLACEMENT_CHARACTER);
       return start;
     }
@@ -242,7 +299,7 @@ export class Sha256Writer {
   /** Writes the code point at a non-ASCII code unit (a final high surrogate waits for the next write). */
   #nonAscii(text: string, i: number): number {
     const unit = text.charCodeAt(i);
-    if (isHighSurrogate(unit) && i + 1 === text.length) {
+    if (unit >= 0xd800 && unit <= 0xdbff && i + 1 === text.length) {
       this.#high = unit;
       return i + 1;
     }
@@ -253,21 +310,7 @@ export class Sha256Writer {
 
   #putCodePoint(code: number): void {
     this.#bytes += utf8Length(code);
-    if (code < 0x80) {
-      this.#put(code);
-    } else if (code < 0x800) {
-      this.#put(0xc0 | (code >> 6));
-      this.#put(0x80 | (code & 0x3f));
-    } else if (code < 0x10000) {
-      this.#put(0xe0 | (code >> 12));
-      this.#put(0x80 | ((code >> 6) & 0x3f));
-      this.#put(0x80 | (code & 0x3f));
-    } else {
-      this.#put(0xf0 | (code >> 18));
-      this.#put(0x80 | ((code >> 12) & 0x3f));
-      this.#put(0x80 | ((code >> 6) & 0x3f));
-      this.#put(0x80 | (code & 0x3f));
-    }
+    encodeCodePoint(code, (byte) => this.#put(byte));
   }
 
   /**
@@ -289,30 +332,54 @@ export class Sha256Writer {
   }
 }
 
-/** Lowercase hex SHA-256 of the UTF-8 encoding of `text` (lone surrogates as U+FFFD). */
-export function sha256Utf8Hex(text: string): string {
-  const writer = new Sha256Writer();
-  writer.write(text);
-  return writer.hex();
+/** The lowercase hex of a digest's 8 words. */
+function hexOf(words: Int32Array): string {
+  let hex = '';
+  for (const word of words) {
+    hex += `${HEX[(word >>> 24) & 0xff] ?? ''}${HEX[(word >>> 16) & 0xff] ?? ''}`;
+    hex += `${HEX[(word >>> 8) & 0xff] ?? ''}${HEX[word & 0xff] ?? ''}`;
+  }
+  return hex;
 }
 
-/** Writes the UTF-8 bytes of `code` into `bytes` from `at`; returns the next index. */
-function writeCodePoint(bytes: Uint8Array, at: number, code: number): number {
-  if (code < 0x80) {
-    bytes[at] = code;
-    return at + 1;
+/** The block `sha256OfDigests` fills; `rounds` reads it before returning. */
+const DIGEST_BLOCK = new Int32Array(BLOCK_WORDS);
+
+/**
+ * Lowercase hex SHA-256 of the concatenation of `count` digests, the i-th being the DIGEST_WORDS words of `table`
+ * from `rows[i] * DIGEST_WORDS` (each word four big-endian bytes): exactly what writing them through a
+ * `Sha256Writer` gives, two digests to a block and then the FIPS 180-4 padding block.
+ */
+export function sha256OfDigests(table: Int32Array, rows: ArrayLike<number>, count: number): string {
+  const h = H0.slice();
+  const block = DIGEST_BLOCK;
+  let filled = 0;
+  for (let i = 0; i < count; i += 1) {
+    const from = (rows[i] ?? 0) * DIGEST_WORDS;
+    for (let j = 0; j < DIGEST_WORDS; j += 1) block[filled + j] = table[from + j] ?? 0;
+    filled += DIGEST_WORDS;
+    if (filled === BLOCK_WORDS) {
+      rounds(h, block);
+      filled = 0;
+    }
   }
-  if (code < 0x800) {
-    bytes.set([0xc0 | (code >> 6), 0x80 | (code & 0x3f)], at);
-    return at + 2;
-  }
-  if (code < 0x10000) {
-    bytes.set([0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f)], at);
-    return at + 3;
-  }
-  const tail = [0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f)];
-  bytes.set([0xf0 | (code >> 18), ...tail], at);
-  return at + 4;
+  const bits = count * DIGEST_WORDS * 32;
+  block[filled] = 0x80000000 | 0;
+  block.fill(0, filled + 1, LENGTH_WORD);
+  block[LENGTH_WORD] = Math.floor(bits / TWO_POW_32);
+  block[LENGTH_WORD + 1] = bits >>> 0;
+  rounds(h, block);
+  return hexOf(h);
+}
+
+/** The writer of one-shot hashes, reset before each (all synchronous: no hash ever sees another's state). */
+const ONE_SHOT = new Sha256Writer();
+
+/** Lowercase hex SHA-256 of the UTF-8 encoding of `text` (lone surrogates as U+FFFD). */
+export function sha256Utf8Hex(text: string): string {
+  const writer = ONE_SHOT.reset();
+  writer.write(text);
+  return writer.hex();
 }
 
 /**
@@ -320,35 +387,11 @@ function writeCodePoint(bytes: Uint8Array, at: number, code: number): number {
  * Buffer do, so hashes match every other implementation.
  */
 export function utf8(text: string): Uint8Array {
-  let length = 0;
+  const bytes: number[] = [];
   for (let i = 0; i < text.length; i += 1) {
     const code = codePointAt(text, i);
     if (code >= 0x10000) i += 1;
-    length += utf8Length(code);
+    encodeCodePoint(code, (byte) => bytes.push(byte));
   }
-  const bytes = new Uint8Array(length);
-  let at = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    const code = codePointAt(text, i);
-    if (code >= 0x10000) i += 1;
-    at = writeCodePoint(bytes, at, code);
-  }
-  return bytes;
-}
-
-/** SHA-256 digest of raw bytes. */
-export function sha256(message: Uint8Array): Uint8Array {
-  const writer = new Sha256Writer();
-  writer.writeBytes(message);
-  const hex = writer.hex();
-  const digest = new Uint8Array(DIGEST_BYTES);
-  for (let i = 0; i < DIGEST_BYTES; i += 1) digest[i] = Number.parseInt(hex.slice(2 * i, 2 * i + 2), 16);
-  return digest;
-}
-
-/** Lowercase hex of bytes. */
-export function toHex(bytes: Uint8Array): string {
-  let hex = '';
-  for (const byte of bytes) hex += HEX[byte] ?? '';
-  return hex;
+  return Uint8Array.from(bytes);
 }

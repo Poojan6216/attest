@@ -209,28 +209,63 @@ export class Score {
  * representable), never used.
  */
 function numberScore(weights: readonly number[], values: readonly NumberRatio[]): Score | null {
-  if (weights.length !== values.length) return null;
+  if (!weightedFraction(weights, values, FRACTION)) return null;
+  const [num, whole] = [FRACTION[0] ?? 0, FRACTION[1] ?? 1];
+  const divisor = gcdNumber(num, whole);
+  return Score.ofReduced(num / divisor, whole / divisor);
+}
+
+/** `numberScore`'s fraction, filled and read within one call (synchronous; nothing re-enters it). */
+const FRACTION = new Float64Array([0, 1]);
+
+/**
+ * The exact weighted mean Σ wᵢ·pᵢ/qᵢ ÷ Σ wᵢ, the i-th value given as `nums[i] / dens[i]`, as an UNREDUCED fraction
+ * of two safe integers written to `out[0]` (numerator) and `out[1]` (denominator, positive): the running sums
+ * `numberScore` keeps, without its final gcd. False (and `out` unspecified) whenever `numberScore` would fall back
+ * to BigInt. Equal to `weightedScore` as a rational; for comparisons only (`compareFractions` is exact on unreduced
+ * fractions), never stored as a Ratio.
+ */
+export function weightedFractionOf(
+  weights: readonly number[],
+  nums: ArrayLike<number>,
+  dens: ArrayLike<number>,
+  out: Float64Array,
+): boolean {
   const max = Number.MAX_SAFE_INTEGER;
   let num = 0;
   let den = 1;
   let total = 0;
-  for (let i = 0; i < values.length; i += 1) {
+  for (let i = 0; i < weights.length; i += 1) {
     const weight = weights[i] ?? -1;
-    const value = values[i] ?? NUMBER_RATIO_ZERO;
-    if (!isCount(weight) || !isCount(value.num) || !isCount(value.den) || value.den === 0) return null;
+    const p = nums[i] ?? -1;
+    const q = dens[i] ?? 0;
+    if (!isCount(weight) || !isCount(p) || !isCount(q) || q === 0) return false;
     total += weight;
-    if (value.den === 1) {
-      num += weight * value.num * den;
+    if (q === 1) {
+      num += weight * p * den;
     } else {
-      num = num * value.den + weight * value.num * den;
-      den *= value.den;
+      num = num * q + weight * p * den;
+      den *= q;
     }
-    if (num > max || den > max || total > max) return null;
+    if (num > max || den > max || total > max) return false;
   }
   const whole = den * total;
-  if (total === 0 || whole > max) return null;
-  const divisor = gcdNumber(num, whole);
-  return Score.ofReduced(num / divisor, whole / divisor);
+  if (total === 0 || whole > max) return false;
+  out[0] = num;
+  out[1] = whole;
+  return true;
+}
+
+/** `weightedFractionOf` with the values given as NumberRatios (one per weight, else false). */
+export function weightedFraction(
+  weights: readonly number[],
+  values: readonly NumberRatio[],
+  out: Float64Array,
+): boolean {
+  if (weights.length !== values.length) return false;
+  const nums = Float64Array.from(values, (value) => value.num);
+  const dens = Float64Array.from(values, (value) => value.den);
+  return weightedFractionOf(weights, nums, dens, out);
 }
 
 /**
@@ -277,6 +312,44 @@ export function scoreGteBasisPoints(score: Score, bp: number): boolean {
   return ratioGteBasisPoints(score.ratio, bp);
 }
 
+/**
+ * −1, 0 or 1 as `a/b` is less than, equal to or greater than `c/d`, exactly, for non-negative safe integers `a`,
+ * `c` and positive safe integers `b`, `d` (callers check; a `Score`'s Number parts are such): the continued-
+ * fraction comparison, which compares the integer parts and then the reciprocals of the fractional parts. Every
+ * operand stays a safe integer no larger than the inputs, `x % y` of safe integers is exact, and `(x − x % y) / y`
+ * divides an exact multiple, so no step rounds (no product is ever formed); it ends within Euclid's step count.
+ */
+export function compareFractions(a: number, b: number, c: number, d: number): -1 | 0 | 1 {
+  let p = a;
+  let q = b;
+  let r = c;
+  let s = d;
+  let sign: -1 | 1 = 1;
+  for (;;) {
+    const pRest = p % q;
+    const rRest = r % s;
+    const pWhole = (p - pRest) / q;
+    const rWhole = (r - rRest) / s;
+    if (pWhole !== rWhole) return pWhole < rWhole ? (sign === 1 ? -1 : 1) : sign;
+    if (pRest === 0 || rRest === 0) {
+      if (pRest === rRest) return 0;
+      return pRest === 0 ? (sign === 1 ? -1 : 1) : sign;
+    }
+    // pRest/q against rRest/s, both in (0, 1): the larger has the smaller reciprocal.
+    p = q;
+    q = pRest;
+    r = s;
+    s = rRest;
+    sign = sign === 1 ? -1 : 1;
+  }
+}
+
+/** Whether `num/den` (a score's Number parts: safe integers, `den > 0`) is ≥ `bp / 10000`, exactly (§5.3). */
+export function fractionGteBasisPoints(num: number, den: number, bp: number): boolean {
+  if (!isCount(bp)) return ratioGteBasisPoints(ratio(num, den), bp);
+  return compareFractions(num, den, bp, BASIS_POINTS) >= 0;
+}
+
 /** A Number-held value as a reduced Ratio (throws like `ratio` for anything but integers over a non-zero one). */
 export function ratioOf(value: NumberRatio): Ratio {
   if (value === NUMBER_RATIO_ZERO) return RATIO_ZERO;
@@ -288,6 +361,21 @@ export function ratioOf(value: NumberRatio): Ratio {
  * `r` as a display number rounded to 4 decimals, half away from zero (17/20 → 0.85, 787/792 → 0.9937).
  * For receipts and the UI only: never compared (§5.3). Exact in BigInt up to the final division.
  */
+/**
+ * `toDisplay(ratio(num, den))`: in Number when `num` and `den` are non-negative safe integers (`den > 0`) and
+ * `num · 10000` is a safe integer (then every step is exact: the product, `%`, and the division of an exact
+ * multiple), else through `toDisplay` in BigInt. Display only, never compared (§5.3).
+ */
+export function toDisplayOf(num: number, den: number): number {
+  const scaled = num * BASIS_POINTS;
+  if (!isCount(num) || !isCount(den) || den === 0 || scaled > Number.MAX_SAFE_INTEGER) {
+    return toDisplay(ratio(num, den));
+  }
+  const rest = scaled % den;
+  const quotient = (scaled - rest) / den + (rest >= den - rest ? 1 : 0);
+  return quotient / BASIS_POINTS;
+}
+
 export function toDisplay(r: Ratio): number {
   assertRatio(r);
   const scaled = abs(r.num) * BASIS_POINTS_BIG;

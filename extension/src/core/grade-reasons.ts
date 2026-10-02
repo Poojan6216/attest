@@ -24,7 +24,7 @@ import type { CeilingCheck, Conditions, CoverageResult, SourceGrace } from './co
 import type { BestCandidate } from './grade-best';
 import { sha256Hex } from './hash';
 import type { Policy, PolicyRule, RuleOutcome } from './policy';
-import { ratio, toDisplay } from './ratio';
+import { toDisplay, toDisplayOf } from './ratio';
 import { reasonCode, type ReasonGroups } from './receipt';
 import type { Claim, Grade, GradeContext, Grant, Reason, ReasonCode, UnaskedSignal } from './schema';
 import { BASIS_POINTS } from './units';
@@ -60,10 +60,11 @@ function plainZero(value: string | number): string | number {
   return Object.is(value, -0) ? 0 : value;
 }
 
-const reason = (code: ReasonCode, params: Reason['params'] = {}): Reason => ({
-  code,
-  params: Object.fromEntries(Object.entries(params).map(([key, value]) => [key, plainZero(value)])),
-});
+function reason(code: ReasonCode, params: Reason['params'] = {}): Reason {
+  const plain: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(params)) plain[key] = plainZero(value);
+  return { code, params: plain };
+}
 
 /** One reason per source in `sources`, or one without params for a type with no sources (§15). */
 function perSource(code: ReasonCode, sources: readonly string[], hasSources: boolean): Reason[] {
@@ -200,9 +201,7 @@ export function confidenceOf(grade: Grade, best: BestCandidate | null, context: 
     case 'OVER_SCOPE':
       return 1;
     case 'UNASKED':
-      return context.attribution === undefined
-        ? 0
-        : toDisplay(ratio(context.attribution.scoreBp, BASIS_POINTS));
+      return context.attribution === undefined ? 0 : toDisplayOf(context.attribution.scoreBp, BASIS_POINTS);
     case 'UNVERIFIABLE':
       return 0;
   }

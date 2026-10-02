@@ -30,13 +30,19 @@ function compareNumbers(a: number, b: number): number {
 }
 
 /** `index` with every observation first seen after `evaluatedMs` left out of every read (§3). */
+/** The rows first seen by `evaluatedMs`, in order. */
+function seenBy(rows: readonly Observation[], evaluatedMs: number): Observation[] {
+  const seen: Observation[] = [];
+  for (const observation of rows) if (observedMs(observation) <= evaluatedMs) seen.push(observation);
+  return seen;
+}
+
 export function visibleAt(index: ObservationIndex, evaluatedMs: number): ObservationIndex {
-  const visible = (rows: readonly Observation[]): Observation[] =>
-    rows.filter((observation) => observedMs(observation) <= evaluatedMs);
   return {
-    byTypeAndBucket: async (type, fromMs, toMs) => visible(await index.byTypeAndBucket(type, fromMs, toMs)),
+    byTypeAndBucket: async (type, fromMs, toMs) =>
+      seenBy(await index.byTypeAndBucket(type, fromMs, toMs), evaluatedMs),
     byCounterpartyToken: async (token, fromMs, toMs) =>
-      visible(await index.byCounterpartyToken(token, fromMs, toMs)),
+      seenBy(await index.byCounterpartyToken(token, fromMs, toMs), evaluatedMs),
   };
 }
 
@@ -80,7 +86,8 @@ function preferred(held: Observation, next: Observation): Observation {
   return order <= 0 ? held : next;
 }
 
-interface Keyed {
+/** A covered observation and its `occurredAt` instant (epoch ms). */
+export interface Keyed {
   readonly observation: Observation;
   readonly atMs: number;
 }
@@ -94,10 +101,19 @@ function compareKeyed(a: Keyed, b: Keyed): number {
   );
 }
 
-/** The observations in candidate order, each instant read once (not once per comparison). */
-function inCandidateOrder(observations: Iterable<Observation>): Observation[] {
-  const keyed = [...observations].map((observation) => ({ observation, atMs: occurredMs(observation) }));
-  return keyed.sort(compareKeyed).map(({ observation }) => observation);
+/** Adds the rows of `type` from `source` that lie in `window` to `found`, each with its instant. */
+function keepInWindow(
+  found: Keyed[],
+  rows: readonly Observation[],
+  type: ActionType,
+  source: ObservationSource,
+  { startMs, endMs }: Interval,
+): void {
+  for (const observation of rows) {
+    if (observation.type !== type || observation.source !== source) continue;
+    const atMs = occurredMs(observation);
+    if (atMs >= startMs && atMs <= endMs) found.push({ observation, atMs });
+  }
 }
 
 /** Observations of `type` from `source` that lie in one of `windows`, read window by window. */
@@ -106,38 +122,41 @@ async function readWindows(
   type: ActionType,
   source: ObservationSource,
   windows: readonly Interval[],
-): Promise<Observation[]> {
-  const found: Observation[] = [];
-  for (const { startMs, endMs } of windows) {
-    for (const observation of await index.byTypeAndBucket(type, startMs, endMs)) {
-      if (observation.type !== type || observation.source !== source) continue;
-      const ms = occurredMs(observation);
-      if (ms >= startMs && ms <= endMs) found.push(observation);
-    }
+): Promise<Keyed[]> {
+  const found: Keyed[] = [];
+  for (const window of windows) {
+    const rows = await index.byTypeAndBucket(type, window.startMs, window.endMs);
+    keepInWindow(found, rows, type, source, window);
   }
   return found;
 }
 
+/** Adds `rows` to `byHash`, one representative per `contentHash` (§4.1, `preferred`), with its own instant. */
+function addOnce(byHash: Map<string, Keyed>, rows: readonly Keyed[]): void {
+  for (const row of rows) {
+    const { contentHash } = row.observation;
+    const held = byHash.get(contentHash)?.observation;
+    if (held === undefined || preferred(held, row.observation) !== held) byHash.set(contentHash, row);
+  }
+}
+
 /**
- * Every observation of a covered type that its own source's observer saw, once per `contentHash`, in
- * candidate order. `index` should already be `visibleAt(evaluatedAt)`.
+ * Every observation of a covered type that its own source's observer saw, once per `contentHash`, in candidate
+ * order (each instant read once, not once per comparison), with its `occurredAt` instant. `index` should already
+ * be `visibleAt(evaluatedAt)`.
  */
 export async function coveredObservations(
   index: ObservationIndex,
   coverage: Coverage,
   policy: OrphanPolicy,
-): Promise<Observation[]> {
+): Promise<Keyed[]> {
   const windows = seenWindows(coverage);
-  const byHash = new Map<string, Observation>();
+  const byHash = new Map<string, Keyed>();
   for (const type of ActionType.options) {
     for (const source of policy.sourcesByType[type]) {
       const seen = windows.get(source);
-      if (seen === undefined) continue;
-      for (const observation of await readWindows(index, type, source, seen)) {
-        const held = byHash.get(observation.contentHash);
-        byHash.set(observation.contentHash, held === undefined ? observation : preferred(held, observation));
-      }
+      if (seen !== undefined) addOnce(byHash, await readWindows(index, type, source, seen));
     }
   }
-  return inCandidateOrder(byHash.values());
+  return [...byHash.values()].sort(compareKeyed);
 }

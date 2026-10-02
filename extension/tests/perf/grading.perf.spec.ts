@@ -4,15 +4,17 @@
  * bench's own (bench/core.ts `buildGradingWorkload`: the task 1.3 observations and claim timings, seeded
  * mulberry32, no Math.random), so the committed bench number and this gate measure the same thing.
  *
- * The clock is this process's CPU time over the call (as in candidates-perf.spec.ts, Decisions [1.3]): core is
- * pure, single-threaded work against a memory index that resolves at once, so CPU time never under-reports it,
- * while wall time inside a parallel suite on a busy machine measures the scheduler. Wall time is logged beside it.
+ * Measured as tests/perf/measure.ts describes: the median CPU time of three runs on freshly built workloads,
+ * in a serial perf pass (vitest.perf.config.ts) where no other test competes for the CPU. Every run's CPU and
+ * wall time is logged, the cold first run included.
  *
  * A fast wrong answer must not pass: every claim gets exactly one receipt, evidence is one-to-one, the result
  * holds real VERIFIED, NOT_FOUND and UNASKED receipts, and every 50th claim's receipt equals `grade()` called
  * directly on its candidates found by brute force (no index), minus the observations other receipts hold.
  */
 import { describe, expect, it } from 'vitest';
+
+import { describeRuns, measure, RUNS } from './measure';
 
 import {
   buildGradingWorkload,
@@ -22,19 +24,18 @@ import {
   gradeAll,
   type GradingWorkload,
   OBSERVATION_COUNT,
-} from '../../../../bench/core';
-import { createMemoryIndex } from '../../../src/core/candidates';
-import { isAssignable } from '../../../src/core/features';
-import { grade } from '../../../src/core/grade';
-import { canonicalJson } from '../../../src/core/hash';
-import { DEFAULT_POLICY } from '../../../src/core/policy';
-import type { Claim, Observation, Receipt } from '../../../src/core/schema';
-import { MS_PER_MINUTE } from '../../../src/core/units';
-import { claimWindow, precisionBounds } from '../../../src/core/window';
-import { priorSpendCents } from '../../../src/core/scope';
+} from '../../../bench/core';
+import { createMemoryIndex } from '../../src/core/candidates';
+import { isAssignable } from '../../src/core/features';
+import { grade } from '../../src/core/grade';
+import { canonicalJson } from '../../src/core/hash';
+import { DEFAULT_POLICY } from '../../src/core/policy';
+import type { Claim, Observation, Receipt } from '../../src/core/schema';
+import { MS_PER_MINUTE } from '../../src/core/units';
+import { claimWindow, precisionBounds } from '../../src/core/window';
+import { priorSpendCents } from '../../src/core/scope';
 
 const SAMPLE_EVERY = 50;
-const MICROSECONDS_PER_MS = 1_000;
 
 /** §4.1 candidates by brute force over every observation (no index, no buckets, no memo). */
 function bruteCandidates(
@@ -82,32 +83,36 @@ function checkSample(workload: GradingWorkload, receipts: readonly Receipt[]): v
 }
 
 describe('perf gate (task 1.5): gradeBatch over 5,000 claims × 50,000 observations', () => {
-  it(`grades the whole batch in < ${String(GATE_MS)} ms of CPU, and is right`, async () => {
-    const workload = buildGradingWorkload();
-    expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
-    expect(workload.claims).toHaveLength(CLAIM_COUNT);
-    const index = createMemoryIndex(workload.observations, BUCKET_MINUTES);
-
-    const cpuBefore = process.cpuUsage();
-    const started = performance.now();
-    const receipts = await gradeAll(workload, index);
-    const wallMs = performance.now() - started;
-    const cpu = process.cpuUsage(cpuBefore);
-    const cpuMs = (cpu.user + cpu.system) / MICROSECONDS_PER_MS;
-    console.log(
-      `perf gate: gradeBatch for ${String(CLAIM_COUNT)} claims took ${cpuMs.toFixed(1)} ms CPU (${wallMs.toFixed(1)} ms wall), ${String(receipts.length)} receipts`,
+  it(`grades the whole batch in a median < ${String(GATE_MS)} ms of CPU over ${String(RUNS)} fresh runs, and is right`, async () => {
+    const measured = await measure(
+      () => {
+        const workload = buildGradingWorkload();
+        return { workload, index: createMemoryIndex(workload.observations, BUCKET_MINUTES) };
+      },
+      async ({ workload, index }) => ({ workload, receipts: await gradeAll(workload, index) }),
     );
+    console.log(describeRuns(`gradeBatch for ${String(CLAIM_COUNT)} claims`, measured));
 
-    const claimReceipts = receipts.filter((r) => r.claimId !== undefined);
-    expect(new Set(claimReceipts.map((r) => r.claimId)).size).toBe(CLAIM_COUNT);
-    const evidence = claimReceipts.flatMap((r) => r.observationIds);
-    expect(new Set(evidence).size).toBe(evidence.length);
-    const count = (grade: Receipt['grade']) => receipts.filter((r) => r.grade === grade).length;
-    expect(count('VERIFIED')).toBeGreaterThan(CLAIM_COUNT / 10);
-    expect(count('NOT_FOUND')).toBeGreaterThan(CLAIM_COUNT / 10);
-    expect(count('UNASKED')).toBeGreaterThan(0);
-    checkSample(workload, receipts);
+    for (const { result } of measured.runs) {
+      const { workload, receipts } = result;
+      expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
+      expect(workload.claims).toHaveLength(CLAIM_COUNT);
+      const claimReceipts = receipts.filter((r) => r.claimId !== undefined);
+      expect(new Set(claimReceipts.map((r) => r.claimId)).size).toBe(CLAIM_COUNT);
+      const evidence = claimReceipts.flatMap((r) => r.observationIds);
+      expect(new Set(evidence).size).toBe(evidence.length);
+      const count = (grade: Receipt['grade']) => receipts.filter((r) => r.grade === grade).length;
+      expect(count('VERIFIED')).toBeGreaterThan(CLAIM_COUNT / 10);
+      expect(count('NOT_FOUND')).toBeGreaterThan(CLAIM_COUNT / 10);
+      expect(count('UNASKED')).toBeGreaterThan(0);
+    }
+    const first = measured.runs[0]?.result;
+    if (first === undefined) throw new Error('no run');
+    checkSample(first.workload, first.receipts);
+    // Every run graded identical inputs, so their receipts must be identical (no memo carried a result over).
+    const canonical = measured.runs.map((r) => canonicalJson(r.result.receipts));
+    expect(new Set(canonical).size).toBe(1);
 
-    expect(cpuMs).toBeLessThan(GATE_MS);
+    expect(measured.medianCpuMs).toBeLessThan(GATE_MS);
   }, 600_000);
 });

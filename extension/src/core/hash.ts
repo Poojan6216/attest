@@ -54,8 +54,25 @@ function canonicalArray(values: readonly unknown[]): string {
   return `${out}]`;
 }
 
+/**
+ * `keys` sorted in place by UTF-16 code unit, as `Array#sort()` sorts strings (insertion sort: an object has a few
+ * keys, and this allocates nothing).
+ */
+function sortKeys(keys: string[]): string[] {
+  for (let i = 1; i < keys.length; i += 1) {
+    const key = keys[i] ?? '';
+    let j = i - 1;
+    while (j >= 0 && (keys[j] ?? '') > key) {
+      keys[j + 1] = keys[j] ?? '';
+      j -= 1;
+    }
+    keys[j + 1] = key;
+  }
+  return keys;
+}
+
 function canonicalObject(value: Record<string, unknown>): string {
-  const keys = Object.keys(value).sort();
+  const keys = sortKeys(Object.keys(value));
   let out = '{';
   for (const key of keys) {
     const item = value[key];

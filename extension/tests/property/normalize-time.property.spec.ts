@@ -15,7 +15,7 @@ import {
   type OffsetAt,
   resolveRelative,
 } from '../../src/core/normalize';
-import { wallToInstant } from '../../src/core/normalize-time';
+import { trailingOffsetMinutes, wallToInstant } from '../../src/core/normalize-time';
 
 const IsoTs = z.iso.datetime({ offset: true });
 const MINUTE = 60_000;
@@ -47,6 +47,124 @@ const instant = fc.integer({ min: -62_135_510_400_000, max: 253_402_128_000_000 
 const offset = fc.integer({ min: -1_439, max: 1_439 });
 /** References from 2000 to 2099 (the DST rule above is the post-2007 one, but it is a consistent zone). */
 const reference = fc.integer({ min: Date.UTC(2000, 0, 1), max: Date.UTC(2099, 11, 31) });
+
+/**
+ * `instantMs` as the schema's own pattern defines it (the implementation before the character-code fast path):
+ * the reference the fast path must equal on every string it accepts, and must leave every other string to.
+ */
+const REFERENCE_ISO =
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.(?<fraction>\d+))?(?:Z|(?<sign>[+-])(?<offsetHour>\d{2}):(?<offsetMinute>\d{2}))$/;
+function referenceInstantMs(iso: string): number {
+  const fields = REFERENCE_ISO.exec(iso)?.groups;
+  if (fields === undefined) throw new NormalizeError('invalid_iso');
+  const [year, month, day] = [Number(fields.year), Number(fields.month), Number(fields.day)];
+  const [hour, minute, second] = [Number(fields.hour), Number(fields.minute), Number(fields.second)];
+  const calculator = new Date(0);
+  calculator.setUTCFullYear(year, month - 1, day);
+  const exists =
+    calculator.getUTCFullYear() === year &&
+    calculator.getUTCMonth() === month - 1 &&
+    calculator.getUTCDate() === day;
+  if (hour >= 24 || minute >= 60 || second >= 60 || !exists) throw new NormalizeError('invalid_iso');
+  const [offsetHours, offsetMinutes] = [Number(fields.offsetHour ?? 0), Number(fields.offsetMinute ?? 0)];
+  if (offsetHours >= 24 || offsetMinutes >= 60) throw new NormalizeError('invalid_iso');
+  const magnitude = offsetHours * 60 + offsetMinutes;
+  const offset = fields.sign === undefined ? 0 : fields.sign === '-' ? -magnitude : magnitude;
+  const fraction =
+    fields.fraction === undefined
+      ? 0
+      : Number((BigInt(fields.fraction) * 1000n) / 10n ** BigInt(fields.fraction.length));
+  return calculator.getTime() + hour * HOUR + minute * MINUTE + second * 1000 + fraction - offset * MINUTE;
+}
+
+/** The outcome of a parse: the instant, or the error code. */
+function outcome(parse: (iso: string) => number, iso: string): number | string {
+  try {
+    return parse(iso);
+  } catch (error) {
+    return error instanceof NormalizeError ? `NormalizeError:${error.code}` : 'other';
+  }
+}
+
+const two = (n: number) => String(n).padStart(2, '0');
+/** ISO-shaped text with fields at and past their limits, any fraction length, `Z` or any written offset. */
+const isoShaped = fc
+  .record({
+    year: fc.oneof(
+      fc.integer({ min: 0, max: 199 }),
+      fc.integer({ min: 1900, max: 2100 }),
+      fc.integer({ min: 0, max: 9999 }),
+    ),
+    month: fc.integer({ min: 0, max: 13 }),
+    day: fc.integer({ min: 0, max: 32 }),
+    hour: fc.integer({ min: 0, max: 25 }),
+    minute: fc.integer({ min: 0, max: 61 }),
+    second: fc.integer({ min: 0, max: 61 }),
+    fraction: fc.option(
+      fc.string({ unit: fc.constantFrom(...Array.from('0123456789')), minLength: 0, maxLength: 12 }),
+    ),
+    offset: fc.option(
+      fc.tuple(fc.constantFrom('+', '-'), fc.integer({ min: 0, max: 25 }), fc.integer({ min: 0, max: 61 })),
+    ),
+  })
+  .map(({ year, month, day, hour, minute, second, fraction, offset }) => {
+    const head = `${String(year).padStart(4, '0')}-${two(month)}-${two(day)}T${two(hour)}:${two(minute)}:${two(second)}`;
+    const tail = offset === null ? 'Z' : `${offset[0]}${two(offset[1])}:${two(offset[2])}`;
+    return `${head}${fraction === null ? '' : `.${fraction}`}${tail}`;
+  });
+/** One character of ISO-shaped text replaced, dropped or doubled (non-ASCII digits and stray punctuation too). */
+const mutated = fc
+  .tuple(
+    isoShaped,
+    fc.nat(40),
+    fc.constantFrom(...Array.from('0129-:TZz+.x \u0663\uff11')),
+    fc.constantFrom('replace', 'drop', 'insert'),
+  )
+  .map(([iso, at, unit, how]) => {
+    const i = at % (iso.length + 1);
+    if (how === 'drop') return iso.slice(0, i) + iso.slice(i + 1);
+    return iso.slice(0, i) + unit + iso.slice(how === 'replace' ? i + 1 : i);
+  });
+
+/** The offset an ISO string ends with, read by the pattern window.ts used before the fast read (Z or none: 0). */
+function referenceTrailingOffset(iso: string): number {
+  const groups = /(?:Z|(?<sign>[+-])(?<hours>\d{2}):(?<minutes>\d{2}))$/.exec(iso)?.groups;
+  if (groups?.sign === undefined) return 0;
+  const magnitude = Number(groups.hours) * 60 + Number(groups.minutes);
+  return groups.sign === '-' ? -magnitude : magnitude;
+}
+
+describe('trailingOffsetMinutes: the fast read equals the pattern wherever it answers (property)', () => {
+  it(
+    'is null or the pattern reading, and answers for every timestamp instantMs accepts',
+    () => {
+      fc.assert(
+        fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
+          const fast = trailingOffsetMinutes(iso);
+          if (fast !== null) expect(fast).toBe(referenceTrailingOffset(iso));
+          if (outcome(instantMs, iso) !== 'NormalizeError:invalid_iso') expect(fast).not.toBeNull();
+        }),
+        { numRuns: 20_000 },
+      );
+    },
+    PROPERTY_TIMEOUT_MS,
+  );
+});
+
+describe('instantMs: the fast path equals the schema-pattern definition (property)', () => {
+  it(
+    'gives the same instant or the same NormalizeError on ISO-shaped and mutated text',
+    () => {
+      fc.assert(
+        fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
+          expect(outcome(instantMs, iso)).toBe(outcome(referenceInstantMs, iso));
+        }),
+        { numRuns: 20_000 },
+      );
+    },
+    PROPERTY_TIMEOUT_MS,
+  );
+});
 
 describe('instantMs / isoWithOffset (property)', () => {
   it('round-trip any instant at any offset, and the IsoTs schema accepts every string written', () => {

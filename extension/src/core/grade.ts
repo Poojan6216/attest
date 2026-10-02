@@ -35,8 +35,15 @@ import { assignedOf, type BestCandidate, bestCandidate, visibleInputs } from './
 import { GradeError } from './grade-error';
 import { confidenceOf, gradeReasons } from './grade-reasons';
 import { type Policy, type PolicyRule, type RuleOutcome, TERMINAL_RULE_ID } from './policy';
-import { buildReceipt, inputsHash, type ReceiptSubject } from './receipt';
-import type { Claim, Coverage, Grade, GradeContext, Grant, Observation, Receipt } from './schema';
+import {
+  buildReceipt,
+  candidatesHashById,
+  coverageHash,
+  grantHash,
+  inputsHashOf,
+  type ReceiptSubject,
+} from './receipt';
+import type { Claim, Coverage, Grade, GradeContext, Grant, Observation, Receipt, Sha256 } from './schema';
 
 export { GradeError, type GradeErrorCode } from './grade-error';
 
@@ -46,9 +53,31 @@ interface Subject {
   readonly orphan: Observation | null;
 }
 
+/**
+ * What a claim's grading reads of its candidates and coverage, derived either by `grade` itself or by a batch
+ * from its own tables (batch-grade.ts), which must give exactly what `grade` derives for the same inputs.
+ */
+export interface ClaimEvidence {
+  /** The coverage as `grade` sees it (§3: entries synced by `evaluatedAt`; grade-best.ts `visibleCoverage`). */
+  readonly coverage: Coverage;
+  /** The best candidate of the visible candidates (grade-best.ts `bestCandidate`), or null. */
+  readonly best: BestCandidate | null;
+  /** §3 `candidatesHash` of the visible candidates (one per id, in id order), read when the receipt is hashed. */
+  readonly candidatesHash: () => string;
+  /** `grantHash(grant)` and `coverageHash(coverage)` when the caller keeps them (§3: once per batch). */
+  readonly grantHash?: () => Sha256;
+  readonly coverageHash?: () => Sha256;
+  /** The claim's eligible coverage when the caller has it (conditions.ts `ConditionFacts.eligible`). */
+  readonly eligible?: EligibleCoverage;
+}
+
+/** The evidence of any grading: a claim's, or a claim-less one's (no best candidate). */
+interface Evidence extends ClaimEvidence {
+  readonly subject: Subject;
+}
+
 /** The decision, before it is written as a receipt. */
 interface Decision {
-  readonly best: BestCandidate | null;
   readonly assigned: Observation | null;
   readonly conditions: Conditions;
   readonly rule: PolicyRule | null;
@@ -93,18 +122,20 @@ function claimlessRule(claim: Claim | null, rule: PolicyRule | null): PolicyRule
 
 function decide(
   claim: Claim | null,
-  candidates: readonly Observation[],
+  evidence: Evidence,
   grant: Grant,
   policy: Policy,
-  coverage: Coverage,
   context: GradeContext,
 ): Decision {
-  const best = claim === null ? null : bestCandidate(claim, candidates, policy);
+  const { best, coverage } = evidence;
   const assigned = assignedOf(best, policy);
   const bestScore = best?.score ?? null;
-  const conditions = evaluateConditions({ claim, grant, policy, coverage, context, bestScore, assigned });
+  const facts = { claim, grant, policy, coverage, context, bestScore, assigned };
+  const conditions = evaluateConditions(
+    evidence.eligible === undefined ? facts : { ...facts, eligible: evidence.eligible },
+  );
   const rule = claimlessRule(claim, firstMatch(policy.rules, conditions));
-  return { best, assigned, conditions, rule, outcome: rule?.then ?? 'UNVERIFIABLE' };
+  return { assigned, conditions, rule, outcome: rule?.then ?? 'UNVERIFIABLE' };
 }
 
 /** §8: the assigned candidate of a claim receipt; an UNASKED receipt's orphan; otherwise none. */
@@ -119,27 +150,25 @@ function eligibleOf(conditions: Conditions): { eligible?: EligibleCoverage } {
   return eligible === null ? {} : { eligible };
 }
 
-/** §6: grades one claim (or one orphan, or one observed scope) against its evidence. */
-export function grade(
+/** §6, §8, §3: decides one grading from its evidence and writes the receipt. */
+function judge(
   claim: Claim | null,
-  candidates: readonly Observation[],
+  evidence: Evidence,
   grant: Grant,
   policy: Policy,
-  coverage: Coverage,
   context: GradeContext,
 ): Receipt {
-  checkAgents(claim, grant, context);
-  const visible = visibleInputs(candidates, coverage);
-  const { subject, orphan } = subjectOf(claim, visible.candidates, grant, context);
-  const decision = decide(claim, visible.candidates, grant, policy, visible.coverage, context);
-  const { rule, outcome, conditions, best } = decision;
+  const { coverage, best } = evidence;
+  const { orphan } = evidence.subject;
+  const decision = decide(claim, evidence, grant, policy, context);
+  const { rule, outcome, conditions } = decision;
   const { final } = isFinalizable({
     outcome,
     rule,
     claim,
     orphan,
     grant,
-    coverage: visible.coverage,
+    coverage,
     context,
     policy,
     candidateDependent: rule !== null && candidateDependent(rule.when, conditions),
@@ -147,7 +176,7 @@ export function grade(
   });
   const receiptGrade: Grade = outcome === 'PENDING' ? 'UNVERIFIABLE' : outcome;
   return buildReceipt({
-    subject,
+    subject: evidence.subject.subject,
     agent: claim?.agent ?? grant.agent,
     claim,
     observationIds: observationIdsOf(decision, receiptGrade, orphan),
@@ -169,7 +198,68 @@ export function grade(
     signals: best?.signals ?? {},
     final,
     policyHash: policy.policyHash,
-    inputsHash: inputsHash({ ...visible, claim, grant, policyHash: policy.policyHash, context }),
+    inputsHash: inputsHashOf({
+      claim,
+      candidatesHash: evidence.candidatesHash(),
+      grantHash: evidence.grantHash?.() ?? grantHash(grant),
+      policyHash: policy.policyHash,
+      coverageHash: evidence.coverageHash?.() ?? coverageHash(coverage),
+      context,
+    }),
     computedAt: coverage.evaluatedAt,
   });
+}
+
+/** §6: grades one claim (or one orphan, or one observed scope) against its evidence. */
+export function grade(
+  claim: Claim | null,
+  candidates: readonly Observation[],
+  grant: Grant,
+  policy: Policy,
+  coverage: Coverage,
+  context: GradeContext,
+): Receipt {
+  checkAgents(claim, grant, context);
+  const visible = visibleInputs(candidates, coverage);
+  const subject = subjectOf(claim, visible.candidates, grant, context);
+  const best = claim === null ? null : bestCandidate(claim, visible.candidates, policy);
+  const candidatesHash = () => candidatesHashById(visible.byId);
+  const evidence = { coverage: visible.coverage, subject, best, candidatesHash };
+  return judge(claim, evidence, grant, policy, context);
+}
+
+/** The evidence every grading of a batch shares: what `grade` derives from the coverage and the grant alone. */
+export type SharedEvidence = Pick<ClaimEvidence, 'coverage' | 'grantHash' | 'coverageHash'>;
+
+/**
+ * `grade(null, [orphan], grant, policy, coverage, context)` for an orphan a batch read from its index as of
+ * `coverage.evaluatedAt` (so `grade` would see it), with the evidence the batch shares (`SharedEvidence`).
+ */
+export function gradeOrphan(
+  orphan: Observation,
+  shared: SharedEvidence,
+  grant: Grant,
+  policy: Policy,
+  context: GradeContext,
+): Receipt {
+  checkAgents(null, grant, context);
+  const subject = subjectOf(null, [orphan], grant, context);
+  const candidatesHash = (): string => candidatesHashById([orphan]);
+  return judge(null, { ...shared, best: null, candidatesHash, subject }, grant, policy, context);
+}
+
+/**
+ * `grade(claim, candidates, grant, policy, coverage, context)` for a claim whose evidence (`ClaimEvidence`) a batch
+ * derived from the same inputs (batch-grade.ts; the perf gate and batch tests pin the two together).
+ */
+export function gradeClaim(
+  claim: Claim,
+  evidence: ClaimEvidence,
+  grant: Grant,
+  policy: Policy,
+  context: GradeContext,
+): Receipt {
+  checkAgents(claim, grant, context);
+  const subject: Subject = { subject: { k: 'claim', claimId: claim.id }, orphan: null };
+  return judge(claim, { ...evidence, subject }, grant, policy, context);
 }

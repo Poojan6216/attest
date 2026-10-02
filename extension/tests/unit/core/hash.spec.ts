@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { IdError } from '../../../src/core/base32';
 import { canonicalJson, HashError, hashCanonical, idFromHash, sha256Hex } from '../../../src/core/hash';
-import { utf8 } from '../../../src/core/sha256';
+import { DIGEST_WORDS, sha256OfDigests, Sha256Writer, utf8 } from '../../../src/core/sha256';
 
 describe('sha256Hex: FIPS 180-4 / NIST test vectors', () => {
   it.each([
@@ -41,6 +41,86 @@ describe('sha256Hex: FIPS 180-4 / NIST test vectors', () => {
   it.each([55, 56, 57, 63, 64, 65, 119, 120, 128])('padding boundary at %i bytes matches Node', (length) => {
     const input = 'x'.repeat(length);
     expect(sha256Hex(input)).toBe(createHash('sha256').update(input, 'utf8').digest('hex'));
+  });
+});
+
+/** Bytes as the big-endian 32-bit words `writeWords` reads (a length that is a multiple of 4). */
+function wordsOf(bytes: Uint8Array): Int32Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Int32Array.from({ length: bytes.byteLength / 4 }, (_, i) => view.getInt32(i * 4));
+}
+
+describe('Sha256Writer raw bytes (§3 v1.5 candidatesHash hashes 32-byte digests)', () => {
+  const node = (...parts: (string | Uint8Array)[]) => {
+    const hash = createHash('sha256');
+    for (const part of parts) hash.update(typeof part === 'string' ? Buffer.from(part, 'utf8') : part);
+    return hash.digest('hex');
+  };
+  const digests = ['a', 'b', 'c', 'd', 'e'].map((text) => createHash('sha256').update(text).digest());
+
+  it('words() is the digest as 8 big-endian words; writeWords hashes their 32 bytes', () => {
+    const writer = new Sha256Writer();
+    writer.write('abc');
+    const words = writer.words();
+    expect(words).toHaveLength(DIGEST_WORDS);
+    expect([...words]).toEqual([...wordsOf(createHash('sha256').update('abc').digest())]);
+    expect(writer.hex()).toBe(node('abc'));
+    const raw = new Sha256Writer();
+    raw.writeWords(wordsOf(Buffer.from('abcd')), 0, 1);
+    expect(raw.hex()).toBe(node('abcd'));
+    const into = new Int32Array(DIGEST_WORDS + 2);
+    writer.wordsInto(into, 1);
+    expect([...into.subarray(1, 1 + DIGEST_WORDS)]).toEqual([...words]);
+    expect([into[0], into[DIGEST_WORDS + 1]]).toEqual([0, 0]);
+  });
+
+  it('concatenated digests, from any offset, after aligned and unaligned text, match Node', () => {
+    for (const prefix of ['', 'x', 'xy', 'xyz', 'wxyz', '€', 'x'.repeat(63)]) {
+      for (let count = 0; count <= digests.length; count += 1) {
+        const chosen = digests.slice(0, count);
+        const table = wordsOf(Buffer.concat([Buffer.alloc(32), ...chosen]));
+        const writer = new Sha256Writer();
+        writer.write(prefix);
+        for (let i = 1; i <= count; i += 1) writer.writeWords(table, i * DIGEST_WORDS, DIGEST_WORDS);
+        expect(writer.hex(), `${prefix} + ${String(count)}`).toBe(node(prefix, ...chosen));
+      }
+    }
+    expect(new Sha256Writer().hex()).toBe(node(''));
+  });
+
+  it('reset() starts a new message: a reused writer hashes like a fresh one, at every padding boundary', () => {
+    const writer = new Sha256Writer();
+    for (let length = 0; length <= 130; length += 1) {
+      const text = 'y'.repeat(length);
+      writer.reset().write(text);
+      expect(writer.hex(), String(length)).toBe(node(text));
+    }
+  });
+
+  it('sha256OfDigests hashes the chosen digests of a table, in the order given, as Node does', () => {
+    const table = wordsOf(Buffer.concat(digests));
+    for (const rows of [[], [0], [1, 0], [4, 2, 0], [0, 1, 2, 3], [3, 3, 1, 4, 0]]) {
+      const expected = node(...rows.map((row) => digests[row] ?? Buffer.alloc(0)));
+      expect(sha256OfDigests(table, rows, rows.length), rows.join(',')).toBe(expected);
+      expect(sha256OfDigests(table, Int32Array.from([...rows, 9]), rows.length)).toBe(expected);
+    }
+  });
+
+  it('a high surrogate left by write() is lone before raw bytes (U+FFFD), and nothing is written after hex()', () => {
+    const writer = new Sha256Writer();
+    writer.write('a\ud800');
+    writer.writeWords(wordsOf(digests[0] ?? Buffer.alloc(32)), 0, DIGEST_WORDS);
+    expect(writer.hex()).toBe(node('a\ufffd', digests[0] ?? Buffer.alloc(0)));
+    expect(() => {
+      writer.writeWords(new Int32Array(DIGEST_WORDS), 0, DIGEST_WORDS);
+    }).toThrow(RangeError);
+    expect(() => {
+      writer.write('x');
+    }).toThrow(RangeError);
+    const bytes = new Sha256Writer();
+    bytes.write('\ud800');
+    bytes.writeWords(wordsOf(Buffer.from('ABCD')), 0, 1);
+    expect(bytes.hex()).toBe(node('\ufffdABCD'));
   });
 });
 

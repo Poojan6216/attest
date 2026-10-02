@@ -5,7 +5,7 @@
  *    `K = {k:'claim', claimId}`, `{k:'unasked', observationId}` or `{k:'scope', agent, scope}`. A regrade
  *    replaces the PENDING row with the same id (idempotent).
  *  - `inputsHash(inputs)` (receipt-hash.ts): what replay proves; `grantHash` and `coverageHash` are its per-batch
- *    sub-hashes (§3 v1.4).
+ *    sub-hashes and `candidatesHash` its Merkle-style hash of the candidates' per-observation `refHash` (§3 v1.5).
  *  - `buildReceipt(parts)`: assembles a Receipt whose §8 invariants hold by construction: `state` is FINAL iff
  *    the parts say final, and then `finalAt = computedAt` (the evaluatedAt of the grading that met the FINAL
  *    condition); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no `override` and no
@@ -28,11 +28,17 @@ import {
 } from './schema';
 
 export {
+  candidatesHash,
+  candidatesHashById,
+  candidatesHashOfRows,
   coverageHash,
   type GradeInputs,
   grantHash,
+  type HashedInputs,
   inputsHash,
-  rememberById,
+  inputsHashOf,
+  refHash,
+  refHashInto,
   uniqueById,
   uniqueRows,
 } from './receipt-hash';
@@ -80,10 +86,16 @@ function codeIndex(reason: Reason): number {
 }
 
 /** §15 order: group by group, each in table order (a stable sort keeps the given order within one code). */
+function byCode(a: Reason, b: Reason): number {
+  return codeIndex(a) - codeIndex(b);
+}
+
 export function orderReasons(groups: ReasonGroups): Reason[] {
-  return [groups.rule, groups.allowlist, groups.coverage, groups.match].flatMap((group) =>
-    [...group].sort((a, b) => codeIndex(a) - codeIndex(b)),
-  );
+  const ordered: Reason[] = [];
+  for (const group of [groups.rule, groups.allowlist, groups.coverage, groups.match]) {
+    for (const item of group.length > 1 ? [...group].sort(byCode) : group) ordered.push(item);
+  }
+  return ordered;
 }
 
 /** Everything `buildReceipt` needs; the builder derives the rest. */

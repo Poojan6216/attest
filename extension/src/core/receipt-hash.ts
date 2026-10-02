@@ -1,26 +1,30 @@
 /**
- * `inputsHash` (docs/grading.md §3 "Hashes", §10): SHA-256 of the canonical JSON of every grading input, so
- * replay can prove a receipt (Hard Rule 4). Internal to receipt.ts: import from there.
+ * `inputsHash` (docs/grading.md §3 "Hashes", §10, contract v1.5): SHA-256 of the canonical JSON of every grading
+ * input, so replay can prove a receipt (Hard Rule 4). Internal to receipt.ts: import from there.
  *
- *   inputsHash = sha256(canonicalJson({claim, candidates: [{id, contentHash, observedAt}] sorted by id,
- *                                      grantHash, policyHash, coverageHash, context}))
+ *   inputsHash = sha256(canonicalJson({claim, candidatesHash, grantHash, policyHash, coverageHash, context}))
+ *
+ * `candidatesHash` is Merkle-style: each candidate's `refHash` is the SHA-256 of `canonicalJson({id, contentHash,
+ * observedAt})` (its content is pinned by `contentHash`, and its id derives from it, §10), computed once per
+ * observation object, and `candidatesHash` is the SHA-256 of the concatenated 32-byte `refHash` digests of the
+ * candidates de-duplicated by id and sorted by id (among rows sharing an id, the one whose canonical JSON sorts
+ * first is named, which `grade()` also grades); the empty list hashes the empty byte string. It binds exactly
+ * the facts listing the refs would, without re-encoding them for every receipt.
  *
  * `grantHash` and `coverageHash` are the SHA-256 of the canonical JSON of the grant and of the coverage after
  * every set-like array is sorted and de-duplicated: `coverage.observers` (identical entries once), the grant's
  * `allowedTypes`, `counterpartyAllowlist`, `declaredScopes`, `observedScopes` and each `accounts[source]` list.
  * `context.attribution.signals` is sorted and de-duplicated too, so the hash depends on the inputs as sets,
  * never on the order a ledger reader returned them in. Strings sort by UTF-16 code unit, as canonical JSON keys
- * do. A candidate is named by `{id, contentHash, observedAt}`: its content is pinned by `contentHash`, and its id
- * derives from it (§10); among rows sharing an id, the one whose canonical JSON sorts first is named, which
- * `grade()` also grades.
+ * do. Every hash written into the canonical JSON is lowercase hex.
  *
- * The two sub-hashes are computed once per batch (§3): one grant object and one coverage object are hashed for
- * every receipt of a batch, so each is remembered per object (hash.ts `memoHash`) while everything its canonical
- * JSON reads is unchanged. A memo never changes a result.
+ * The sub-hashes are computed once per batch (§3): one grant object and one coverage object are hashed for every
+ * receipt of a batch, so each is remembered per object (hash.ts `memoHash`) while everything its canonical JSON
+ * reads is unchanged, and so is each observation's `refHash` (`refHash`). A memo never changes a result.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
-import { canonicalJson, type HashMemo, memoHash } from './hash';
+import { canonicalJson, type HashMemo, memoHash, sha256Hex } from './hash';
 import {
   type Claim,
   type Coverage,
@@ -30,7 +34,7 @@ import {
   type ObserverCoverage,
   Sha256,
 } from './schema';
-import { Sha256Writer } from './sha256';
+import { DIGEST_WORDS, sha256OfDigests, Sha256Writer } from './sha256';
 
 /** What `grade()` hashes, after it dropped the coverage entries and candidates it ignores (§3). */
 export interface GradeInputs {
@@ -71,35 +75,6 @@ export function uniqueRows<T extends Observation>(candidates: readonly T[]): T[]
 /** One candidate per id (`uniqueRows`), sorted by id. */
 export function uniqueById<T extends Observation>(candidates: readonly T[]): T[] {
   return uniqueRows(candidates).sort((a, b) => compareText(a.id, b.id));
-}
-
-/**
- * Id-sorted forms of frozen candidate lists with no repeated id, recorded by `grade`'s `visibleInputs` (which sorts
- * by id anyway, to find repeats) so `inputsHash` does not sort the same list again.
- */
-const BY_ID = new WeakMap<readonly Observation[], readonly Observation[]>();
-
-/** Records `sorted` as `uniqueById(list)`: `list` must be frozen, and `sorted` its members by strictly rising id. */
-export function rememberById(list: readonly Observation[], sorted: readonly Observation[]): void {
-  if (Object.isFrozen(list) && sorted.length === list.length) BY_ID.set(list, sorted);
-}
-
-function risingIds(sorted: readonly Observation[]): boolean {
-  for (let i = 1; i < sorted.length; i += 1) {
-    if ((sorted[i - 1]?.id ?? '') >= (sorted[i]?.id ?? '')) return false;
-  }
-  return true;
-}
-
-/**
- * `uniqueById(candidates)`, from the record when there is one and it still holds: the list is frozen, so the
- * recorded members are its members, and while their ids still rise strictly they are distinct and in id order,
- * which is exactly what `uniqueById` returns (it drops nothing from a list with no repeated id).
- */
-function candidatesById(candidates: readonly Observation[]): readonly Observation[] {
-  const held = BY_ID.get(candidates);
-  if (held?.length === candidates.length && risingIds(held)) return held;
-  return uniqueById(candidates);
 }
 
 /** An absent value sorts first; then by UTF-16 code unit (`false` before `true`). */
@@ -187,69 +162,120 @@ function candidateRef(candidate: Observation): Pick<Observation, 'id' | 'content
   return { id: candidate.id, contentHash: candidate.contentHash, observedAt: candidate.observedAt };
 }
 
-interface RefText {
+/** The writer of `refHash`, reset for each ref (synchronous: no ref ever sees another's state). */
+const REF_WRITER = new Sha256Writer();
+
+/**
+ * SHA-256 of `canonicalJson({id, contentHash, observedAt})`, as digest words: written piece by piece in canonical key
+ * order (contentHash < id < observedAt), each value as `JSON.stringify` writes it, when all three are strings, as a
+ * parsed Observation's are (the bytes are exactly the canonical JSON's, without building it as one string);
+ * anything else goes through `canonicalJson`, which also throws for what it cannot write.
+ */
+function writeRef(candidate: Observation): Sha256Writer {
+  const { id, contentHash, observedAt } = candidate;
+  const writer = REF_WRITER.reset();
+  if (typeof id !== 'string' || typeof contentHash !== 'string' || typeof observedAt !== 'string') {
+    writer.write(canonicalJson(candidateRef(candidate)));
+    return writer;
+  }
+  writer.write('{"contentHash":');
+  writer.write(JSON.stringify(contentHash));
+  writer.write(',"id":');
+  writer.write(JSON.stringify(id));
+  writer.write(',"observedAt":');
+  writer.write(JSON.stringify(observedAt));
+  writer.write('}');
+  return writer;
+}
+
+/**
+ * `refHash(candidate)`'s words written into `out` from index `at`, computed afresh (no memo): a batch keeps each
+ * row's refHash in its own table, one row per observation object, so each is still computed once per batch.
+ */
+export function refHashInto(candidate: Observation, out: Int32Array, at: number): void {
+  writeRef(candidate).wordsInto(out, at);
+}
+
+interface HeldRef {
   readonly id: string;
   readonly contentHash: string;
   readonly observedAt: string;
-  /** `,` and the canonical JSON of the ref (the first ref of a list is written without its comma). */
-  readonly text: string;
+  readonly hash: Int32Array;
 }
 
 /**
- * The canonical JSON of each candidate's ref, per observation object: an index hands one observation to every
- * claim whose window holds it, and its ref is hashed into each of their receipts. Used only while the three
- * fields it was written from are unchanged, so an observation edited in place is written again, never stale.
+ * Each observation's `refHash`, per object: an index hands one observation to every claim whose window holds it,
+ * and its ref is hashed into each of their receipts (§3: "computed once per observation"). Used only while the
+ * three fields it was computed from are unchanged, so an observation edited in place is hashed again, never stale.
  */
-const REF_TEXTS = new WeakMap<Observation, RefText>();
+const REF_HASHES = new WeakMap<Observation, HeldRef>();
 
 /**
- * `,` and `canonicalJson({id, contentHash, observedAt})`: written out in canonical key order (contentHash < id <
- * observedAt) when all three are strings, as a parsed Observation's are; anything else goes through
- * `canonicalJson`, which also throws for what it cannot write.
+ * §3 v1.5 `refHash`: SHA-256 of `canonicalJson({id, contentHash, observedAt})`, as its 32 raw bytes held in
+ * DIGEST_WORDS big-endian words. Remembered per observation object (see above); callers never modify it.
  */
-function writeRef(candidate: Observation): string {
+export function refHash(candidate: Observation): Int32Array {
   const { id, contentHash, observedAt } = candidate;
-  if (typeof id !== 'string' || typeof contentHash !== 'string' || typeof observedAt !== 'string') {
-    return `,${canonicalJson(candidateRef(candidate))}`;
-  }
-  const hash = JSON.stringify(contentHash);
-  return `,{"contentHash":${hash},"id":${JSON.stringify(id)},"observedAt":${JSON.stringify(observedAt)}}`;
-}
-
-function refText(candidate: Observation): string {
-  const { id, contentHash, observedAt } = candidate;
-  const held = REF_TEXTS.get(candidate);
-  if (held?.id === id && held.contentHash === contentHash && held.observedAt === observedAt) return held.text;
-  const text = writeRef(candidate);
-  REF_TEXTS.set(candidate, { id, contentHash, observedAt, text });
-  return text;
+  const held = REF_HASHES.get(candidate);
+  if (held?.id === id && held.contentHash === contentHash && held.observedAt === observedAt) return held.hash;
+  const hash = writeRef(candidate).words();
+  REF_HASHES.set(candidate, { id, contentHash, observedAt, hash });
+  return hash;
 }
 
 /**
- * §3 `inputsHash`: SHA-256 of `canonicalJson({claim, candidates, grantHash, policyHash, coverageHash, context})`,
- * candidates named by `{id, contentHash, observedAt}` and sorted by id, every set-like array sorted and
- * de-duplicated. Permuting or repeating a set's members never changes it.
- *
- * `candidates` sorts before every other key, so the canonical JSON of the whole object is `{"candidates":[…],`
- * followed by the canonical JSON of the rest without its opening brace (the rest is never empty: it always holds
- * the three hashes). It is streamed into the hash piece by piece (each ref written once per observation,
- * `refText`) rather than built as one string: a calendar claim names hundreds of candidates. receipt.spec.ts pins
- * this to the plain `canonicalJson` of the whole object.
+ * §3 v1.5 `candidatesHash` of `rows` (indexes into a table of refHash words, DIGEST_WORDS per row), in the order
+ * given: SHA-256 of the concatenation of their 32-byte refHash digests, lowercase hex (no rows: SHA-256 of the
+ * empty byte string). The caller gives the rows of distinct ids in id order.
+ */
+export function candidatesHashOfRows(refs: Int32Array, rows: ArrayLike<number>, count: number): string {
+  return sha256OfDigests(refs, rows, count);
+}
+
+/** §3 v1.5 `candidatesHash` of candidates already one per id and in id order (`uniqueById`). */
+export function candidatesHashById(sorted: readonly Observation[]): string {
+  const writer = new Sha256Writer();
+  for (const candidate of sorted) writer.writeWords(refHash(candidate), 0, DIGEST_WORDS);
+  return writer.hex();
+}
+
+/** §3 v1.5 `candidatesHash` of a candidate list: one per id (`uniqueById`), in id order. */
+export function candidatesHash(candidates: readonly Observation[]): string {
+  return candidatesHashById(uniqueById(candidates));
+}
+
+/** What `inputsHash` hashes (§3), every hash lowercase hex: the candidates as `candidatesHash`, and so on. */
+export interface HashedInputs {
+  readonly claim: Claim | null;
+  readonly candidatesHash: string;
+  readonly grantHash: Sha256;
+  readonly policyHash: string;
+  readonly coverageHash: Sha256;
+  readonly context: GradeContext;
+}
+
+/**
+ * §3 `inputsHash` from its parts: SHA-256 of `canonicalJson({claim, candidatesHash, grantHash, policyHash,
+ * coverageHash, context})`, `context.attribution.signals` sorted and de-duplicated.
+ */
+export function inputsHashOf(parts: HashedInputs): Sha256 {
+  const { claim, candidatesHash: candidates, grantHash: grant, policyHash, coverageHash: coverage } = parts;
+  const hashed = { claim, candidatesHash: candidates, grantHash: grant, policyHash, coverageHash: coverage };
+  return Sha256.parse(sha256Hex(canonicalJson({ ...hashed, context: canonicalContext(parts.context) })));
+}
+
+/**
+ * §3 `inputsHash` (v1.5): SHA-256 of `canonicalJson({claim, candidatesHash, grantHash, policyHash, coverageHash,
+ * context})`, the candidates de-duplicated by id and sorted by id inside `candidatesHash`, every set-like array
+ * sorted and de-duplicated. Permuting or repeating a set's members never changes it.
  */
 export function inputsHash(inputs: GradeInputs): Sha256 {
-  const rest = canonicalJson({
+  return inputsHashOf({
     claim: inputs.claim,
+    candidatesHash: candidatesHash(inputs.candidates),
     grantHash: grantHash(inputs.grant),
     policyHash: inputs.policyHash,
     coverageHash: coverageHash(inputs.coverage),
-    context: canonicalContext(inputs.context),
+    context: inputs.context,
   });
-  const writer = new Sha256Writer();
-  writer.write('{"candidates":[');
-  candidatesById(inputs.candidates).forEach((candidate, i) => {
-    writer.write(refText(candidate), i === 0 ? 1 : 0);
-  });
-  writer.write('],');
-  writer.write(rest, 1);
-  return Sha256.parse(writer.hex());
 }

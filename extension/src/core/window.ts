@@ -11,6 +11,7 @@
  *    `[start − beforeClaimMin, end + afterClaimMin]`.
  */
 import { instantMs } from './normalize';
+import { trailingOffsetMinutes } from './normalize-time';
 import type { Policy } from './policy';
 import type { ActionType, ClaimPrecision } from './schema';
 import { MINUTES_PER_HOUR, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
@@ -76,6 +77,8 @@ export function isCalendarType(type: ActionType): boolean {
 
 /** The UTC offset written in `iso`, in minutes (`Z` is 0). Call only after `instantMs(iso)` succeeded. */
 function writtenOffsetMinutes(iso: string): number {
+  const plain = trailingOffsetMinutes(iso);
+  if (plain !== null) return plain;
   const groups = ISO_OFFSET.exec(iso)?.groups;
   if (groups?.sign === undefined) return 0;
   const magnitude = Number(groups.hours) * MINUTES_PER_HOUR + Number(groups.minutes);
@@ -103,19 +106,41 @@ export function precisionStartMs(claim: Pick<WindowClaim, 'claimedAt' | 'claimed
   return local - floorMod(local, UNIT_MS[claim.claimedAtPrecision]) - shift;
 }
 
+function computeBounds(claim: WindowClaim): Interval {
+  const startMs = precisionStartMs(claim);
+  if (claim.claimedAtEnd === undefined) {
+    return Object.freeze({ startMs, endMs: checkedSafe(startMs + UNIT_MS[claim.claimedAtPrecision]) });
+  }
+  const endMs = instantMs(claim.claimedAtEnd);
+  if (endMs <= instantMs(claim.claimedAt)) throw new WindowError('end_not_after_claimed_at');
+  return Object.freeze({ startMs, endMs });
+}
+
+interface HeldBounds {
+  readonly claimedAt: string;
+  readonly precision: ClaimPrecision;
+  readonly end: string | undefined;
+  readonly bounds: Interval;
+}
+
 /**
- * §4.1 `[start(p,t), end(p,t)]`. Throws `NormalizeError` for a timestamp that is not ISO with an offset, and
+ * Each claim's precision unit, per claim object: a grading reads it for the window, grace, finality and attribution.
+ * Used only while the three fields it was computed from are unchanged, so a claim edited in place is read again.
+ */
+const BOUNDS = new WeakMap<WindowClaim, HeldBounds>();
+
+/**
+ * §4.1 `[start(p,t), end(p,t)]` (frozen). Throws `NormalizeError` for a timestamp that is not ISO with an offset, and
  * `WindowError('end_not_after_claimed_at')` unless `claimedAtEnd` is strictly after `claimedAt` (the unit must
  * contain `t` and have a length; the same rule as the Claim schema's cross-field check).
  */
 export function precisionBounds(claim: WindowClaim): Interval {
-  const startMs = precisionStartMs(claim);
-  if (claim.claimedAtEnd === undefined) {
-    return { startMs, endMs: checkedSafe(startMs + UNIT_MS[claim.claimedAtPrecision]) };
-  }
-  const endMs = instantMs(claim.claimedAtEnd);
-  if (endMs <= instantMs(claim.claimedAt)) throw new WindowError('end_not_after_claimed_at');
-  return { startMs, endMs };
+  const { claimedAt, claimedAtPrecision: precision, claimedAtEnd: end } = claim;
+  const held = BOUNDS.get(claim);
+  if (held?.claimedAt === claimedAt && held.precision === precision && held.end === end) return held.bounds;
+  const bounds = computeBounds(claim);
+  BOUNDS.set(claim, { claimedAt, precision, end, bounds });
+  return bounds;
 }
 
 /**

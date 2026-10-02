@@ -16,7 +16,7 @@
     "lint": "pnpm --dir extension run lint && eslint . --max-warnings 0 && prettier --check .",
     "format": "pnpm --dir extension run format",
     "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
-    "test": "pnpm --dir extension run test",
+    "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",
     "e2e": "pnpm --dir extension run e2e",
     "bench": "pnpm --dir extension run bench",
     "capture": "pnpm --dir extension run capture",

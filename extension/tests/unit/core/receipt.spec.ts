@@ -1,6 +1,8 @@
 /**
  * Task 1.5: receipt ids, `inputsHash` and the receipt builder (docs/grading.md §3, §8, §10, §15).
  */
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../../policy/default.json';
@@ -8,6 +10,7 @@ import { GradeError } from '../../../src/core/grade';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import {
   buildReceipt,
+  candidatesHash,
   coverageHash,
   type GradeInputs,
   grantHash,
@@ -16,6 +19,7 @@ import {
   reasonCode,
   receiptId,
   type ReceiptParts,
+  refHash,
   uniqueById,
 } from '../../../src/core/receipt';
 import {
@@ -132,7 +136,25 @@ function canonicalParts(input: GradeInputs) {
   };
 }
 
-describe('inputsHash (§3 v1.4, §10)', () => {
+/** SHA-256 with Node's crypto, independent of core's own implementation. */
+const nodeSha256 = (data: string | Buffer): Buffer => createHash('sha256').update(data).digest();
+
+/**
+ * §3 v1.5, recomputed from the contract with Node's crypto: each candidate's refHash is the SHA-256 of the canonical
+ * JSON of {id, contentHash, observedAt}; candidatesHash is the SHA-256 of their 32-byte digests concatenated in id
+ * order, one per id (the empty list hashes the empty byte string).
+ */
+function definedCandidatesHash(candidates: readonly Observation[]): string {
+  const byId = new Map(candidates.map((o) => [o.id, o]));
+  const refs = [...byId.values()]
+    .sort((a, b) => (a.id < b.id ? -1 : 1))
+    .map((o) =>
+      nodeSha256(canonicalJson({ id: o.id, contentHash: o.contentHash, observedAt: o.observedAt })),
+    );
+  return nodeSha256(Buffer.concat(refs)).toString('hex');
+}
+
+describe('inputsHash (§3 v1.5, §10)', () => {
   const base = inputsHash(inputs());
 
   it('grantHash and coverageHash are the SHA-256 of the canonical grant and coverage', () => {
@@ -141,30 +163,56 @@ describe('inputsHash (§3 v1.4, §10)', () => {
     expect(coverageHash(inputs().coverage)).toBe(sha256Hex(canonicalJson(parts.coverage)));
   });
 
-  it('is a SHA-256 of the canonical JSON of the claim, candidate refs, sub-hashes, policyHash and context', () => {
+  it('refHash and candidatesHash are the Merkle-style hashes the contract defines', () => {
+    for (const o of [O1, O2]) {
+      const ref = canonicalJson({ id: o.id, contentHash: o.contentHash, observedAt: o.observedAt });
+      const words = refHash(o);
+      const bytes = Buffer.alloc(32);
+      words.forEach((word, i) => bytes.writeInt32BE(word, i * 4));
+      expect(bytes.toString('hex')).toBe(nodeSha256(ref).toString('hex'));
+    }
+    expect(candidatesHash([O2, O1])).toBe(definedCandidatesHash([O1, O2]));
+    expect(candidatesHash([O1])).toBe(definedCandidatesHash([O1]));
+    expect(candidatesHash([])).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  });
+
+  it('is the SHA-256 of the canonical JSON of the claim, candidatesHash, sub-hashes, policyHash and context', () => {
     expect(Sha256.safeParse(base).success).toBe(true);
     const { context } = inputs();
     const parts = canonicalParts(inputs());
-    const sorted = {
+    const defined = {
       claim: CLAIM,
-      candidates: [O1, O2]
-        .sort((a, b) => (a.id < b.id ? -1 : 1))
-        .map((o) => ({ id: o.id, contentHash: o.contentHash, observedAt: o.observedAt })),
-      grantHash: sha256Hex(canonicalJson(parts.grant)),
+      candidatesHash: definedCandidatesHash([O1, O2]),
+      grantHash: nodeSha256(canonicalJson(parts.grant)).toString('hex'),
       policyHash: POLICY_HASH,
-      coverageHash: sha256Hex(canonicalJson(parts.coverage)),
+      coverageHash: nodeSha256(canonicalJson(parts.coverage)).toString('hex'),
       context: {
         ...context,
         attribution: { ...context.attribution, signals: ['agentSessionActive', 'userIdle'] },
       },
     };
-    expect(base).toBe(sha256Hex(canonicalJson(sorted)));
+    expect(base).toBe(nodeSha256(canonicalJson(defined)).toString('hex'));
+    const none = inputsHash(inputs({ candidates: [] }));
+    expect(none).toBe(
+      nodeSha256(canonicalJson({ ...defined, candidatesHash: definedCandidatesHash([]) })).toString('hex'),
+    );
   });
 
   it('names a candidate by id, contentHash and observedAt: a re-sighting changes the hash', () => {
     const seenLater = { ...O1, observedAt: IsoTs.parse('2026-10-06T14:59:00-04:00') };
     expect(inputsHash(inputs({ candidates: [seenLater, O2] }))).not.toBe(base);
     expect(inputsHash(inputs({ candidates: [{ ...O1 }, { ...O2 }] }))).toBe(base);
+  });
+
+  it('refHash is remembered per observation, never stale: an observation edited in place is hashed again', () => {
+    const edited: Mutable<Observation> = { ...O1 };
+    const before = candidatesHash([edited, O2]);
+    expect(before).toBe(definedCandidatesHash([O1, O2]));
+    edited.observedAt = IsoTs.parse('2026-10-06T14:59:00-04:00');
+    expect(candidatesHash([edited, O2])).toBe(definedCandidatesHash([edited, O2]));
+    expect(candidatesHash([edited, O2])).not.toBe(before);
+    edited.contentHash = Sha256.parse(sha256Hex('another row'));
+    expect(candidatesHash([edited, O2])).toBe(definedCandidatesHash([edited, O2]));
   });
 });
 
