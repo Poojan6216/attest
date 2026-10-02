@@ -3,9 +3,11 @@
  *
  *  - `subjectOverlap`: Jaccard |A∩B| / |A∪B| of the §11 subject token sets (stop words from the policy). An
  *    observation with no subject, or no tokens, scores 0.
- *  - `amountExact`: 1 iff the amounts are equal and both currencies are present and equal.
+ *  - `amountExact` (applicable when the claim has `amountCents`): 1 iff the amounts are equal and both
+ *    currencies are present and equal; a currency missing on either side scores 0.
  *  - `merchantMatch`: 1 iff the claim's normalised counterparty equals the observation's normalised merchant
- *    (`name()`), else the Jaccard of their name tokens; 0 when the observation has none.
+ *    (`name()`), else the Jaccard of their name tokens; 0 when the observation has none. Merchant text is read
+ *    through `counterparty()`: text it rejects has no name tokens (claim: not applicable; observation: 0).
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
@@ -44,11 +46,18 @@ export function subjectOverlap(
   observedSubject: string | undefined,
   stopWords: readonly string[],
 ): Ratio {
-  if (claimTokens.length === 0) return RATIO_ZERO;
-  return jaccard(claimTokens, subjectTokenSet(observedSubject, stopWords));
+  return tokenOverlap(claimTokens, subjectTokenSet(observedSubject, stopWords));
 }
 
-/** `amountExact`: 1 iff `amountCents` are equal and both currencies are present and equal (§5.1). */
+/** `subjectOverlap` from the observation's subject tokens (already `subjectTokenSet`). No claim tokens scores 0. */
+export function tokenOverlap(claimTokens: readonly string[], observedTokens: readonly string[]): Ratio {
+  return claimTokens.length === 0 ? RATIO_ZERO : jaccard(claimTokens, observedTokens);
+}
+
+/**
+ * `amountExact`: 1 iff `amountCents` are equal and both currencies are present and equal; a currency missing on
+ * either side scores 0 (§5.1 v1.3).
+ */
 export function amountExact(claimed: Money, observed: Money): Ratio {
   const same =
     claimed.amountCents !== undefined &&
@@ -71,7 +80,11 @@ export function merchantName(raw: string | undefined): MerchantName | null {
 
 /** `merchantMatch` of a claim merchant with an observation's `merchant` field (§5.1). */
 export function merchantMatch(claimed: MerchantName, observedMerchant: string | undefined): Ratio {
-  const observed = merchantName(observedMerchant);
+  return merchantMatchName(claimed, merchantName(observedMerchant));
+}
+
+/** `merchantMatch` from the observation's merchant already read by `merchantName` (null: no name tokens). */
+export function merchantMatchName(claimed: MerchantName, observed: MerchantName | null): Ratio {
   if (observed === null) return RATIO_ZERO;
   return claimed.name === observed.name ? RATIO_ONE : jaccard(claimed.tokens, observed.tokens);
 }

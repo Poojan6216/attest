@@ -6,8 +6,9 @@
  *  1. (The task's check.) Every scenario with exactly one claim and an expected non-null score: the maximum
  *     features().score over that claim's same-type observations inside claimWindow equals the expectation.
  *  2. (Stronger.) Every claim receipt with a non-null score in every batch scenario: the best score over the
- *     claim's own candidates (same type, inside claimWindow, seen by evaluatedAt, the calendar.created
- *     first-seen rule, minus observations the expectations assign to other claims or the scenario fixes),
+ *     claim's own candidates (same type, inside claimWindow, seen by evaluatedAt, the v1.3 calendar.created
+ *     first-seen rule: the earliest observedAt per contentHash ≥ start(p,t) − beforeClaimMin, minus
+ *     observations the expectations assign to other claims or the scenario fixes),
  *     and, when the receipt names its assigned observation, that pair's score. The best candidate's cp.*
  *     reasons (§15: "cp.* from the best candidate only") must be exactly the receipt's cp.* reason codes.
  */
@@ -19,7 +20,7 @@ import { loadPolicy, type Policy } from '../../../src/core/policy';
 import { compareRatio, type Ratio } from '../../../src/core/ratio';
 import type { Claim, Observation } from '../../../src/core/schema';
 import { MS_PER_MINUTE } from '../../../src/core/units';
-import { claimWindow } from '../../../src/core/window';
+import { claimWindow, precisionStartMs } from '../../../src/core/window';
 import { type LoadedScenario, loadScenario, scenarioFiles } from '../../golden/load';
 
 const text = (value: Ratio): string => `${value.num}/${value.den}`;
@@ -115,13 +116,20 @@ function ownCandidates(item: ScoredClaim): Observation[] {
   );
   for (const pair of loaded.fixed) takenElsewhere.add(pair.observationId);
   const evaluatedMs = instantMs(loaded.evaluatedAt);
-  const firstSeenMs = instantMs(claim.claimedAt) - policy.windows.beforeClaimMin * MS_PER_MINUTE;
-  return [...loaded.observations.values()].filter(
+  const seen = [...loaded.observations.values()].filter((o) => instantMs(o.observedAt) <= evaluatedMs);
+  // §4.1 v1.3: measured from the unit start, against the earliest sighting of each contentHash.
+  const firstSeenFromMs = precisionStartMs(claim) - policy.windows.beforeClaimMin * MS_PER_MINUTE;
+  const earliest = new Map<string, number>();
+  for (const o of seen) {
+    const at = instantMs(o.observedAt);
+    earliest.set(o.contentHash, Math.min(earliest.get(o.contentHash) ?? at, at));
+  }
+  return seen.filter(
     (observation) =>
       inWindow(claim, policy, observation) &&
       !takenElsewhere.has(observation.id) &&
-      instantMs(observation.observedAt) <= evaluatedMs &&
-      (claim.type !== 'calendar.created' || instantMs(observation.observedAt) >= firstSeenMs),
+      (claim.type !== 'calendar.created' ||
+        (earliest.get(observation.contentHash) ?? Number.NEGATIVE_INFINITY) >= firstSeenFromMs),
   );
 }
 

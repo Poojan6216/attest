@@ -26,6 +26,8 @@ const ANGSTROM = '\u212B';
 const ZWSP = '\u200B';
 const RLO = '\u202E';
 const LRO = '\u202D';
+const RLE = '\u202B';
+const LRE = '\u202A';
 const PDF = '\u202C';
 const NBSP = '\u00A0';
 
@@ -98,6 +100,10 @@ const EMAIL_ROWS: readonly EmailRow[] = [
   // Non-ASCII or ACE domains: an xn-- label (any case, any position) is confusable even though it is ASCII.
   plain('priya@xn--pple-43d.com', 'priya', 'xn--pple-43d.com', true),
   plain('priya@XN--pple-43d.com', 'priya', 'XN--pple-43d.com', true),
+  // v1.3 §11: xn-- in ANY ASCII case: mixed-case prefixes are ACE labels too.
+  plain('priya@xN--pple-43d.com', 'priya', 'xN--pple-43d.com', true),
+  plain('priya@Xn--pple-43d.com', 'priya', 'Xn--pple-43d.com', true),
+  plain('priya@mail.xN--mnchen-3ya.de', 'priya', 'mail.xN--mnchen-3ya.de', true),
   plain('priya@mail.xn--pple-43d.com', 'priya', 'mail.xn--pple-43d.com', true),
   plain('priya@c\u00F6mpany.com', 'priya', 'c\u00F6mpany.com', true),
   plain('priya@compan\u0443.com', 'priya', 'compan\u0443.com', true), // Cyrillic у
@@ -255,6 +261,10 @@ const NO_COUNTERPARTY: (string | undefined)[] = [
   `${RLO}ayirp${PDF}`,
   `${LRO}Priya${PDF}`,
   `${RLO}Pri${ZWSP}y\u00E1`,
+  // v1.3 §11: a bidi embedding (RLE, LRE) reorders like an override, so it is refused the same way.
+  `${RLE}ayirp${PDF}`,
+  `${LRE}Priya${PDF}`,
+  `Priya ${RLE}Shah`,
   // A \p{No} digit NFKC would change shows one name and matches another ("Priya²" would be "priya2").
   'Priya\u00B2',
   '\u2460 Priya',

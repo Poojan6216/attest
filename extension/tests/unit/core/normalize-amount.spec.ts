@@ -99,6 +99,8 @@ const REJECTED: [string, AmountOptions][] = [
   // Text that displays differently from how it is stored or folded.
   ['\u202E01$\u202C', USD], // RLO: shows as "$10", stored as "01$"
   ['\u202D$10\u202C', USD], // LRO
+  ['\u202B01$\u202C', USD], // v1.3: RLE, an embedding, reorders like an override
+  ['\u202A$10\u202C', USD], // LRE
   ['$9\u2079\u2079', USD], // superscript cents: $9.99 shown, NFKC gives "$999"
   ['$10\u00B2', USD], // NFKC gives "$102"
   ['$\u2460\u2461', USD], // circled ①②

@@ -27,6 +27,9 @@ const pair = (claim: number, observation: number, score: Ratio, claimedAtMs = T0
   observationId: O(observation),
   score,
 });
+/** No observation fixed as taken: `taken` is required (§4.3 v1.3 `assign(pairs, policy, fixed, taken)`). */
+const NONE: ReadonlySet<Ulid> = new Set();
+
 const fix = (observation: number, claim: number): FixedPair => ({
   observationId: O(observation),
   claimId: C(claim),
@@ -34,29 +37,29 @@ const fix = (observation: number, claim: number): FixedPair => ({
 
 describe('assign: fixed pairs', () => {
   it('are taken first and never moved, even by a better score', () => {
-    const result = assign([pair(2, 1, ratio(1, 1))], DEFAULT_POLICY, [fix(1, 1)]);
+    const result = assign([pair(2, 1, ratio(1, 1))], DEFAULT_POLICY, [fix(1, 1)], NONE);
     expect([...result]).toEqual([[O(1), C(1)]]);
   });
 
   it('a fixed claim takes no second observation; the next claim gets it', () => {
     const pairs = [pair(1, 2, ratio(1, 1)), pair(3, 2, ratio(3, 4))];
-    expect([...assign(pairs, DEFAULT_POLICY, [fix(1, 1)])]).toEqual([
+    expect([...assign(pairs, DEFAULT_POLICY, [fix(1, 1)], NONE)]).toEqual([
       [O(1), C(1)],
       [O(2), C(3)],
     ]);
   });
 
   it('are kept with no scored pair at all (an override keeps its stored observation)', () => {
-    expect([...assign([], DEFAULT_POLICY, [fix(5, 4)])]).toEqual([[O(5), C(4)]]);
+    expect([...assign([], DEFAULT_POLICY, [fix(5, 4)], NONE)]).toEqual([[O(5), C(4)]]);
   });
 
   it('a repeated identical fixed pair is harmless', () => {
-    expect([...assign([], DEFAULT_POLICY, [fix(1, 1), fix(1, 1)])]).toEqual([[O(1), C(1)]]);
+    expect([...assign([], DEFAULT_POLICY, [fix(1, 1), fix(1, 1)], NONE)]).toEqual([[O(1), C(1)]]);
   });
 
   it('fixed pairs that are not one-to-one fail loud (a corrupt ledger never grades silently)', () => {
-    expect(() => assign([], DEFAULT_POLICY, [fix(1, 1), fix(1, 2)])).toThrow(CandidatesError);
-    expect(() => assign([], DEFAULT_POLICY, [fix(1, 1), fix(2, 1)])).toThrow(
+    expect(() => assign([], DEFAULT_POLICY, [fix(1, 1), fix(1, 2)], NONE)).toThrow(CandidatesError);
+    expect(() => assign([], DEFAULT_POLICY, [fix(1, 1), fix(2, 1)], NONE)).toThrow(
       expect.objectContaining({ code: 'fixed_conflict' }),
     );
   });
@@ -68,14 +71,24 @@ describe('assign: taken observations and bad input', () => {
     expect([...assign(pairs, DEFAULT_POLICY, [], new Set([O(1)]))]).toEqual([[O(2), C(1)]]);
   });
 
+  it("a taken observation is never assigned, even as every claim's best and only candidate", () => {
+    const pairs = [pair(1, 1, ratio(1, 1)), pair(2, 1, ratio(1, 1), T0 - 1), pair(3, 1, ratio(9, 10))];
+    expect([...assign(pairs, DEFAULT_POLICY, [], new Set([O(1)]))]).toEqual([]);
+  });
+
+  it('a fixed pair is kept as given even when its observation is also taken (Decisions [1.3])', () => {
+    const result = assign([pair(2, 1, ratio(1, 1))], DEFAULT_POLICY, [fix(1, 1)], new Set([O(1)]));
+    expect([...result]).toEqual([[O(1), C(1)]]);
+  });
+
   it.each([Number.NaN, 1.5, Number.POSITIVE_INFINITY])('rejects claimedAtMs %s', (claimedAtMs) => {
-    expect(() => assign([pair(1, 1, ratio(1, 1), claimedAtMs)], DEFAULT_POLICY, [])).toThrow(
+    expect(() => assign([pair(1, 1, ratio(1, 1), claimedAtMs)], DEFAULT_POLICY, [], NONE)).toThrow(
       expect.objectContaining({ code: 'invalid_pair' }),
     );
   });
 
   it('rejects a hand-built score with a zero denominator (ratio.ts)', () => {
-    expect(() => assign([pair(1, 1, { num: 1n, den: 0n })], DEFAULT_POLICY, [])).toThrow();
+    expect(() => assign([pair(1, 1, { num: 1n, den: 0n })], DEFAULT_POLICY, [], NONE)).toThrow();
   });
 });
 

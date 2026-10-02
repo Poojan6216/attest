@@ -3,20 +3,13 @@
  * schema, at least five valid cases (each parses to exactly itself) and five invalid ones, each rejected at
  * one specific path. Grading-input schemas are in schema-grading.spec.ts, primitives and enums in
  * schema-primitives.spec.ts, caps in schema-limits.spec.ts, Reason and its closed params in
- * schema-reasons.spec.ts.
+ * schema-reasons.spec.ts, ReceiptOverride and the v1.3 cross-field checks in schema-cross-checks.spec.ts.
  */
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
-import {
-  Claim,
-  Grant,
-  HealthReport,
-  Observation,
-  Receipt,
-  ReceiptOverride,
-  Request,
-} from '../../../src/core/schema';
+import { idFromHash } from '../../../src/core/hash';
+import { Claim, Grant, HealthReport, Observation, Receipt, Request } from '../../../src/core/schema';
 
 type Path = readonly (string | number)[];
 type Invalid = readonly [label: string, value: unknown, path: Path];
@@ -60,8 +53,11 @@ const CLAIM = {
   rawHash: HASH,
 };
 
+/** §10 (v1.3): an observation's id is idFromHash(contentHash), checked by the schema. */
+const DAY = { ...CLAIM, claimedAtPrecision: 'day' };
+
 const OBSERVATION = {
-  id: ULID,
+  id: idFromHash(HASH),
   source: 'gmail.sent',
   type: 'email.sent',
   counterparty: 'priya@company.com',
@@ -151,7 +147,7 @@ const TABLES: readonly Table[] = [
         claimedAtEnd: '2026-11-02T00:00:00-05:00',
       },
       // 09:02Z then 10:00Z: after as instants although the strings sort the other way.
-      { ...CLAIM, claimedAt: '2026-10-06T14:02:00+05:00', claimedAtEnd: '2026-10-06T10:00:00Z' },
+      { ...DAY, claimedAt: '2026-10-06T14:02:00+05:00', claimedAtEnd: '2026-10-06T10:00:00Z' },
       // The US spring-forward day is 23 hours: it ends at the next local midnight, in the summer offset.
       {
         ...CLAIM,
@@ -159,28 +155,28 @@ const TABLES: readonly Table[] = [
         claimedAtPrecision: 'day',
         claimedAtEnd: '2026-03-09T00:00:00-04:00',
       },
-      { ...CLAIM, claimedAtEnd: '2026-10-06T18:03:00Z' }, // the end of the minute, written in UTC
-      { ...CLAIM, claimedAtEnd: '2026-10-06T14:02:00.001-04:00' }, // one millisecond is strictly after
+      { ...DAY, claimedAtEnd: '2026-10-07T04:00:00Z' }, // the next local midnight, written in UTC
+      { ...DAY, claimedAtEnd: '2026-10-06T14:02:00.001-04:00' }, // one millisecond is strictly after
     ],
     invalid: [
-      ['a claimedAtEnd equal to claimedAt', { ...CLAIM, claimedAtEnd: T0 }, ['claimedAtEnd']],
+      ['a claimedAtEnd equal to claimedAt', { ...DAY, claimedAtEnd: T0 }, ['claimedAtEnd']],
       [
         'a claimedAtEnd at the same instant in another offset',
-        { ...CLAIM, claimedAtEnd: '2026-10-06T18:02:00Z' },
+        { ...DAY, claimedAtEnd: '2026-10-06T18:02:00Z' },
         ['claimedAtEnd'],
       ],
       [
         'a claimedAtEnd before claimedAt',
-        { ...CLAIM, claimedAtEnd: '2026-10-06T14:01:59-04:00' },
+        { ...DAY, claimedAtEnd: '2026-10-06T14:01:59-04:00' },
         ['claimedAtEnd'],
       ],
       // 18:02Z then 10:00Z: before as instants although the string sorts after.
       [
         'a claimedAtEnd that only sorts after',
-        { ...CLAIM, claimedAtEnd: '2026-10-06T15:00:00+05:00' },
+        { ...DAY, claimedAtEnd: '2026-10-06T15:00:00+05:00' },
         ['claimedAtEnd'],
       ],
-      ['a claimedAtEnd without offset', { ...CLAIM, claimedAtEnd: '2026-10-07T00:00:00' }, ['claimedAtEnd']],
+      ['a claimedAtEnd without offset', { ...DAY, claimedAtEnd: '2026-10-07T00:00:00' }, ['claimedAtEnd']],
       ['a missing claimedAtPrecision', without(CLAIM, 'claimedAtPrecision'), ['claimedAtPrecision']],
       ['a precision of second', { ...CLAIM, claimedAtPrecision: 'second' }, ['claimedAtPrecision']],
       ['a date-only targetAt', { ...CLAIM, targetAt: '2026-10-09' }, ['targetAt']],
@@ -224,6 +220,7 @@ const TABLES: readonly Table[] = [
       ['an unknown source', { ...OBSERVATION, source: 'outlook' }, ['source']],
       ['an unknown type', { ...OBSERVATION, type: 'email.received' }, ['type']],
       ['a missing contentHash', without(OBSERVATION, 'contentHash'), ['contentHash']],
+      ['an id not derived from contentHash', { ...OBSERVATION, id: ULID }, ['id']],
       ['a smuggled body', { ...OBSERVATION, body: 'Hi Priya, the code is 7731' }, []],
       ['an occurredAt without offset', { ...OBSERVATION, occurredAt: '2026-10-06T14:02' }, ['occurredAt']],
       ['a subjectHint over 80', { ...OBSERVATION, subjectHint: x(81) }, ['subjectHint']],
@@ -291,28 +288,6 @@ const TABLES: readonly Table[] = [
     ],
   },
   {
-    name: 'ReceiptOverride',
-    schema: ReceiptOverride,
-    valid: [
-      OVERRIDE,
-      { ...OVERRIDE, grade: 'VERIFIED', previousState: 'FINAL' },
-      { ...OVERRIDE, reason: x(120) },
-      { ...OVERRIDE, reason: 'x' },
-      { ...OVERRIDE, at: '2026-10-06T19:00:00Z' },
-      { ...OVERRIDE, reason: '\u200bJá cancelei' },
-    ],
-    invalid: [
-      ['an override to PARTIAL', { ...OVERRIDE, grade: 'PARTIAL' }, ['grade']],
-      ['an empty reason', { ...OVERRIDE, reason: '' }, ['reason']],
-      ['a blank reason', { ...OVERRIDE, reason: ' \t ' }, ['reason']],
-      ['an invisible-only reason', { ...OVERRIDE, reason: '\u200b\u200e\ufeff' }, ['reason']],
-      ['a smuggled note', { ...OVERRIDE, note: 'called Priya' }, []],
-      ['a reason over 120', { ...OVERRIDE, reason: x(121) }, ['reason']],
-      ['a previous USER_OVERRIDDEN', { ...OVERRIDE, previousState: 'USER_OVERRIDDEN' }, ['previousState']],
-      ['a missing at', without(OVERRIDE, 'at'), ['at']],
-    ],
-  },
-  {
     name: 'Receipt',
     schema: Receipt,
     valid: [
@@ -361,6 +336,7 @@ const TABLES: readonly Table[] = [
         { ...RECEIPT, signals: { 'time proximity': 1 } },
         ['signals', 'time proximity'],
       ],
+      ['a signal that is no §5.1 feature', { ...RECEIPT, signals: { userIdle: 1 } }, ['signals', 'userIdle']],
     ],
   },
 ];

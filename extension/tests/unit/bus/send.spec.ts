@@ -121,7 +121,9 @@ describe('send(): transport failures', () => {
     expect(records[0]).toMatchObject({ level: 'warn', event: 'bus.send_failed' });
     expect(records[0]?.fields.error).toMatch(/^BusError code=no_receiver /);
   });
+});
 
+describe('send(): transport failures that still resolve', () => {
   it('a synchronous throw from sendMessage (orphaned context) resolves undefined and is logged', async () => {
     vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockImplementation(() => {
       throw new Error('Extension context invalidated.');
@@ -195,7 +197,9 @@ describe('query()', () => {
     expect(result).toEqual({ type: 'ui.result', kind: 'ledger.export', ok: false, error: 'unavailable' });
     expect(records[0]?.fields).toEqual({ kind: 'ledger.export', reason: 'kind_mismatch' });
   });
+});
 
+describe('query(): invalid queries and failed results', () => {
   it('an invalid query is never sent: it rejects with BusError(invalid_outgoing)', async () => {
     const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage');
 

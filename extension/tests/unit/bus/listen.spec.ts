@@ -111,7 +111,9 @@ describe('drops', () => {
     expect(handler).not.toHaveBeenCalled();
     expect(drops()).toEqual([{ reason: 'foreign_sender', type: 'adapter.health' }]);
   });
+});
 
+describe('drops: malformed, unknown and unhandled messages', () => {
   it('drops an unknown type and does not log the unknown type string', async () => {
     connectAs(contentScript());
     const handlers = { 'adapter.health': vi.fn(), 'ui.query': vi.fn() };
@@ -157,7 +159,9 @@ describe('drops', () => {
 
     expect(records.filter((r) => r.event === 'bus.dropped').map((r) => r.level)).toEqual(['warn']);
   });
+});
 
+describe('drops: ui.query from anything but an extension page', () => {
   it('drops ui.query from a content script: only extension pages may ask for the ledger', async () => {
     connectAs(contentScript());
     const handler = vi.fn();
@@ -243,7 +247,9 @@ describe('handler failures', () => {
 
     expect(result).toEqual({ type: 'ui.result', kind: 'health.list', ok: false, error: 'handler_failed' });
   });
+});
 
+describe('handler failures: ui.query answers are checked before they leave', () => {
   it('a ui.query handler that answers for another kind is caught before the answer leaves', async () => {
     connectAs(extensionPage());
     const wrongKind: UiResult = { type: 'ui.result', kind: 'health.list', ok: true, data: [] };

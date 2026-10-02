@@ -71,16 +71,17 @@ function sortedByObservation(assignment: ReadonlyMap<Ulid, Ulid>): Map<Ulid, Uli
 }
 
 /**
- * §4.3 assignment: observation id → claim id, fixed pairs included, entries ordered by observation id.
- * `taken` lists observations fixed as taken by an overridden UNASKED receipt: the greedy pass never assigns
- * them (a fixed pair is still kept as given). Throws `CandidatesError('fixed_conflict')` for fixed pairs that
- * are not one-to-one, and `CandidatesError('invalid_pair')` for a `claimedAtMs` that is not a safe integer.
+ * §4.3 `assign(pairs, policy, fixed, taken)`: observation id → claim id, fixed pairs included, entries ordered
+ * by observation id. `taken` lists observations fixed as taken by an overridden UNASKED receipt: the greedy
+ * pass never assigns them (a fixed pair is still kept as given). Required, so no caller can forget it (Hard
+ * Rule 7). Throws `CandidatesError('fixed_conflict')` for fixed pairs that are not one-to-one, and
+ * `CandidatesError('invalid_pair')` for a `claimedAtMs` that is not a safe integer.
  */
 export function assign(
   pairs: readonly ScoredPair[],
   policy: AssignPolicy,
   fixed: readonly FixedPair[],
-  taken: ReadonlySet<Ulid> = new Set<Ulid>(),
+  taken: ReadonlySet<Ulid>,
 ): Map<Ulid, Ulid> {
   const assignment = fixedAssignment(fixed);
   const claimsTaken = new Set<Ulid>(assignment.values());

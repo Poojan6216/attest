@@ -16,6 +16,7 @@ import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import {
   CONTENT_FIELDS,
   DERIVED_FIELDS,
+  hashRowKey,
   hashText,
   project,
   type ProjectContext,
@@ -101,7 +102,7 @@ describe('project: one row per observer source keeps exactly the allowlisted fie
   });
 
   it.each(ROWS)('$source with a row key adds rowKeyHash to the record and to the hash', (row) => {
-    const rowKeyHash = nodeSha('msg-17');
+    const rowKeyHash = nodeSha('"msg-17"'); // §10 v1.3: sha256Hex(canonicalJson(rowKey))
     const canonical = row.canonical.replace('"source"', `"rowKeyHash":"${rowKeyHash}","source"`);
     const out = project(row.source, RAW, ctx(row.type, { rowKey: 'msg-17' }), DEFAULT_POLICY);
     expect(out.rowKeyHash).toBe(rowKeyHash);
@@ -212,7 +213,37 @@ describe('a raw row never supplies its own identity', () => {
 
   it('a raw rowKeyHash never replaces the hash of ctx.rowKey', () => {
     const out = project('gmail.sent', forged, ctx('email.sent', { rowKey: 'send-1' }), DEFAULT_POLICY);
-    expect(out.rowKeyHash).toBe(nodeSha('send-1'));
+    expect(out.rowKeyHash).toBe(nodeSha('"send-1"'));
+  });
+});
+
+describe('hashRowKey: sha256Hex(canonicalJson(rowKey)) (§10 v1.3)', () => {
+  it.each([
+    ['send-1', '"send-1"'],
+    ['', '""'],
+    ['a "quoted" key', '"a \\"quoted\\" key"'],
+    ['Pr\u0131ya', '"Pr\u0131ya"'],
+    ['\uD800', '"\\ud800"'], // a lone surrogate is escaped, never encoded as U+FFFD
+  ])('%j hashes the canonical JSON %s', (rowKey, json) => {
+    expect(hashRowKey(rowKey)).toBe(nodeSha(json));
+    expect(Sha256.safeParse(hashRowKey(rowKey)).success).toBe(true);
+  });
+
+  it('two row ids that differ only in a lone surrogate stay two observations', () => {
+    // Plain UTF-8 encodes U+D800 as U+FFFD, so hashing the text would merge them (hashText shows the collision).
+    expect(hashText('\uD800')).toBe(hashText('\uFFFD'));
+    expect(hashRowKey('\uD800')).not.toBe(hashRowKey('\uFFFD'));
+    const lone = sent(RAW, { rowKey: 'row-\uD800' });
+    const replaced = sent(RAW, { rowKey: 'row-\uFFFD' });
+    expect(lone.rowKeyHash).not.toBe(replaced.rowKeyHash);
+    expect(lone.id).not.toBe(replaced.id);
+  });
+
+  it('the content hash covers only the content fields, the source, the type and the rowKeyHash', () => {
+    const out = sent(RAW, { rowKey: 'send-1' });
+    const canonical = `{"counterparty":"priya@company.com","occurredAt":"${OCCURRED}","rowKeyHash":"${hashRowKey('send-1')}","source":"gmail.sent","subjectHint":"Q3 deck","type":"email.sent"}`;
+    expect(out.contentHash).toBe(nodeSha(canonical));
+    expect(out.id).toBe(idFromHash(out.contentHash));
   });
 });
 

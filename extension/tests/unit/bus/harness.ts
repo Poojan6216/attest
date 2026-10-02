@@ -22,6 +22,7 @@ import {
   UiResultMessage,
 } from '../../../src/bus/messages';
 import type { MessageSender } from '../../../src/bus/listen';
+import { idFromHash } from '../../../src/core/hash';
 import { Claim, Observation, Request } from '../../../src/core/schema';
 import { type LogLevel, type LogRecord, setLogLevel, setLogSink } from '../../../src/log';
 
@@ -31,7 +32,8 @@ export const SECRET = 'SSN 078-05-1120 card 4111 1111 1111 1111 pass hunter2';
 export const HASH = 'ab'.repeat(32);
 export const ULID_REQUEST = '01J9Z8K3M4N5P6Q7R8S9T0V1W2';
 export const ULID_CLAIM = '01J9Z8K3M4N5P6Q7R8S9T0V1W3';
-export const ULID_OBSERVATION = '01J9Z8K3M4N5P6Q7R8S9T0V1W4';
+/** §10 (v1.3): an observation's id is idFromHash(contentHash), and the schema checks it. */
+export const ULID_OBSERVATION = idFromHash(HASH);
 export const TS = '2026-10-01T09:30:00Z';
 export const TS_OFFSET = '2026-10-01T11:31:00+02:00';
 

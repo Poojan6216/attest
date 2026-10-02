@@ -16,7 +16,11 @@ import type { ClaimWindow } from './window';
 
 /** §5.1 timeProximity of an observation at `occurredAt` (ISO with offset) to a claim window. */
 export function timeProximity(window: ClaimWindow, occurredAt: string, toleranceMin: number): Ratio {
-  const at = instantMs(occurredAt);
+  return timeProximityAt(window, instantMs(occurredAt), toleranceMin);
+}
+
+/** `timeProximity` of an observation whose `occurredAt` instant is `at` (epoch ms). */
+export function timeProximityAt(window: ClaimWindow, at: number, toleranceMin: number): Ratio {
   const { anchor } = window;
   const before = at < anchor.startMs;
   const deltaMs = before ? anchor.startMs - at : Math.max(at - anchor.endMs, 0);

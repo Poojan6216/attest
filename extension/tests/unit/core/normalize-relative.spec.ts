@@ -175,6 +175,8 @@ const UNREADABLE: [string][] = [
   ['\u202E00:21\u202C'], // RLO: shows as "12:00", stored as "00:21"
   ['\u202Eyadretsey\u202C'],
   ['\u202DYesterday\u202C'],
+  ['\u202B00:21\u202C'], // v1.3: RLE, an embedding, is refused like an override
+  ['\u202AYesterday\u202C'], // LRE
 ];
 
 describe('resolveRelative() \u2014 US Eastern', () => {

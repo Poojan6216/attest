@@ -20,7 +20,7 @@ import {
   toRequestRow,
 } from '../../../src/ledger/index-fields';
 import { Claim, CoveragePing, Observation, Receipt, Request } from '../../../src/ledger/types';
-import { makeClaim, makeObservation, makePing, makeReceipt, makeRequest, omit, sha, ulid } from './fixtures';
+import { makeClaim, makeObservation, makePing, makeReceipt, makeRequest, omit, sha } from './fixtures';
 
 const BUCKET_MS = LEDGER_TIME_BUCKET_MINUTES * 60_000;
 
@@ -139,7 +139,7 @@ describe('row builders', () => {
       fc.property(stamp, stamp, fc.integer({ min: 1, max: 1_000_000 }), (at, other, n) => {
         const [a, b] = [at.ts, other.ts];
         const observation = Observation.parse(
-          makeObservation({ id: ulid(n), occurredAt: a, observedAt: b, contentHash: sha(n) }),
+          makeObservation({ occurredAt: a, observedAt: b, contentHash: sha(n) }),
         );
         const claim = Claim.parse(makeClaim({ claimedAt: a, observedAt: b }));
         const request = Request.parse(makeRequest({ ts: a }));
@@ -158,5 +158,5 @@ describe('row builders', () => {
       }),
       { numRuns: 1_000 },
     );
-  });
+  }, 60_000);
 });

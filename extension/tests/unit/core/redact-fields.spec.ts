@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../../policy/default.json';
-import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy, type Policy, PolicyError } from '../../../src/core/policy';
 import {
   clampSubjectHint,
   project,
@@ -171,11 +171,17 @@ describe('occurredAt is required', () => {
   });
 
   it('a valid occurredAt that the source allowlist omits is missing', () => {
-    const policy = loadPolicy({
+    // v1.3 §12: the loader rejects an allowlist without occurredAt, so only a hand-built policy gets here;
+    // project() still fails loud on it rather than inventing a time.
+    const document = {
       ...defaultPolicyJson,
       allowlistedFields: { ...defaultPolicyJson.allowlistedFields, 'gmail.receipt': ['merchant'] },
-    });
-    expectRedactError(() => project('gmail.receipt', BASE, CTX, policy), 'missing_occurred_at');
+    };
+    expect(() => loadPolicy(document)).toThrow(PolicyError);
+    const handBuilt: Pick<Policy, 'allowlistedFields'> = {
+      allowlistedFields: { ...DEFAULT_POLICY.allowlistedFields, 'gmail.receipt': ['merchant'] },
+    };
+    expectRedactError(() => project('gmail.receipt', BASE, CTX, handBuilt), 'missing_occurred_at');
   });
 });
 

@@ -4,9 +4,10 @@
  *
  * A candidate for a claim is an observation of the SAME `ActionType` whose `occurredAt` instant lies in the
  * claim window (inclusive at both ends, window.ts). For `calendar.created` it must also have been first seen
- * no earlier than `beforeClaimMin` before the claim: an event already on the calendar before the claim
- * cannot verify "created". Observations with the same `contentHash` count once (lowest id kept). Results are
- * ordered by (`occurredAt` instant, id), and never depend on the order the index returned them in.
+ * (the earliest `observedAt` of every observation sharing its `contentHash`) no earlier than
+ * `start(p,t) − beforeClaimMin`: an event already on the calendar before the claim cannot verify "created".
+ * Observations with the same `contentHash` count once (lowest id, then earliest `observedAt`, kept). Results are
+ * ordered by (`occurredAt` instant, id, `contentHash`), and never depend on the order the index returned them in.
  *
  * Split for size: candidates-index.ts (ObservationIndex, the memory index), candidates-assign.ts (§4.3
  * assignment), candidates-time.ts (memoised instants), candidates-error.ts. Import from here.
@@ -68,9 +69,9 @@ function merge(held: Sighting, next: Sighting): Sighting {
 }
 
 /**
- * The `calendar.created` first-seen bound (§4.1): `observedAt ≥ claimedAt − beforeClaimMin`, with `claimedAt`
- * read as the start of its precision unit (equal to `claimedAt` for a unit-aligned claim; a day-precision
- * "yesterday" claim must not reject an event first seen that morning). Null for every other type.
+ * The `calendar.created` first-seen bound (§4.1 v1.3): `observedAt ≥ start(p,t) − beforeClaimMin` (equal to
+ * `claimedAt − beforeClaimMin` for a unit-aligned claim; a day-precision "yesterday" claim must not reject an
+ * event first seen that morning). Null for every other type.
  */
 function firstSeenFromMs(claim: WindowClaim, policy: WindowPolicy): number | null {
   if (claim.type !== 'calendar.created') return null;
@@ -92,7 +93,7 @@ function compareSightings(a: Sighting, b: Sighting): number {
 
 /**
  * §4.1 candidates of `claim`, read from `index` and filtered exactly (the index may over-return). Empty for
- * a calendar claim without `targetAt`. Ordered by (`occurredAt` instant, id).
+ * a calendar claim without `targetAt`. Ordered by (`occurredAt` instant, id, `contentHash`).
  *
  * Rows are filtered by type and window before they are grouped by `contentHash`. Equal content hashes mean
  * equal `occurredAt` (it is hashed, §10), so a row and its re-sightings are in or out of the window together,

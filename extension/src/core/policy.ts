@@ -31,6 +31,7 @@ import { BASIS_POINTS } from './units';
 
 export { PolicyError } from './policy-errors';
 export {
+  ALLOWLISTABLE_FIELDS,
   ConditionName,
   CoverageLevel,
   FeatureName,

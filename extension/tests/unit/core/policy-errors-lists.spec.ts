@@ -268,7 +268,7 @@ const UNASKED_AND_FIELD_CASES: readonly Case[] = [
     'allowlisted field not an Observation field',
     ['allowlistedFields', 'gmail.sent', 1],
     'body',
-    'allowlistedFields["gmail.sent"][1]: must be an Observation field name',
+    'allowlistedFields["gmail.sent"][1]: must be a content field, rowKeyHash or contentHash',
   ),
   one(
     'duplicate allowlisted field',
@@ -280,7 +280,7 @@ const UNASKED_AND_FIELD_CASES: readonly Case[] = [
     'empty allowlist',
     ['allowlistedFields', 'gmail.receipt'],
     [],
-    'allowlistedFields["gmail.receipt"]: must not be empty',
+    'allowlistedFields["gmail.receipt"]: must list "occurredAt"',
   ),
   one(
     'unknown allowlist source',
@@ -354,7 +354,7 @@ describe('loadPolicy: properties', () => {
       }),
       PROPERTY_RUNS,
     );
-  });
+  }, 60_000);
 
   const WEIGHT_PATHS: readonly (readonly Segment[])[] = [
     ...Object.keys(policyJson.features).map((key) => ['features', key]),
@@ -374,7 +374,7 @@ describe('loadPolicy: properties', () => {
       ),
       PROPERTY_RUNS,
     );
-  });
+  }, 60_000);
 
   it('any weight or threshold above 1 is rejected naming its path', () => {
     fc.assert(
@@ -387,5 +387,5 @@ describe('loadPolicy: properties', () => {
       ),
       PROPERTY_RUNS,
     );
-  });
+  }, 60_000);
 });

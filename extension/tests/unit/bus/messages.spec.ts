@@ -75,7 +75,9 @@ describe('BusMessage', () => {
       expect(BusMessage.safeParse({ ...VALID[type], extra: SECRET }).success, type).toBe(false);
     }
   });
+});
 
+describe('BusMessage payload items', () => {
   it('rejects raw content smuggled into payload items (Hard Rule 2)', () => {
     const cases: unknown[] = [
       { ...VALID['adapter.claims'], requests: [{ ...REQUEST, transcript: SECRET }] },
@@ -107,7 +109,9 @@ describe('BusMessage', () => {
     expect(ObserverObservationsMessage.shape.observations.element).toBe(Observation);
     expect(AdapterHealthMessage.shape.health).toBe(HealthReport);
   });
+});
 
+describe('BusMessage payload items: the Sprint 1 fields', () => {
   it('rejects payloads missing the Sprint 1 fields or breaking their formats', () => {
     const noPrecision = Object.fromEntries(
       Object.entries(CLAIM).filter(([key]) => key !== 'claimedAtPrecision'),
@@ -119,6 +123,10 @@ describe('BusMessage', () => {
       { ...VALID['adapter.claims'], claims: [{ ...CLAIM, amountCents: -1 }] },
       { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, rowKeyHash: 'row-17' }] },
       { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, currency: 'usd' }] },
+      // v1.3: an observation's id must be idFromHash(contentHash); claimedAtEnd only on a day claim.
+      { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, id: CLAIM.id }] },
+      { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, contentHash: 'cd'.repeat(32) }] },
+      { ...VALID['adapter.claims'], claims: [{ ...CLAIM, claimedAtEnd: '2026-10-01T09:31:00Z' }] },
     ];
     for (const raw of cases) expect(BusMessage.safeParse(raw).success).toBe(false);
     const withRowKey = { ...OBSERVATION, rowKeyHash: HASH, amountCents: 0, currency: 'USD' };

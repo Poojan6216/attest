@@ -7,8 +7,12 @@
  * every other field itself. It never copies `id`, `source`, `type`, `observedAt`, `rowKeyHash` or
  * `contentHash` from the raw row, so a row cannot choose its own identity:
  *  - `source`, `type`, `observedAt` come from the arguments;
- *  - `rowKeyHash` = SHA-256 of `ctx.rowKey` (the vendor's own row id) when the observer has one;
- *  - `contentHash` = SHA-256 of the canonical JSON of `{source, type, ...kept content fields, rowKeyHash?}`;
+ *  - `rowKeyHash` = `sha256Hex(canonicalJson(ctx.rowKey))` when the observer has the vendor's own row id;
+ *    canonical JSON escapes a lone surrogate, which plain UTF-8 turns into U+FFFD, so two distinct row ids
+ *    never share a hash (§10 v1.3);
+ *  - `contentHash` = SHA-256 of the canonical JSON of `{source, type, ...kept content fields, rowKeyHash?}`,
+ *    where the content fields are only `counterparty`, `merchant`, `amountCents`, `currency`, `subjectHint` and
+ *    `occurredAt` (§10 v1.3): no derived field ever enters it;
  *  - `id` = `idFromHash(contentHash)`.
  * So the same row seen twice is one observation (observedAt is not hashed), a created and a deleted event
  * differ (type is hashed), and two identical sends with different row ids stay two (rowKeyHash is hashed).
@@ -88,6 +92,14 @@ export function hashText(text: string): Sha256 {
   return Sha256.parse(sha256Hex(text));
 }
 
+/**
+ * §10 (v1.3): `rowKeyHash = sha256Hex(canonicalJson(rowKey))`. Hashed through canonical JSON, not as plain
+ * UTF-8, so row ids that differ only in a lone surrogate (which UTF-8 encodes as U+FFFD) stay distinct.
+ */
+export function hashRowKey(rowKey: string): Sha256 {
+  return Sha256.parse(sha256Hex(canonicalJson(rowKey)));
+}
+
 /** The first SUBJECT_HINT code points of `text`; a surrogate pair counts once and is never split. */
 export function clampSubjectHint(text: string): string {
   if (text.length <= SCHEMA_LIMITS.SUBJECT_HINT) return text;
@@ -157,7 +169,7 @@ export function project(
     source,
     type,
     ...content,
-    ...(rowKey === undefined ? {} : { rowKeyHash: hashText(rowKey) }),
+    ...(rowKey === undefined ? {} : { rowKeyHash: hashRowKey(rowKey) }),
   };
   const contentHash = sha256Hex(canonicalJson(hashed));
   return Observation.parse(

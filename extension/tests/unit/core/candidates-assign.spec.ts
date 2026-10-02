@@ -25,8 +25,11 @@ const pair = (claim: number, observation: number, score: Ratio, claimedAtMs = T0
   score,
 });
 
+/** No observation fixed as taken: `taken` is required (§4.3 v1.3 `assign(pairs, policy, fixed, taken)`). */
+const NONE: ReadonlySet<Ulid> = new Set();
+
 const entries = (map: ReadonlyMap<Ulid, Ulid>) => [...map];
-const run = (pairs: readonly ScoredPair[]) => entries(assign(pairs, DEFAULT_POLICY, []));
+const run = (pairs: readonly ScoredPair[]) => entries(assign(pairs, DEFAULT_POLICY, [], NONE));
 
 describe('assign: best score first, exact', () => {
   it('the better-scoring claim takes a shared observation, whatever the input order', () => {
@@ -100,7 +103,7 @@ describe('assign: thresholds.partial', () => {
 
   it('follows the policy threshold with no code change', () => {
     const lenient = loadPolicy({ ...defaultPolicyJson, thresholds: { verified: 0.85, partial: 0.4 } });
-    expect(entries(assign([pair(1, 1, ratio(49, 100))], lenient, []))).toEqual([[O(1), C(1)]]);
+    expect(entries(assign([pair(1, 1, ratio(49, 100))], lenient, [], NONE))).toEqual([[O(1), C(1)]]);
   });
 });
 
@@ -123,7 +126,7 @@ describe('assign: one-to-one both ways', () => {
   it('never reorders or edits its inputs (frozen arrays are accepted)', () => {
     const pairs = Object.freeze([pair(2, 1, ratio(1, 2)), pair(1, 1, ratio(1, 2)), pair(1, 2, ratio(3, 4))]);
     const fixed = Object.freeze([{ observationId: O(9), claimId: C(9) }]);
-    expect(entries(assign(pairs, DEFAULT_POLICY, fixed))).toEqual([
+    expect(entries(assign(pairs, DEFAULT_POLICY, fixed, NONE))).toEqual([
       [O(1), C(2)],
       [O(2), C(1)],
       [O(9), C(9)],

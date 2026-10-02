@@ -33,6 +33,7 @@ import {
   makeHealth,
   makeObservation,
   makePing,
+  observationId,
   sha,
   ulid,
   uniqueDbName,
@@ -65,11 +66,11 @@ async function seedObservations(): Promise<void> {
   await upsertObservation(db, valid);
   await writeRaw('observations', [
     {
-      ...toObservationRow(Observation.parse(makeObservation({ id: ulid(2), contentHash: sha(2) }))),
+      ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(2) }))),
       body: SECRET,
     },
     {
-      ...toObservationRow(Observation.parse(makeObservation({ id: ulid(3), contentHash: sha(3) }))),
+      ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(3) }))),
       contentHash: 'zz',
     },
   ]);
@@ -91,11 +92,10 @@ describe('reads skip corrupt rows', () => {
     const bucket = timeBucketOf(makeObservation().occurredAt);
     const found = await observationsByTypeAndBuckets(db, 'email.sent', bucket, bucket);
     expect(found).toEqual([makeObservation()]);
+    // Rows are read in primary-key (id) order within the bucket.
+    const skipped = [observationId(2), observationId(3)].sort();
     expect(invalidRowEvents().map((record) => [record.level, record.fields.table, record.fields.id])).toEqual(
-      [
-        ['warn', 'observations', ulid(2)],
-        ['warn', 'observations', ulid(3)],
-      ],
+      skipped.map((id) => ['warn', 'observations', id]),
     );
     expect(JSON.stringify(logs.records)).not.toContain(SECRET);
     expect(await observationsByCounterpartyToken(db, 'alice@example.com')).toEqual([makeObservation()]);
@@ -104,7 +104,7 @@ describe('reads skip corrupt rows', () => {
   it('a get of a corrupt row returns undefined instead of throwing', async () => {
     await seedObservations();
     await writeRaw('meta', [{ key: 'retentionDays', value: { days: 90 } }]);
-    expect(await getObservation(db, ulid(2))).toBeUndefined();
+    expect(await getObservation(db, observationId(2))).toBeUndefined();
     expect(await getMeta(db, 'retentionDays')).toBeUndefined();
     expect(invalidRowEvents().map((record) => record.fields.table)).toEqual(['observations', 'meta']);
   });
@@ -116,7 +116,9 @@ describe('reads skip corrupt rows', () => {
     expect(JSON.stringify(exported)).not.toContain(SECRET);
     expect(invalidRowEvents()).toHaveLength(2);
   });
+});
 
+describe('corrupt rows: valid writes replace them and logs never echo them', () => {
   it('a valid write replaces a corrupt latest-wins row instead of being blocked by it', async () => {
     await writeRaw('adapterHealth', [
       { adapterId: 'muse', status: 'MAYBE', checkedAt: '2099-01-01T00:00:00Z' },
@@ -174,17 +176,21 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
     await writeRaw('observations', [
       { ...toObservationRow(Observation.parse(makeObservation())), subjectHint: 'x'.repeat(81) },
     ]);
-    const fresh = makeObservation({ id: ulid(2) });
-    expect(await upsertObservation(db, fresh)).toEqual({ id: ulid(2), inserted: true });
-    expect(await getObservation(db, ulid(2))).toEqual(fresh);
+    // §10 v1.3: the same contentHash always has the same id, so the fresh row takes the stale row's id.
+    const fresh = makeObservation({ observedAt: '2026-10-01T11:00:00-04:00' });
+    expect(await upsertObservation(db, fresh)).toEqual({ id: observationId(1), inserted: true });
+    expect(await getObservation(db, observationId(1))).toEqual(fresh);
     expect(await observationsByCounterpartyToken(db, 'alice@example.com')).toEqual([fresh]);
     expect(await db.observations.count()).toBe(1);
-    expect(events('ledger.row_replaced')).toEqual([['observations', ulid(1)]]);
+    expect(events('ledger.row_replaced')).toEqual([['observations', observationId(1)]]);
     // Once replaced, the hash is idempotent again.
-    expect(await upsertObservation(db, makeObservation({ id: ulid(3) }))).toEqual({
-      id: ulid(2),
-      inserted: false,
-    });
+    expect(await upsertObservation(db, makeObservation({ observedAt: '2026-10-01T12:00:00-04:00' }))).toEqual(
+      {
+        id: observationId(1),
+        inserted: false,
+      },
+    );
+    expect(await getObservation(db, observationId(1))).toEqual(fresh);
   });
 
   it('a valid claim replaces an unreadable row holding its rawHash', async () => {
@@ -197,13 +203,15 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
   });
 
   it('a valid write replaces an unreadable row under its own id instead of raising id_conflict', async () => {
+    // An unreadable row under observationId(1) holding another hash (and an unknown source).
     const stale = {
       ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(9) }))),
+      id: observationId(1),
       source: 'outlook',
     };
     await writeRaw('observations', [stale]);
-    expect(await upsertObservation(db, makeObservation())).toEqual({ id: ulid(1), inserted: true });
-    expect(await getObservation(db, ulid(1))).toEqual(makeObservation());
+    expect(await upsertObservation(db, makeObservation())).toEqual({ id: observationId(1), inserted: true });
+    expect(await getObservation(db, observationId(1))).toEqual(makeObservation());
     expect(await db.observations.count()).toBe(1);
   });
 });

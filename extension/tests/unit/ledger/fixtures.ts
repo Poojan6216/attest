@@ -10,6 +10,7 @@ import 'fake-indexeddb/auto';
 
 import { expect } from 'vitest';
 
+import { idFromHash } from '../../../src/core/hash';
 import { LedgerError, type LedgerErrorCode } from '../../../src/ledger/errors';
 import type {
   AdapterHealthInput,
@@ -27,10 +28,20 @@ export function ulid(n: number): string {
   return `01JA${String(n).padStart(22, '0')}`;
 }
 
-/** A valid lowercase SHA-256 hex string derived from `n`. */
+/**
+ * A valid lowercase SHA-256 hex string derived from `n`. `n` is written in both halves, so the first 128 bits
+ * differ per `n` and `idFromHash(sha(n))` (which reads only those bits, §10) is distinct per `n` too.
+ */
 export function sha(n: number): string {
-  return n.toString(16).padStart(64, '0');
+  return n.toString(16).padStart(32, '0').repeat(2);
 }
+
+/** The id of the observation whose contentHash is `sha(n)`: §10 (v1.3) `id = idFromHash(contentHash)`. */
+export function observationId(n: number): string {
+  return idFromHash(sha(n));
+}
+
+const HEX_SHA256 = /^[0-9a-f]{64}$/;
 
 let dbCounter = 0;
 
@@ -40,16 +51,22 @@ export function uniqueDbName(prefix: string): string {
   return `attest-test-${prefix}-${String(dbCounter)}`;
 }
 
+/**
+ * A valid observation: contentHash `sha(1)` unless overridden, and an id derived from whatever contentHash it
+ * ends up with (the schema checks `id = idFromHash(contentHash)`, §10 v1.3). Overriding `id` builds an
+ * observation whose id does not match, which the schema rejects.
+ */
 export function makeObservation(overrides: Partial<ObservationInput> = {}): ObservationInput {
+  const contentHash = overrides.contentHash ?? sha(1);
   return {
-    id: ulid(1),
+    id: HEX_SHA256.test(contentHash) ? idFromHash(contentHash) : observationId(1),
     source: 'gmail.sent',
     type: 'email.sent',
     counterparty: 'alice@example.com',
     subjectHint: 'Quarterly numbers',
     occurredAt: '2026-10-01T10:15:00-04:00',
     observedAt: '2026-10-01T10:20:00-04:00',
-    contentHash: sha(1),
+    contentHash,
     ...overrides,
   };
 }
@@ -89,12 +106,12 @@ export function makeReceipt(overrides: Partial<ReceiptInput> = {}): ReceiptInput
     id: ulid(301),
     agent: 'muse',
     claimId: ulid(101),
-    observationIds: [ulid(1)],
+    observationIds: [observationId(1)],
     requestId: ulid(201),
     grade: 'VERIFIED',
     confidence: 0.92,
     ruleId: 'verified',
-    reasons: [{ code: 'match.best', params: { observationId: ulid(1) } }],
+    reasons: [{ code: 'match.best', params: { observationId: observationId(1) } }],
     signals: { timeProximity: 0.9, counterpartyExact: 1 },
     state: 'PENDING',
     policyHash: sha(302),

@@ -242,28 +242,34 @@ describe('an observation with no tokens scores 0, never "not applicable" (§5.2)
   });
 });
 
-describe('a claim no weighted feature can score is never given a score (§5.3, HR5/HR6)', () => {
+describe('a claim no weighted feature can score is never given a score (§5.3 v1.3, HR5/HR6)', () => {
   /**
-   * The loader rejects identity features of weight 0, but not an EMPTY identity list for a type with sources:
-   * then a claim with only zero-weight applicable features is not underspecified, yet has nothing to score.
-   * Either the loader rejects this policy (contract issue raised) or features() fails loud; never a number.
+   * v1.2 let an EMPTY identity list stand for a type with sources: a claim with only zero-weight applicable
+   * features was then not underspecified, yet had nothing to score. v1.3 closes it at load, and features()
+   * still fails loud (RatioError) for any claim with no weighted applicable feature: never a number.
    */
-  it('the loader rejects the policy, or features() throws a typed RatioError', () => {
+  it('the loader rejects the policy that opened the hole', () => {
     const document = {
       ...defaultPolicyJson,
       features: { ...defaultPolicyJson.features, timeProximity: 0 },
       identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: [] },
     };
-    let policy: Policy;
-    try {
-      policy = loadPolicy(document);
-    } catch (error) {
-      expect(error).toBeInstanceOf(PolicyError);
-      return;
-    }
+    expect(() => loadPolicy(document)).toThrow(PolicyError);
+  });
+
+  it('features() throws a typed RatioError when nothing weighted applies', () => {
+    const policy = withWeights({ timeProximity: 0 });
     const bare: FeatureClaim = { type: EMAIL, claimedAt: AT, claimedAtPrecision: 'minute' };
     expect(applicableFeatures(bare, policy)).toEqual(['timeProximity']);
-    expect(isUnderspecified(bare, policy)).toBe(false);
-    expect(() => features(bare, { occurredAt: AT }, policy)).toThrow(RatioError);
+    expect(isUnderspecified(bare, policy)).toBe(true);
+    expect(isAssignable(bare, policy)).toBe(false);
+    let thrown: unknown;
+    try {
+      features(bare, { occurredAt: AT }, policy);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(RatioError);
+    expect(thrown).toMatchObject({ code: 'zero_weight_sum' });
   });
 });

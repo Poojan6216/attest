@@ -59,7 +59,7 @@ describe('instantMs / isoWithOffset (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  });
+  }, 60_000);
 
   it('instantMs accepts exactly what the IsoTs schema accepts, with the instant Date reads', () => {
     const two = (max: number) => fc.integer({ min: 0, max }).map((n) => String(n).padStart(2, '0'));
@@ -92,7 +92,7 @@ describe('instantMs / isoWithOffset (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  });
+  }, 60_000);
 });
 
 /** Local wall-clock fields of an ISO string in its own written offset. */

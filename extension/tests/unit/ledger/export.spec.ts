@@ -25,6 +25,7 @@ import {
   makePing,
   makeReceipt,
   makeRequest,
+  observationId,
   omit,
   sha,
   ulid,
@@ -48,7 +49,7 @@ afterEach(() => {
 async function populate(db: LedgerDb, reverse = false): Promise<void> {
   const order = <T>(items: T[]): T[] => (reverse ? [...items].reverse() : items);
   for (const n of order([2, 1])) {
-    await upsertObservation(db, makeObservation({ id: ulid(n), contentHash: sha(n) }));
+    await upsertObservation(db, makeObservation({ contentHash: sha(n) }));
     await upsertClaim(db, makeClaim({ id: ulid(100 + n), rawHash: sha(100 + n) }));
     await putRequest(db, makeRequest({ id: ulid(200 + n) }));
     await putReceipt(db, makeReceipt({ id: ulid(300 + n), agent: n === 1 ? 'muse' : 'claude' }));
@@ -78,7 +79,7 @@ describe('exportLedger', () => {
     });
     expect(Object.keys(exported.tables).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
     const { tables } = exported;
-    expect(tables.observations.map((o) => o.id)).toEqual([ulid(1), ulid(2)]);
+    expect(tables.observations.map((o) => o.id)).toEqual([observationId(1), observationId(2)].sort());
     expect(tables.claims.map((c) => c.id)).toEqual([ulid(101), ulid(102)]);
     expect(tables.receipts.map((r) => r.id)).toEqual([ulid(301), ulid(302)]);
     expect(tables.grants.map((g) => g.agent)).toEqual(['chatgpt', 'muse']);
@@ -101,7 +102,9 @@ describe('exportLedger', () => {
     expect(JSON.stringify(await exportLedger(a, { exportedAt: EXPORTED_AT }))).toBe(first);
     expect(JSON.stringify(await exportLedger(b, { exportedAt: EXPORTED_AT }))).toBe(first);
   });
+});
 
+describe('exportLedger: record fields export in a fixed order', () => {
   it('is deterministic for record fields: receipt signals export in sorted key order', async () => {
     const a = await open('export-signals-a');
     const b = await open('export-signals-b');
@@ -151,7 +154,9 @@ describe('exportLedger', () => {
     ]);
     expect(Object.keys(fromA.tables.grants[0]?.accounts ?? {})).toEqual(['gcal.event', 'gmail.sent']);
   });
+});
 
+describe('exportLedger: an empty ledger and a bad exportedAt', () => {
   it('exports an empty ledger and reports the migrated schema version', async () => {
     const db = await open('export-v2', [...MIGRATIONS, { version: 2, stores: {} }]);
     const exported = await exportLedger(db, { exportedAt: EXPORTED_AT });

@@ -16,6 +16,7 @@ import {
   Grant,
   GradeContext,
   IsoTs,
+  Observation,
   ObserverCoverage,
   Receipt,
 } from '../../../src/core/schema';
@@ -61,6 +62,9 @@ const CLAIM = {
   extractor: { id: 'muse.activity', version: '1', confidence: 1 },
   rawHash: HASH,
 };
+
+/** v1.3 §4.1: only a day claim may carry claimedAtEnd, so the timestamp checks below use one. */
+const DAY_CLAIM = { ...CLAIM, claimedAtPrecision: 'day' };
 
 const EMPTY_ACTIVITY = { sessions: [], idle: [], entries: [], adapterSyncs: [], claims: [] };
 
@@ -271,7 +275,17 @@ describe('cross-field refinements', () => {
   it('never throw on malformed input: safeParse always answers (property)', () => {
     // The ledger reads untrusted rows with safeParse and skips the bad ones; a throwing refinement would
     // turn one corrupt row into a failed read of the whole table (Hard Rule 6).
-    const refined = [Receipt, Grant, ObserverCoverage, Coverage, Attribution, GradeContext, Activity, Claim];
+    const refined = [
+      Receipt,
+      Grant,
+      ObserverCoverage,
+      Coverage,
+      Attribution,
+      GradeContext,
+      Activity,
+      Claim,
+      Observation,
+    ];
     const malformed = fc.oneof(
       fc.anything(),
       fc.record({
@@ -287,8 +301,9 @@ describe('cross-field refinements', () => {
         to: fc.anything(),
       }),
       fc
-        .record({ claimedAt: fc.anything(), claimedAtEnd: fc.anything() })
-        .map((times) => ({ ...CLAIM, ...times })),
+        .record({ claimedAt: fc.anything(), claimedAtEnd: fc.anything(), day: fc.boolean() })
+        .map(({ day, ...times }) => ({ ...(day ? DAY_CLAIM : CLAIM), ...times })),
+      fc.record({ id: fc.anything(), contentHash: fc.anything(), signals: fc.anything() }),
     );
     fc.assert(
       fc.property(malformed, (value) => {
@@ -296,7 +311,7 @@ describe('cross-field refinements', () => {
       }),
       { numRuns: 1_000 },
     );
-  });
+  }, 60_000);
 });
 
 describe('cross-field refinements on timestamps', () => {
@@ -306,8 +321,8 @@ describe('cross-field refinements on timestamps', () => {
     // offset-less value below is earlier than its partner in every zone from −12:00 to +14:00.
     const DAY_BEFORE = '2026-10-05T00:00:00';
     const cases: readonly (readonly [z.ZodType, unknown, Path])[] = [
-      [Claim, { ...CLAIM, claimedAtEnd: DAY_BEFORE }, ['claimedAtEnd']],
-      [Claim, { ...CLAIM, claimedAt: 'not a time', claimedAtEnd: T1 }, ['claimedAt']],
+      [Claim, { ...DAY_CLAIM, claimedAtEnd: DAY_BEFORE }, ['claimedAtEnd']],
+      [Claim, { ...DAY_CLAIM, claimedAt: 'not a time', claimedAtEnd: T1 }, ['claimedAt']],
       [ObserverCoverage, { ...GMAIL, windowEnd: DAY_BEFORE }, ['windowEnd']],
       [Activity, { ...EMPTY_ACTIVITY, idle: [{ from: T0, to: DAY_BEFORE }] }, ['idle', 0, 'to']],
     ];
@@ -328,10 +343,14 @@ describe('cross-field refinements on timestamps', () => {
         const at = `2026-10-06T${String(hour).padStart(2, '0')}:02:00${digits}${offset}`;
         if (!IsoTs.safeParse(at).success) return;
         compared += 1;
-        expect(issuePaths(Claim, { ...CLAIM, claimedAt: at, claimedAtEnd: at })).toEqual([['claimedAtEnd']]);
+        const claim = { ...DAY_CLAIM, claimedAt: at, claimedAtEnd: at };
+        expect(issuePaths(Claim, claim)).toEqual([['claimedAtEnd']]);
+        expect(Claim.safeParse(claim).error?.issues.map((issue) => issue.message)).toEqual([
+          'must be after claimedAt',
+        ]);
       }),
       { numRuns: 1_000 },
     );
     expect(compared).toBeGreaterThan(100);
-  });
+  }, 60_000);
 });

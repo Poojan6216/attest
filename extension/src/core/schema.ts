@@ -16,12 +16,16 @@ import {
   claimProblems,
   coverageProblems,
   intervalProblems,
+  MATCH_FEATURES,
+  observationProblems,
   REASON_CODES,
   REASON_PARAM_KINDS,
   type ReasonParamKind,
+  RECEIPT_SIGNALS,
   receiptProblems,
   refineReasonParams,
   refineWith,
+  signalProblems,
 } from './schema-checks';
 import { BASIS_POINTS } from './units';
 
@@ -35,7 +39,7 @@ export const SCHEMA_LIMITS = Object.freeze({
   ID: 64,
   /** One human-readable reason, scope, allowlist entry, or override reason. */
   ITEM: 120,
-  /** Reasons on one receipt or health report; signals on one receipt. */
+  /** Reasons on one receipt or health report (receipt signals are a closed set of names, §8). */
   REASONS: 32,
   /** Entries in one grant list (allowlist, declared or observed scopes). */
   LIST: 200,
@@ -108,6 +112,8 @@ export const ObservationSource = z.enum(['gmail.sent', 'gmail.receipt', 'gcal.ev
 export const ClaimPrecision = z.enum(['minute', 'hour', 'day']);
 export const SourceKind = z.enum(['activity_view', 'chat', 'notification', 'settings']);
 export const Grade = z.enum(['VERIFIED', 'PARTIAL', 'NOT_FOUND', 'UNASKED', 'OVER_SCOPE', 'UNVERIFIABLE']);
+/** The grades a user may override a receipt to (§8). */
+export const OverrideGrade = z.enum(['VERIFIED', 'NOT_FOUND']);
 export const ReceiptState = z.enum(['PENDING', 'FINAL', 'USER_OVERRIDDEN']);
 export const UnaskedSignal = z.enum([
   'agentSessionActive',
@@ -118,6 +124,9 @@ export const UnaskedSignal = z.enum([
 
 /** Closed, in docs/grading.md §15 table order (reasons are emitted in this order within each group). */
 export const ReasonCode = z.enum(REASON_CODES);
+/** The §5.1 match features; a receipt's `signals` keys are these plus `score` (§8). */
+export const MatchFeature = z.enum(MATCH_FEATURES);
+export const ReceiptSignal = z.enum(RECEIPT_SIGNALS);
 
 // ── Agent side ──────────────────────────────────────────────────────────────────────────────────
 
@@ -144,8 +153,8 @@ export const Claim = z
     claimedAt: IsoTs,
     claimedAtPrecision: ClaimPrecision,
     /**
-     * The end of the precision unit, strictly after `claimedAt` (§4.1). Adapters set it for `day` precision to
-     * the next local midnight, because a local day on a DST change is 23 or 25 hours long.
+     * §4.1: `day` precision only, in `(claimedAt, start(day, t) + 25 h]`. Adapters set it to the next local
+     * midnight, because a local day on a DST change is 23 or 25 hours long.
      */
     claimedAtEnd: IsoTs.optional(),
     /** The claimed event start of a calendar claim (§4.1); a calendar claim without it is graded `no_target`. */
@@ -164,22 +173,24 @@ export const Claim = z
 
 // ── Evidence side ───────────────────────────────────────────────────────────────────────────────
 
-/** Derived facts only: no body, no full page. redact.ts enforces the per-source allowlist (Hard Rule 2). */
-export const Observation = z.strictObject({
-  id: Ulid,
-  source: ObservationSource,
-  type: ActionType,
-  counterparty: z.string().max(L.COUNTERPARTY).optional(),
-  merchant: z.string().max(L.MERCHANT).optional(),
-  amountCents: AmountCents.optional(),
-  currency: Currency.optional(),
-  subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
-  occurredAt: IsoTs,
-  observedAt: IsoTs,
-  /** SHA-256 of the vendor's own row id, so two identical rows stay two observations (§10). */
-  rowKeyHash: Sha256.optional(),
-  contentHash: Sha256,
-});
+/** Derived facts only; redact.ts applies the allowlist (Hard Rule 2). `id` = `idFromHash(contentHash)` (§10). */
+export const Observation = z
+  .strictObject({
+    id: Ulid,
+    source: ObservationSource,
+    type: ActionType,
+    counterparty: z.string().max(L.COUNTERPARTY).optional(),
+    merchant: z.string().max(L.MERCHANT).optional(),
+    amountCents: AmountCents.optional(),
+    currency: Currency.optional(),
+    subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
+    occurredAt: IsoTs,
+    observedAt: IsoTs,
+    /** SHA-256 of the vendor's own row id, so two identical rows stay two observations (§10). */
+    rowKeyHash: Sha256.optional(),
+    contentHash: Sha256,
+  })
+  .superRefine(refineWith(observationProblems));
 
 /** What one observer pass could see (§3). Exists only for a pass whose health() was OK (Hard Rules 5, 6). */
 export const ObserverCoverage = z
@@ -243,7 +254,7 @@ const PARAM_KIND_SCHEMAS: Readonly<Record<ReasonParamKind, z.ZodType>> = {
   'source?': ObservationSource.optional(),
   actionType: ActionType,
   agent: AgentId,
-  grade: Grade,
+  overrideGrade: OverrideGrade,
   cents: AmountCents,
   /** A sum of capped amounts, like GradeContext.priorSpendCents: not itself capped at 10^12. */
   priorSpend: z.number().int().min(0),
@@ -272,7 +283,7 @@ export const Reason = z
 
 /** A user override sits beside the computed grade and never replaces it (§8). */
 export const ReceiptOverride = z.strictObject({
-  grade: z.enum(['VERIFIED', 'NOT_FOUND']),
+  grade: OverrideGrade,
   /** Required and non-empty in substance (§8): blank or invisible-only text is no reason. */
   reason: z.string().max(L.ITEM).regex(VISIBLE, 'must not be blank'),
   at: IsoTs,
@@ -293,10 +304,8 @@ export const Receipt = z
     confidence: UnitInterval,
     ruleId: RuleId,
     reasons: z.array(Reason).max(L.REASONS),
-    /** Display numbers (feature values, score); never compared (§5.3). */
-    signals: z
-      .record(Key, z.number())
-      .refine((signals) => Object.keys(signals).length <= L.REASONS, `at most ${L.REASONS} signals`),
+    /** Display numbers, keyed by §5.1 feature name or `score`; never compared (§5.3). */
+    signals: z.record(Key, z.number()).superRefine(refineWith(signalProblems)),
     state: ReceiptState,
     policyHash: Sha256,
     inputsHash: Sha256,
@@ -357,6 +366,9 @@ export type ObservationSource = z.infer<typeof ObservationSource>;
 export type ClaimPrecision = z.infer<typeof ClaimPrecision>;
 export type SourceKind = z.infer<typeof SourceKind>;
 export type Grade = z.infer<typeof Grade>;
+export type OverrideGrade = z.infer<typeof OverrideGrade>;
+export type MatchFeature = z.infer<typeof MatchFeature>;
+export type ReceiptSignal = z.infer<typeof ReceiptSignal>;
 export type ReceiptState = z.infer<typeof ReceiptState>;
 export type UnaskedSignal = z.infer<typeof UnaskedSignal>;
 export type ReasonCode = z.infer<typeof ReasonCode>;

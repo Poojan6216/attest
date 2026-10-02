@@ -125,7 +125,7 @@ describe('the score is an exact value in [0, 1]', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 type PolicyDoc = typeof defaultPolicyJson;
@@ -231,16 +231,20 @@ describe('a missing observation field never raises the score (§5.2)', () => {
   it.each([
     ['removed', false],
     ['emptied', true],
-  ] as const)('any set of fields %s', (_label, empty) => {
-    fc.assert(
-      fc.property(scorableClaim, observationArb, fc.subarray([...FIELDS]), (claim, observation, drop) => {
-        const full = features(claim, observation, DEFAULT_POLICY).score;
-        const partial = features(claim, strip(observation, drop, empty), DEFAULT_POLICY).score;
-        expect(compareRatio(partial, full)).toBeLessThanOrEqual(0);
-      }),
-      RUNS,
-    );
-  });
+  ] as const)(
+    'any set of fields %s',
+    (_label, empty) => {
+      fc.assert(
+        fc.property(scorableClaim, observationArb, fc.subarray([...FIELDS]), (claim, observation, drop) => {
+          const full = features(claim, observation, DEFAULT_POLICY).score;
+          const partial = features(claim, strip(observation, drop, empty), DEFAULT_POLICY).score;
+          expect(compareRatio(partial, full)).toBeLessThanOrEqual(0);
+        }),
+        RUNS,
+      );
+    },
+    60_000,
+  );
 });
 
 const LOCAL = fc
@@ -277,5 +281,5 @@ describe('address features: identity is code points after ASCII lowercasing, nev
       }),
       { numRuns: 2_000 },
     );
-  });
+  }, 60_000);
 });

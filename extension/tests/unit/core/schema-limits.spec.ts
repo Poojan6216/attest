@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
+import { idFromHash } from '../../../src/core/hash';
 import {
   Activity,
   ActionType,
@@ -20,6 +21,7 @@ import {
   ObserverCoverage,
   Receipt,
   ReceiptOverride,
+  ReceiptSignal,
   Request,
   SCHEMA_LIMITS as L,
 } from '../../../src/core/schema';
@@ -46,7 +48,7 @@ const CLAIM = {
   rawHash: HASH,
 };
 const OBSERVATION = {
-  id: ULID,
+  id: idFromHash(HASH),
   source: 'gmail.sent',
   type: 'email.sent',
   occurredAt: T,
@@ -240,14 +242,6 @@ const CASES: readonly Case[] = [
     L.REASONS,
     ['reasons'],
   ],
-  ['Receipt.signals', Receipt, (n) => ({ ...RECEIPT, signals: keyed(n, 1) }), L.REASONS, ['signals']],
-  [
-    'Receipt.signals key',
-    Receipt,
-    (n) => ({ ...RECEIPT, signals: { [x(n)]: 1 } }),
-    L.ID,
-    ['signals', x(L.ID + 1)],
-  ],
   [
     'ObserverCoverage.observerId',
     ObserverCoverage,
@@ -321,6 +315,14 @@ describe('core SCHEMA_LIMITS (SECURITY-4)', () => {
     expect(Object.isFrozen(L)).toBe(true);
     for (const [name, cap] of Object.entries(L))
       expect(Number.isSafeInteger(cap) && cap > 0, name).toBe(true);
+  });
+
+  it('Receipt.signals is bounded by its closed vocabulary (§8 v1.3), within L.REASONS', () => {
+    const all = Object.fromEntries(ReceiptSignal.options.map((key) => [key, 1]));
+    expect(ReceiptSignal.options.length).toBeLessThanOrEqual(L.REASONS);
+    expect(Receipt.safeParse({ ...RECEIPT, signals: all }).success).toBe(true);
+    const over = Receipt.safeParse({ ...RECEIPT, signals: { ...all, ...keyed(1, 1) } });
+    expect(over.error?.issues.map((issue) => issue.path)).toEqual([['signals', 'k0']]);
   });
 
   it('caps amounts at 10^12 cents and timestamps at nanosecond precision', () => {

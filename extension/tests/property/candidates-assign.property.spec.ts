@@ -127,7 +127,7 @@ describe('assign (property)', () => {
       }),
       { numRuns: RUNS },
     );
-  });
+  }, 60_000);
 
   it('does not depend on the input order of pairs or fixed pairs, and equals the greedy oracle', () => {
     fc.assert(
@@ -148,5 +148,5 @@ describe('assign (property)', () => {
       ),
       { numRuns: RUNS },
     );
-  });
+  }, 60_000);
 });

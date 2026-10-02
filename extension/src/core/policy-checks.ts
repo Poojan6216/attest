@@ -46,11 +46,12 @@ function thresholdIssues({ thresholds }: PolicyDocument): PolicyIssue[] {
 
 /**
  * §5.2, §5.3: a type that lists features must give them a positive total weight (the score divides by it),
- * and its identity features must be among them with a weight above 0. Identity decides that a claim is not
- * underspecified, so every such claim then has Σw > 0 and a zero weight can never make a claim matchable
- * on time alone.
+ * and its identity features must be among them with a weight above 0. A type with sources must name at least
+ * one identity feature (v1.3). Identity decides that a claim is not underspecified, so every claim that can be
+ * assigned then has Σw > 0 and a zero weight can never make a claim matchable on time alone.
  */
-function featureIssues({ features, featuresByType, identityFeatures }: PolicyDocument): PolicyIssue[] {
+function featureIssues(doc: PolicyDocument): PolicyIssue[] {
+  const { features, featuresByType, identityFeatures, sourcesByType } = doc;
   return ActionType.options.flatMap((type) => {
     const listed = featuresByType[type];
     const issues: PolicyIssue[] = [];
@@ -60,6 +61,9 @@ function featureIssues({ features, featuresByType, identityFeatures }: PolicyDoc
         path: ['featuresByType', type],
         message: 'the weights of the listed features must sum to more than 0',
       });
+    }
+    if (sourcesByType[type].length > 0 && identityFeatures[type].length === 0) {
+      issues.push({ path: ['identityFeatures', type], message: 'must not be empty for a type with sources' });
     }
     identityFeatures[type].forEach((feature, index) => {
       const path = ['identityFeatures', type, index];

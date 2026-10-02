@@ -3,7 +3,9 @@
  * nesting, carrying every value and canary of tests/fixtures/secrets/seeded.json in keys that are not
  * allowlisted (as keys, as values, nested, in forged id/hash/rowKey fields, as the row key, in invalid,
  * boxed, coercible or overlong values of allowlisted fields, and past the subjectHint cap), under the default
- * policy or a random allowlist.
+ * policy or a random allowlist. A random allowlist the loader accepts (v1.3 §12: only content fields and the
+ * derived markers, `occurredAt` required) is loaded; any other one must be rejected by the loader and is then
+ * handed to project() as an unvalidated object, so redact.ts's own defences are tested without the loader's.
  *
  * Seeds also arrive as VALID values through every channel project() must not read: a content field the
  * source does not allowlist, an inherited property, a getter, an own `__proto__` key, and the elements of an
@@ -25,7 +27,13 @@ import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../policy/default.json';
 import { canonicalJson, idFromHash } from '../../src/core/hash';
-import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../src/core/policy';
+import {
+  ALLOWLISTABLE_FIELDS,
+  DEFAULT_POLICY,
+  loadPolicy,
+  type Policy,
+  PolicyError,
+} from '../../src/core/policy';
 import {
   CONTENT_FIELDS,
   type ContentField,
@@ -209,7 +217,17 @@ const example = fc.record({
   type: fc.constantFrom(...ActionType.options),
   observedAt: isoTs,
   rowKey: fc.option(fc.oneof(fc.string(), secret), { nil: undefined }),
-  allowlist: fc.option(fc.subarray([...Observation.keyof().options], { minLength: 1 }), { nil: undefined }),
+  allowlist: fc.option(
+    fc.oneof(
+      // Any Observation keys: mostly lists the v1.3 loader rejects (a derived field, or no occurredAt).
+      fc.subarray([...Observation.keyof().options], { minLength: 1 }),
+      // A list the loader accepts: allowlistable fields only, occurredAt included.
+      fc
+        .subarray(ALLOWLISTABLE_FIELDS.filter((field) => field !== 'occurredAt'))
+        .chain((fields) => fc.shuffledSubarray([...fields, 'occurredAt'], { minLength: fields.length + 1 })),
+    ),
+    { nil: undefined },
+  ),
   junk: fc.dictionary(junkKey, junkValue, { maxKeys: 6 }),
   derived: fc.dictionary(fc.constantFrom(...DERIVED_FIELDS, 'rowKey', 'ref'), fc.oneof(secret, forged)),
   fields: fc.record(
@@ -221,12 +239,32 @@ const example = fc.record({
 });
 type Example = typeof example extends fc.Arbitrary<infer T> ? T : never;
 
-function policyFor({ source, allowlist }: Example): Policy {
+const counts = {
+  projected: 0,
+  rejected: 0,
+  loaded: 0,
+  handBuilt: 0,
+  channels: Object.fromEntries(CHANNELS.map((channel) => [channel, 0])),
+};
+
+type AllowlistPolicy = Pick<Policy, 'allowlistedFields'>;
+const ALLOWLISTABLE: ReadonlySet<string> = new Set(ALLOWLISTABLE_FIELDS);
+
+/** Whether the v1.3 loader accepts `allowlist` (§12): allowlistable fields only, occurredAt included. */
+const loadable = (allowlist: readonly string[]): boolean =>
+  allowlist.includes('occurredAt') && allowlist.every((field) => ALLOWLISTABLE.has(field));
+
+function policyFor({ source, allowlist }: Example): AllowlistPolicy {
   if (allowlist === undefined) return DEFAULT_POLICY;
-  return loadPolicy({
-    ...defaultPolicyJson,
-    allowlistedFields: { ...defaultPolicyJson.allowlistedFields, [source]: allowlist },
-  });
+  const allowlistedFields = { ...defaultPolicyJson.allowlistedFields, [source]: allowlist };
+  const document = { ...defaultPolicyJson, allowlistedFields };
+  if (loadable(allowlist)) {
+    counts.loaded += 1;
+    return loadPolicy(document);
+  }
+  expect(() => loadPolicy(document)).toThrow(PolicyError);
+  counts.handBuilt += 1;
+  return z.custom<AllowlistPolicy>().parse({ allowlistedFields });
 }
 
 /** The row's own data properties; with offAllowlist, every content field the source does not allowlist holds a seed. */
@@ -287,15 +325,9 @@ function expectedContent({ fields }: Example, allowlist: readonly string[]): Rec
   return out;
 }
 
-const counts = {
-  projected: 0,
-  rejected: 0,
-  channels: Object.fromEntries(CHANNELS.map((channel) => [channel, 0])),
-};
-
 function check(input: Example): void {
   const policy = policyFor(input);
-  const allowlist = policy.allowlistedFields[input.source];
+  const allowlist: readonly string[] = policy.allowlistedFields[input.source];
   const own = ownOf(input, allowlist);
   const raw = wrap(own, input.channel, input.smuggled);
   const ctx = { type: input.type, observedAt: input.observedAt, rowKey: input.rowKey };
@@ -314,7 +346,8 @@ function check(input: Example): void {
   expect(Object.keys(out).filter((key) => !allowed.has(key))).toStrictEqual([]);
   const text = JSON.stringify(out);
   expect(SECRETS.filter((seed) => text.includes(seed))).toStrictEqual([]);
-  const rowKeyHash = input.rowKey === undefined ? {} : { rowKeyHash: nodeSha(input.rowKey) };
+  // §10 v1.3: rowKeyHash = sha256Hex(canonicalJson(rowKey)); for a string that is Node's JSON.stringify.
+  const rowKeyHash = input.rowKey === undefined ? {} : { rowKeyHash: nodeSha(JSON.stringify(input.rowKey)) };
   const hashed = { source: input.source, type: input.type, ...content, ...rowKeyHash };
   const contentHash = nodeSha(canonicalJson(hashed));
   const expected = { ...hashed, id: idFromHash(contentHash), observedAt: input.observedAt, contentHash };
@@ -343,6 +376,8 @@ describe('redact (property)', () => {
       fc.assert(fc.property(example, check), { numRuns: 1000 });
       expect(counts.projected).toBeGreaterThan(300);
       expect(counts.rejected).toBeGreaterThan(50);
+      expect(counts.loaded).toBeGreaterThan(20);
+      expect(counts.handBuilt).toBeGreaterThan(20);
       for (const channel of CHANNELS) expect(counts.channels[channel], channel).toBeGreaterThan(20);
       expect(reads.getters).toBe(0);
     },

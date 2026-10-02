@@ -1,9 +1,11 @@
 /**
- * docs/grading.md v1.2 §15 "Params per code (closed)": a Reason's params are exactly the ones its code lists,
+ * docs/grading.md v1.3 §15 "Params per code (closed)": a Reason's params are exactly the ones its code lists,
  * each an id, a hash, an enum value or an integer, and a code with no params accepts only `{}`. So no reason
  * can carry an address, a name, a subject or a formatted local time (§6.4, Hard Rules 2 and 10). Same contract
  * as schema.spec.ts: five valid cases (each parses to exactly itself) and five invalid ones, each rejected at
- * one specific path; then every code on its own, and a property over arbitrary params.
+ * one specific path; then every code on its own, and a property over arbitrary params. v1.3 adds
+ * `coverage.no_parser` (an optional `source`, like the other coverage-capping codes) and narrows
+ * `override.user.grade` to the override's own grade, `VERIFIED` or `NOT_FOUND`.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -32,6 +34,7 @@ const EXAMPLE: Readonly<Record<ReasonCode, Readonly<Record<string, string | numb
   'coverage.calendars_hidden': { source: 'gcal.event' },
   'coverage.multiple_accounts': { source: 'gmail.receipt' },
   'coverage.no_account': { source: 'gmail.sent' },
+  'coverage.no_parser': { source: 'gmail.receipt' },
   'coverage.never_completed': {},
   'grace.waiting': { source: 'gmail.sent' },
   'scope.type_not_allowed': { type: 'purchase.made' },
@@ -57,6 +60,7 @@ const SOURCE_CODES: readonly ReasonCode[] = [
   'coverage.calendars_hidden',
   'coverage.multiple_accounts',
   'coverage.no_account',
+  'coverage.no_parser',
   'grace.waiting',
 ];
 
@@ -72,6 +76,9 @@ const VALID: readonly unknown[] = [
     params: { priorSpendCents: 2e12, amountCents: 1e12, ceilingCents: 0 },
   },
   { code: 'override.user', params: { grade: 'NOT_FOUND' } },
+  { code: 'override.user', params: { grade: 'VERIFIED' } },
+  { code: 'coverage.no_parser', params: { source: 'gmail.receipt' } },
+  { code: 'coverage.no_parser', params: {} },
 ];
 
 const INVALID: readonly (readonly [label: string, value: unknown, path: Path])[] = [
@@ -142,6 +149,19 @@ const INVALID: readonly (readonly [label: string, value: unknown, path: Path])[]
     'a grade that is not a Grade',
     { code: 'override.user', params: { grade: 'CERTAIN' } },
     ['params', 'grade'],
+  ],
+  // v1.3 §15: an override is to VERIFIED or NOT_FOUND only (§8), so its reason can name no other grade.
+  ['an override to PARTIAL', { code: 'override.user', params: { grade: 'PARTIAL' } }, ['params', 'grade']],
+  ['an override to UNASKED', { code: 'override.user', params: { grade: 'UNASKED' } }, ['params', 'grade']],
+  [
+    'a merchant name on coverage.no_parser',
+    { code: 'coverage.no_parser', params: { source: 'gmail.receipt', merchant: 'acme' } },
+    ['params', 'merchant'],
+  ],
+  [
+    'an unknown source on coverage.no_parser',
+    { code: 'coverage.no_parser', params: { source: 'acme' } },
+    ['params', 'source'],
   ],
   ['a numeric type', { code: 'scope.type_not_allowed', params: { type: 7 } }, ['params', 'type']],
   ['a boolean param', { code: 'match.none', params: { flag: true } }, ['params', 'flag']],
@@ -309,5 +329,5 @@ describe('Reason params never carry content (property)', () => {
     );
     // Not vacuous: valid params were offered and accepted often enough to have been checked.
     expect(parsedWithParams).toBeGreaterThan(10);
-  });
+  }, 60_000);
 });

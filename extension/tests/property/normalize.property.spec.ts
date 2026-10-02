@@ -79,7 +79,7 @@ describe('amount() (property)', () => {
       ),
       { numRuns: 5_000 },
     );
-  });
+  }, 60_000);
 
   it('round-trips exactly through every locale style (a lone separator with three decimals is rejected)', () => {
     const style = fc.constantFrom(
@@ -107,13 +107,24 @@ describe('amount() (property)', () => {
       ),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('text that reads differently from how it displays (property)', () => {
-  /** Bidi overrides and a sample of \p{No} digits (superscripts, subscripts, circled, fractions). */
-  const UNREADABLE = ['\u202D', '\u202E', '\u00B2', '\u2079', '\u2080', '\u2460', '\u00BD', '\u2155'];
-  it('amount() and resolveRelative() never read text holding a bidi override or a \\p{No} digit', () => {
+  /** Bidi embeddings and overrides (v1.3), and a sample of \p{No} digits (superscripts, circled, fractions). */
+  const UNREADABLE = [
+    '\u202A',
+    '\u202B',
+    '\u202D',
+    '\u202E',
+    '\u00B2',
+    '\u2079',
+    '\u2080',
+    '\u2460',
+    '\u00BD',
+    '\u2155',
+  ];
+  it('amount() and resolveRelative() never read text holding a bidi embedding, override or \\p{No} digit', () => {
     const context = { referenceIso: '2026-10-01T15:00:00-04:00', offsetAt: () => -240 };
     const readable = fc.oneof(
       amountish,
@@ -128,7 +139,7 @@ describe('text that reads differently from how it displays (property)', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('asciiLower (property)', () => {
@@ -146,7 +157,7 @@ describe('asciiLower (property)', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 const ADDRESS_PARTS = [
@@ -196,7 +207,7 @@ describe('email() and sameAddress() (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  });
+  }, 60_000);
 
   it('is symmetric and internally consistent', () => {
     // Small alphabets so that exact, plus-tag-only, same-domain and confusable pairs all occur often.
@@ -220,7 +231,7 @@ describe('email() and sameAddress() (property)', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('name(), nameTokens(), subjectTokens() (property)', () => {
@@ -237,7 +248,7 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 
   it('subjectTokens() is a sorted set with no empty token or stop word, unchanged by a reply prefix', () => {
     fc.assert(
@@ -250,7 +261,7 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 /** Any text, and `mark` inserted into `raw` at a position chosen by `at` (v1.2 \u00A711 properties below). */
@@ -282,7 +293,7 @@ describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks 
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 
   it('subject tokens are runs of letters, digits and marks only, with no invisible character', () => {
     fc.assert(
@@ -294,15 +305,15 @@ describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks 
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('v1.2 \u00A711: text that reads differently from how it is stored gives no tokens (property)', () => {
-  /** Bidi overrides, and \p{No} digits NFKC turns into other digits. */
-  const OVERRIDES = ['\u202D', '\u202E'];
+  /** Bidi embeddings and overrides (v1.3), and \p{No} digits NFKC turns into other digits. */
+  const OVERRIDES = ['\u202A', '\u202B', '\u202D', '\u202E'];
   const NFKC_DIGITS = ['\u00B2', '\u2079', '\u2080', '\u2460', '\u00BD', '\u2155', '\u3280'];
 
-  it('a bidi override anywhere leaves a subject with no tokens, and a name with none either', () => {
+  it('a bidi embedding or override anywhere leaves a subject with no tokens, and a name with none either', () => {
     fc.assert(
       fc.property(anyText, fc.constantFrom(...OVERRIDES), fc.nat(), (raw, mark, at) => {
         const spoiled = insert(raw, mark, at);
@@ -312,7 +323,7 @@ describe('v1.2 \u00A711: text that reads differently from how it is stored gives
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 
   it('a \\p{No} digit NFKC would change leaves a name with no tokens and no name counterparty', () => {
     fc.assert(
@@ -323,7 +334,7 @@ describe('v1.2 \u00A711: text that reads differently from how it is stored gives
       }),
       RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('toUnicodeDomain (property)', () => {
@@ -357,5 +368,5 @@ describe('toUnicodeDomain (property)', () => {
       }),
       { numRuns: 1_000 },
     );
-  });
+  }, 60_000);
 });

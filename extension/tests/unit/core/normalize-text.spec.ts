@@ -86,6 +86,8 @@ describe('name()', () => {
     ['\u202EPriya\u202C'], // RLO … PDF
     ['\u202Eayirp\u202C'], // displays as "priya"
     ['\u202DPriya'], // LRO
+    ['\u202BPriya\u202C'], // v1.3: RLE … PDF, an embedding, is refused like an override
+    ['\u202APriya'], // LRE
     ['Priya\u00B2'], // NFKC would read "priya2"
     ['\u2460 Priya'], // circled one
     ['Priya \u00BD'], // one half
@@ -109,6 +111,7 @@ describe('nameTokens()', () => {
     ['\u092A\u094D\u0930\u093F\u092F\u093E', ['\u092A\u0930\u093F\u092F\u093E']],
     ['Priya \u2067Shah\u2069', ['priya', 'shah']], // an isolate does not reorder letters
     ['\u202Eahs ayirp\u202C', []], // an override does
+    ['\u202Bahs ayirp\u202C', []], // and so does an embedding (v1.3)
     ['Priya\u2075', []], // superscript five
   ])('%j \u2192 %j', (input, expected) => {
     expect(nameTokens(input)).toEqual(expected);
@@ -151,6 +154,9 @@ describe('subjectTokens()', () => {
     ['\u202Ekced 3Q\u202C', []],
     ['Q3 \u202Ddeck', []],
     ['Re: Q3 deck\u202E', []],
+    // v1.3: a bidi embedding (RLE U+202B, LRE U+202A) is refused like an override.
+    ['\u202Bkced 3Q\u202C', []],
+    ['Q3 \u202Adeck', []],
   ])('%j \u2192 %j', (input, expected) => {
     expect(subjectTokens(input, STOP_WORDS)).toEqual(expected);
   });

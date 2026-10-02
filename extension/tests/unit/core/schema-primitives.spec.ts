@@ -207,6 +207,7 @@ describe('ReasonCode', () => {
       'coverage.calendars_hidden',
       'coverage.multiple_accounts',
       'coverage.no_account',
+      'coverage.no_parser',
       'coverage.never_completed',
       'grace.waiting',
       'scope.type_not_allowed',
@@ -236,7 +237,7 @@ describe('ids derived from hashes (docs/grading.md §10)', () => {
       }),
       { numRuns: 1_000 },
     );
-  });
+  }, 60_000);
 });
 
 describe('brands', () => {

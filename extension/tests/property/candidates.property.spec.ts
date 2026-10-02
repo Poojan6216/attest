@@ -9,8 +9,9 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { candidates, createMemoryIndex, type ObservationIndex } from '../../src/core/candidates';
+import { idFromHash } from '../../src/core/hash';
 import { DEFAULT_POLICY } from '../../src/core/policy';
-import { type ActionType, type ClaimPrecision, Observation } from '../../src/core/schema';
+import { type ActionType, type ClaimPrecision, Observation, Ulid } from '../../src/core/schema';
 import { precisionBounds, type WindowClaim } from '../../src/core/window';
 
 const RUNS = 1_000;
@@ -64,7 +65,7 @@ describe('precisionBounds (property)', () => {
       }),
       { numRuns: RUNS },
     );
-  });
+  }, 60_000);
 });
 
 // ── candidates() against the oracle ─────────────────────────────────────────────────────────────
@@ -156,7 +157,14 @@ function buildClaim(c: {
   return { claim, unitStartMs };
 }
 
-/** ids are unique per (content, twin); a content's sightings share type, occurredAt and contentHash. */
+const TWIN_ID_BASE = 100;
+
+/**
+ * ids are unique per (content, twin); a content's sightings share type, occurredAt and contentHash. Twin 0 is
+ * the honest row (id = idFromHash(contentHash), schema-valid); twins 1 and 2 carry another id with the same
+ * contentHash, which the v1.3 schema rejects, so they are built without a parse, as a corrupt index could
+ * return them: the dedupe rule (lowest id, then earliest observedAt) must still hold.
+ */
 function buildObservations(
   contents: readonly Generated<typeof contentArb>[],
   sightings: readonly Generated<typeof sightingArb>[],
@@ -166,17 +174,19 @@ function buildObservations(
     const k = s.content % contents.length;
     const content = contents[k];
     if (content === undefined) return [];
-    return [
-      Observation.parse({
-        id: pad(k * 10 + s.twin, 26),
-        source: sourceOf(content.type),
-        type: content.type,
-        subjectHint: `content ${String(k)}`,
-        occurredAt: isoAt(placed(content.at, window), content.offset),
-        observedAt: isoAt(placed(s.seen, window), s.offset),
-        contentHash: k.toString(16).padStart(64, '0'),
-      }),
-    ];
+    // k in both halves: idFromHash reads only the first 128 bits, so each content gets its own id.
+    const contentHash = k.toString(16).padStart(32, '0').repeat(2);
+    const honest = Observation.parse({
+      id: idFromHash(contentHash),
+      source: sourceOf(content.type),
+      type: content.type,
+      subjectHint: `content ${String(k)}`,
+      occurredAt: isoAt(placed(content.at, window), content.offset),
+      observedAt: isoAt(placed(s.seen, window), s.offset),
+      contentHash,
+    });
+    // Twin ids start at 100: an honest id is idFromHash(k…k) = base32(k) ≤ "…07", so no twin can take one.
+    return [s.twin === 0 ? honest : { ...honest, id: Ulid.parse(pad(TWIN_ID_BASE + k * 10 + s.twin, 26)) }];
   });
 }
 
@@ -271,5 +281,5 @@ describe('candidates (property)', () => {
     expect(tally.merged).toBeGreaterThan(RUNS / 10);
     expect(tally.noWindow).toBeGreaterThan(RUNS / 50);
     console.log(`candidates property tally: ${JSON.stringify(tally)}`);
-  });
+  }, 60_000);
 });

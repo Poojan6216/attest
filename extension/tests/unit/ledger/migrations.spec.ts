@@ -18,9 +18,11 @@ import {
   upsertClaim,
   upsertObservation,
 } from '../../../src/ledger/repo';
-import { Observation } from '../../../src/ledger/types';
+import { Observation, Ulid } from '../../../src/ledger/types';
 import { captureLogs, expectLedgerError, makeClaim, makeObservation, omit, uniqueDbName } from './fixtures';
 
+/** The seeded observation seen again later: same contentHash, so the same id (§10 v1.3). */
+const resighting = () => makeObservation({ observedAt: '2026-10-01T11:00:00-04:00' });
 const OBSERVATIONS_V1 = 'id, &contentHash, [type+timeBucket], *counterpartyTokens, occurredAt';
 
 const opened: LedgerDb[] = [];
@@ -90,10 +92,12 @@ describe('v1 → v2 migrations', () => {
     expect(indexOf(db, 'observations', 'source')).toBeDefined();
     const rows = await db.observations.where('source').equals('gmail.sent').toArray();
     expect(rows.map((row) => row.id)).toEqual([makeObservation().id]);
-    // Pre-existing unique index still enforced after the upgrade.
-    expect((await upsertObservation(db, makeObservation({ id: makeClaim().id }))).inserted).toBe(false);
+    // Pre-existing unique index still enforced after the upgrade (a re-sighting is not inserted).
+    expect((await upsertObservation(db, resighting())).inserted).toBe(false);
   });
+});
 
+describe('v1 → v2 migrations: upgrade functions', () => {
   it('runs an upgrade function exactly once', async () => {
     const name = uniqueDbName('upgrade-once');
     await seedV1(name);
@@ -156,5 +160,22 @@ describe('assertValidMigrations', () => {
     for (const migrations of invalid) {
       await expectLedgerError(openLedger(uniqueDbName('invalid'), migrations), 'invalid_migrations');
     }
+  });
+});
+
+describe('v1 → v2 migrations: the unique contentHash index', () => {
+  it('still refuses a raw row that reuses a contentHash under another id', async () => {
+    // §10 v1.3 makes such a row invalid input for upsertObservation; the store's own index refuses it too.
+    const name = uniqueDbName('unique-hash');
+    await seedV1(name);
+    const db = await open(name, [
+      ...MIGRATIONS,
+      { version: 2, stores: { observations: `${OBSERVATIONS_V1}, source` } },
+    ]);
+    const [row] = await db.observations.toArray();
+    if (row === undefined) throw new Error('expected the seeded observation');
+    await expect(db.observations.add({ ...row, id: Ulid.parse(makeClaim().id) })).rejects.toMatchObject({
+      name: 'ConstraintError',
+    });
   });
 });

@@ -117,7 +117,7 @@ describe('applicableFeatures() reads the claim alone (§5.2)', () => {
   it('never applies modelScore (Sprint 5), even when a policy lists it', () => {
     const withModel = patched({
       featuresByType: { ...defaultPolicyJson.featuresByType, [EMAIL]: ['timeProximity', 'modelScore'] },
-      identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: [] },
+      identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: ['timeProximity'] },
     });
     expect(applicableFeatures(claim({ type: EMAIL }), withModel)).toEqual(['timeProximity']);
   });

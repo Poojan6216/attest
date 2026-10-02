@@ -11,13 +11,40 @@
 import { z } from 'zod';
 
 import { name } from './normalize';
-import { ActionType, AgentId, Grade, Observation, ObservationSource, RuleId, UnaskedSignal } from './schema';
+import {
+  ActionType,
+  AgentId,
+  Grade,
+  type Observation,
+  ObservationSource,
+  RuleId,
+  UnaskedSignal,
+} from './schema';
 import { BASIS_POINTS, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
-/** Hard Rule 2: an allowlisted field must be a field of the core Observation schema (rowKeyHash included). */
-export const ObservationFieldName = z.enum(Observation.keyof().options, {
-  error: 'must be an Observation field name',
+/**
+ * §12 (v1.3): the Observation fields an `allowlistedFields` entry may name. The content fields a raw row may
+ * supply, plus the derived markers `rowKeyHash` and `contentHash`; never `id`, `source`, `type` or
+ * `observedAt`, which redact.ts computes (Hard Rule 2).
+ */
+export const ALLOWLISTABLE_FIELDS = [
+  'counterparty',
+  'merchant',
+  'amountCents',
+  'currency',
+  'subjectHint',
+  'occurredAt',
+  'rowKeyHash',
+  'contentHash',
+] as const satisfies readonly (keyof z.input<typeof Observation>)[];
+
+/** A field an `allowlistedFields` entry may name (see ALLOWLISTABLE_FIELDS). */
+export const ObservationFieldName = z.enum(ALLOWLISTABLE_FIELDS, {
+  error: 'must be a content field, rowKeyHash or contentHash',
 });
+
+/** Every observation has an `occurredAt` (§10), so every source's allowlist must name it. */
+const REQUIRED_FIELD = 'occurredAt';
 
 /** A rule compares the best candidate score against a threshold by name, never by number. */
 export const ThresholdName = z.enum(['verified', 'partial']);
@@ -267,8 +294,14 @@ export const PolicyShape = z.strictObject({
   normalize: z.strictObject({ stopWords: uniqueList(StopWord) }),
   rules: Rules,
   unasked: Unasked,
-  /** Hard Rule 2: the only Observation fields each observer source may ever store. */
-  allowlistedFields: z.record(ObservationSource, uniqueList(ObservationFieldName).min(1)),
+  /** Hard Rule 2: the only Observation fields each observer source may ever store; `occurredAt` required. */
+  allowlistedFields: z.record(
+    ObservationSource,
+    uniqueList(ObservationFieldName).refine(
+      (fields) => fields.includes(REQUIRED_FIELD),
+      `must list "${REQUIRED_FIELD}"`,
+    ),
+  ),
 });
 
 /** A validated policy document, exactly as written (decimal weights; no basis points, no hash). */

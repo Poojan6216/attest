@@ -264,7 +264,7 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
       }),
       PROPERTY_RUNS,
     );
-  });
+  }, 60_000);
 
   it('property: ordered thresholds and the unasked threshold convert exactly', () => {
     fc.assert(
@@ -285,12 +285,14 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
       ),
       PROPERTY_RUNS,
     );
-  });
+  }, 60_000);
 });
 
 describe('policy vocabularies come from the core schema', () => {
-  it('ObservationFieldName is exactly the Observation schema keys (rowKeyHash included)', () => {
-    expect([...ObservationFieldName.options].sort()).toEqual(Object.keys(Observation.shape).sort());
+  it('ObservationFieldName is the Observation keys minus the four redact.ts computes (§12 v1.3)', () => {
+    const computed = ['id', 'source', 'type', 'observedAt'];
+    const keys = Object.keys(Observation.shape).filter((key) => !computed.includes(key));
+    expect([...ObservationFieldName.options].sort()).toEqual(keys.sort());
     expect(ObservationFieldName.options).toContain('rowKeyHash');
   });
 

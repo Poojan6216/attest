@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
-import { type ActionType, IsoTs, Observation, type ObservationSource } from '../../../src/core/schema';
+import { type ActionType, IsoTs, Observation, type ObservationSource, Ulid } from '../../../src/core/schema';
 import type { WindowClaim } from '../../../src/core/window';
 
 interface ObservationSpec {
@@ -17,7 +17,11 @@ interface ObservationSpec {
   readonly observedAt?: string;
   readonly subjectHint?: string;
   readonly counterparty?: string;
-  /** Forces an id other than idFromHash(contentHash) (two ids, one contentHash). */
+  /**
+   * Forces an id other than idFromHash(contentHash) (two ids, one contentHash): a corrupt ledger row. The
+   * schema rejects it (v1.3 §10), so it is built as a typed object without a parse, as a bad index could hand
+   * one to candidates().
+   */
   readonly idLabel?: string;
 }
 
@@ -35,8 +39,16 @@ function obs(spec: ObservationSpec): Observation {
     occurredAt: spec.occurredAt,
   };
   const contentHash = sha256Hex(canonicalJson(content));
-  const id = idFromHash(spec.idLabel === undefined ? contentHash : sha256Hex(spec.idLabel));
-  return Observation.parse({ ...content, id, contentHash, observedAt: spec.observedAt ?? spec.occurredAt });
+  const id = idFromHash(contentHash);
+  const parsed = Observation.parse({
+    ...content,
+    id,
+    contentHash,
+    observedAt: spec.observedAt ?? spec.occurredAt,
+  });
+  return spec.idLabel === undefined
+    ? parsed
+    : { ...parsed, id: Ulid.parse(idFromHash(sha256Hex(spec.idLabel))) };
 }
 
 const emailClaim = (claimedAt: string, extra: Partial<WindowClaim> = {}): WindowClaim => ({
