@@ -7,6 +7,7 @@
 import { loadPolicy, type PolicyBasisPoints, type SignalName } from '../../src/core/policy';
 import { BASIS_POINTS } from '../../src/core/units';
 import { type PolicyView } from './load';
+import { grantInForce, grantProblems } from './grants';
 import {
   type ExpectedReceipt,
   parseFraction,
@@ -15,6 +16,7 @@ import {
   type Scenario,
   type ScenarioObservation,
 } from './scenario-schema';
+import { instantMs } from './time';
 
 const BP_CACHE = new WeakMap<PolicyView, PolicyBasisPoints>();
 
@@ -209,6 +211,12 @@ function claimlessProblems(e: ExpectedReceipt, kind: 'unasked' | 'scope', policy
   const foreign = e.reasonCodes.filter((code) => !CLAIMLESS_CODES[kind].includes(code));
   if (foreign.length > 0) problems.push(`no ${foreign.join(', ')} on a claim-less receipt`);
   if (e.agent === undefined) problems.push('claim-less receipts name their agent');
+  // §8 v1.4: a claim-less grade() that matches no UNASKED/OVER_SCOPE rule is default_unverifiable, FINAL, no evidence.
+  if (e.ruleId === 'default_unverifiable') {
+    if (e.state === 'PENDING' || e.observationRefs.length > 0)
+      problems.push('claim-less default: FINAL, no evidence');
+    return problems;
+  }
   if (kind === 'scope') {
     if (e.ruleId !== 'over_scope_observed' || e.observationRefs.length > 0)
       problems.push('scope receipt shape');
@@ -261,7 +269,7 @@ export function accountBindingProblems(scenario: Scenario, policy: PolicyView): 
   for (const e of scenario.expect) {
     if (e.grade !== 'NOT_FOUND') continue;
     const claim = scenario.input.claims.find((c) => c.ref === e.ref);
-    const grant = scenario.input.grants.find((g) => g.agent === claim?.agent);
+    const grant = grantInForce(scenario, claim?.agent);
     const sources = claim === undefined ? [] : (policy.sourcesByType?.[claim.type] ?? []);
     const unbound = sources.some(
       (source) => grant?.accounts?.[source as ScenarioObservation['source']] === undefined,
@@ -324,10 +332,19 @@ function batchSubjectProblems(scenario: Scenario): string[] {
   const fixed = scenario.input.fixed ?? [];
   const fixedClaims = new Set(fixed.flatMap((pair) => (pair.claim === null ? [] : [pair.claim])));
   const subjects = scenario.expect.map(subjectKey);
+  const evaluatedMs = instantMs(scenario.input.evaluatedAt);
   for (const claim of scenario.input.claims) {
     const count = subjects.filter((key) => key === claim.ref).length;
-    const want = fixedClaims.has(claim.ref) ? 0 : 1;
+    // §3 v1.4: a claim first seen after evaluatedAt is ignored (no receipt).
+    const later = instantMs(claim.observedAt ?? claim.claimedAt) > evaluatedMs;
+    const want = fixedClaims.has(claim.ref) || later ? 0 : 1;
     if (count !== want) problems.push(`${claim.ref}: ${String(count)} expectations, want ${String(want)}`);
+  }
+  for (const e of scenario.expect) {
+    if (subjectKind(e) !== 'claim' && e.grade !== 'UNASKED' && e.grade !== 'OVER_SCOPE')
+      problems.push(
+        `${e.ref ?? 'scope'}: gradeBatch returns claim-less receipts only when UNASKED or OVER_SCOPE`,
+      );
   }
   const taken = [
     ...fixed.map((pair) => pair.observation),
@@ -349,7 +366,7 @@ function gradeSubjectProblems(scenario: Scenario): string[] {
 }
 
 export function refProblems(scenario: Scenario): string[] {
-  const { claims, observations, grants } = scenario.input;
+  const { claims, observations } = scenario.input;
   const claimRefs = new Set(claims.map((c) => c.ref));
   const obsRefs = new Set(observations.map((o) => o.ref));
   const problems: string[] = [];
@@ -360,11 +377,12 @@ export function refProblems(scenario: Scenario): string[] {
   }
   const subjects = scenario.expect.map(subjectKey);
   if (new Set(subjects).size !== subjects.length) problems.push('two expectations for one subject');
-  for (const ev of scenario.events ?? []) if (!subjects.includes(ev.ref)) problems.push(`event on ${ev.ref}`);
-  const agents = grants.map((g) => g.agent);
-  if (new Set(agents).size !== agents.length) problems.push('two grants for one agent');
-  const needGrant = [...claims.map((c) => c.agent), ...scenario.expect.flatMap((e) => e.agent ?? [])];
-  for (const agent of needGrant) if (!agents.includes(agent)) problems.push(`no grant for ${agent}`);
+  const deleted = (scenario.events ?? []).flatMap((ev) =>
+    ev.event === 'regrade' && ev.deleted ? [ev.ref] : [],
+  );
+  for (const ev of scenario.events ?? [])
+    if (!subjects.includes(ev.ref) && !deleted.includes(ev.ref)) problems.push(`event on ${ev.ref}`);
+  problems.push(...grantProblems(scenario));
   problems.push(
     ...(scenario.mode === 'batch' ? batchSubjectProblems(scenario) : gradeSubjectProblems(scenario)),
   );

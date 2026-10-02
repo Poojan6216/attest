@@ -66,7 +66,7 @@ const NO_PARAMS = {} as const;
 const SOURCE = { source: 'source' } as const;
 const AGENT = { agent: 'agent' } as const;
 
-/** §15 (v1.3) params per code, written from the contract. `source` is omitted for a type with no sources. */
+/** §15 (v1.4) params per code, written from the contract. `source` is omitted for a type with no sources. */
 export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, ParamKind>>>> = {
   'match.best': { observationId: 'observationRef' },
   'match.none': NO_PARAMS,
@@ -81,8 +81,8 @@ export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, 
   'coverage.calendars_hidden': SOURCE,
   'coverage.multiple_accounts': SOURCE,
   'coverage.no_account': SOURCE,
-  // §15 v1.3 lists no params for coverage.no_parser ("every other code has no params"): see README, readings.
-  'coverage.no_parser': NO_PARAMS,
+  // §15 v1.4: coverage.no_parser carries {source} like the other coverage caps.
+  'coverage.no_parser': SOURCE,
   'coverage.never_completed': NO_PARAMS,
   'grace.waiting': SOURCE,
   'scope.type_not_allowed': { type: 'actionType' },
@@ -146,6 +146,7 @@ const OverrideGrade = z.enum(['VERIFIED', 'NOT_FOUND']);
 export const IsoTs = z.iso.datetime({ offset: true });
 
 export const ClaimRef = z.string().regex(/^c\d+$/, 'claim refs are c<n>');
+export const GrantRef = z.string().regex(/^g\d+$/, 'grant refs are g<n>');
 export const ObservationRef = z.string().regex(/^o\d+$/, 'observation refs are o<n>');
 const Ref = z.union([ClaimRef, ObservationRef]);
 
@@ -220,6 +221,8 @@ export const ScenarioObservation = z.strictObject({
 export type ScenarioObservation = z.infer<typeof ScenarioObservation>;
 
 export const ScenarioGrant = z.strictObject({
+  /** Optional, so an expectation's `inputs.grant` can name the grant in force (§3 v1.4). */
+  ref: GrantRef.optional(),
   agent: AgentId,
   allowedTypes: z.array(ActionType).optional(),
   counterpartyAllowlist: z.array(z.string().min(1).max(320)).optional(),
@@ -231,6 +234,8 @@ export const ScenarioGrant = z.strictObject({
   declaredScopes: z.array(z.string().min(1).max(120)).optional(),
   observedScopes: z.array(z.string().min(1).max(120)).optional(),
   accounts: z.partialRecord(ObservationSource, z.array(Label).min(1)).optional(),
+  /** When the grant took effect (§3 v1.4: the latest `updatedAt ≤ evaluatedAt` is in force). */
+  updatedAt: IsoTs.optional(),
 });
 export type ScenarioGrant = z.infer<typeof ScenarioGrant>;
 
@@ -268,7 +273,14 @@ export const GradeCall = z.strictObject({
 });
 export type GradeCall = z.infer<typeof GradeCall>;
 
-/** State events applied with state.ts `transition` after grading, in order (§8). */
+/** v1.4: an illegal event (§8); `transition` must throw IllegalTransitionError and nothing changes. */
+const Rejected = z.literal(true).optional();
+
+/**
+ * State events applied with state.ts `transition` after grading, in order (§8). `regrade` (batch mode, v1.4)
+ * re-grades the same inputs at `evaluatedAt` and installs the subject's new receipt; `deleted: true`: the new
+ * grading has none, so the caller deletes the PENDING UNASKED receipt (§7, §8).
+ */
 export const ScenarioEvent = z.discriminatedUnion('event', [
   z.strictObject({
     event: z.literal('override'),
@@ -276,12 +288,28 @@ export const ScenarioEvent = z.discriminatedUnion('event', [
     grade: OverrideGrade,
     reason: z.string().min(1).max(120),
     at: IsoTs,
+    rejected: Rejected,
   }),
-  z.strictObject({ event: z.literal('supersede'), ref: ObservationRef, claim: ClaimRef }),
+  z.strictObject({ event: z.literal('supersede'), ref: ObservationRef, claim: ClaimRef, rejected: Rejected }),
+  z.strictObject({
+    event: z.literal('regrade'),
+    ref: Ref,
+    evaluatedAt: IsoTs,
+    deleted: z.literal(true).optional(),
+    rejected: Rejected,
+  }),
 ]);
 export type ScenarioEvent = z.infer<typeof ScenarioEvent>;
 
 const ScopeSubject = z.strictObject({ agent: AgentId, scope: z.string().min(1).max(120) });
+
+/** Stated parts of gradeBatch's `inputs` (§3 v1.4): grant in force, `priorSpendCents`, `scope.observed`. */
+export const ExpectedInputs = z.strictObject({
+  grant: GrantRef.optional(),
+  priorSpendCents: z.number().int().min(0).optional(),
+  scope: z.string().min(1).max(120).optional(),
+});
+export type ExpectedInputs = z.infer<typeof ExpectedInputs>;
 
 export const ExpectedReceipt = z
   .strictObject({
@@ -303,6 +331,8 @@ export const ExpectedReceipt = z
     override: OverrideGrade.optional(),
     previousState: z.enum(['PENDING', 'FINAL']).optional(),
     supersededBy: ClaimRef.optional(),
+    /** Batch mode only: the inputs gradeBatch returned with this receipt (§3 v1.4). */
+    inputs: ExpectedInputs.optional(),
   })
   .refine((e) => (e.ref === undefined) !== (e.scope === undefined), 'name exactly one of ref or scope');
 export type ExpectedReceipt = z.infer<typeof ExpectedReceipt>;
@@ -344,5 +374,13 @@ export const Scenario = z
   .refine((s) => s.mode === 'batch' || s.input.fixed === undefined, {
     message: 'fixed pre-assignments are a gradeBatch input',
     path: ['input', 'fixed'],
+  })
+  .refine((s) => s.mode === 'batch' || !(s.events ?? []).some((event) => event.event === 'regrade'), {
+    message: 'regrade events re-run gradeBatch',
+    path: ['events'],
+  })
+  .refine((s) => s.mode === 'batch' || s.expect.every((e) => e.inputs === undefined), {
+    message: 'expected inputs are what gradeBatch returns',
+    path: ['expect'],
   });
 export type Scenario = z.infer<typeof Scenario>;

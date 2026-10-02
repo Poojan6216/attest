@@ -39,7 +39,10 @@ export const PolicyView = z.looseObject({
     graceMin: z.number(),
     calendarDays: z.number(),
   }),
-  unasked: z.looseObject({ threshold: z.number(), windows: z.looseObject({ sessionMin: z.number() }) }),
+  unasked: z.looseObject({
+    threshold: z.number(),
+    windows: z.looseObject({ sessionMin: z.number(), adjacentMin: z.number() }),
+  }),
 });
 export type PolicyView = z.infer<typeof PolicyView>;
 
@@ -197,7 +200,7 @@ export function buildGrant(grant: ScenarioGrant, evaluatedAt: string): Grant {
     ...present(grant, ['spendCurrency', 'observedScopes']),
     declaredScopes: grant.declaredScopes ?? [],
     ...(grant.accounts === undefined ? {} : { accounts: hashAccounts(grant.accounts) }),
-    updatedAt: shiftIso(evaluatedAt, -MS_PER_DAY),
+    updatedAt: grant.updatedAt ?? shiftIso(evaluatedAt, -MS_PER_DAY),
   });
 }
 

@@ -1,0 +1,89 @@
+{
+  "name": "a calendar orphan is attributed from when it was first seen, not from the event start",
+  "covers": ["contract:calendar_anchor_first_seen"],
+  "mode": "batch",
+  "notes": [
+    "§7 v1.4: for calendar.* observations the anchor of every attribution window is the EARLIEST observedAt of the observation (when the change was first seen), not occurredAt (the event start).",
+    "No claims. Two gcal.event passes (acct-a, allCalendars) at 14:05 and 14:50 saw [10-05 00:00, 10-12 00:00]; both are synced by evaluatedAt 15:00, so every event below is an orphan of a covered type (§3).",
+    "o1 and o2 are two sightings of one event ('Board dinner', starts 10-08 19:00): same content → same contentHash and id (assertIds), counted once (§4.1). First seen 14:05 (o1), seen again 14:50 (o2). Anchor = 14:05.",
+    "o1 at 14:05: muse session at 14:00 (within ±10 min) → 4000; idle [14:00, 14:10] covers [14:03, 14:05] → 3000; no activity entries. muse = 7000 bp = 7/10 ≥ 6/10 → UNASKED, reasons unasked.session, unasked.idle.",
+    "Wrong anchors: the event start 10-08 19:00 (v1.3) has no session or idle near it → no receipt; the later sighting 14:50 has none either (session 50 min away, idle ended 14:10).",
+    "o3 ('Dentist', starts 10-06 12:00, first seen 14:50): anchor 14:50 → no session within 10 min, no idle interval covers [14:48, 14:50] → no signal → no receipt. Anchored on its start 12:00 (v1.3) it would be UNASKED (session 12:00, idle [11:50, 12:05] covers [11:58, 12:00]).",
+    "o1 stays PENDING: muse's adapter synced 14:30, before occurredAt + 2 + 30 min (10-08 19:32), and evaluatedAt is before occurredAt + 24 h. (Measured from the first sighting it would be PENDING too: 14:30 < 14:37 and 15:00 < 10-07 14:05.)"
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Board dinner",
+        "occurredAt": "2026-10-08T19:00:00-04:00",
+        "observedAt": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Board dinner",
+        "occurredAt": "2026-10-08T19:00:00-04:00",
+        "observedAt": "2026-10-06T14:50:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "occurredAt": "2026-10-06T12:00:00-04:00",
+        "observedAt": "2026-10-06T14:50:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:05:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:50:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T12:00:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T11:50:00-04:00", "to": "2026-10-06T12:05:00-04:00" },
+        { "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:10:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:30:00-04:00" }]
+    }
+  },
+  "assertIds": { "equal": [["o1", "o2"]] },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "name": "coverage levels are per source: one source fully covered does not make the claim fully covered",
+  "covers": ["contract:per_source_coverage", "edge:default_unverifiable"],
+  "mode": "batch",
+  "policyPatch": {
+    "sourcesByType": { "email.sent": ["gmail.sent", "gcal.event"] },
+    "rules": [
+      { "id": "unasked", "when": { "unaskedLikely": true }, "then": "UNASKED" },
+      { "id": "over_scope_observed", "when": { "observedScopeExceedsDeclared": true }, "then": "OVER_SCOPE" },
+      { "id": "over_scope", "when": { "typeNotInGrant": true }, "then": "OVER_SCOPE" },
+      { "id": "over_allowlist", "when": { "counterpartyNotAllowed": true }, "then": "OVER_SCOPE" },
+      { "id": "over_ceiling", "when": { "amountAboveCeiling": true }, "then": "OVER_SCOPE" },
+      { "id": "over_ceiling_cumulative", "when": { "cumulativeAboveCeiling": true }, "then": "OVER_SCOPE" },
+      { "id": "no_target", "when": { "targetMissing": true }, "then": "UNVERIFIABLE" },
+      { "id": "underspecified", "when": { "underspecified": true }, "then": "UNVERIFIABLE" },
+      { "id": "no_coverage", "when": { "coverage": "none" }, "then": "UNVERIFIABLE" },
+      { "id": "verified", "when": { "bestScoreGte": "verified" }, "then": "VERIFIED" },
+      { "id": "partial", "when": { "bestScoreGte": "partial" }, "then": "PARTIAL" },
+      { "id": "pending", "when": { "graceElapsed": false }, "then": "PENDING" },
+      {
+        "id": "not_found",
+        "when": { "graceElapsed": true, "coverage": "full", "bestScoreLt": "partial" },
+        "then": "NOT_FOUND"
+      }
+    ]
+  },
+  "notes": [
+    "§6.1 v1.4: with several relevant sources, coverage levels are per source: full iff every relevant source is full, none iff every one is none, else partial. The patch gives email.sent two sources (gmail.sent, gcal.event) and drops partial_coverage, so a partial claim falls to the terminal default_unverifiable, which adds no rule code: the per-source level decides the outcome without any per-source reason (how many coverage.partial reasons a two-source claim carries is left open, README).",
+    "The grant binds acct-a for both sources (no account_unbound, no cap); the gcal.event entry has allCalendars. Both entries synced 17:00 = evaluatedAt. No observations.",
+    "c1 (14:02): window [14:00, 14:48]. gmail.sent [12:00, 17:00] contains it → full; gcal.event [12:00, 15:00] contains it → full. Combined full. graceElapsed: each source has a sync ≥ end + 30 and ≥ end + 45 (14:48). No candidate → not_found → NOT_FOUND, FINAL, reasons match.none (accounts bound, so no coverage.account_unbound).",
+    "c2 (16:02): window [16:00, 16:48]. gmail.sent full; gcal.event's interval ends at 15:00 → none. Per source → partial. graceElapsed true (both synced 17:00 ≥ 16:48). No rule matches (not_found needs full, pending needs grace not elapsed) → default_unverifiable → UNVERIFIABLE, reasons match.none. PENDING (§8): 17:00 < end(16:03) + 24 h.",
+    "Reading coverage as the union of every relevant interval would call c2 full ([12:00, 17:00] ⊇ [16:00, 16:48]) and give a false NOT_FOUND (Hard Rule 5)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q4 plan",
+        "claimedAt": "2026-10-06T16:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse", "accounts": { "gmail.sent": ["acct-a"], "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"],
+      "reasonParams": { "match.none": {} }
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "default_unverifiable",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

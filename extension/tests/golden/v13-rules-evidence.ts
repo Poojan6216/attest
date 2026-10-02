@@ -5,12 +5,13 @@
  * rule; v13-rules.ts collects them with the other v1.3 rules.
  */
 import { MS_PER_DAY } from '../../src/core/units';
+import { grantInForce } from './grants';
 import { bestOf, claimOf, evidenceOf, minutes, minuteWindow, type Proof } from './proof-helpers';
 import { type ExpectedReceipt, type Scenario, type ScenarioObservation } from './scenario-schema';
 import { instantMs, truncateIso } from './time';
 
 const grantOf = (s: Scenario, e: ExpectedReceipt): Scenario['input']['grants'][number] | undefined =>
-  s.input.grants.find((g) => g.agent === claimOf(s, e)?.agent);
+  grantInForce(s, claimOf(s, e)?.agent);
 
 /** §6.1 v1.3: a claim in spendCurrency, assigned a receipt in another currency → ceiling.currency_mismatch. */
 const thirdCurrencyReceipt: Proof = (s) =>

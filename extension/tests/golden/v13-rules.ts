@@ -8,6 +8,7 @@
  */
 import { type PolicyView } from './build';
 import { hasNoParser, receiptOnlyType } from './checks-claims';
+import { grantInForce } from './grants';
 import { ASCII_ONLY, bestOf, claimOf, minuteWindow, type Proof } from './proof-helpers';
 import { type ExpectedReceipt, type Scenario, type ScenarioClaim } from './scenario-schema';
 import { instantMs } from './time';
@@ -135,7 +136,7 @@ const cpOnlyAddressClaims: Proof = (s) =>
 const allowlistSubjectOnly: Proof = (s) =>
   s.expect.some((e) => {
     const claim = claimOf(s, e);
-    const grant = s.input.grants.find((g) => g.agent === claim?.agent);
+    const grant = grantInForce(s, claim?.agent);
     return (
       claim?.type.startsWith('calendar.') === true &&
       claim.counterparty === undefined &&

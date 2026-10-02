@@ -1,0 +1,118 @@
+{
+  "name": "the grant in force is the one with the latest updatedAt not after evaluatedAt",
+  "covers": ["contract:grant_latest_updated_at", "ledger_engineer:type_not_in_grant"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.4: the grant in force for an agent is the one with the latest updatedAt ≤ evaluatedAt (compared as instants). muse has four grants, listed so that every shortcut picks a wrong one: g1 (15:30, after evaluatedAt 15:00: not yet in force), g3 (10-04 15:00), g2 (written 2026-10-06T20:00:00+01:00, the very instant of evaluatedAt 15:00−04:00: in force, since ≤), g4 (10-05 09:00).",
+    "Wrong picks: the first listed (g1), the last listed (g4), the latest overall (g1), the first listed of those already in force (g3), the last listed of those (g4), the earliest (g3), a strict updatedAt < evaluatedAt (g4), and comparing the timestamps as text ('2026-10-06T20…' sorts after '2026-10-06T15…', so g2 would look future → g4). Every one of them gives c1 VERIFIED and a different scope receipt.",
+    "c1 (muse, email.sent, priya@company.com, 'Q3 deck', 14:02) × o1 exact → 1/1 → assigned (assignment does not read the grant).",
+    "With g2 (allowedTypes [calendar.created]): typeNotInGrant → rule over_scope → OVER_SCOPE, FINAL at once (a claim-only fact, §8), reasons scope.type_not_allowed {type: email.sent}, match.best {o1}; evidence [o1]. g1, g3 or g4 (every type) would give VERIFIED.",
+    "Scope subjects come from the grant in force only (§6.1): g2 declares gmail.read and holds gmail.read and gmail.send → one receipt, muse/gmail.send, OVER_SCOPE by over_scope_observed, FINAL. g1's drive.read, g3's contacts.read and g4's drive.write are not the grant in force → no receipt.",
+    "Inputs: both receipts were graded with g2 (§3 v1.4); c1's context.priorSpendCents is 0 (email.sent is not a spend type)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "ref": "g1",
+        "agent": "muse",
+        "observedScopes": ["drive.read"],
+        "updatedAt": "2026-10-06T15:30:00-04:00"
+      },
+      {
+        "ref": "g3",
+        "agent": "muse",
+        "observedScopes": ["contacts.read"],
+        "updatedAt": "2026-10-04T15:00:00-04:00"
+      },
+      {
+        "ref": "g2",
+        "agent": "muse",
+        "allowedTypes": ["calendar.created"],
+        "declaredScopes": ["gmail.read"],
+        "observedScopes": ["gmail.read", "gmail.send"],
+        "updatedAt": "2026-10-06T20:00:00+01:00"
+      },
+      {
+        "ref": "g4",
+        "agent": "muse",
+        "observedScopes": ["drive.write"],
+        "updatedAt": "2026-10-05T09:00:00-04:00"
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["scope.type_not_allowed", "match.best"],
+      "reasonParams": {
+        "scope.type_not_allowed": {
+          "type": "email.sent"
+        },
+        "match.best": {
+          "observationId": "o1"
+        }
+      },
+      "inputs": {
+        "grant": "g2",
+        "priorSpendCents": 0
+      }
+    },
+    {
+      "scope": {
+        "agent": "muse",
+        "scope": "gmail.send"
+      },
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope_observed",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.observed_not_declared"],
+      "reasonParams": {
+        "scope.observed_not_declared": {
+          "scopeHash": "gmail.send"
+        }
+      },
+      "agent": "muse",
+      "inputs": {
+        "grant": "g2",
+        "scope": "gmail.send"
+      }
+    }
+  ]
+}

@@ -12,7 +12,7 @@
   "notes": [
     "§6.1 (v1.3): a purchase-like type (sources ['gmail.receipt']) whose normalised counterparty (name(), §11) is not in policy.receiptMerchants, or which has no counterparty, has coverage at most partial (reason coverage.no_parser). receiptMerchants is patched to ['acme']; one gmail.receipt entry (acct-a, one account) saw [09:00, 15:00] and synced 15:00; the grant binds no account.",
     "c1 'ACME' 3000 USD (10:02) × o1 merchant 'Acme' 3000 USD (10:02): name('ACME') = 'acme' ∈ receiptMerchants → coverage from the intervals alone: [10:00, 10:48] ⊆ [09:00, 15:00] → full. Applicable: timeProximity 2500, amountExact 2500, merchantMatch 2000 (no subject); Σw = 7000. tp 1; amountExact 1 (3000 USD both); merchantMatch 1 (normalised 'acme' = 'acme') → S = 7000/7000 = 1/1 → verified, FINAL (15:00 ≥ end + 30 = 10:33).",
-    "c2 3000 USD with no counterparty (12:02): identity amountExact is applicable → not underspecified, and the claim is assignable, but nothing is in its window [12:00, 12:48] → match.none. No counterparty → no parser → coverage capped at partial although the receipt interval contains the window. graceElapsed (15:00 ≥ 12:33 and ≥ 12:48) → pending does not fire → rule partial_coverage, reasons coverage.partial {source: gmail.receipt}, coverage.no_parser, match.none. PENDING (§8): 15:00 < end + 24 h = 10-07 12:03. Reading the interval alone would give a false NOT_FOUND; v1.2's no_coverage is gone.",
+    "c2 3000 USD with no counterparty (12:02): identity amountExact is applicable → not underspecified, and the claim is assignable, but nothing is in its window [12:00, 12:48] → match.none. No counterparty → no parser → coverage capped at partial although the receipt interval contains the window. graceElapsed (15:00 ≥ 12:33 and ≥ 12:48) → pending does not fire → rule partial_coverage, reasons coverage.partial {source: gmail.receipt}, coverage.no_parser {source: gmail.receipt} (§15 v1.4), match.none. PENDING (§8): 15:00 < end + 24 h = 10-07 12:03. Reading the interval alone would give a false NOT_FOUND; v1.2's no_coverage is gone.",
     "c3 'ACME' 2500 USD (13:02), no receipt in its window [13:00, 13:48]: name('ACME') ∈ receiptMerchants → not capped → full coverage; graceElapsed (15:00 ≥ 13:48) → rule not_found, FINAL; the grant binds no gmail.receipt account → coverage.account_unbound {source: gmail.receipt}. Comparing the raw 'ACME' with the list would cap it at partial → partial_coverage instead: this claim is the one the normalised-name rule decides.",
     "o1 is outside the windows of c2 and c3. No activity → no orphan receipts."
   ],
@@ -99,7 +99,9 @@
         "coverage.partial": {
           "source": "gmail.receipt"
         },
-        "coverage.no_parser": {},
+        "coverage.no_parser": {
+          "source": "gmail.receipt"
+        },
         "match.none": {}
       }
     },

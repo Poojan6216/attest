@@ -1,9 +1,9 @@
 /**
- * The golden scenario files (docs/grading.md v1.3 §15): every file parses strictly, every ref resolves, every
- * expectation obeys the contract's emission, ordering and params rules, together they cover the mandatory
- * list, the §2 demo, every policy rule, every ReasonCode, the hardened edge cases and the v1.2 rules (the v1.3
- * rules: v13-rules.spec.ts), and the loader turns each into schema-valid core inputs with stable ids.
- * checks.spec.ts proves the checks bite.
+ * The golden scenario files (docs/grading.md v1.5 §15): every file parses strictly, every ref resolves, every
+ * expectation obeys the contract's emission, ordering, params, grant and event rules, together they cover the
+ * mandatory list, the §2 demo, every policy rule, every ReasonCode, the hardened edge cases and the v1.2 rules
+ * (the v1.3 rules: v13-rules.spec.ts; the v1.4 rules: v14-rules.spec.ts), and the loader turns each into
+ * schema-valid core inputs with stable ids. checks.spec.ts proves the checks bite.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -16,6 +16,7 @@ import { loadPolicy } from '../../src/core/policy';
 import * as core from '../../src/core/schema';
 import { accountBindingProblems, expectationProblems, inputProblems, refProblems } from './checks';
 import { claimProblems, noParserProblems } from './checks-claims';
+import { eventProblems } from './checks-events';
 import { allowlistUncheckedProblems, reasonParamProblems, scenarioParamProblems } from './checks-reasons';
 import { formatIds, IDS_SNAPSHOT, scenarioIds } from './ids';
 import {
@@ -142,6 +143,7 @@ describe('golden scenario files', () => {
       expect(allowlistUncheckedProblems(s, policy)).toEqual([]);
       expect(claimProblems(s, policy)).toEqual([]);
       expect(noParserProblems(s, policy)).toEqual([]);
+      expect(eventProblems(s)).toEqual([]);
     },
   );
 

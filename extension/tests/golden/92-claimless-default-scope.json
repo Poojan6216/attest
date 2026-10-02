@@ -1,0 +1,38 @@
+{
+  "name": "grade() on a declared scope: default_unverifiable on the scope's subject",
+  "covers": ["contract:claimless_default_scope", "contract:grade_mode_claimless"],
+  "mode": "grade",
+  "notes": [
+    "mode grade: grade(null, [], muse's grant, policy, coverage, {priorSpendCents: 0, scope: {observed: 'gmail.read'}}). No activity, so no attribution.",
+    "observedScopeExceedsDeclared (§6.1): gmail.read is in grant.declaredScopes → false. unaskedLikely: no attribution → not applicable. Every other condition is not applicable claim-less → no rule matches → terminal default_unverifiable.",
+    "§8 v1.4: rule default_unverifiable, FINAL, subject {k:'scope', agent: muse, scope: gmail.read}, observationIds [], reasons [] (no match code claim-less, no rule code). gradeBatch never returns it (87: a declared scope yields no receipt)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [],
+    "grants": [{ "agent": "muse", "declaredScopes": ["gmail.read"], "observedScopes": ["gmail.read"] }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "grade": { "claim": null, "candidates": [], "agent": "muse", "scope": "gmail.read" }
+  },
+  "expect": [
+    {
+      "scope": { "agent": "muse", "scope": "gmail.read" },
+      "grade": "UNVERIFIABLE",
+      "ruleId": "default_unverifiable",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": [],
+      "agent": "muse"
+    }
+  ]
+}

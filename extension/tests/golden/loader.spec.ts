@@ -292,3 +292,92 @@ describe('golden loader (v1.3): row keys and scope hashes', () => {
     ]);
   });
 });
+
+const GRANTED = Scenario.parse({
+  ...MINIMAL,
+  input: {
+    ...MINIMAL.input,
+    grants: [
+      { ref: 'g1', agent: 'muse', updatedAt: '2026-10-06T13:00:00-04:00' },
+      { ref: 'g2', agent: 'muse' },
+    ],
+  },
+  events: [
+    { event: 'regrade', ref: 'c1', evaluatedAt: '2026-10-06T15:30:00-04:00' },
+    {
+      event: 'override',
+      ref: 'c1',
+      grade: 'VERIFIED',
+      reason: 'mine',
+      at: '2026-10-06T14:00:00-04:00',
+      rejected: true,
+    },
+  ],
+  expect: [
+    {
+      ref: 'c1',
+      grade: 'NOT_FOUND',
+      ruleId: 'not_found',
+      state: 'FINAL',
+      observationRefs: [],
+      score: null,
+      reasonCodes: ['match.none'],
+      inputs: { grant: 'g1', priorSpendCents: 0 },
+    },
+  ],
+});
+describe('golden loader (v1.4): grants in force and stated inputs', () => {
+  const loaded = buildScenario('granted.json', GRANTED);
+
+  it('keeps a written updatedAt, defaults the rest, and indexes grants by ref (§3 v1.4)', () => {
+    expect(loaded.grants.map((g) => g.updatedAt)).toEqual([
+      '2026-10-06T13:00:00-04:00',
+      '2026-10-05T15:00:00-04:00',
+    ]);
+    expect(loaded.grantRefs.get('g1')).toEqual(loaded.grants[0]);
+    expect(loaded.grantRefs.get('g2')).toEqual(loaded.grants[1]);
+  });
+
+  it('resolves stated inputs to the built grant', () => {
+    expect(loaded.expected[0]?.inputs).toEqual({ grant: loaded.grants[0], priorSpendCents: 0 });
+  });
+});
+
+describe('golden loader (v1.4): events, claim ids and modes', () => {
+  const loaded = buildScenario('granted.json', GRANTED);
+
+  it('builds regrade events with their instant and every event with its rejected flag', () => {
+    const receiptId = loaded.expected[0]?.receiptId;
+    expect(loaded.events).toEqual([
+      {
+        event: 'regrade',
+        receiptId,
+        evaluatedAt: '2026-10-06T15:30:00-04:00',
+        deleted: false,
+        rejected: false,
+      },
+      {
+        event: 'override',
+        receiptId,
+        grade: 'VERIFIED',
+        reason: 'mine',
+        at: '2026-10-06T14:00:00-04:00',
+        rejected: true,
+      },
+    ]);
+  });
+
+  it('derives Claim.id = idFromHash(rawHash) for every claim (§8 v1.4 schema rule)', () => {
+    for (const claim of loaded.claims.values()) expect(claim.id).toBe(idFromHash(claim.rawHash));
+  });
+
+  it('rejects inputs and regrade events in grade mode', () => {
+    const graded = {
+      ...GRANTED,
+      mode: 'grade',
+      input: { ...GRANTED.input, grade: { claim: 'c1', candidates: [] } },
+    };
+    expect(Scenario.safeParse(graded).success).toBe(false);
+    expect(Scenario.safeParse({ ...graded, events: [], expect: [] }).success).toBe(true);
+  });
+});

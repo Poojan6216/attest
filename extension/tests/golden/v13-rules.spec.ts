@@ -17,6 +17,7 @@ import {
 } from './scenario-schema';
 import { V12_RULES } from './v12-rules';
 import { V13_RULES } from './v13-rules';
+import { V14_RULES } from './v14-rules';
 
 const FILES = scenarioFiles();
 const SCENARIOS: readonly (readonly [string, Scenario])[] = FILES.map((file) => [file, readScenario(file)]);
@@ -184,8 +185,8 @@ const DESCRIPTIVE_TAGS = [
 ];
 
 describe('contract tags', () => {
-  it('every contract:<tag> a file carries is a proved v1.2/v1.3 rule or a listed descriptive tag', () => {
-    const proved = new Set([...V12_RULES, ...V13_RULES].map(([tag]) => tag));
+  it('every contract:<tag> a file carries is a proved v1.2/v1.3/v1.4 rule or a listed descriptive tag', () => {
+    const proved = new Set([...V12_RULES, ...V13_RULES, ...V14_RULES].map(([tag]) => tag));
     const unproved = SCENARIOS.flatMap(([file, s]) =>
       s.covers
         .filter((tag) => tag.startsWith('contract:'))

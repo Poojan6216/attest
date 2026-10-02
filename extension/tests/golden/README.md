@@ -1,29 +1,36 @@
 # Golden scenarios
 
-Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` (v1.3) **alone**,
+Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` (v1.5) **alone**,
 never from `src/core`. They are the independent statement of what `grade()` and `gradeBatch()` must do: the code
 is written to satisfy them, not the other way round (sprint 1: "write scenarios first").
 
-| File                                     | Role                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NN-slug.json`                           | One scenario (§15 format, extended below).                                                        |
-| `scenario-schema.ts`                     | Strict Zod schema for a scenario file, and the §15 params table. Unknown keys fail.               |
-| `load.ts`                                | Builds schema-valid core inputs from a file: defaults, ids, hashes, receipt ids, reasons.         |
-| `build.ts`                               | Per-object builders (claim, observation, grant, coverage) and the policy merge patch.             |
-| `time.ts`                                | Offset-preserving time helpers (no host time zone, no `Intl`).                                    |
-| `checks.ts`                              | Contract invariants checked on the files (emission table, v1.3 order, thresholds, refs).          |
-| `checks-reasons.ts`                      | §15 params per code and the `allowlist.unchecked` emission rule, checked on the files.            |
-| `checks-claims.ts`                       | Never-scored claims (§4.3), evidence of the claim's own type (§4.1), no-parser purchases.         |
-| `proof-helpers.ts`                       | Shared pieces of the `contract:<tag>` proofs.                                                     |
-| `v12-rules.ts`                           | One `contract:<tag>` per v1.2 rule (as it still reads in v1.3), with its proof.                   |
-| `v13-rules*.ts` (rules, evidence, text)  | One `contract:<tag>` per v1.3 rule, with a proof that the tagged file exercises it.               |
-| `ids.ts`, `write-ids.ts`                 | The ids snapshot and the script that writes it.                                                   |
-| `scenarios.spec.ts`                      | Validates every file, the coverage requirements, and the loader output.                           |
-| `checks.spec.ts`                         | Mutation tests: every check and v1.2 proof rejects a broken copy of a real expectation.           |
-| `v13-rules.spec.ts`                      | Every v1.3 tag is exercised, every proof and check fails on a broken copy, every tag has a proof. |
-| `loader.spec.ts`                         | Pins the loader defaults, `claimedAtEnd`, row-key hashing, reason params and time helpers.        |
-| `__snapshots__/ids.json`                 | Every claim and observation id per scenario, so a hashing change is a reviewed diff.              |
-| `runner.ts`, `golden.spec.ts` (task 1.5) | The runner: grades every file through the core and compares receipts (owned by task 1.5).         |
+| File                                    | Role                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NN-slug.json`                          | One scenario (§15 format, extended below).                                                        |
+| `scenario-schema.ts`                    | Strict Zod schema for a scenario file, and the §15 params table. Unknown keys fail.               |
+| `load.ts`                               | Builds schema-valid core inputs from a file: defaults, ids, hashes, receipt ids, reasons.         |
+| `build.ts`                              | Per-object builders (claim, observation, grant, coverage) and the policy merge patch.             |
+| `time.ts`                               | Offset-preserving time helpers (no host time zone, no `Intl`).                                    |
+| `checks.ts`                             | Contract invariants checked on the files (emission table, v1.3 order, thresholds, refs).          |
+| `checks-reasons.ts`                     | §15 params per code and the `allowlist.unchecked` emission rule, checked on the files.            |
+| `checks-claims.ts`                      | Never-scored claims (§4.3), evidence of the claim's own type (§4.1), no-parser purchases.         |
+| `checks-events.ts`                      | The §8 v1.4 event rules on the files: stale regrades, early overrides, the last supersede wins.   |
+| `grants.ts`                             | The grant in force (§3 v1.4) read from a file, and the grant checks (one instant per agent).      |
+| `proof-helpers.ts`                      | Shared pieces of the `contract:<tag>` proofs.                                                     |
+| `v12-rules.ts`                          | One `contract:<tag>` per v1.2 rule (as it still reads in v1.3), with its proof.                   |
+| `v13-rules*.ts` (rules, evidence, text) | One `contract:<tag>` per v1.3 rule, with a proof that the tagged file exercises it.               |
+| `v14-rules*.ts` (rules, events)         | One `contract:<tag>` per v1.4 rule, with a proof that the tagged file exercises it.               |
+| `ids.ts`, `write-ids.ts`                | The ids snapshot and the script that writes it.                                                   |
+| `scenarios.spec.ts`                     | Validates every file, the coverage requirements, and the loader output.                           |
+| `checks.spec.ts`                        | Mutation tests: every check and v1.2 proof rejects a broken copy of a real expectation.           |
+| `v13-rules.spec.ts`                     | Every v1.3 tag is exercised, every proof and check fails on a broken copy, every tag has a proof. |
+| `v14-rules.spec.ts`                     | The same for the v1.4 tags, and the v1.4 checks (grants, late claims, events, params) bite.       |
+| `loader.spec.ts`                        | Pins the loader defaults, `claimedAtEnd`, row-key hashing, reason params and time helpers.        |
+| `__snapshots__/ids.json`                | Every claim and observation id per scenario, so a hashing change is a reviewed diff.              |
+| `runner.ts`, `golden.spec.ts`           | The runner: grades every file through the core (gradeBatch or grade, then the events).            |
+| `runner-inputs.ts`                      | Checks the inputs gradeBatch returns with every receipt, by replaying them through `grade`.       |
+| `runner-diff.ts`                        | Compares a run with the expectations, one line per disagreement.                                  |
+| `runner-v14.spec.ts`                    | The v1.4 runner checks (inputs, regrade, rejected events) report broken runs and expectations.    |
 
 ## File format
 
@@ -43,9 +50,9 @@ The §15 format, plus a few fields the contract needs but the §15 example does 
                  "observedAt": "…", "text": "…", "rowKey": "label" }],
     "observations": [{ "ref": "o1", "source": "gmail.sent", "type": "email.sent", "counterparty": "…",
                        "occurredAt": "…", "observedAt": "…", "rowKey": "label" }],
-    "grants": [{ "agent": "muse", "allowedTypes": [], "counterpartyAllowlist": [], "spendCeilingCents": 5000,
-                 "spendCurrency": "USD", "declaredScopes": [], "observedScopes": [],
-                 "accounts": { "gmail.sent": ["acct-a"] } }],
+    "grants": [{ "ref": "g1", "agent": "muse", "allowedTypes": [], "counterpartyAllowlist": [],
+                 "spendCeilingCents": 5000, "spendCurrency": "USD", "declaredScopes": [], "observedScopes": [],
+                 "accounts": { "gmail.sent": ["acct-a"] }, "updatedAt": "…" }],
     "coverage": [{ "source": "gmail.sent", "lastSyncAt": "…", "windowStart": "…", "windowEnd": "…",
                    "accountHash": "acct-a", "allCalendars": true }],
     "activity": { "sessions": [], "idle": [], "entries": [], "adapterSyncs": [], "claims": ["c1"] },
@@ -53,19 +60,34 @@ The §15 format, plus a few fields the contract needs but the §15 example does 
     "grade": { "claim": null, "candidates": ["o1"], "agent": "muse", "priorSpendCents": 0, "scope": "…" }
   },
   "events": [{ "event": "override", "ref": "c1", "grade": "VERIFIED", "reason": "…", "at": "…" },
-             { "event": "supersede", "ref": "o1", "claim": "c1" }],
+             { "event": "supersede", "ref": "o1", "claim": "c1" },
+             { "event": "regrade", "ref": "c1", "evaluatedAt": "…" },
+             { "event": "regrade", "ref": "o2", "evaluatedAt": "…", "deleted": true },
+             { "event": "override", "ref": "c1", "grade": "NOT_FOUND", "reason": "…", "at": "…", "rejected": true }],
   "assertIds": { "equal": [["o1", "o2"]], "ascending": [["c3", "c4"]] },
   "expect": [{ "ref": "c1", "grade": "VERIFIED", "ruleId": "verified", "state": "FINAL",
                "observationRefs": ["o1"], "score": "1/1", "reasonCodes": ["match.best"],
-               "reasonParams": { "match.best": { "observationId": "o1" } } },
+               "reasonParams": { "match.best": { "observationId": "o1" } },
+               "inputs": { "grant": "g1", "priorSpendCents": 0 } },
              { "ref": "o2", "grade": "UNASKED", …, "agent": "muse", "attributionScore": "7/10" },
              { "scope": { "agent": "muse", "scope": "gmail.read" }, "grade": "OVER_SCOPE", …,
                "reasonParams": { "scope.observed_not_declared": { "scopeHash": "gmail.read" } } }]
 }
 ```
 
-- **Refs.** Claims are `c<n>`, observations `o<n>`. An expectation names its subject: a claim ref (claim
-  receipt), an observation ref (UNASKED receipt for that orphan), or `scope` (scope-diff receipt).
+- **Refs.** Claims are `c<n>`, observations `o<n>`, grants `g<n>` (optional). An expectation names its subject:
+  a claim ref (claim receipt), an observation ref (UNASKED receipt for that orphan), or `scope` (scope-diff
+  receipt).
+- **Grants (v1.4).** An agent may have several grants; the one in force is the latest `updatedAt ≤ evaluatedAt`
+  (§3). `updatedAt` defaults to `evaluatedAt − 1 day`. One agent's grants never share an instant (gradeBatch would
+  throw `ambiguous_grant`), and every agent a claim or an expectation names has a grant in force (`89`).
+- **`inputs`** (batch mode, v1.4, optional). What gradeBatch returned with the receipt (§3: `{receipt, inputs:
+{grant, context, policyHash}}`), stated where it is the point: `grant` (a grant ref; it must be the grant in
+  force), `priorSpendCents` (`context.priorSpendCents`) and `scope` (`context.scope.observed`) (`87`–`89`, `93`).
+  Whether stated or not, the runner checks every returned input (see "Runner contract").
+- **Claims read after `evaluatedAt`** (v1.4). A claim whose `observedAt` is after `evaluatedAt` is still passed to
+  gradeBatch (it is in the ledger) but must be ignored (§3): no receipt, no expectation, no spend, no adjacency
+  (`88`, `94`).
 - **Labels.** `accountHash` and `accounts` entries are short labels; the loader stores SHA-256(label) (§15). A
   `rowKey` label becomes `rowKeyHash = sha256Hex(canonicalJson(rowKey))` (§10 v1.3), for claims (`rawHash`) and
   observations (`contentHash`) alike. Ids and hashes are never typed by hand.
@@ -79,7 +101,12 @@ The §15 format, plus a few fields the contract needs but the §15 example does 
   assert codes only.
 - **`fixed`.** FINAL or USER_OVERRIDDEN pre-assignments (§4.3). A claim named here already holds its receipt: it
   is not passed to `gradeBatch` and gets no expectation. `claim: null` is an overridden UNASKED receipt.
-- **`events`.** State events applied with `state.ts` `transition()` after grading, in order (§8).
+- **`events`.** State events applied with `state.ts` `transition()` after grading, in order (§8). `regrade`
+  (batch mode, v1.4) grades the same inputs again at its `evaluatedAt` (each input filtered by that instant, §3)
+  and installs the subject's new receipt; with `deleted: true` that grading returns no receipt for the subject,
+  and the caller deletes the PENDING UNASKED receipt (§7). `rejected: true` marks an illegal event: `transition`
+  must throw `IllegalTransitionError` and nothing changes (a stale regrade, a regrade of a FINAL receipt, an
+  override dated before `computedAt`; `93`, `94`).
 - **`assertIds`.** When an expectation depends on hash-derived ids (a tie broken by claim or observation id,
   or dedupe by `contentHash`), the file states the id relation it relies on and the spec verifies it.
 - **`expect` is the whole result.** In batch mode it lists every receipt `gradeBatch` returns: a missing or an
@@ -88,18 +115,19 @@ The §15 format, plus a few fields the contract needs but the §15 example does 
 
 ## Loader defaults (§15)
 
-| Object         | Default                                                                                                                                                         |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claim          | `extractor {golden, 1, 1}`, `sourceKind activity_view`, `claimedAtPrecision minute`, no `claimedAtEnd`, `observedAt = claimedAt`, `text = ref`, no `requestId`  |
-| Claim id       | `rawHash = sha256(canonicalJson({agent, sourceKind, rowKeyHash or null, text, claimedAt truncated to its unit in its own offset}))`, `id = idFromHash(rawHash)` |
-| Observation    | `observedAt` = earliest `lastSyncAt ≤ evaluatedAt` among its source's coverage entries whose window holds `occurredAt`, else `evaluatedAt`                      |
-| Observation id | `contentHash = sha256(canonicalJson({source, type, …the content fields allowlistedFields[source] names, rowKeyHash if any}))`, `id = idFromHash(contentHash)`   |
-| Row key        | `rowKeyHash = sha256Hex(canonicalJson(rowKey))` (§10 v1.3); `redact-golden.spec.ts` checks `project()` builds the same observation                              |
-| Grant          | every type allowed, empty allowlist, `spendCeilingCents null`, no scopes, no accounts, `updatedAt = evaluatedAt − 1 day`                                        |
-| Coverage       | `observerId = source`                                                                                                                                           |
-| Activity       | empty lists; `claims` = every scenario claim                                                                                                                    |
-| Receipt id     | `idFromHash(sha256(canonicalJson(K)))`, `K = {k:'claim', claimId}` / `{k:'unasked', observationId}` / `{k:'scope', agent, scope}`                               |
-| Reasons        | only with `reasonParams`: `{code, params}` in `reasonCodes` order, refs resolved to ids, scopes hashed, parsed with the core `Reason` schema                    |
+| Object         | Default                                                                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claim          | `extractor {golden, 1, 1}`, `sourceKind activity_view`, `claimedAtPrecision minute`, no `claimedAtEnd`, `observedAt = claimedAt`, `text = ref`, no `requestId`                                |
+| Claim id       | `rawHash = sha256(canonicalJson({agent, sourceKind, rowKeyHash or null, text, claimedAt truncated to its unit in its own offset}))`, `id = idFromHash(rawHash)` (the v1.4 schema requires it) |
+| Observation    | `observedAt` = earliest `lastSyncAt ≤ evaluatedAt` among its source's coverage entries whose window holds `occurredAt`, else `evaluatedAt`                                                    |
+| Observation id | `contentHash = sha256(canonicalJson({source, type, …the content fields allowlistedFields[source] names, rowKeyHash if any}))`, `id = idFromHash(contentHash)`                                 |
+| Row key        | `rowKeyHash = sha256Hex(canonicalJson(rowKey))` (§10 v1.3); `redact-golden.spec.ts` checks `project()` builds the same observation                                                            |
+| Grant          | every type allowed, empty allowlist, `spendCeilingCents null`, no scopes, no accounts, `updatedAt` as written, else `evaluatedAt − 1 day`                                                     |
+| Coverage       | `observerId = source`                                                                                                                                                                         |
+| Activity       | empty lists; `claims` = every scenario claim                                                                                                                                                  |
+| Receipt id     | `idFromHash(sha256(canonicalJson(K)))`, `K = {k:'claim', claimId}` / `{k:'unasked', observationId}` / `{k:'scope', agent, scope}`                                                             |
+| Reasons        | only with `reasonParams`: `{code, params}` in `reasonCodes` order, refs resolved to ids, scopes hashed, parsed with the core `Reason` schema                                                  |
+| Inputs         | only with `inputs`: the grant ref resolved to the built grant                                                                                                                                 |
 
 ## How an expectation is computed
 
@@ -126,6 +154,43 @@ Everything is exact: basis points and reduced fractions, never floats (§5.3). W
 `timeProximity` = 1 within `toleranceMin`, else `(edge − Δ)/(edge − tolerance)` in ms, with edge 120 000 before
 the unit, 2 700 000 after it, 259 200 000 around a calendar target. `28` and `29` exercise the millisecond
 boundaries (9503999/9504000, 17/20 exactly, 8078399/9504000).
+
+## What v1.4 (and v1.5) changed in the files
+
+v1.4 settled the wave C questions (Decisions [1.contract] v1.4); v1.5 only changed how `inputsHash` names the
+candidates, which no file states. Each rule below has a `contract:<tag>` with a proof in `v14-rules*.ts`.
+
+- **gradeBatch returns `{receipt, inputs}` (§3).** The runner checks every returned input on every receipt
+  (policy hash, grant in force, context shape, and replay: `grade` on the inputs gives back the very receipt);
+  files state inputs where they are the point: the scope-diff receipts (`87`), the grant chosen (`89`) and the
+  spend that a late claim must not add (`88`).
+- **Grant in force (§3).** The latest `updatedAt ≤ evaluatedAt`, compared as instants: neither the first nor the
+  last listed, nor the first or last listed of those already in force, nor the earliest, nor the latest overall;
+  and it took effect at `evaluatedAt` itself, written in another offset, so a strict `<` or a text comparison
+  picks another (`89`; its older and future grants' scopes yield no receipt).
+- **Late claims ignored (§3).** A claim read after `evaluatedAt` gets no receipt, adds nothing to
+  `priorSpendCents` and suppresses no adjacency (`88`); a later regrade sees it (`94`).
+- **Adjacency (§7).** Only an _assignable_ claim of the agent, by its precision unit, suppresses
+  `activityLogAdjacent`: a vague claim next to an orphan no longer hides it (`85` o1, UNASKED; v1.3 gave no
+  receipt), while an assignable one still does (`85` o2, `48`).
+- **Calendar anchor (§7).** A calendar orphan's attribution windows are measured from its earliest `observedAt`,
+  not the event start (`86`: UNASKED from the first sighting; none from the later sighting; an event attributed
+  only from its start has no receipt).
+- **Per-source coverage (§6.1).** Full iff every relevant source is full (`90`: one source full and one blind is
+  partial, never NOT_FOUND; the union of the intervals would give a false NOT_FOUND).
+- **Claim-less default subject (§8).** A claim-less `grade` matching no UNASKED/OVER_SCOPE rule is
+  `default_unverifiable`, FINAL, on the orphan's (`91`) or the scope's (`92`) subject, `observationIds []`,
+  reasons `[]`; gradeBatch never returns one (checked on every batch file).
+- **Params (§15).** `coverage.no_parser` carries `{source}` (`06`, `76`); `ceiling.currency_mismatch.currency` is
+  the claim's when present and ≠ `spendCurrency`, else the assigned candidate's (`81` c1 now asserts EUR, the
+  candidate's; `81` c3, a EUR claim with a CAD receipt, asserts EUR, the claim's).
+- **Events (§8).** A regrade installs a later grading of the same subject (`93` PENDING → FINAL, `94` PENDING
+  UNASKED → FINAL UNASKED); a stale regrade (`next.computedAt < computedAt`) and a regrade of a FINAL receipt are
+  refused (`93`); an override dated before `computedAt` is refused (`93`); a PENDING UNASKED that a later grading
+  no longer returns is deleted (`94` o2); a later supersede replaces the earlier claim and repeating it changes
+  nothing (`94`). Existing events (`56`, `57`, `74`) already satisfied every v1.4 rule.
+- **Loader.** Grants take an optional `ref` and `updatedAt`; `Claim.id = idFromHash(rawHash)` as before (now a
+  schema rule). No existing id changed; the snapshot gained `85`–`94` and `81`'s c3 and o3.
 
 ## What v1.3 changed in the files
 
@@ -169,26 +234,34 @@ One behaviour change and a set of clarifications (Decisions [1.contract] v1.3; `
 Each is reported as a contract issue. _Avoided_ files stay off the reading (some enforced by a check); _taken_
 readings are asserted and must change if the contract decides otherwise.
 
-1. _Taken._ `coverage.no_parser` carries no params: §15's closed table names `{source}` for the other caps but not
-   for it, and says "every other code has no params" (`06`, `76`). The core schema accepts an optional `source`.
-2. _Avoided._ `ceiling.currency_mismatch.currency` when the claim's currency is `spendCurrency` and only the
-   receipt's differs: "the claim's when present" would name `spendCurrency` itself. `81` c1 asserts codes only.
+1. _Settled in v1.4._ `coverage.no_parser` carries `{source}` (`06`, `76`).
+2. _Settled in v1.4._ `ceiling.currency_mismatch.currency` names the candidate's currency when the claim's is
+   `spendCurrency` (`81` c1), and the claim's when both differ from it (`81` c3).
 3. _Taken._ "An amount is known" (the `amountAboveCeiling` guard) counts a claim amount in another currency, so a
    claim in EUR against a USD ceiling is `ceiling.currency_mismatch` even though that amount is not in the Amount
-   (`34`, `65` c2).
+   (`34`, `65` c2). v1.4's "(the claim's or the assigned candidate's `amountCents`, in any currency)" agrees.
 4. _Avoided._ The finality of an over-ceiling claim whose `ceiling.exceeded` comes from the claim alone and whose
    `ceiling.currency_mismatch` comes from the receipt: `81` c2 is past grace, so both readings give FINAL.
 5. _Avoided (checked)._ `coverage.no_parser` when coverage would be partial anyway (an interval gap): every
    no-parser file has an interval that holds the whole window; `checks-claims.ts` requires the code on every
    no-parser `partial_coverage` receipt.
-6. _Avoided._ The receipt id, `observationIds` and finality of a claim-less `grade()` that falls to
-   `default_unverifiable` (§8 says FINAL; `gradeBatch` never stores it); no grade-mode file produces one.
+6. _Settled in v1.4._ A claim-less `grade()` falling to `default_unverifiable` (`91`, `92`).
 7. _Avoided._ An allowlist claim with no address whose assigned candidate has no address either (a calendar
    event with no attendees): no file has one.
 8. _Loader convention_, not a grading reading: a claim's truncated `claimedAt` in `rawHash` keeps a `Z` offset
    as `Z` (`31`). It changes golden ids only; the core never recomputes `rawHash`.
 9. _Avoided._ Whether `name()` of merchant text that `counterparty()` rejects (a bidi override) can match
    `policy.receiptMerchants` (§6.1 no-parser test): `84` c5 is VERIFIED, which no coverage reading changes.
+10. _Avoided._ How many `coverage.none` / `coverage.partial` / `grace.waiting` reasons a claim with several
+    relevant sources carries (one per source, or one per source that falls short), and in which order: `90`
+    patches out `partial_coverage` so its partial claim falls to `default_unverifiable`, which adds no code.
+11. _Avoided._ Whether a calendar UNASKED receipt's finality (§7: "`occurredAt` + beforeClaimMin + graceMin",
+    "`occurredAt` + finalizeUnverifiableHours") also moves to the first sighting: `86` is PENDING either way.
+12. _Avoided._ `context.priorSpendCents` of a claim-less receipt (§3 calls the field required but defines it for
+    claims only): `87`, `89` and `88` state it only for claims.
+13. _Taken._ A claim passed to gradeBatch whose `observedAt` is after `evaluatedAt` is ignored entirely (no
+    receipt), reading §3's filter ("claims with `observedAt > evaluatedAt` … are ignored") over "grades exactly
+    the PENDING `claims` it is given" (`88`, `94`; `checks.ts` expects no receipt for such a claim).
 
 The v1.1/v1.2 readings are all settled now: evidence is the assigned candidate only (`18`–`23`, `30`, `73`);
 `gradeBatch` returns claim, UNASKED and `over_scope_observed` receipts only (`46`–`48`, `50`, `73`); no-source
@@ -210,7 +283,14 @@ added `75`–`77`. The v1.3 pass re-derived every purchase scenario from v1.3 al
 The v1.3 adversarial verifier recomputed every changed and new file from v1.3 alone (no disagreement) and added
 `84` for the §11/§5.1 text rules no file exercised.
 After the files were written, the task 1.5 runner (`golden.spec.ts`) graded all of them through the core with
-no disagreement.
+no disagreement. The v1.4 pass re-checked every file against v1.4/v1.5 (only `06`, `76` and `81` changed: their
+params), added `85`–`94` computed from the contract alone (each built so the v1.3-era reading gives a different
+receipt set, grade or state; its notes say how), and moved the runner to gradeBatch's `{receipt, inputs}`; the
+v1.4 core then graded all 94 with no disagreement, every returned input replaying to its receipt. The v1.4
+adversarial verifier recomputed `85`–`94`, `06`, `76` and `81` from v1.4/v1.5 alone (no disagreement), then ran
+the suite against copies of the core with one v1.4 rule broken at a time: two broken rules passed, so `89` gained
+a fourth grant and the in-force grant at `evaluatedAt` itself (a grant picked as the first one already in force
+passed), and `81` gained c3 (the claim's currency named before the candidate's; the reverse order passed).
 
 ## Adding a scenario
 
@@ -232,7 +312,7 @@ no disagreement.
 - ≥ 40 files; each parses strictly; refs resolve; one expectation per graded claim; evidence is one-to-one.
 - Every expectation agrees with the rule → grade mapping, the thresholds (exactly, in the basis points
   `loadPolicy()` computes, never the decimal fields), first-match-wins (a rule after `verified` or `partial` in
-  policy order has a best score below that threshold), the §15 emission table and the v1.3 reason order;
+  policy order has a best score below that threshold), the §15 emission table and the reason order;
   NOT_FOUND carries `coverage.account_unbound` iff the grant binds no account; `allowlist.unchecked` appears
   exactly when §6.1 makes the allowlist uncheckable; a purchase no parser can see is never NOT_FOUND, and its
   `partial_coverage` receipt names `coverage.no_parser`.
@@ -246,29 +326,47 @@ no disagreement.
 - Observations carry only allowlisted fields from a source that sees their type; every patched policy loads.
 - Coverage: the 12 mandatory scenarios (checked against `agents/ledger_engineer.md`), the §2 demo and its
   UNVERIFIABLE variant, every rule in `policy/default.json` plus `default_unverifiable`, every ReasonCode, every
-  grade and state, both modes, the hardened edge cases, and each v1.2 and v1.3 rule with a proof it is exercised.
+  grade and state, both modes, the hardened edge cases, and each v1.2, v1.3 and v1.4 rule with a proof it is
+  exercised.
 - The scenario enums equal `src/core/schema.ts`; the loader's objects and reasons parse with the core schemas.
 - `__snapshots__/ids.json` is byte-identical to what `write-ids.ts` writes.
-- Mutation tests (`checks.spec.ts`, `v13-rules.spec.ts`) prove the checks and the proofs fail on broken files.
-- Every `contract:<tag>` a file carries has a proof (`v12-rules.ts`, `v13-rules*.ts`), except four descriptive
-  v1.0/v1.1 tags listed in `v13-rules.spec.ts` (`demo`, `demo_unverifiable`, `counterparty_domain_plus_tag`,
-  `grade_mode_claimless`).
+- Mutation tests (`checks.spec.ts`, `v13-rules.spec.ts`, `v14-rules.spec.ts`) prove the checks and the proofs
+  fail on broken files; `golden.spec.ts` and `runner-v14.spec.ts` prove the runner reports broken runs.
+- Grants: one instant per agent, a grant in force for every agent named, `inputs.grant` is the grant in force.
+  A claim read after `evaluatedAt` has no expectation; a batch file keeps claim-less receipts only when UNASKED
+  or OVER_SCOPE; a claim-less `default_unverifiable` (grade mode) is FINAL with no evidence.
+- Events (`checks-events.ts`): a stale regrade and an override before `computedAt` are `rejected`, every other
+  override is applied, only an orphan is `deleted`, and the expectation shows the last applied override and
+  supersede.
+- Every `contract:<tag>` a file carries has a proof (`v12-rules.ts`, `v13-rules*.ts`, `v14-rules*.ts`), except
+  four descriptive v1.0/v1.1 tags listed in `v13-rules.spec.ts` (`demo`, `demo_unverifiable`,
+  `counterparty_domain_plus_tag`, `grade_mode_claimless`).
 
 ## Runner contract
 
 For each file: `loadScenario(file)`, `policy = loadPolicy(loaded.policyJson)`, then
 
 - **batch:** `gradeBatch(loaded.batchClaims, createMemoryIndex([...loaded.observations.values()]),
-loaded.grants, policy, loaded.coverage, loaded.activity, loaded.fixed)`;
-- **grade:** `grade(call.claim, call.candidates, grantOf(call.agent), policy, loaded.coverage, context)`, where
-  `context = call.context` plus, when `call.attributeFromActivity`, `attribution = attribute(call.candidates[0],
+loaded.grants, policy, loaded.coverage, loaded.activity, loaded.fixed)` → `{receipt, inputs}[]` (§3 v1.4);
+- **grade:** `grade(call.claim, call.candidates, grantInForce(call.agent), policy, loaded.coverage, context)`,
+  where `context = call.context` plus, when `call.attributeFromActivity`, `attribute(call.candidates[0],
 loaded.activity, policy)`;
 
-then apply `loaded.events` with `transition()` and compare by receipt id with `loaded.expected`: the same set of
+then apply `loaded.events` with `transition()` in order (a `regrade` grades the same inputs again at its instant,
+with the coverage's `evaluatedAt` replaced, and installs the subject's receipt from that grading, or deletes a
+PENDING UNASKED receipt the grading no longer returns when the event says `deleted`; a `rejected` event must throw
+`IllegalTransitionError` and change nothing), and compare by receipt id with `loaded.expected`: the same set of
 ids; `grade`, `ruleId`, `state`; `observationIds` = `expected.observationIds`; reason codes as an exact ordered
 list, and when `expected.reasons` is set, `receipt.reasons` deep-equal to it; `score` = the exact `features()`
 score of the `match.best` candidate as a reduced fraction (null with `match.none` or no claim); `agent`; for
-UNASKED the attribution `scoreBp` as `attributionScore` and `attribution: 'likely'`;
-`override.grade`/`override.previousState`; `supersededBy`. Generic checks for every receipt: `computedAt =
-evaluatedAt`; `finalAt = evaluatedAt` iff the (pre-override) state is FINAL; claim receipts carry the claim's
-agent.
+UNASKED the attribution `scoreBp` the receipt was graded with as `attributionScore` and `attribution: 'likely'`;
+`override.grade`/`override.previousState`; `supersededBy`; the stated `inputs` (grant by `grantHash`,
+`priorSpendCents`, `scope.observed`). Generic checks for every receipt: `computedAt` = the instant of the grading
+that produced it (`evaluatedAt`, or its last applied regrade's); `finalAt` = that instant iff the (pre-override)
+state is FINAL; claim receipts carry the claim's agent. On every receipt of every batch grading
+(`runner-inputs.ts`): `inputs.policyHash` is the policy's, `inputs.grant` is the agent's grant in force,
+`inputs.context` has the subject's shape (claim: no attribution or scope; UNASKED: the attributed agent's
+attribution; scope: the scope), and `grade(subject, candidates, inputs.grant, policy, coverage, inputs.context)`
+gives back the receipt exactly, where the candidates are the claim's §4.1 candidates as of that instant minus
+those assigned to other claims, fixed or taken (none for a claim that is not assignable), `[the orphan]` for
+UNASKED and `[]` for a scope subject (§4.3, §9).

@@ -1,0 +1,94 @@
+{
+  "name": "scope-diff receipts come back with the inputs they were graded with",
+  "covers": ["contract:scope_receipt_inputs", "edge:scope_diff"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.4: gradeBatch returns {receipt, inputs: {grant, context, policyHash}} for claim receipts and for claim-less receipts whose matched rule concludes UNASKED or OVER_SCOPE, so the caller can store receiptInputs for replay (§9).",
+    "g1 (muse) declares gmail.read and holds gmail.read and gmail.send; g2 (chatgpt) declares calendar.read and holds calendar.write. Each is its agent's only grant, in force since evaluatedAt − 1 day.",
+    "Scope subjects (§6.1 observedScopeExceedsDeclared): muse/gmail.send and chatgpt/calendar.write are not declared → rule over_scope_observed → OVER_SCOPE, FINAL at once (a claim-only fact, §8), reason scope.observed_not_declared {scopeHash: sha256Hex(scope)}, observationIds []. muse/gmail.read is declared → its claim-less outcome is not OVER_SCOPE → no receipt.",
+    "Inputs: each scope receipt's grant is its agent's grant in force and its context.scope.observed is the scope (priorSpendCents of a claim-less context is not stated here).",
+    "c1 (muse, priya@company.com, 'Q3 deck', 14:02) × o1 exact → 1/1 → verified, FINAL (sync 15:00 ≥ end(14:03) + 30); inputs: grant g1, context.priorSpendCents 0 (email.sent is not a spend type, §6.3)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "ref": "g1",
+        "agent": "muse",
+        "declaredScopes": ["gmail.read"],
+        "observedScopes": ["gmail.read", "gmail.send"]
+      },
+      {
+        "ref": "g2",
+        "agent": "chatgpt",
+        "declaredScopes": ["calendar.read"],
+        "observedScopes": ["calendar.write"]
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "inputs": { "grant": "g1", "priorSpendCents": 0 }
+    },
+    {
+      "scope": { "agent": "muse", "scope": "gmail.send" },
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope_observed",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.observed_not_declared"],
+      "reasonParams": { "scope.observed_not_declared": { "scopeHash": "gmail.send" } },
+      "agent": "muse",
+      "inputs": { "grant": "g1", "scope": "gmail.send" }
+    },
+    {
+      "scope": { "agent": "chatgpt", "scope": "calendar.write" },
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope_observed",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.observed_not_declared"],
+      "reasonParams": { "scope.observed_not_declared": { "scopeHash": "calendar.write" } },
+      "agent": "chatgpt",
+      "inputs": { "grant": "g2", "scope": "calendar.write" }
+    }
+  ]
+}

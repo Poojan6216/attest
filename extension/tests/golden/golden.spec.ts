@@ -3,26 +3,29 @@
  * the core exactly as the README's runner contract says (mode batch → gradeBatch, mode grade → grade, then the
  * scenario's events through state.ts `transition`), and every receipt is compared with the hand-computed
  * expectation: grade, ruleId, state, observationIds, the exact score, reason codes (and params when asserted),
- * agent, attribution, override and supersession, plus the generic computedAt/finalAt/schema checks. A missing
- * or an extra receipt fails.
+ * agent, attribution, override and supersession, the stated inputs, plus the generic computedAt/finalAt/schema
+ * checks and, on every receipt gradeBatch returns, its inputs (§3 v1.4, runner-inputs.ts). A missing or an extra
+ * receipt fails.
  *
  * A failing scenario prints its file, its name, and one line per disagreement, naming the subject by ref:
  *   `c1 ruleId: expected "verified", got "partial"`.
  *
- * The runner is itself tested: each comparison is shown to report a broken expectation or a broken receipt.
+ * The runner is itself tested: each comparison is shown to report a broken expectation or a broken receipt
+ * (the v1.4 inputs and events in runner-v14.spec.ts).
  */
 import { describe, expect, it } from 'vitest';
 
 import { IsoTs, type Reason, type Receipt } from '../../src/core/schema';
 import { type LoadedScenario, loadScenario, type ResolvedExpect, scenarioFiles } from './load';
-import { diffScenario, runScenario, type ScenarioRun } from './runner';
+import { runScenario, type ScenarioRun } from './runner';
+import { diffScenario } from './runner-diff';
 import type { ExpectedReceipt } from './scenario-schema';
 
 const FILES = scenarioFiles();
 
 describe('golden scenarios (docs/grading.md §15)', () => {
-  it('has at least 77 scenarios (sprint 1: 40+; every file in tests/golden is run)', () => {
-    expect(FILES.length).toBeGreaterThanOrEqual(77);
+  it('has at least 94 scenarios (sprint 1: 40+; every file in tests/golden is run)', () => {
+    expect(FILES.length).toBeGreaterThanOrEqual(94);
   });
 
   it.each(FILES)('%s', async (file) => {

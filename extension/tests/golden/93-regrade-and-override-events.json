@@ -1,0 +1,124 @@
+{
+  "name": "regrade installs a later grading of the same subject; stale regrades, regrades of FINAL and early overrides are refused",
+  "covers": [
+    "contract:regrade_pending_to_final",
+    "contract:regrade_stale_rejected",
+    "contract:regrade_final_rejected",
+    "contract:override_before_computed_rejected"
+  ],
+  "mode": "batch",
+  "notes": [
+    "c1 (muse, priya@company.com, 'Q3 deck', 14:02; observed 14:02); window [14:00, 14:48]. o1 is the exact sent row (14:02). Gmail passes (acct-a, bound in the grant): e1 synced 14:30 saw [12:00, 14:30] and first saw o1 (observedAt 14:30, the loader default); e2 synced 14:40 saw [12:00, 14:40].",
+    "First grading at 14:30 (§3: e2 is later, so ignored): c1 × o1 = tp 1, ce 1, cd 1, subject 1 → 1/1 → rule verified (coverage is partial, not none, so no_coverage does not fire first). §8: VERIFIED is FINAL once an eligible entry has lastSyncAt ≥ end(14:03) + 30 = 14:33; e1 synced 14:30 → PENDING, reasons match.best {o1}.",
+    "Event 1, regrade at 14:10 (§8 v1.4: next.computedAt ≥ computedAt): the 14:10 grading (e1 and o1 not yet seen → no_coverage, PENDING) was computed before the stored 14:30 receipt → IllegalTransitionError; nothing changes.",
+    "Event 2, regrade at 14:45: e2 (14:40 ≥ 14:33) is now visible → the same VERIFIED, now FINAL, computedAt = finalAt = 14:45. PENDING → FINAL is the one legal regrade.",
+    "Event 3, regrade at 15:00: the receipt is FINAL; FINAL receipts are never regraded → IllegalTransitionError.",
+    "Event 4, override NOT_FOUND at 14:44: after the first grading (14:30) but before the regraded receipt's computedAt (14:45); §8 v1.4 needs override.at ≥ computedAt → IllegalTransitionError.",
+    "Event 5, override NOT_FOUND at 15:05 → USER_OVERRIDDEN, previousState FINAL; the computed VERIFIED stays beside the override; reason override.user {grade: NOT_FOUND} last (§15). inputs: context.priorSpendCents 0 (email.sent is not a spend type)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:30:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse",
+        "accounts": {
+          "gmail.sent": ["acct-a"]
+        }
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:30:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:40:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "events": [
+    {
+      "event": "regrade",
+      "ref": "c1",
+      "evaluatedAt": "2026-10-06T14:10:00-04:00",
+      "rejected": true
+    },
+    {
+      "event": "regrade",
+      "ref": "c1",
+      "evaluatedAt": "2026-10-06T14:45:00-04:00"
+    },
+    {
+      "event": "regrade",
+      "ref": "c1",
+      "evaluatedAt": "2026-10-06T15:00:00-04:00",
+      "rejected": true
+    },
+    {
+      "event": "override",
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "reason": "I never sent this",
+      "at": "2026-10-06T14:44:00-04:00",
+      "rejected": true
+    },
+    {
+      "event": "override",
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "reason": "I never sent this",
+      "at": "2026-10-06T15:05:00-04:00"
+    }
+  ],
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "USER_OVERRIDDEN",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best", "override.user"],
+      "reasonParams": {
+        "match.best": {
+          "observationId": "o1"
+        },
+        "override.user": {
+          "grade": "NOT_FOUND"
+        }
+      },
+      "override": "NOT_FOUND",
+      "previousState": "FINAL",
+      "inputs": {
+        "priorSpendCents": 0
+      }
+    }
+  ]
+}

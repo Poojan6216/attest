@@ -430,8 +430,10 @@
   "81-ceiling-third-currency-receipt.json": {
     "c1": "53ZPCPTW2FEPZ23WTDJZ2278M6",
     "c2": "29WY5GSPCMFDQA5FWGF1YY29R3",
+    "c3": "53T8Q8ZNV168NWESMCJEMFS6Q9",
     "o1": "7PPKZ94MJVJ5EBZZ1YZMZ2KBCG",
-    "o2": "3PMAFMVKAHBZ9FDQ57MT62CYJS"
+    "o2": "3PMAFMVKAHBZ9FDQ57MT62CYJS",
+    "o3": "1BJYZS3TMPNS79AV0EJVY9GTND"
   },
   "82-best-candidate-tie-by-id.json": {
     "c1": "090TBE32E3P9NECV8YM47Z378N",
@@ -459,5 +461,50 @@
     "o3": "7DGXZBZ19NKNANM1ERN8EP16G3",
     "o4": "6XVGGJ9NMSAM9K417A12QAVJRA",
     "o5": "7RHYKJSZC536CZ7T05F5RG0D2H"
+  },
+  "85-vague-claim-no-adjacency-suppression.json": {
+    "c1": "5Q41PXGE5ZEK1XFBB0M7Y22BYW",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "7AKJKPCZ0CBW21TPEVWNF6G7AW",
+    "o2": "3Y687TTPM3EKGG2EGJXFVDRCEQ"
+  },
+  "86-calendar-orphan-first-sighting.json": {
+    "o1": "54TEYZ1ZVTK0FSSP3X69RPFNJK",
+    "o2": "54TEYZ1ZVTK0FSSP3X69RPFNJK",
+    "o3": "426MN5MNETR8P20Q1P6HCP64QZ"
+  },
+  "87-scope-diff-inputs.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "88-claim-after-evaluated-ignored.json": {
+    "c1": "5H7KDSE36WA188QQEPD15C7PF2",
+    "c2": "29WY5GSPCMFDQA5FWGF1YY29R3",
+    "c3": "7EH057W74WQNTXKACAA8SJKDHS",
+    "o1": "661PXNX2EVW7HM5MB78KHZXBHD",
+    "o2": "4KPNEYJGJXQH520AXYK4SE0TE5"
+  },
+  "89-grant-latest-updated-at.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "90-per-source-coverage.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0"
+  },
+  "91-claimless-default-orphan.json": {
+    "o1": "4RFCKVAC8YVQAJMAT3NNCTEP61"
+  },
+  "92-claimless-default-scope.json": {},
+  "93-regrade-and-override-events.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "94-unasked-regrade-supersede.json": {
+    "c1": "1YHS4W8E64A59BZVV8SNTMD2D4",
+    "c2": "7A5MKWDK2FEY5F4RFPV7TM34S5",
+    "c3": "1YHTX9Q7SJYGR0FE2FJ83ZHMP9",
+    "o1": "4RFCKVAC8YVQAJMAT3NNCTEP61",
+    "o2": "0PCB5ZWYTD8GWG7RG54EX75ABH"
   }
 }

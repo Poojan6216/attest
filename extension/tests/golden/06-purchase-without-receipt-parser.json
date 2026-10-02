@@ -1,13 +1,17 @@
 {
   "name": "purchase with no receipt parser for the merchant: UNVERIFIABLE, never NOT_FOUND",
-  "covers": ["ledger_engineer:purchase_no_parser", "contract:no_parser_partial_coverage"],
+  "covers": [
+    "ledger_engineer:purchase_no_parser",
+    "contract:no_parser_partial_coverage",
+    "contract:no_parser_source_param"
+  ],
   "mode": "batch",
   "notes": [
     "c1 purchase.made 'acme' $49.99 (4999 USD) at 14:02. The default grant allows every type and has no ceiling; purchase.made ∉ allowlistTypes; not calendar.",
     "Identity for purchase.made is amountExact or merchantMatch; both applicable (amount and counterparty present) → not underspecified.",
     "§6.1 (v1.3): policy.receiptMerchants is [] (no parser shipped), so name('acme') is not in it → coverage is at most partial, reason coverage.no_parser. The gmail.receipt entry (acct-a, one account, no grant.accounts) contains the window [14:00, 14:48], so without the cap it would be full; with it, partial. (v1.2 said coverage 'none' → no_coverage.)",
     "No receipt in the window → no candidate. graceElapsed: the gmail.receipt sync at 15:00 ≥ end(14:03) + 30 = 14:33 and ≥ end + 45 = 14:48 → pending does not fire → rule partial_coverage (coverage partial, no candidate below partial) → UNVERIFIABLE. Never not_found: that needs coverage full, which the cap forbids (Hard Rule 5).",
-    "Reasons (§15 v1.3): coverage.partial {source: gmail.receipt} (the rule's own code), the cap coverage.no_parser (no params: the closed table lists none for it), match.none.",
+    "Reasons (§15 v1.3): coverage.partial {source: gmail.receipt} (the rule's own code), the cap coverage.no_parser {source: gmail.receipt} (§15 v1.4: the coverage caps all carry {source}), match.none.",
     "PENDING (§8): partial_coverage finalises at end + 24 h = 10-07 14:03 > evaluatedAt 15:00."
   ],
   "input": {
@@ -52,7 +56,9 @@
         "coverage.partial": {
           "source": "gmail.receipt"
         },
-        "coverage.no_parser": {},
+        "coverage.no_parser": {
+          "source": "gmail.receipt"
+        },
         "match.none": {}
       }
     }

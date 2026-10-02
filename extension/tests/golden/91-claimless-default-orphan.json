@@ -1,0 +1,52 @@
+{
+  "name": "grade() on an orphan whose attribution is below the threshold: default_unverifiable on the orphan's subject",
+  "covers": ["contract:claimless_default_orphan", "contract:grade_mode_claimless"],
+  "mode": "grade",
+  "notes": [
+    "mode grade: grade(null, [o1], muse's grant, policy, coverage, {priorSpendCents: 0, attribution: attribute(o1, activity, policy)}).",
+    "Attribution (§7): a muse session at 14:00 is within ±10 min of 14:03 → agentSessionActive 4000; no idle evidence, no entries, no signature → muse 4000 bp = 2/5. unaskedLikely: 2/5 < 6/10 → false.",
+    "Claim-less (§6.1): every condition but unaskedLikely and observedScopeExceedsDeclared is not applicable, and context.scope is absent → no rule matches → terminal default_unverifiable.",
+    "§8 v1.4: a claim-less grade whose matched rule concludes anything but UNASKED or OVER_SCOPE returns rule default_unverifiable, FINAL, subject {k:'unasked', observationId: o1} (so the receipt id is the orphan's), observationIds []. It carries no match code (claim-less), no unasked.* (not UNASKED) and the rule adds none → reasons []. gradeBatch never returns it."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Re: invoice",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    },
+    "grade": { "claim": null, "candidates": ["o1"], "agent": "muse" }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "default_unverifiable",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": [],
+      "agent": "muse"
+    }
+  ]
+}

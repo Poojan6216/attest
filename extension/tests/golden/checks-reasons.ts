@@ -5,6 +5,7 @@
  */
 import { type PolicyView } from './build';
 import { subjectKind } from './checks';
+import { grantInForce } from './grants';
 import {
   ACTION_TYPES,
   AGENT_IDS,
@@ -125,7 +126,7 @@ function ceilingAmount(
 function claimParamProblems(scenario: Scenario, e: ExpectedReceipt, policy: PolicyView): string[] {
   const p = e.reasonParams ?? {};
   const claim = scenario.input.claims.find((c) => c.ref === e.ref);
-  const grant = scenario.input.grants.find((g) => g.agent === claim?.agent);
+  const grant = grantInForce(scenario, claim?.agent);
   if (claim === undefined) return ['unknown claim'];
   const sources = policy.sourcesByType?.[claim.type] ?? [];
   const problems: string[] = [];
@@ -152,8 +153,9 @@ function claimParamProblems(scenario: Scenario, e: ExpectedReceipt, policy: Poli
   const mismatch = p['ceiling.currency_mismatch'];
   if (mismatch !== undefined) {
     if (mismatch.spendCurrency !== grant?.spendCurrency) problems.push('spendCurrency is the grant currency');
-    if (mismatch.currency !== (claim.currency ?? evidence?.currency))
-      problems.push('currency is the claim currency, else the assigned candidate currency');
+    const claimDiffers = claim.currency !== undefined && claim.currency !== grant?.spendCurrency;
+    if (mismatch.currency !== (claimDiffers ? claim.currency : evidence?.currency))
+      problems.push('currency is the claim currency when it differs, else the assigned candidate currency');
   }
   return problems;
 }
@@ -174,7 +176,7 @@ export function allowlistUncheckedProblems(scenario: Scenario, policy: PolicyVie
   const problems: string[] = [];
   for (const e of scenario.expect.filter((x) => subjectKind(x) === 'claim')) {
     const claim = scenario.input.claims.find((c) => c.ref === e.ref);
-    const grant = scenario.input.grants.find((g) => g.agent === claim?.agent);
+    const grant = grantInForce(scenario, claim?.agent);
     if (claim === undefined) continue;
     const listed = (policy.allowlistTypes ?? []).includes(claim.type);
     const allowlist = grant?.counterpartyAllowlist ?? [];

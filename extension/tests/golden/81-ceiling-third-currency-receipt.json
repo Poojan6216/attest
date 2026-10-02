@@ -1,20 +1,23 @@
 {
-  "name": "a receipt in another currency than a spendCurrency claim is a mismatch; an Amount over the ceiling keeps both codes",
+  "name": "a receipt in a currency other than spendCurrency is a mismatch; the claim names its own currency first",
   "covers": [
     "contract:ceiling_third_currency",
     "contract:ceiling_exceeded_and_mismatch",
     "edge:currency_mismatch",
-    "edge:ceiling_from_evidence"
+    "edge:ceiling_from_evidence",
+    "contract:currency_mismatch_param_candidate",
+    "contract:currency_mismatch_param_claim_first"
   ],
   "mode": "batch",
   "notes": [
     "Grant: ceiling 5000 USD. The shipped policy (receiptMerchants []) caps purchase coverage at partial, but over-scope rules come before every coverage rule (§6.2), so the cap does not matter here. One gmail.receipt entry (acct-a) saw [09:00, 15:00] and synced 15:00 = evaluatedAt.",
     "Purchase claims with an amount and a counterparty, no subject: applicable timeProximity 2500, amountExact 2500, merchantMatch 2000; Σw = 7000.",
     "c1 'acme' 3000 USD (10:02) × o1 receipt 'Acme' 3000 EUR (10:02): tp 1; amountExact 0 (USD ≠ EUR); merchantMatch 1 → S = 4500/7000 = 9/14 ≥ 1/2 → assigned.",
-    "c1 amountAboveCeiling (§6.1 v1.3): Amount = the claim's 3000 (in spendCurrency, so it counts); the candidate's EUR amount does not count → 3000 ≤ 5000, not exceeded. The claim's own currency is USD = spendCurrency, but the assigned candidate's currency EUR is present and ≠ USD, whatever the claim's currency → true, reason ceiling.currency_mismatch alone → rule over_ceiling. v1.2 read literally raised nothing here (its candidate clause needed a claim without a currency). It depended on the candidate → finalises like PARTIAL: graceElapsed (15:00 ≥ end(10:03) + 45) → FINAL. Params are not asserted: §15 says currency is 'the claim's when present', which here is USD = spendCurrency (README, readings).",
+    "c1 amountAboveCeiling (§6.1 v1.3): Amount = the claim's 3000 (in spendCurrency, so it counts); the candidate's EUR amount does not count → 3000 ≤ 5000, not exceeded. The claim's own currency is USD = spendCurrency, but the assigned candidate's currency EUR is present and ≠ USD, whatever the claim's currency → true, reason ceiling.currency_mismatch alone → rule over_ceiling. v1.2 read literally raised nothing here (its candidate clause needed a claim without a currency). It depended on the candidate → finalises like PARTIAL: graceElapsed (15:00 ≥ end(10:03) + 45) → FINAL. Params (§15 v1.4): currency is the claim's when present and ≠ spendCurrency, else the assigned candidate's → {currency: EUR, spendCurrency: USD}.",
     "c2 'acme' 8000 with no currency (12:02) × o2 receipt 'Acme' 8000 CAD (12:02): tp 1; amountExact 0 (the claim has no currency); merchantMatch 1 → 9/14 → assigned.",
     "c2 amountAboveCeiling: Amount = the claim's 8000 (no currency, so it counts; the candidate's CAD amount does not) > 5000 → ceiling.exceeded {amountCents 8000, ceilingCents 5000}; and the candidate's CAD ≠ USD → ceiling.currency_mismatch {currency CAD (the claim has none, so the candidate's), spendCurrency USD}. The mismatch replaces ceiling.exceeded unless the Amount also exceeds the ceiling, which it does → both, in table order → rule over_ceiling. FINAL: graceElapsed (15:00 ≥ end(12:03) + 45), so the reading of finality (claim-only amount, or the candidate's currency) does not matter.",
-    "o1 is outside c2's window [12:00, 12:48] and o2 outside c1's [10:00, 10:48]."
+    "c3 'acme' 3000 EUR (13:02) × o3 receipt 'Acme' 3000 CAD (13:02): tp 1; amountExact 0 (EUR ≠ CAD); merchantMatch 1 → S = 4500/7000 = 9/14 ≥ 1/2 → assigned. amountAboveCeiling: an amount is known (the claim's, in any currency), but neither counts toward the Amount (the claim's EUR and the candidate's CAD are both ≠ USD) → not exceeded; the claim's currency EUR is present and ≠ USD (and so is the candidate's CAD) → true, reason ceiling.currency_mismatch alone → rule over_ceiling. Params (§15 v1.4): the claim's currency when present and ≠ spendCurrency, else the candidate's → {currency: EUR, spendCurrency: USD}, never CAD. The claim's own currency decides it (claim-only, §8) → FINAL at once; graceElapsed holds too (15:00 ≥ end(13:03) + 45). priorSpendCents is not read: over_ceiling matches first.",
+    "o1 is outside the windows of c2 [12:00, 12:48] and c3 [13:00, 13:48]; o2 outside those of c1 [10:00, 10:48] and c3; o3 outside those of c1 and c2."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T15:00:00-04:00",
@@ -35,6 +38,15 @@
         "counterparty": "acme",
         "amountCents": 8000,
         "claimedAt": "2026-10-06T12:02:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "EUR",
+        "claimedAt": "2026-10-06T13:02:00-04:00"
       }
     ],
     "observations": [
@@ -55,6 +67,15 @@
         "amountCents": 8000,
         "currency": "CAD",
         "occurredAt": "2026-10-06T12:02:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 3000,
+        "currency": "CAD",
+        "occurredAt": "2026-10-06T13:02:00-04:00"
       }
     ],
     "grants": [
@@ -82,7 +103,16 @@
       "state": "FINAL",
       "observationRefs": ["o1"],
       "score": "9/14",
-      "reasonCodes": ["ceiling.currency_mismatch", "match.best"]
+      "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
+      "reasonParams": {
+        "ceiling.currency_mismatch": {
+          "currency": "EUR",
+          "spendCurrency": "USD"
+        },
+        "match.best": {
+          "observationId": "o1"
+        }
+      }
     },
     {
       "ref": "c2",
@@ -103,6 +133,24 @@
         },
         "match.best": {
           "observationId": "o2"
+        }
+      }
+    },
+    {
+      "ref": "c3",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling",
+      "state": "FINAL",
+      "observationRefs": ["o3"],
+      "score": "9/14",
+      "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
+      "reasonParams": {
+        "ceiling.currency_mismatch": {
+          "currency": "EUR",
+          "spendCurrency": "USD"
+        },
+        "match.best": {
+          "observationId": "o3"
         }
       }
     }

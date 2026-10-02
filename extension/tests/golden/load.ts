@@ -10,7 +10,8 @@
  * allowlist, no ceiling, no scopes, no accounts, updatedAt = evaluatedAt − 1 day; activity: empty lists and
  * every scenario claim. Account labels (accountHash, accounts) become SHA-256(label); a rowKey label
  * becomes rowKeyHash = sha256Hex(canonicalJson(rowKey)) (§10 v1.3). A `scopeHash` reason param is written
- * as the observed scope and stored as sha256Hex(scope) (§15 v1.3).
+ * as the observed scope and stored as sha256Hex(scope) (§15 v1.3). Claim.id = idFromHash(rawHash) and
+ * Observation.id = idFromHash(contentHash), as the v1.4 schema requires.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -31,6 +32,7 @@ import {
 } from '../../src/core/schema';
 import { buildClaim, buildCoverage, buildGrant, buildObservation, mergePatch, PolicyView } from './build';
 import {
+  type ExpectedInputs,
   type ExpectedReceipt,
   REASON_PARAMS,
   type ReasonCode,
@@ -83,15 +85,26 @@ export interface BuiltGradeCall {
   attributeFromActivity: boolean;
 }
 
-export type BuiltEvent =
+/** One §8 event; `rejected`: `transition` must throw and leave the receipt as it was (v1.4). */
+export type BuiltEvent = { rejected: boolean } & (
   | { event: 'override'; receiptId: Ulid; grade: 'VERIFIED' | 'NOT_FOUND'; reason: string; at: IsoTs }
-  | { event: 'supersede'; receiptId: Ulid; claimId: Ulid };
+  | { event: 'supersede'; receiptId: Ulid; claimId: Ulid }
+  /** Re-grade at `evaluatedAt` and install the subject's new receipt; `deleted`: the new grading has none. */
+  | { event: 'regrade'; receiptId: Ulid; evaluatedAt: IsoTs; deleted: boolean }
+);
 
 /** The receipt subject (§3): the receipt id is idFromHash(sha256(canonicalJson(subject))). */
 export type ReceiptSubject =
   | { k: 'claim'; claimId: string }
   | { k: 'unasked'; observationId: string }
   | { k: 'scope'; agent: AgentId; scope: string };
+
+/** The stated parts of gradeBatch's `inputs` (§3 v1.4), the grant ref resolved to the built grant. */
+export interface ResolvedInputs {
+  grant?: Grant;
+  priorSpendCents?: number;
+  scope?: string;
+}
 
 export interface ResolvedExpect {
   receiptId: Ulid;
@@ -100,6 +113,8 @@ export interface ResolvedExpect {
   supersededById?: Ulid;
   /** When the file asserts `reasonParams`: the receipt's exact reasons, refs resolved to ids (§15). */
   reasons?: Reason[];
+  /** When the file states `inputs`. */
+  inputs?: ResolvedInputs;
   expected: ExpectedReceipt;
 }
 
@@ -115,6 +130,8 @@ export interface LoadedScenario {
   /** mode "batch": the claims passed to gradeBatch (claims named in `fixed` already hold a FINAL receipt). */
   batchClaims: Claim[];
   grants: Grant[];
+  /** Grants that carry a ref (`g1`), by ref. */
+  grantRefs: ReadonlyMap<string, Grant>;
   coverage: Coverage;
   activity: Activity;
   fixed: BuiltFixed[];
@@ -148,6 +165,7 @@ function lookup<B>(map: ReadonlyMap<string, B>, ref: string): B {
 interface Built {
   claims: ReadonlyMap<string, Claim>;
   observations: ReadonlyMap<string, Observation>;
+  grants: ReadonlyMap<string, Grant>;
 }
 
 const claimId = (built: Built, ref: string): Ulid => lookup(built.claims, ref).id;
@@ -185,6 +203,14 @@ function buildReasons(built: Built, expected: ExpectedReceipt): Reason[] | undef
   return expected.reasonCodes.map((code) => buildReason(built, code, written[code] ?? {}));
 }
 
+function resolveInputs(built: Built, inputs: ExpectedInputs): ResolvedInputs {
+  return {
+    ...(inputs.grant === undefined ? {} : { grant: lookup(built.grants, inputs.grant) }),
+    ...(inputs.priorSpendCents === undefined ? {} : { priorSpendCents: inputs.priorSpendCents }),
+    ...(inputs.scope === undefined ? {} : { scope: inputs.scope }),
+  };
+}
+
 function resolveExpect(built: Built, expected: ExpectedReceipt): ResolvedExpect {
   const subject: ReceiptSubject =
     expected.scope === undefined
@@ -197,21 +223,22 @@ function resolveExpect(built: Built, expected: ExpectedReceipt): ResolvedExpect 
     observationIds: expected.observationRefs.map((ref) => observationId(built, ref)),
     ...(expected.supersededBy === undefined ? {} : { supersededById: claimId(built, expected.supersededBy) }),
     ...(reasons === undefined ? {} : { reasons }),
+    ...(expected.inputs === undefined ? {} : { inputs: resolveInputs(built, expected.inputs) }),
     expected,
   };
 }
 
 function buildEvent(built: Built, event: ScenarioEvent): BuiltEvent {
   const receiptId = receiptIdFor(subjectOfRef(built, event.ref));
+  const rejected = event.rejected === true;
   if (event.event === 'supersede')
-    return { event: 'supersede', receiptId, claimId: claimId(built, event.claim) };
-  return {
-    event: 'override',
-    receiptId,
-    grade: event.grade,
-    reason: event.reason,
-    at: IsoTs.parse(event.at),
-  };
+    return { event: 'supersede', receiptId, claimId: claimId(built, event.claim), rejected };
+  if (event.event === 'regrade') {
+    const evaluatedAt = IsoTs.parse(event.evaluatedAt);
+    return { event: 'regrade', receiptId, evaluatedAt, deleted: event.deleted === true, rejected };
+  }
+  const at = IsoTs.parse(event.at);
+  return { event: 'override', receiptId, grade: event.grade, reason: event.reason, at, rejected };
 }
 
 function buildActivity(scenario: Scenario, built: Built): Activity {
@@ -262,12 +289,33 @@ export function scenarioFiles(): string[] {
 
 function buildRefs(scenario: Scenario, policy: PolicyView): Built {
   const { evaluatedAt, coverage } = scenario.input;
+  const withRefs = scenario.input.grants.flatMap((grant) =>
+    grant.ref === undefined ? [] : [{ ...grant, ref: grant.ref }],
+  );
   return {
     claims: indexByRef(scenario.input.claims, buildClaim),
     observations: indexByRef(scenario.input.observations, (o) =>
       buildObservation(o, coverage, evaluatedAt, policy),
     ),
+    grants: indexByRef(withRefs, (grant) => buildGrant(grant, evaluatedAt)),
   };
+}
+
+/**
+ * The claims passed to gradeBatch: every claim not named in `fixed` (those already hold a FINAL receipt, §4.3).
+ * A claim first seen after `evaluatedAt` is passed too; gradeBatch must ignore it (§3).
+ */
+function batchClaimsOf(scenario: Scenario, built: Built): Claim[] {
+  const { fixed = [] } = scenario.input;
+  const fixedClaims = new Set(fixed.flatMap((pair) => (pair.claim === null ? [] : [pair.claim])));
+  return scenario.input.claims
+    .filter((claim) => !fixedClaims.has(claim.ref))
+    .map((claim) => lookup(built.claims, claim.ref));
+}
+
+/** The scenario's coverage as of another instant (a `regrade` event, §8): the same entries, a new evaluatedAt. */
+export function coverageAt(loaded: LoadedScenario, evaluatedAt: IsoTs): Coverage {
+  return buildCoverage(loaded.scenario.input.coverage, evaluatedAt);
 }
 
 export function buildScenario(file: string, scenario: Scenario): LoadedScenario {
@@ -275,7 +323,6 @@ export function buildScenario(file: string, scenario: Scenario): LoadedScenario 
   const policy = PolicyView.parse(policyJson);
   const { evaluatedAt, coverage, fixed = [] } = scenario.input;
   const built = buildRefs(scenario, policy);
-  const fixedClaims = new Set(fixed.flatMap((pair) => (pair.claim === null ? [] : [pair.claim])));
   const gradeCall = buildGradeCall(scenario, built);
   return {
     file,
@@ -283,11 +330,11 @@ export function buildScenario(file: string, scenario: Scenario): LoadedScenario 
     policyJson,
     policy,
     evaluatedAt: IsoTs.parse(evaluatedAt),
-    ...built,
-    batchClaims: scenario.input.claims
-      .filter((claim) => !fixedClaims.has(claim.ref))
-      .map((claim) => lookup(built.claims, claim.ref)),
+    claims: built.claims,
+    observations: built.observations,
+    batchClaims: batchClaimsOf(scenario, built),
     grants: scenario.input.grants.map((grant) => buildGrant(grant, evaluatedAt)),
+    grantRefs: built.grants,
     coverage: buildCoverage(coverage, evaluatedAt),
     activity: buildActivity(scenario, built),
     fixed: fixed.map((pair) => ({

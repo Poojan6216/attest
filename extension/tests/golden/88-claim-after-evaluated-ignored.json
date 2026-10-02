@@ -1,0 +1,114 @@
+{
+  "name": "a claim first seen after evaluatedAt is ignored: no receipt, no spend, no adjacency suppression",
+  "covers": ["contract:claim_after_evaluated_ignored"],
+  "mode": "batch",
+  "policyPatch": { "receiptMerchants": ["acme"] },
+  "notes": [
+    "§3 v1.4: claims with observedAt > evaluatedAt are ignored, like observations, so replay at an earlier instant sees exactly what grading saw. c1 and c3 were read at 17:30, after evaluatedAt 17:00: gradeBatch is given them (they are in the ledger) but grades neither, and neither counts in priorSpendCents (§6.3) nor in attribution (§7), which read activity.claims.",
+    "Grant g1 (muse): ceiling 5000 USD. receiptMerchants is patched to ['acme'], so 'Acme' purchases are fully covered by the gmail.receipt entry (acct-a, [09:00, 17:00], synced 17:00).",
+    "c2 'Acme' 3000 USD (12:02) × o1 receipt 'Acme' 3000 USD (12:02): purchase features tp 2500, amountExact 2500, merchantMatch 2000 (Σw = 7000), all 1 → 1/1 → assigned.",
+    "c2 ceilings: Amount 3000 ≤ 5000, both in USD → over_ceiling no. priorSpendCents (§6.3): muse's earlier USD spend claims within 30 days are c1 (4000, 10:00), but c1 is ignored → 0; 0 + 3000 ≤ 5000 → over_ceiling_cumulative no. Counting c1 would give 7000 > 5000 → OVER_SCOPE. → verified, FINAL (receipt sync 17:00 ≥ end(12:03) + 30); inputs: grant g1, priorSpendCents 0.",
+    "o2 (14:03): userIdle [14:00, 14:05] covers [14:01, 14:03] → 3000; muse entry at 14:04 within ±2 min, and the only muse email.sent claim near it, c3 (unit [14:02, 14:03]), is ignored → activityLogAdjacent fires → 4000. 7/10 → UNASKED, reasons unasked.idle, unasked.adjacent; FINAL (adapter 17:00 ≥ 14:35).",
+    "Had c3 been graded it would have taken o2 (tp 1, cd 1 on supplier.example, subject {order, 12} vs {invoice, 12} = 1/3 → 4500/9000 = 1/2) and o2 would be no orphan; had c3 only been read by attribution, it would have suppressed adjacency and o2 would have no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Acme",
+        "amountCents": 4000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T10:00:00-04:00",
+        "observedAt": "2026-10-06T17:30:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T12:02:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "ops@supplier.example",
+        "subjectHint": "Order 12",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "observedAt": "2026-10-06T17:30:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T12:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "billing@supplier.example",
+        "subjectHint": "Invoice 12",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      }
+    ],
+    "grants": [{ "ref": "g1", "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T09:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "entries": [{ "agent": "muse", "at": "2026-10-06T14:04:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:05:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T17:00:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } },
+      "inputs": { "grant": "g1", "priorSpendCents": 0 }
+    },
+    {
+      "ref": "o2",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": null,
+      "reasonCodes": ["unasked.idle", "unasked.adjacent"],
+      "reasonParams": { "unasked.idle": { "agent": "muse" }, "unasked.adjacent": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10",
+      "inputs": { "grant": "g1" }
+    }
+  ]
+}

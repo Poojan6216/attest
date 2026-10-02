@@ -5,6 +5,7 @@
  * of passing. The two purchase-coverage rules changed meaning in v1.3 and live in v13-rules.ts.
  */
 import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../../src/core/units';
+import { grantInForce } from './grants';
 import { ASCII_ONLY, claimOf, evidenceOf, type Proof } from './proof-helpers';
 import { REASON_PARAMS, type Scenario } from './scenario-schema';
 import { instantMs, truncateIso } from './time';
@@ -33,7 +34,7 @@ const dayEndOnDst: Proof = (s, policy) =>
 /** §6.1: claim without a currency, assigned receipt in another currency → mismatch that waits like PARTIAL. */
 const candidateCurrency: Proof = (s) => {
   const hits = s.expect.filter((e) => {
-    const grant = s.input.grants.find((g) => g.agent === claimOf(s, e)?.agent);
+    const grant = grantInForce(s, claimOf(s, e)?.agent);
     const currency = evidenceOf(s, e)?.currency;
     return (
       e.reasonCodes.includes('ceiling.currency_mismatch') &&
