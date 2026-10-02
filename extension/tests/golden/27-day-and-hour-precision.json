@@ -6,7 +6,8 @@
     "c1 'Yesterday' resolves to 10-05 12:00 -04:00 with precision day: the unit is [10-05 00:00, 10-06 00:00] in the claim's own offset; window [10-04 23:58, 10-06 00:45]. o1 at 10-05 08:15 is inside the unit → Δ = 0 → tp 1 (a minute-precision reading would centre on 12:00 and miss it). S = 1/1 → verified.",
     "c2 'around 4pm' has precision hour: unit [16:00, 17:00]; o2 at 16:40 → tp 1 → 1/1.",
     "Cross pair c1 × o2 (o2 is inside c1's day): ce 0, cd 1, tp 1, so 0 ({q3, deck} vs {budget}) → 4/9 < 1/2, never assigned. o1 is outside c2's window.",
-    "Both FINAL: the sync at 10-06 09:00 ≥ end + 30 for each (10-06 00:30 and 10-05 17:30)."
+    "Both FINAL: the sync at 10-06 09:00 ≥ end + 30 for each (10-06 00:30 and 10-05 17:30).",
+    "No claimedAtEnd (§4.1 v1.2): 10-05 is not a DST day in -04:00, so end = start + 24 h is the next local midnight; 68 covers the 23- and 25-hour days."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T09:00:00-04:00",

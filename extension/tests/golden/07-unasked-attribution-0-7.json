@@ -46,6 +46,7 @@
       "observationRefs": ["o1"],
       "score": null,
       "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
       "agent": "muse",
       "attributionScore": "7/10"
     }

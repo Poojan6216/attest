@@ -52,7 +52,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["claim.too_vague", "match.none"]
+      "reasonCodes": ["claim.too_vague", "match.none"],
+      "reasonParams": { "claim.too_vague": {}, "match.none": {} }
     },
     {
       "ref": "o1",

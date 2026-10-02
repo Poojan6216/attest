@@ -1,0 +1,145 @@
+{
+  "name": "reason order: rule code, allowlist.unchecked, coverage reasons, match reasons, override.user last",
+  "covers": [
+    "contract:reason_order_allowlist_override",
+    "contract:reason_params",
+    "edge:allowlist_name_unchecked",
+    "edge:user_override",
+    "edge:no_account_cap"
+  ],
+  "mode": "batch",
+  "notes": [
+    "§15 (v1.2) order: the rule's own code first, then allowlist.unchecked if emitted, then coverage reasons, then match and counterparty reasons, each group in table order; override.user and superseded last. Plain table order would put coverage.account_unbound and coverage.no_account before allowlist.unchecked.",
+    "muse: allowlist ['company.com'], no grant.accounts. gmail.sent entries: E1 (acct-a) saw [12:00, 15:00], synced 15:00; E2 (no accountHash, so capped at partial, §6.1) saw [15:30, 17:00], synced 17:00. Only one distinct account hash → no multiple_accounts cap.",
+    "c1 'Priya' (a name; 14:02), nothing in its window: no known address → counterpartyNotAllowed not applicable → allowlist.unchecked (§6.1). Window [14:00, 14:48] ⊆ E1 → full; graceElapsed (E1 15:00 ≥ 14:48) → rule not_found, FINAL; no account bound → coverage.account_unbound {source: gmail.sent}. Graded reasons: allowlist.unchecked, coverage.account_unbound, match.none.",
+    "Event override {VERIFIED} on c1 (FINAL → USER_OVERRIDDEN, previousState FINAL): override.user {grade: VERIFIED} is appended last.",
+    "c2 'Raj' (16:02), nothing in its window [16:00, 16:48]: only the capped E2 contains it → coverage partial; graceElapsed (E2 17:00 ≥ 16:48) → pending does not fire → rule partial_coverage. Reasons: coverage.partial (rule code), allowlist.unchecked, coverage.no_account (the cap), match.none. PENDING until end + 24 h = 10-07 16:03.",
+    "Event override {NOT_FOUND} on c2 (PENDING → USER_OVERRIDDEN, previousState PENDING): override.user {grade: NOT_FOUND} last.",
+    "c3 (chatgpt, allowed only calendar types, same allowlist) 'Lee' email.sent at 10:02: typeNotInGrant → rule over_scope, FINAL at once; allowlist.unchecked is not emitted on a receipt that is OVER_SCOPE by another rule (§15)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "Raj",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T16:02:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "chatgpt",
+        "type": "email.sent",
+        "counterparty": "Lee",
+        "subjectHint": "Hiring plan",
+        "claimedAt": "2026-10-06T10:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [
+      { "agent": "muse", "counterpartyAllowlist": ["company.com"] },
+      {
+        "agent": "chatgpt",
+        "allowedTypes": ["calendar.created", "calendar.updated", "calendar.deleted"],
+        "counterpartyAllowlist": ["company.com"]
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T15:30:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00"
+      }
+    ]
+  },
+  "events": [
+    {
+      "event": "override",
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "reason": "Sent it from my phone",
+      "at": "2026-10-06T17:05:00-04:00"
+    },
+    {
+      "event": "override",
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "reason": "I never asked for this email",
+      "at": "2026-10-06T17:06:00-04:00"
+    }
+  ],
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "USER_OVERRIDDEN",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["allowlist.unchecked", "coverage.account_unbound", "match.none", "override.user"],
+      "reasonParams": {
+        "allowlist.unchecked": {},
+        "coverage.account_unbound": { "source": "gmail.sent" },
+        "match.none": {},
+        "override.user": { "grade": "VERIFIED" }
+      },
+      "override": "VERIFIED",
+      "previousState": "FINAL"
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "USER_OVERRIDDEN",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": [
+        "coverage.partial",
+        "allowlist.unchecked",
+        "coverage.no_account",
+        "match.none",
+        "override.user"
+      ],
+      "reasonParams": {
+        "coverage.partial": { "source": "gmail.sent" },
+        "allowlist.unchecked": {},
+        "coverage.no_account": { "source": "gmail.sent" },
+        "match.none": {},
+        "override.user": { "grade": "NOT_FOUND" }
+      },
+      "override": "NOT_FOUND",
+      "previousState": "PENDING"
+    },
+    {
+      "ref": "c3",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.type_not_allowed", "match.none"],
+      "reasonParams": {
+        "scope.type_not_allowed": { "type": "email.sent" },
+        "match.none": {}
+      }
+    }
+  ]
+}

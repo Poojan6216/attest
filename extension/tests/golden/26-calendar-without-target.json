@@ -47,7 +47,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["claim.no_target", "match.none"]
+      "reasonCodes": ["claim.no_target", "match.none"],
+      "reasonParams": { "claim.no_target": {}, "match.none": {} }
     }
   ]
 }

@@ -5,7 +5,7 @@
   "notes": [
     "Grant allowlist: ['priya@company.com'] (an exact address, not a domain). email.sent ∈ allowlistTypes.",
     "c1 priya@company.com 'Q3 deck' (14:02) × o1 raj@company.com 'Q3 deck' (14:02): tp 1, ce 0, cd 1 (same non-common domain), so 1 → S = 5500/9000 = 11/18 ≥ 1/2 → assigned.",
-    "counterpartyNotAllowed (§6.1): the claim's address matches the entry, but the assigned candidate's raj@company.com matches no entry (not identical; 'company.com' is neither the entry nor ends in '.priya@company.com') → true → rule over_allowlist (before partial).",
+    "counterpartyNotAllowed (§6.1 v1.2): an entry containing '@' is an address and matches only an identical address. The claim's address matches it, but the assigned candidate's raj@company.com does not (and there is no domain entry) → true → rule over_allowlist (before partial).",
     "That outcome depended on the candidate's address → finalises like PARTIAL (§8): graceElapsed needs a sync ≥ end + 30 = 14:33 (14:40 yes) and ≥ end + 45 = 14:48 (no) → PENDING. A better match may still arrive.",
     "c2 lee@company.com 'Budget' (12:02): the claim's own address matches no entry → over_allowlist from a claim-only fact → FINAL at once; no observation in [12:00, 12:48] → match.none."
   ],

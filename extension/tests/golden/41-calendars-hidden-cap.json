@@ -39,7 +39,12 @@
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.partial", "coverage.calendars_hidden", "match.none"]
+      "reasonCodes": ["coverage.partial", "coverage.calendars_hidden", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.calendars_hidden": { "source": "gcal.event" },
+        "match.none": {}
+      }
     }
   ]
 }

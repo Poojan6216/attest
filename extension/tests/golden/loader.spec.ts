@@ -171,3 +171,67 @@ describe('policy merge patch (RFC 7386) and fractions', () => {
     expect(ExpectedReceipt.safeParse({ ...base, score: '17/20', reasonCodes: [] }).success).toBe(true);
   });
 });
+
+const DAY_CLAIM = Scenario.parse({
+  ...MINIMAL,
+  input: {
+    ...MINIMAL.input,
+    claims: [
+      {
+        ref: 'c1',
+        agent: 'muse',
+        type: 'email.sent',
+        counterparty: 'priya@company.com',
+        claimedAt: '2026-11-01T00:00:00-07:00',
+        claimedAtPrecision: 'day',
+        claimedAtEnd: '2026-11-02T00:00:00-08:00',
+      },
+    ],
+  },
+  expect: [
+    {
+      ref: 'c1',
+      grade: 'VERIFIED',
+      ruleId: 'verified',
+      state: 'USER_OVERRIDDEN',
+      observationRefs: ['o1'],
+      score: '1/1',
+      reasonCodes: ['match.best', 'override.user'],
+      reasonParams: { 'match.best': { observationId: 'o1' }, 'override.user': { grade: 'NOT_FOUND' } },
+      override: 'NOT_FOUND',
+      previousState: 'FINAL',
+    },
+  ],
+});
+
+describe('golden loader (v1.2): claimedAtEnd and reason params', () => {
+  const loaded = buildScenario('day.json', DAY_CLAIM);
+  const claim = loaded.claims.get('c1');
+
+  it('passes claimedAtEnd through as written and keeps it out of rawHash (§4.1, §10)', () => {
+    expect(claim?.claimedAtEnd).toBe('2026-11-02T00:00:00-08:00');
+    const rawHash = hashCanonical({
+      agent: 'muse',
+      sourceKind: 'activity_view',
+      rowKeyHash: null,
+      text: 'c1',
+      claimedAt: '2026-11-01T00:00:00-07:00',
+    });
+    expect(claim?.rawHash).toBe(rawHash);
+  });
+
+  it('resolves param refs to ids and keeps the reason order of reasonCodes (§15)', () => {
+    const [resolved] = loaded.expected;
+    expect(resolved?.reasons).toEqual([
+      { code: 'match.best', params: { observationId: loaded.observations.get('o1')?.id } },
+      { code: 'override.user', params: { grade: 'NOT_FOUND' } },
+    ]);
+    const [first] = DAY_CLAIM.expect;
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    const codesOnly = { ...first };
+    delete codesOnly.reasonParams;
+    const without = buildScenario('codes.json', { ...DAY_CLAIM, expect: [codesOnly] });
+    expect(without.expected[0]?.reasons).toBeUndefined();
+  });
+});

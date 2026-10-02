@@ -31,7 +31,10 @@ export const PolicyView = z.looseObject({
   thresholds: z.looseObject({ verified: z.number(), partial: z.number() }),
   rules: z.array(z.looseObject({ id: z.string(), then: z.string() })),
   sourcesByType: z.record(z.string(), z.array(z.string())).optional(),
-  unasked: z.looseObject({ threshold: z.number() }),
+  allowlistTypes: z.array(z.string()).optional(),
+  receiptMerchants: z.array(z.string()).optional(),
+  windows: z.looseObject({ beforeClaimMin: z.number(), afterClaimMin: z.number() }),
+  unasked: z.looseObject({ threshold: z.number(), windows: z.looseObject({ sessionMin: z.number() }) }),
 });
 export type PolicyView = z.infer<typeof PolicyView>;
 
@@ -67,7 +70,10 @@ function present<T extends object, K extends keyof T>(
   return out;
 }
 
-/** §10: rawHash = SHA-256 of {agent, sourceKind, rowKeyHash or null, text, claimedAt truncated}. */
+/**
+ * §10: rawHash = SHA-256 of {agent, sourceKind, rowKeyHash or null, text, claimedAt truncated}. `claimedAtEnd`
+ * (§4.1) is passed through as written and never enters rawHash.
+ */
 export function buildClaim(claim: ScenarioClaim): Claim {
   const precision = claim.claimedAtPrecision ?? 'minute';
   const sourceKind = claim.sourceKind ?? 'activity_view';
@@ -85,6 +91,7 @@ export function buildClaim(claim: ScenarioClaim): Claim {
     ...present(claim, ['counterparty', 'amountCents', 'currency', 'subjectHint', 'targetAt']),
     claimedAt: claim.claimedAt,
     claimedAtPrecision: precision,
+    ...present(claim, ['claimedAtEnd']),
     observedAt: claim.observedAt ?? claim.claimedAt,
     sourceKind,
     extractor: { id: 'golden', version: '1', confidence: 1 },

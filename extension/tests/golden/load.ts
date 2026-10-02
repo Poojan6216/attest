@@ -24,10 +24,17 @@ import {
   type GradeContext,
   IsoTs,
   type Observation,
+  Reason,
   Ulid,
 } from '../../src/core/schema';
 import { buildClaim, buildCoverage, buildGrant, buildObservation, mergePatch, PolicyView } from './build';
-import { type ExpectedReceipt, Scenario, type ScenarioEvent } from './scenario-schema';
+import {
+  type ExpectedReceipt,
+  REASON_PARAMS,
+  type ReasonCode,
+  Scenario,
+  type ScenarioEvent,
+} from './scenario-schema';
 
 export {
   buildClaim,
@@ -88,6 +95,8 @@ export interface ResolvedExpect {
   subject: ReceiptSubject;
   observationIds: Ulid[];
   supersededById?: Ulid;
+  /** When the file asserts `reasonParams`: the receipt's exact reasons, refs resolved to ids (§15). */
+  reasons?: Reason[];
   expected: ExpectedReceipt;
 }
 
@@ -147,16 +156,40 @@ function subjectOfRef(built: Built, ref: string): ReceiptSubject {
     : { k: 'unasked', observationId: observationId(built, ref) };
 }
 
+/** One reason with its params resolved: observation and claim refs become ids; other values pass through. */
+function buildReason(
+  built: Built,
+  code: ReasonCode,
+  written: Readonly<Record<string, string | number>>,
+): Reason {
+  const params: Record<string, string | number> = {};
+  for (const [name, value] of Object.entries(written)) {
+    const kind = REASON_PARAMS[code][name];
+    if (kind === 'observationRef') params[name] = observationId(built, String(value));
+    else if (kind === 'claimRef') params[name] = claimId(built, String(value));
+    else params[name] = value;
+  }
+  return Reason.parse({ code, params });
+}
+
+function buildReasons(built: Built, expected: ExpectedReceipt): Reason[] | undefined {
+  const written = expected.reasonParams;
+  if (written === undefined) return undefined;
+  return expected.reasonCodes.map((code) => buildReason(built, code, written[code] ?? {}));
+}
+
 function resolveExpect(built: Built, expected: ExpectedReceipt): ResolvedExpect {
   const subject: ReceiptSubject =
     expected.scope === undefined
       ? subjectOfRef(built, expected.ref ?? '')
       : { k: 'scope', ...expected.scope };
+  const reasons = buildReasons(built, expected);
   return {
     receiptId: receiptIdFor(subject),
     subject,
     observationIds: expected.observationRefs.map((ref) => observationId(built, ref)),
     ...(expected.supersededBy === undefined ? {} : { supersededById: claimId(built, expected.supersededBy) }),
+    ...(reasons === undefined ? {} : { reasons }),
     expected,
   };
 }

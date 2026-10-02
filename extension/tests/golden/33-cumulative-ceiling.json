@@ -1,13 +1,13 @@
 {
   "name": "two $30 purchases against a $50 ceiling: the second is OVER_SCOPE",
-  "covers": ["edge:cumulative_ceiling"],
+  "covers": ["edge:cumulative_ceiling", "contract:reason_params"],
   "mode": "batch",
   "policyPatch": { "receiptMerchants": ["acme"] },
   "notes": [
     "receiptMerchants is patched to ['acme'] so the receipt observer covers these purchases (§6.1).",
     "purchase.made applicable features: timeProximity 2500, amountExact 2500, merchantMatch 2000 (no subject); Σw = 7000.",
     "c1 (10:00, 3000 USD) × o1 (10:00, Acme, 3000 USD): tp 1, amounts and currencies equal → 1, merchant 'acme' = normalised 'Acme' → 1 → S = 1/1. priorSpend 0: 3000 ≤ 5000 and 0 + 3000 ≤ 5000 → no ceiling rule; coverage full ([09:00, 12:00] ⊇ [09:58, 10:46]) → verified, FINAL.",
-    "c2 (11:00, 3000 USD): priorSpend = c1's 3000 (same agent, spend type, USD, within 30 days, earlier) → 3000 + 3000 = 6000 > 5000 → rule over_ceiling_cumulative, FINAL at once (claim-only). o2 scores 1/1 and is assigned (match.best).",
+    "c2 (11:00, 3000 USD): priorSpend = c1's 3000 (same agent, spend type, USD, within 30 days, earlier) → 3000 + 3000 = 6000 > 5000 → rule over_ceiling_cumulative, FINAL at once (claim-only); params {priorSpendCents: 3000, amountCents: 3000 (the claim's), ceilingCents: 5000}. o2 scores 1/1 and is assigned (match.best).",
     "o1 is outside c2's window [10:58, 11:46] and o2 outside c1's [09:58, 10:46]."
   ],
   "input": {
@@ -80,7 +80,11 @@
       "state": "FINAL",
       "observationRefs": ["o2"],
       "score": "1/1",
-      "reasonCodes": ["ceiling.cumulative_exceeded", "match.best"]
+      "reasonCodes": ["ceiling.cumulative_exceeded", "match.best"],
+      "reasonParams": {
+        "ceiling.cumulative_exceeded": { "priorSpendCents": 3000, "amountCents": 3000, "ceilingCents": 5000 },
+        "match.best": { "observationId": "o2" }
+      }
     }
   ]
 }

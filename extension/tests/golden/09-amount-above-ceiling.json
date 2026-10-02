@@ -1,6 +1,6 @@
 {
   "name": "claimed amount above the spend ceiling: OVER_SCOPE with no receipt visible",
-  "covers": ["ledger_engineer:amount_above_ceiling"],
+  "covers": ["ledger_engineer:amount_above_ceiling", "contract:reason_params"],
   "mode": "batch",
   "notes": [
     "Grant: ceiling 5000 USD. c1 claims a $200.00 purchase (20000 USD).",
@@ -33,7 +33,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["ceiling.exceeded", "match.none"]
+      "reasonCodes": ["ceiling.exceeded", "match.none"],
+      "reasonParams": { "ceiling.exceeded": { "amountCents": 20000, "ceilingCents": 5000 }, "match.none": {} }
     }
   ]
 }

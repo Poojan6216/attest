@@ -50,7 +50,11 @@
       "state": "FINAL",
       "observationRefs": ["o1"],
       "score": "1/1",
-      "reasonCodes": ["scope.type_not_allowed", "match.best"]
+      "reasonCodes": ["scope.type_not_allowed", "match.best"],
+      "reasonParams": {
+        "scope.type_not_allowed": { "type": "email.sent" },
+        "match.best": { "observationId": "o1" }
+      }
     }
   ]
 }

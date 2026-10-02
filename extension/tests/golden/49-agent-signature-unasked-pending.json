@@ -45,6 +45,7 @@
       "observationRefs": ["o1"],
       "score": null,
       "reasonCodes": ["unasked.session", "unasked.signature"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.signature": { "agent": "muse" } },
       "agent": "muse",
       "attributionScore": "9/10"
     }

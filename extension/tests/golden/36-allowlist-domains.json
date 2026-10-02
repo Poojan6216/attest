@@ -131,7 +131,8 @@
       "state": "FINAL",
       "observationRefs": ["o3"],
       "score": "1/1",
-      "reasonCodes": ["scope.counterparty_not_allowed", "match.best"]
+      "reasonCodes": ["scope.counterparty_not_allowed", "match.best"],
+      "reasonParams": { "scope.counterparty_not_allowed": {}, "match.best": { "observationId": "o3" } }
     },
     {
       "ref": "c4",

@@ -1,0 +1,97 @@
+{
+  "name": "day precision on a DST day: claimedAtEnd keeps the 25th hour in the window",
+  "covers": ["contract:claimed_at_end_dst", "edge:day_precision", "edge:dst"],
+  "mode": "batch",
+  "notes": [
+    "US clocks fall back on Sun 2026-11-01 (a 25-hour local day) and spring forward on Sun 2026-03-08 (a 23-hour local day). The adapter reads 'Sunday' as day precision with claimedAt = the local midnight that starts the day and claimedAtEnd = the next local midnight (§4.1 v1.2, computed with the injected offset function).",
+    "c1: start = 2026-11-01T00:00-07:00 (07:00Z), end(p,t) = claimedAtEnd = 2026-11-02T00:00-08:00 (11-02 08:00Z), 25 h later. Window [11-01 06:58Z, 11-02 08:45Z].",
+    "o1 at 2026-11-01T23:50-08:00 (11-02 07:50Z), the 25th hour: inside [start, end] → Δ = 0 → tp 1; same address → ce 1, cd 1; same subject → so 1. S = 9000/9000 = 1/1 → verified. With end = start + 24 h (11-02 07:00Z) the window would end at 07:45Z and o1 would not even be a candidate (a false NOT_FOUND).",
+    "c1 FINAL (§8 VERIFIED): the November entry synced 11-02 10:00Z ≥ end + graceMin = 08:30Z.",
+    "c2: start = 2026-03-08T00:00-08:00 (08:00Z), end = claimedAtEnd = 2026-03-09T00:00-07:00 (03-09 07:00Z), 23 h later. o2 at 2026-03-09T00:30-07:00 (07:30Z) is 30 minutes into the next local day: Δ = 1 800 000 ms after end → tp = (2 700 000 − 1 800 000)/(2 700 000 − 60 000) = 900 000/2 640 000 = 15/44.",
+    "c2: S = (2500·15/44 + 3500 + 1500 + 1500)/9000 = (37 500 + 286 000)/(44·9000) = 323 500/396 000 = 647/792 (≈ 0.8169): ≥ 1/2, < 17/20 → partial. With end = start + 24 h (08:00Z) o2 would sit inside the unit and wrongly verify a claim about the previous day.",
+    "c2 FINAL (§8 PARTIAL, graceElapsed): an eligible gmail.sent entry synced ≥ end + 30 and ≥ end + 45 = 03-09 07:45Z (the March entry, 09:00Z; the November one too).",
+    "The two claims are eight months apart, so neither observation is in the other claim's window. No activity → no orphan receipts."
+  ],
+  "input": {
+    "evaluatedAt": "2026-11-02T02:00:00-08:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-11-01T00:00:00-07:00",
+        "claimedAtPrecision": "day",
+        "claimedAtEnd": "2026-11-02T00:00:00-08:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-03-08T00:00:00-08:00",
+        "claimedAtPrecision": "day",
+        "claimedAtEnd": "2026-03-09T00:00:00-07:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-11-01T23:50:00-08:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-03-09T00:30:00-07:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-03-09T02:00:00-07:00",
+        "windowStart": "2026-03-07T22:00:00-08:00",
+        "windowEnd": "2026-03-09T02:00:00-07:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-11-02T02:00:00-08:00",
+        "windowStart": "2026-10-31T22:00:00-07:00",
+        "windowEnd": "2026-11-02T02:00:00-08:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } }
+    },
+    {
+      "ref": "c2",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "647/792",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o2" } }
+    }
+  ]
+}

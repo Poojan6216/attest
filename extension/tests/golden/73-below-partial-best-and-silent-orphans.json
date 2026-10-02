@@ -1,0 +1,73 @@
+{
+  "name": "a best candidate below partial is named but is not evidence, and below-threshold orphans yield no receipt",
+  "covers": ["contract:observation_ids_assigned_only", "contract:batch_claimless_outputs"],
+  "mode": "batch",
+  "notes": [
+    "c1 priya@company.com 'Q3 deck' (14:02) × o1 raj@supplier.example 'Q3 deck' (14:03): tp 1 (inside [14:02, 14:03]), ce 0, cd 0 (different domains), so 1 → S = (2500 + 1500)/9000 = 4/9 < 1/2 → never assigned (§4.3).",
+    "c1's receipt (§8 v1.2): observationIds = [] because nothing is assigned, while match.best still names o1 with its score 4/9. Coverage [12:00, 14:40] overlaps c1's window [14:00, 14:48] without containing it → partial, not none. graceElapsed needs a sync ≥ 14:48 → 14:40 is not → rule pending: UNVERIFIABLE placeholder, PENDING, reasons grace.waiting {source: gmail.sent} then match.best.",
+    "o1 is an orphan: muse's session ping at 14:00 is within ±10 min of 14:03 → agentSessionActive 4000 bp; no idle interval covers [14:01, 14:03] → muse scores 4/10 < 6/10 → unaskedLikely false. A claim-less grade with any outcome other than UNASKED or over_scope_observed yields no receipt (§3 v1.2).",
+    "o2 (13:30, vendor@supplier.example) is an orphan with recorded idle [13:20, 13:35] covering [13:28, 13:30] → userIdle, but no agent-specific signal (the session at 14:00 is 30 min away) → no attribution at all (§7) → no receipt. o2 is outside c1's window.",
+    "So gradeBatch returns exactly one receipt, c1's."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:40:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@supplier.example",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Re: invoice",
+        "occurredAt": "2026-10-06T13:30:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:40:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:20:00-04:00", "to": "2026-10-06T13:35:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:40:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": "4/9",
+      "reasonCodes": ["grace.waiting", "match.best"],
+      "reasonParams": {
+        "grace.waiting": { "source": "gmail.sent" },
+        "match.best": { "observationId": "o1" }
+      }
+    }
+  ]
+}

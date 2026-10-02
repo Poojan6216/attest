@@ -40,7 +40,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.account_unbound", "match.none"]
+      "reasonCodes": ["coverage.account_unbound", "match.none"],
+      "reasonParams": { "coverage.account_unbound": { "source": "gmail.sent" }, "match.none": {} }
     }
   ]
 }

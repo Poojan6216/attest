@@ -6,7 +6,7 @@
   "notes": [
     "Grant ceiling 5000 USD. c1 claims $30 (3000 USD) at Acme; the receipt o1 says $80 (8000 USD).",
     "c1 × o1: tp 1, amountExact 0, merchantMatch 1 → S = (2500 + 0 + 2000)/7000 = 4500/7000 = 9/14 ≥ 1/2 → assigned.",
-    "amountAboveCeiling: amount = max(claim 3000, assigned candidate 8000 in USD = spendCurrency) = 8000 > 5000 → rule over_ceiling, reason ceiling.exceeded.",
+    "amountAboveCeiling: amount = max(claim 3000, assigned candidate 8000 in USD = spendCurrency) = 8000 > 5000 → rule over_ceiling, reason ceiling.exceeded with params {amountCents: 8000 (that Amount), ceilingCents: 5000}.",
     "The outcome depended on the candidate's amount → finalises like PARTIAL (§8): graceElapsed needs a sync ≥ end + 45 = 14:48; the receipt observer last synced 14:30 → PENDING."
   ],
   "input": {
@@ -52,7 +52,11 @@
       "state": "PENDING",
       "observationRefs": ["o1"],
       "score": "9/14",
-      "reasonCodes": ["ceiling.exceeded", "match.best"]
+      "reasonCodes": ["ceiling.exceeded", "match.best"],
+      "reasonParams": {
+        "ceiling.exceeded": { "amountCents": 8000, "ceilingCents": 5000 },
+        "match.best": { "observationId": "o1" }
+      }
     }
   ]
 }

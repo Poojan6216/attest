@@ -63,7 +63,12 @@
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.partial", "coverage.multiple_accounts", "match.none"]
+      "reasonCodes": ["coverage.partial", "coverage.multiple_accounts", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gmail.sent" },
+        "coverage.multiple_accounts": { "source": "gmail.sent" },
+        "match.none": {}
+      }
     },
     {
       "ref": "c2",

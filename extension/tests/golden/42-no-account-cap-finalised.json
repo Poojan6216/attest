@@ -38,7 +38,12 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.partial", "coverage.no_account", "match.none"]
+      "reasonCodes": ["coverage.partial", "coverage.no_account", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gmail.sent" },
+        "coverage.no_account": { "source": "gmail.sent" },
+        "match.none": {}
+      }
     }
   ]
 }

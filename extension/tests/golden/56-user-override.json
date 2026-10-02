@@ -4,7 +4,7 @@
   "mode": "batch",
   "notes": [
     "c1 grades exactly as in 04: NOT_FOUND by not_found, FINAL, reasons coverage.account_unbound, match.none.",
-    "Event override {grade: VERIFIED, reason, at} (§8): FINAL → USER_OVERRIDDEN with previousState FINAL. The computed grade and ruleId are kept; the override is stored beside them; reason override.user is appended after the graded reasons."
+    "Event override {grade: VERIFIED, reason, at} (§8): FINAL → USER_OVERRIDDEN with previousState FINAL. The computed grade and ruleId are kept; the override is stored beside them; reason override.user {grade: VERIFIED, the override's grade} comes last (§15 v1.2)."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T15:00:00-04:00",
@@ -48,6 +48,11 @@
       "observationRefs": [],
       "score": null,
       "reasonCodes": ["coverage.account_unbound", "match.none", "override.user"],
+      "reasonParams": {
+        "coverage.account_unbound": { "source": "gmail.sent" },
+        "match.none": {},
+        "override.user": { "grade": "VERIFIED" }
+      },
       "override": "VERIFIED",
       "previousState": "FINAL"
     }

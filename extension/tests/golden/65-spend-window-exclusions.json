@@ -95,7 +95,11 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["ceiling.currency_mismatch", "match.none"]
+      "reasonCodes": ["ceiling.currency_mismatch", "match.none"],
+      "reasonParams": {
+        "ceiling.currency_mismatch": { "currency": "EUR", "spendCurrency": "USD" },
+        "match.none": {}
+      }
     },
     {
       "ref": "c3",
@@ -131,7 +135,11 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["ceiling.cumulative_exceeded", "match.none"]
+      "reasonCodes": ["ceiling.cumulative_exceeded", "match.none"],
+      "reasonParams": {
+        "ceiling.cumulative_exceeded": { "priorSpendCents": 5000, "amountCents": 1, "ceilingCents": 5000 },
+        "match.none": {}
+      }
     }
   ]
 }

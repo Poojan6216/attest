@@ -4,7 +4,7 @@
   "mode": "batch",
   "notes": [
     "sourcesByType['message.sent'] and ['other'] are empty: coverage is always 'none' (§6.1), the claims are never scored (§4.3), and nothing can ever cover them → rule no_coverage, FINAL immediately (§8).",
-    "Reading taken here: the empty identity list of a no-source type does not make the claim 'underspecified'; §8 names no_coverage as the rule for these types (see the contract issue in the README).",
+    "Settled by v1.2 §5.2: a claim is underspecified only if its type's identity list is non-empty, so these claims are not 'underspecified'; §8 names no_coverage as their rule. coverage.none carries no source param: the type has no source to name (§15).",
     "A full gmail.sent entry exists and is irrelevant: gmail.sent is not a source for either type."
   ],
   "input": {
@@ -46,7 +46,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"]
+      "reasonCodes": ["coverage.none", "match.none"],
+      "reasonParams": { "coverage.none": {}, "match.none": {} }
     },
     {
       "ref": "c2",
@@ -55,7 +56,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"]
+      "reasonCodes": ["coverage.none", "match.none"],
+      "reasonParams": { "coverage.none": {}, "match.none": {} }
     }
   ]
 }

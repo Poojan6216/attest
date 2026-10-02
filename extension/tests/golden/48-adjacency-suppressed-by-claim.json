@@ -85,6 +85,7 @@
       "observationRefs": ["o3"],
       "score": null,
       "reasonCodes": ["unasked.idle", "unasked.adjacent"],
+      "reasonParams": { "unasked.idle": { "agent": "muse" }, "unasked.adjacent": { "agent": "muse" } },
       "agent": "muse",
       "attributionScore": "7/10"
     }

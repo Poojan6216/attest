@@ -51,7 +51,11 @@
       "state": "FINAL",
       "observationRefs": ["o1"],
       "score": "1/1",
-      "reasonCodes": ["ceiling.exceeded", "match.best"]
+      "reasonCodes": ["ceiling.exceeded", "match.best"],
+      "reasonParams": {
+        "ceiling.exceeded": { "amountCents": 8000, "ceilingCents": 5000 },
+        "match.best": { "observationId": "o1" }
+      }
     }
   ]
 }

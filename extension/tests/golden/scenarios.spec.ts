@@ -1,8 +1,8 @@
 /**
- * The golden scenario files (docs/grading.md §15): every file parses strictly, every ref resolves, every
- * expectation obeys the contract's emission rules, together they cover the mandatory list, the §2 demo, every
- * policy rule, every ReasonCode and every hardened edge case, and the loader turns each into schema-valid core
- * inputs with stable ids. The runner that executes grade()/gradeBatch() against them arrives in a later wave.
+ * The golden scenario files (docs/grading.md v1.2 §15): every file parses strictly, every ref resolves, every
+ * expectation obeys the contract's emission, ordering and params rules, together they cover the mandatory
+ * list, the §2 demo, every policy rule, every ReasonCode, the hardened edge cases and the v1.2 rules, and the
+ * loader turns each into schema-valid core inputs with stable ids. checks.spec.ts proves the checks bite.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,29 +13,29 @@ import defaultPolicyJson from '../../../policy/default.json';
 import { canonicalJson, idFromHash, sha256Hex } from '../../src/core/hash';
 import { loadPolicy } from '../../src/core/policy';
 import * as core from '../../src/core/schema';
-import {
-  accountBindingProblems,
-  expectationProblems,
-  inputProblems,
-  reasonOrderProblems,
-  refProblems,
-} from './checks';
+import { accountBindingProblems, expectationProblems, inputProblems, refProblems } from './checks';
+import { claimProblems } from './checks-claims';
+import { allowlistUncheckedProblems, reasonParamProblems, scenarioParamProblems } from './checks-reasons';
+import { formatIds, IDS_SNAPSHOT, scenarioIds } from './ids';
 import { loadScenario, PolicyView, readScenario, receiptIdFor, SCENARIO_FILE, scenarioFiles } from './load';
 import {
   ACTION_TYPES,
   AGENT_IDS,
   GRADES,
   OBSERVATION_SOURCES,
+  type ParamKind,
   REASON_CODES,
-  type ExpectedReceipt,
+  REASON_PARAMS,
   RECEIPT_STATES,
   type Scenario,
 } from './scenario-schema';
+import { paramCodesAsserted, V12_RULES } from './v12-rules';
 
 const FILES = scenarioFiles();
 const SCENARIOS: readonly (readonly [string, Scenario])[] = FILES.map((file) => [file, readScenario(file)]);
 const BASE_POLICY = PolicyView.parse(defaultPolicyJson);
 const ROLE_FILE = path.resolve(import.meta.dirname, '../../../agents/ledger_engineer.md');
+const policyOf = (file: string): PolicyView => PolicyView.parse(loadScenario(file).policyJson);
 
 /** agents/ledger_engineer.md "Golden scenarios that must exist", in order, with the tag that proves each. */
 const MANDATORY: readonly (readonly [tag: string, bullet: string])[] = [
@@ -56,7 +56,7 @@ const MANDATORY: readonly (readonly [tag: string, bullet: string])[] = [
   ['timezone_edge', 'Timezone edge: claim 23:58, observation 00:01 next day → VERIFIED'],
 ];
 
-/** The edge cases the v1.1 contract was hardened for (Sprint 1 golden task list). */
+/** The edge cases the contract was hardened for (Sprint 1 golden task lists, v1.1 and v1.2). */
 const REQUIRED_EDGES = [
   'free_mail_exact',
   'free_mail_domain_alone',
@@ -90,8 +90,6 @@ const REQUIRED_EDGES = [
   'per_agent_attribution',
   'scope_diff',
   'default_unverifiable',
-  // Added by the second independent author: identity per type, purchase feature details, the allowlist on the
-  // evidence's address, the spend window, UNASKED finalised by time, a ceiling known only from the receipt.
   'identity_per_type',
   'purchase_features',
   'allowlist_from_evidence',
@@ -117,25 +115,29 @@ describe('golden scenario files', () => {
     expect(() => readScenario(file)).not.toThrow();
   });
 
-  it.each(SCENARIOS)(
-    '%s: refs resolve, every graded subject has one expectation, evidence is one-to-one',
-    (_, s) => {
-      expect(refProblems(s)).toEqual([]);
-    },
-  );
-
-  it.each(SCENARIOS)('%s: every expectation obeys the §15 emission and §5.3 threshold rules', (_, s) => {
-    const policy = PolicyView.parse(loadScenario(_).policyJson);
-    expect(s.expect.flatMap((e) => expectationProblems(e, policy))).toEqual([]);
-    expect(accountBindingProblems(s, policy)).toEqual([]);
+  it.each(SCENARIOS)('%s: refs resolve, one expectation per graded subject, one-to-one evidence', (_, s) => {
+    expect(refProblems(s)).toEqual([]);
   });
 
   it.each(SCENARIOS)(
-    '%s: observations carry only allowlisted fields from a source that sees their type',
-    (_, s) => {
-      expect(inputProblems(s, BASE_POLICY)).toEqual([]);
+    '%s: every expectation obeys §15 emission and order and the §5.3 thresholds',
+    (file, s) => {
+      const policy = policyOf(file);
+      expect(s.expect.flatMap((e) => expectationProblems(e, policy))).toEqual([]);
+      expect(accountBindingProblems(s, policy)).toEqual([]);
+      expect(allowlistUncheckedProblems(s, policy)).toEqual([]);
+      expect(claimProblems(s, policy)).toEqual([]);
     },
   );
+
+  it.each(SCENARIOS)('%s: asserted reason params follow the closed §15 table', (file, s) => {
+    expect(s.expect.flatMap((e) => reasonParamProblems(e))).toEqual([]);
+    expect(scenarioParamProblems(s, policyOf(file))).toEqual([]);
+  });
+
+  it.each(SCENARIOS)('%s: observations carry only allowlisted fields from a source of their type', (_, s) => {
+    expect(inputProblems(s, BASE_POLICY)).toEqual([]);
+  });
 
   it.each(FILES)('%s: the patched policy passes loadPolicy', (file) => {
     expect(() => loadPolicy(loadScenario(file).policyJson)).not.toThrow();
@@ -241,85 +243,41 @@ describe('golden coverage: edge cases, rules and reason codes', () => {
   });
 });
 
-describe('the checks catch broken expectations', () => {
-  const [, exact] = SCENARIOS.find(([file]) => file.startsWith('01-')) ?? [];
-  const base = exact?.expect[0];
-
-  const mutations: readonly (readonly [string, Partial<ExpectedReceipt>])[] = [
-    ['a VERIFIED score below thresholds.verified', { score: '1/2' }],
-    ['match.best without a score', { score: null }],
-    ['both match codes', { reasonCodes: ['match.best', 'match.none'] }],
-    [
-      'match before the rule reason',
-      { ruleId: 'over_scope', grade: 'OVER_SCOPE', reasonCodes: ['match.best', 'scope.type_not_allowed'] },
-    ],
-    ['a grade the rule cannot give', { grade: 'PARTIAL' }],
-    [
-      'evidence for an unassigned pair',
-      { grade: 'NOT_FOUND', ruleId: 'not_found', score: '4/9', reasonCodes: ['match.best'] },
-    ],
-    ['an account cap outside partial_coverage', { reasonCodes: ['coverage.no_account', 'match.best'] }],
-    ['an override reason without the state', { reasonCodes: ['match.best', 'override.user'] }],
-    [
-      'a PENDING receipt with coverage.never_completed',
-      {
-        ruleId: 'pending',
-        grade: 'UNVERIFIABLE',
-        state: 'PENDING',
-        score: null,
-        observationRefs: [],
-        reasonCodes: ['coverage.never_completed', 'match.none'],
-      },
-    ],
-    [
-      'a FINAL pending outcome still waiting for grace',
-      {
-        ruleId: 'pending',
-        grade: 'UNVERIFIABLE',
-        score: null,
-        observationRefs: [],
-        reasonCodes: ['grace.waiting', 'match.none'],
-      },
-    ],
-    [
-      'account_unbound on a receipt that is not NOT_FOUND',
-      { reasonCodes: ['coverage.account_unbound', 'match.best'] },
-    ],
-    ['a PARTIAL score at or above thresholds.verified', { grade: 'PARTIAL', ruleId: 'partial' }],
-  ];
-
-  it.each(mutations)('%s', (_, change) => {
-    expect(base).toBeDefined();
-    if (base === undefined) return;
-    expect(expectationProblems({ ...base, ...change }, BASE_POLICY)).not.toEqual([]);
+describe('golden coverage: the contract v1.2 rules', () => {
+  it.each(V12_RULES)('contract:%s has a scenario that exercises it', (tag, proves) => {
+    const files = tagged(`contract:${tag}`);
+    expect(files.length, tag).toBeGreaterThan(0);
+    expect(files.some(([file, s]) => proves(s, policyOf(file)))).toBe(true);
   });
 
-  it('flags a reordered reason list and an UNASKED receipt below the threshold', () => {
-    expect(reasonOrderProblems(['match.none', 'coverage.account_unbound'])).not.toEqual([]);
-    expect(reasonOrderProblems(['unasked.idle', 'unasked.session'])).not.toEqual([]);
-    const unasked = allExpectations.find((e) => e.grade === 'UNASKED');
-    expect(unasked).toBeDefined();
-    if (unasked !== undefined) {
-      expect(expectationProblems({ ...unasked, attributionScore: '1/2' }, BASE_POLICY)).not.toEqual([]);
+  it('every reason code that carries params has them asserted (except the open scopeHash reading)', () => {
+    expect(paramCodesAsserted(SCENARIOS.map(([, s]) => s))).toEqual([]);
+  });
+
+  it('the golden §15 params table is the one src/core/schema.ts enforces, code by code', () => {
+    const sample: Readonly<Record<ParamKind, string | number>> = {
+      observationRef: idFromHash(sha256Hex('o')),
+      claimRef: idFromHash(sha256Hex('c')),
+      source: 'gmail.sent',
+      actionType: 'email.sent',
+      cents: 1,
+      currency: 'USD',
+      scopeHash: sha256Hex('gmail.read'),
+      agent: 'muse',
+      grade: 'VERIFIED',
+    };
+    for (const code of REASON_CODES) {
+      const params = Object.fromEntries(
+        Object.entries(REASON_PARAMS[code]).map(([name, kind]) => [name, sample[kind]]),
+      );
+      expect(core.Reason.safeParse({ code, params }).success, code).toBe(true);
+      expect(core.Reason.safeParse({ code, params: { ...params, extra: 1 } }).success, code).toBe(false);
     }
-  });
-
-  it('flags a claim graded twice, an observation used twice, and an unknown ref', () => {
-    const [, two] = SCENARIOS.find(([file]) => file.startsWith('10-')) ?? [];
-    expect(two).toBeDefined();
-    if (two === undefined) return;
-    const both = two.expect.map((e) => ({ ...e, grade: 'VERIFIED' as const, observationRefs: ['o1'] }));
-    expect(refProblems({ ...two, expect: both })).not.toEqual([]);
-    expect(refProblems({ ...two, expect: two.expect.slice(1) })).not.toEqual([]);
-    const [first] = two.expect;
-    expect(first).toBeDefined();
-    if (first === undefined) return;
-    expect(refProblems({ ...two, expect: [...two.expect, { ...first, ref: 'c7' }] })).not.toEqual([]);
   });
 });
 
 describe('golden loader', () => {
-  it.each(FILES)('%s builds schema-valid core inputs', (file) => {
+  it.each(FILES)('%s builds schema-valid core inputs and reasons', (file) => {
     const s = loadScenario(file);
     for (const claim of s.claims.values()) expect(core.Claim.safeParse(claim).success).toBe(true);
     for (const obs of s.observations.values()) expect(core.Observation.safeParse(obs).success).toBe(true);
@@ -328,7 +286,13 @@ describe('golden loader', () => {
     expect(core.Activity.safeParse(s.activity).success).toBe(true);
     if (s.gradeCall !== undefined)
       expect(core.GradeContext.safeParse(s.gradeCall.context).success).toBe(true);
-    for (const e of s.expected) expect(core.Ulid.safeParse(e.receiptId).success).toBe(true);
+    for (const e of s.expected) {
+      expect(core.Ulid.safeParse(e.receiptId).success).toBe(true);
+      expect(e.reasons?.map((reason) => reason.code) ?? e.expected.reasonCodes).toEqual(
+        e.expected.reasonCodes,
+      );
+      for (const reason of e.reasons ?? []) expect(core.Reason.safeParse(reason).success).toBe(true);
+    }
   });
 
   it.each(SCENARIOS)(
@@ -353,19 +317,10 @@ describe('golden loader', () => {
     expect(receiptIdFor(subject)).toBe(idFromHash(sha256Hex(canonicalJson(subject))));
   });
 
-  it('loading is deterministic and the ids are pinned by __snapshots__/ids.json', async () => {
-    const ids = (): Record<string, Record<string, string>> =>
-      Object.fromEntries(
-        FILES.map((file) => {
-          const s = loadScenario(file);
-          const refs = [...s.claims].map(([ref, c]) => [ref, c.id] as const);
-          return [
-            file,
-            Object.fromEntries([...refs, ...[...s.observations].map(([r, o]) => [r, o.id] as const)]),
-          ];
-        }),
-      );
-    expect(ids()).toEqual(ids());
-    await expect(`${JSON.stringify(ids(), null, 2)}\n`).toMatchFileSnapshot('./__snapshots__/ids.json');
+  it('loading is deterministic and __snapshots__/ids.json is exactly what write-ids.ts writes', () => {
+    const ids = scenarioIds();
+    expect(scenarioIds()).toEqual(ids);
+    // On a mismatch: run `pnpm exec tsx tests/golden/write-ids.ts` and review the diff (README, step 5).
+    expect(readFileSync(IDS_SNAPSHOT, 'utf8')).toBe(formatIds(ids));
   });
 });

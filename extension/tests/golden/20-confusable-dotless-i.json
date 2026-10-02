@@ -54,7 +54,12 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": "4/9",
-      "reasonCodes": ["coverage.account_unbound", "match.best", "cp.confusable"]
+      "reasonCodes": ["coverage.account_unbound", "match.best", "cp.confusable"],
+      "reasonParams": {
+        "coverage.account_unbound": { "source": "gmail.sent" },
+        "match.best": { "observationId": "o1" },
+        "cp.confusable": {}
+      }
     },
     {
       "ref": "o1",

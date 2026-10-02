@@ -59,7 +59,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["allowlist.unchecked", "match.none"]
+      "reasonCodes": ["allowlist.unchecked", "match.none"],
+      "reasonParams": { "allowlist.unchecked": {}, "match.none": {} }
     },
     {
       "ref": "c2",

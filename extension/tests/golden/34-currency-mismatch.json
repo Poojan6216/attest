@@ -6,7 +6,7 @@
   "notes": [
     "Grant ceiling 5000 USD. c1 claims 3000 EUR; o1 is an Acme receipt for 3000 EUR.",
     "c1 × o1: tp 1, amountExact 1 (3000 = 3000, EUR = EUR), merchantMatch 1 → S = 7000/7000 = 1/1 → assigned.",
-    "amountAboveCeiling (§6.1): the candidate's amount is ignored (EUR ≠ spendCurrency); 3000 ≤ 5000, but the claim's currency EUR is present and ≠ USD → true, reason ceiling.currency_mismatch (it replaces ceiling.exceeded: the amount itself is not over) → rule over_ceiling.",
+    "amountAboveCeiling (§6.1): the candidate's amount is ignored (EUR ≠ spendCurrency); 3000 ≤ 5000, but the claim's currency EUR is present and ≠ USD → true, reason ceiling.currency_mismatch (§6.1 v1.2: it replaces ceiling.exceeded, since no amount in spendCurrency exceeds the ceiling) → rule over_ceiling. Params {currency: EUR, spendCurrency: USD}.",
     "FINAL at once: the claim's currency is a claim-only fact."
   ],
   "input": {
@@ -52,7 +52,11 @@
       "state": "FINAL",
       "observationRefs": ["o1"],
       "score": "1/1",
-      "reasonCodes": ["ceiling.currency_mismatch", "match.best"]
+      "reasonCodes": ["ceiling.currency_mismatch", "match.best"],
+      "reasonParams": {
+        "ceiling.currency_mismatch": { "currency": "EUR", "spendCurrency": "USD" },
+        "match.best": { "observationId": "o1" }
+      }
     }
   ]
 }

@@ -63,6 +63,10 @@
       "observationRefs": ["o2"],
       "score": null,
       "reasonCodes": ["unasked.session", "unasked.adjacent"],
+      "reasonParams": {
+        "unasked.session": { "agent": "chatgpt" },
+        "unasked.adjacent": { "agent": "chatgpt" }
+      },
       "agent": "chatgpt",
       "attributionScore": "4/5"
     }

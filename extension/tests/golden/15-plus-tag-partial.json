@@ -47,7 +47,8 @@
       "state": "FINAL",
       "observationRefs": ["o1"],
       "score": "11/18",
-      "reasonCodes": ["match.best", "cp.plus_tag"]
+      "reasonCodes": ["match.best", "cp.plus_tag"],
+      "reasonParams": { "match.best": { "observationId": "o1" }, "cp.plus_tag": {} }
     }
   ]
 }

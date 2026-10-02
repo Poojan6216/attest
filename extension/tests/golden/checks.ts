@@ -4,6 +4,8 @@
  * docs/grading.md §2, §4.3, §6, §8 and the §15 emission table. scenarios.spec.ts asserts [] for every file
  * and mutation tests prove each check bites.
  */
+import { loadPolicy, type PolicyBasisPoints, type SignalName } from '../../src/core/policy';
+import { BASIS_POINTS } from '../../src/core/units';
 import { type PolicyView } from './load';
 import {
   type ExpectedReceipt,
@@ -14,16 +16,29 @@ import {
   type ScenarioObservation,
 } from './scenario-schema';
 
-const BASIS_POINTS = 10_000;
-const toBp = (fraction: number): bigint => BigInt(Math.round(fraction * BASIS_POINTS));
+const BP_CACHE = new WeakMap<PolicyView, PolicyBasisPoints>();
 
-/** fraction "p/q" ≥ bp/10000, compared exactly. */
-export function atLeast(score: string, bp: bigint): boolean {
-  const { num, den } = parseFraction(score);
-  return BigInt(BASIS_POINTS) * num >= bp * den;
+/** The policy's thresholds as the core loads them (§5.3: integer basis points; never the decimal fields). */
+export function basisPointsOf(policy: PolicyView): PolicyBasisPoints {
+  const cached = BP_CACHE.get(policy);
+  if (cached !== undefined) return cached;
+  const { bp } = loadPolicy(policy);
+  BP_CACHE.set(policy, bp);
+  return bp;
 }
 
-/** §15 ordering groups: rule reason, then coverage reasons, then match and counterparty, then events. */
+/** fraction "p/q" ≥ bp/10000, compared exactly. */
+export function atLeast(score: string, bp: number): boolean {
+  const { num, den } = parseFraction(score);
+  return BigInt(BASIS_POINTS) * num >= BigInt(bp) * den;
+}
+
+/**
+ * §15 (v1.2) order groups: the rule's own code first, then `allowlist.unchecked` if emitted, then coverage
+ * reasons, then match and counterparty reasons, then `override.user` and `superseded`; each group in table
+ * order. The rule's own codes are the rule codes of the table (claim.*, coverage.none/partial, grace.waiting,
+ * coverage.never_completed, scope.*, ceiling.*) and, on UNASKED receipts, the fired unasked.* signals.
+ */
 const COVERAGE_GROUP: readonly ReasonCode[] = [
   'coverage.account_unbound',
   'coverage.calendars_hidden',
@@ -34,9 +49,10 @@ const COVERAGE_CAPS = COVERAGE_GROUP.slice(1);
 const EVENT_GROUP: readonly ReasonCode[] = ['override.user', 'superseded'];
 
 export function groupOf(code: ReasonCode): number {
-  if (EVENT_GROUP.includes(code)) return 3;
-  if (code.startsWith('match.') || code.startsWith('cp.')) return 2;
-  if (COVERAGE_GROUP.includes(code)) return 1;
+  if (EVENT_GROUP.includes(code)) return 4;
+  if (code.startsWith('match.') || code.startsWith('cp.')) return 3;
+  if (COVERAGE_GROUP.includes(code)) return 2;
+  if (code === 'allowlist.unchecked') return 1;
   return 0;
 }
 
@@ -56,7 +72,12 @@ export function reasonOrderProblems(codes: readonly ReasonCode[]): string[] {
 const RULE_REASONS: Readonly<Record<string, readonly (readonly ReasonCode[])[]>> = {
   over_scope: [['scope.type_not_allowed']],
   over_allowlist: [['scope.counterparty_not_allowed']],
-  over_ceiling: [['ceiling.exceeded'], ['ceiling.currency_mismatch']],
+  // §6.1 v1.2: currency_mismatch replaces exceeded unless the amount also exceeds the ceiling in spendCurrency.
+  over_ceiling: [
+    ['ceiling.exceeded'],
+    ['ceiling.currency_mismatch'],
+    ['ceiling.exceeded', 'ceiling.currency_mismatch'],
+  ],
   over_ceiling_cumulative: [['ceiling.cumulative_exceeded']],
   over_scope_observed: [['scope.observed_not_declared']],
   no_target: [['claim.no_target']],
@@ -79,8 +100,9 @@ export function subjectKind(e: ExpectedReceipt): SubjectKind {
 function ruleCodeProblems(e: ExpectedReceipt): string[] {
   const own = e.reasonCodes.filter((code) => RULE_CODE_SET.has(code));
   let allowed: readonly (readonly ReasonCode[])[] = RULE_REASONS[e.ruleId] ?? [[]];
+  // An override keeps the graded reasons, so the pending rule's code follows the state before the override.
   if (e.ruleId === 'pending')
-    allowed = [[e.state === 'PENDING' ? 'grace.waiting' : 'coverage.never_completed']];
+    allowed = [[(e.previousState ?? e.state) === 'PENDING' ? 'grace.waiting' : 'coverage.never_completed']];
   const ok = allowed.some((codes) => codes.length === own.length && codes.every((c, i) => own[i] === c));
   const unasked = e.reasonCodes.filter((code) => code.startsWith('unasked.'));
   const problems = ok ? [] : [`rule ${e.ruleId} (${e.state}) needs rule reason ${JSON.stringify(allowed)}`];
@@ -94,11 +116,27 @@ function gradeOfRule(ruleId: string, policy: PolicyView): string | undefined {
   return then === 'PENDING' ? 'UNVERIFIABLE' : then;
 }
 
+/**
+ * §6 first match wins: a receipt graded by a rule that comes after `verified` (or `partial`) in policy order,
+ * or by the terminal default, cannot have a best score that rule would have matched first.
+ */
+function ruleOrderScoreProblems(e: ExpectedReceipt, policy: PolicyView): string[] {
+  if (e.score === null) return [];
+  const ids = policy.rules.map((rule) => rule.id);
+  const position = (id: string): number => (ids.includes(id) ? ids.indexOf(id) : ids.length);
+  const { thresholds } = basisPointsOf(policy);
+  const problems: string[] = [];
+  for (const rule of ['verified', 'partial'] as const) {
+    if (ids.includes(rule) && position(e.ruleId) > position(rule) && atLeast(e.score, thresholds[rule]))
+      problems.push(`rule ${e.ruleId} comes after ${rule}, so its best score must be below ${rule}`);
+  }
+  return problems;
+}
+
 /** Score, evidence and match reasons agree with the thresholds and the one-to-one assignment (§4.3, §5.3). */
 function scoreProblems(e: ExpectedReceipt, policy: PolicyView): string[] {
-  const verified = toBp(policy.thresholds.verified);
-  const partial = toBp(policy.thresholds.partial);
-  const problems: string[] = [];
+  const { verified, partial } = basisPointsOf(policy).thresholds;
+  const problems: string[] = [...ruleOrderScoreProblems(e, policy)];
   const has = (code: ReasonCode): boolean => e.reasonCodes.includes(code);
   const assigned = e.score !== null && atLeast(e.score, partial);
   if (has('match.best') === has('match.none')) problems.push('exactly one of match.best / match.none');
@@ -116,10 +154,58 @@ function scoreProblems(e: ExpectedReceipt, policy: PolicyView): string[] {
   return problems;
 }
 
-function claimlessProblems(e: ExpectedReceipt, kind: SubjectKind, threshold: bigint): string[] {
+/** The §7 signal behind each unasked.* reason, by its policy weight key. */
+const SIGNAL_OF: Readonly<Partial<Record<ReasonCode, SignalName>>> = {
+  'unasked.session': 'agentSessionActive',
+  'unasked.idle': 'userIdle',
+  'unasked.signature': 'agentSignature',
+  'unasked.adjacent': 'activityLogAdjacent',
+};
+
+/** Every code a claim-less receipt may carry (§15 Emission): no match, cp, coverage or allowlist code. */
+const CLAIMLESS_CODES: Readonly<Record<'unasked' | 'scope', readonly ReasonCode[]>> = {
+  unasked: [
+    'unasked.session',
+    'unasked.idle',
+    'unasked.signature',
+    'unasked.adjacent',
+    'override.user',
+    'superseded',
+  ],
+  scope: ['scope.observed_not_declared', 'override.user'],
+};
+
+/** fraction "p/q" = bp/10000, compared exactly. */
+function equalsBasisPoints(score: string, bp: number): boolean {
+  const { num, den } = parseFraction(score);
+  return BigInt(BASIS_POINTS) * num === BigInt(bp) * den;
+}
+
+/**
+ * §7: the reasons are the attributed agent's fired signals (at least one agent-specific: userIdle alone never
+ * attributes) plus userIdle, and the score is their weights' sum capped at 1, exact in basis points.
+ */
+function attributionProblems(e: ExpectedReceipt, bp: PolicyBasisPoints['unasked']): string[] {
+  const signals = e.reasonCodes.flatMap((code) => SIGNAL_OF[code] ?? []);
+  const problems: string[] = [];
+  if (!signals.some((signal) => signal !== 'userIdle'))
+    problems.push('UNASKED needs an agent-specific signal');
+  const sum = Math.min(
+    BASIS_POINTS,
+    signals.reduce((total, signal) => total + bp.signals[signal], 0),
+  );
+  if (e.attributionScore === undefined || !equalsBasisPoints(e.attributionScore, sum))
+    problems.push(`attributionScore must be the fired signals' weights, ${String(sum)} bp`);
+  if (!atLeast(e.attributionScore ?? '0/1', bp.threshold))
+    problems.push('UNASKED needs an attribution score ≥ unasked.threshold');
+  return problems;
+}
+
+function claimlessProblems(e: ExpectedReceipt, kind: 'unasked' | 'scope', policy: PolicyView): string[] {
   const problems: string[] = [];
   if (e.score !== null) problems.push('claim-less receipts are never scored');
-  if (e.reasonCodes.some((c) => groupOf(c) === 2)) problems.push('no match.* or cp.* without a claim');
+  const foreign = e.reasonCodes.filter((code) => !CLAIMLESS_CODES[kind].includes(code));
+  if (foreign.length > 0) problems.push(`no ${foreign.join(', ')} on a claim-less receipt`);
   if (e.agent === undefined) problems.push('claim-less receipts name their agent');
   if (kind === 'scope') {
     if (e.ruleId !== 'over_scope_observed' || e.observationRefs.length > 0)
@@ -128,9 +214,7 @@ function claimlessProblems(e: ExpectedReceipt, kind: SubjectKind, threshold: big
   }
   if (e.grade !== 'UNASKED' || e.ruleId !== 'unasked')
     problems.push('only UNASKED orphans are kept (§1, §7)');
-  if (e.attributionScore === undefined || !atLeast(e.attributionScore, threshold)) {
-    problems.push('UNASKED needs an attribution score ≥ unasked.threshold');
-  }
+  problems.push(...attributionProblems(e, basisPointsOf(policy).unasked));
   if (e.observationRefs.length !== 1 || e.observationRefs[0] !== e.ref)
     problems.push('UNASKED names its orphan');
   return problems;
@@ -146,6 +230,10 @@ function emissionProblems(e: ExpectedReceipt): string[] {
     problems.push('account_unbound only on NOT_FOUND');
   if (has('allowlist.unchecked') && e.grade === 'OVER_SCOPE')
     problems.push('allowlist.unchecked on OVER_SCOPE');
+  if (has('allowlist.unchecked') && has('coverage.never_completed'))
+    problems.push(
+      'allowlist.unchecked with coverage.never_completed: their order is an open reading (README)',
+    );
   if (has('override.user') !== (e.state === 'USER_OVERRIDDEN'))
     problems.push('override.user ⇔ USER_OVERRIDDEN');
   if ((e.override === undefined) !== (e.state !== 'USER_OVERRIDDEN'))
@@ -164,7 +252,7 @@ export function expectationProblems(e: ExpectedReceipt, policy: PolicyView): str
   const problems = [...reasonOrderProblems(e.reasonCodes), ...ruleCodeProblems(e), ...emissionProblems(e)];
   if (gradeOfRule(e.ruleId, policy) !== e.grade) problems.push(`rule ${e.ruleId} does not give ${e.grade}`);
   if (kind === 'claim') problems.push(...scoreProblems(e, policy));
-  else problems.push(...claimlessProblems(e, kind, toBp(policy.unasked.threshold)));
+  else problems.push(...claimlessProblems(e, kind, policy));
   const label = e.ref ?? `scope:${e.scope?.scope ?? ''}`;
   return problems.map((problem) => `${label}: ${problem}`);
 }

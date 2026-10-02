@@ -41,7 +41,8 @@
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"]
+      "reasonCodes": ["coverage.none", "match.none"],
+      "reasonParams": { "coverage.none": { "source": "gmail.receipt" }, "match.none": {} }
     }
   ]
 }

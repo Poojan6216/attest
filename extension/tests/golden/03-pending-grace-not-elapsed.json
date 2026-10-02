@@ -41,7 +41,8 @@
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["grace.waiting", "match.none"]
+      "reasonCodes": ["grace.waiting", "match.none"],
+      "reasonParams": { "grace.waiting": { "source": "gmail.sent" }, "match.none": {} }
     }
   ]
 }

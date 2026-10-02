@@ -1,11 +1,11 @@
 {
   "name": "grade() on an orphan, then a later claim supersedes the UNASKED receipt",
-  "covers": ["edge:unasked_superseded", "contract:grade_mode_claimless"],
+  "covers": ["edge:unasked_superseded", "contract:grade_mode_claimless", "contract:reason_params"],
   "mode": "grade",
   "notes": [
     "mode grade: grade(null, [o1], muse's grant, policy, coverage, {priorSpendCents: 0, attribution: attribute(o1, activity, policy)}).",
     "muse session 14:00 and idle [14:00, 14:05] covering [14:01, 14:03] → 7/10 → UNASKED, FINAL (adapter 14:50 ≥ 14:35).",
-    "c1 is a claim read later (observedAt 15:30) that took o1 in a later batch; it is not graded here. Event supersede(c1) (§8): only on UNASKED receipts, any state; sets supersededBy and appends reason superseded. State stays FINAL."
+    "c1 is a claim read later (observedAt 15:30) that took o1 in a later batch; it is not graded here. Event supersede(c1) (§8): only on UNASKED receipts, any state; sets supersededBy and appends reason superseded {claimId: c1's id}, last (§15 v1.2). State stays FINAL."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T15:00:00-04:00",
@@ -58,6 +58,11 @@
       "observationRefs": ["o1"],
       "score": null,
       "reasonCodes": ["unasked.session", "unasked.idle", "superseded"],
+      "reasonParams": {
+        "unasked.session": { "agent": "muse" },
+        "unasked.idle": { "agent": "muse" },
+        "superseded": { "claimId": "c1" }
+      },
       "agent": "muse",
       "attributionScore": "7/10",
       "supersededBy": "c1"

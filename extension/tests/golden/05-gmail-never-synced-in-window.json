@@ -45,7 +45,8 @@
       "state": "FINAL",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.none", "match.none"]
+      "reasonCodes": ["coverage.none", "match.none"],
+      "reasonParams": { "coverage.none": { "source": "gmail.sent" }, "match.none": {} }
     }
   ]
 }

@@ -1,0 +1,86 @@
+{
+  "name": "cumulative spend counts the agent's FINAL claims from activity.claims, not only the batch",
+  "covers": [
+    "contract:prior_spend_reads_final_claims",
+    "edge:cumulative_ceiling",
+    "edge:fixed_pre_assignment"
+  ],
+  "mode": "batch",
+  "policyPatch": { "receiptMerchants": ["acme"] },
+  "notes": [
+    "§3 (v1.2): gradeBatch grades exactly the PENDING claims it is given; priorSpendCents reads activity.claims, which holds every claim of the user within retention, FINAL and USER_OVERRIDDEN included. Grant: ceiling 5000 USD.",
+    "c9 'acme' 3000 USD (10:02) already holds a FINAL receipt with o9 (fixed: o9 → c9): it is not passed to gradeBatch and gets no receipt, but it is in activity.claims (the loader default: every scenario claim).",
+    "c1 'acme' 3000 USD (11:02) × o1 'Acme' 3000 USD (11:02): tp 1, amountExact 1, merchantMatch 1 → S = 7000/7000 = 1/1 → assigned.",
+    "amountAboveCeiling: Amount = max(3000, 3000 in USD) = 3000 ≤ 5000 and the currency is USD → false. cumulativeAboveCeiling (§6.3): prior = c9's 3000 (same agent, spend type, USD, 10:02 ∈ [11:02 − 30 d, 11:02], strictly before) → 3000 + 3000 = 6000 > 5000 → rule over_ceiling_cumulative, params {priorSpendCents 3000, amountCents 3000, ceilingCents 5000}; FINAL at once (claim-only facts). Summing the batch claims alone gives prior 0 → full coverage → verified 1/1.",
+    "o9 is fixed (taken) and outside c1's window [11:00, 11:48]. No activity signals → no orphan receipts."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c9",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T10:02:00-04:00"
+      },
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T11:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o9",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T10:02:00-04:00"
+      },
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T11:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T09:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "fixed": [{ "claim": "c9", "observation": "o9" }]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling_cumulative",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["ceiling.cumulative_exceeded", "match.best"],
+      "reasonParams": {
+        "ceiling.cumulative_exceeded": { "priorSpendCents": 3000, "amountCents": 3000, "ceilingCents": 5000 },
+        "match.best": { "observationId": "o1" }
+      }
+    }
+  ]
+}
