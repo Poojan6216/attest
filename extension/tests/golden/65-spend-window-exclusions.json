@@ -1,0 +1,137 @@
+{
+  "name": "cumulative spend: only the same agent, the same currency and the last 30 days count, and only above the ceiling",
+  "covers": ["edge:cumulative_spend_window"],
+  "mode": "batch",
+  "notes": [
+    "muse: ceiling 5000 USD. chatgpt: no ceiling. receiptMerchants is [] → every purchase has coverage 'none' (§6.1), so a claim that no ceiling rule catches is no_coverage.",
+    "priorSpendCents (§6.3) = Σ amountCents of the same agent's spend-type claims in the claim's currency with claimedAt in [t − 30 d, t] and strictly before the claim.",
+    "c1 muse 3000 USD at 09-06 09:59:59.999: prior 0 → no ceiling rule → no_coverage; FINAL (§8): evaluatedAt ≥ end(09-06 10:00) + 24 h.",
+    "c2 muse 3000 EUR at 10-06 09:00: the claim's currency ≠ spendCurrency → amountAboveCeiling → rule over_ceiling, reason ceiling.currency_mismatch, FINAL at once.",
+    "c3 chatgpt 3000 USD at 10-06 09:30: no ceiling → no_coverage, PENDING until 10-07 09:31.",
+    "c4 muse 3000 USD at 10-06 10:00: window [09-06 10:00, 10-06 10:00]. c1 is 1 ms before its start (excluded), c2 is EUR (excluded), c3 is chatgpt's (excluded) → prior 0; 0 + 3000 ≤ 5000 → no_coverage, PENDING. Counting any of them would give 6000 > 5000.",
+    "c5 muse 2000 USD at 10-06 10:30: prior = c4's 3000 → 3000 + 2000 = 5000, not > 5000 → no_coverage, PENDING (the ceiling itself is allowed).",
+    "c6 muse 1 cent USD at 10-06 11:00: prior = c4 3000 + c5 2000 = 5000 → 5001 > 5000 → rule over_ceiling_cumulative, reason ceiling.cumulative_exceeded, FINAL at once (claim-only).",
+    "No observations: every receipt has match.none."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T12:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-09-06T09:59:59.999-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "EUR",
+        "claimedAt": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "chatgpt",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T09:30:00-04:00"
+      },
+      {
+        "ref": "c4",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T10:00:00-04:00"
+      },
+      {
+        "ref": "c5",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 2000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T10:30:00-04:00"
+      },
+      {
+        "ref": "c6",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 1,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T11:00:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [
+      { "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" },
+      { "agent": "chatgpt" }
+    ],
+    "coverage": []
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["ceiling.currency_mismatch", "match.none"]
+    },
+    {
+      "ref": "c3",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    },
+    {
+      "ref": "c4",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    },
+    {
+      "ref": "c5",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    },
+    {
+      "ref": "c6",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling_cumulative",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["ceiling.cumulative_exceeded", "match.none"]
+    }
+  ]
+}

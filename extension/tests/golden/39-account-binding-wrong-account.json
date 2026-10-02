@@ -1,0 +1,44 @@
+{
+  "name": "only the wrong Gmail account was open: UNVERIFIABLE, never NOT_FOUND",
+  "covers": ["edge:account_binding", "edge:wrong_account"],
+  "mode": "batch",
+  "notes": [
+    "grant.accounts['gmail.sent'] = [acct-a]; the user only opened acct-b. acct-b's entry is not eligible → no eligible interval overlaps the window → coverage 'none' → rule no_coverage.",
+    "PENDING until end + 24 h (10-07 14:03): opening the right account later can still produce a real answer."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse", "accounts": { "gmail.sent": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-b"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    }
+  ]
+}

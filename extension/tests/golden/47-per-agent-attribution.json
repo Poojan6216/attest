@@ -1,0 +1,70 @@
+{
+  "name": "attribution scores each agent separately",
+  "covers": ["edge:per_agent_attribution"],
+  "mode": "batch",
+  "notes": [
+    "No claims; no idle data. Both agents have grants.",
+    "o1 (14:03): muse session at 14:00 → muse 4000 bp; a chatgpt activity entry at 14:04 with no chatgpt email.sent claim within ±2 min → activityLogAdjacent for chatgpt → chatgpt 4000 bp. Each agent alone is 4/10 < 6/10; summing across agents (8/10) is wrong (§7) → no UNASKED receipt.",
+    "o2 (16:03): chatgpt session at 16:05 (within ±10) and chatgpt entry at 16:02 (within ±2, no chatgpt claim) → 4000 + 4000 = 8000 bp = 4/5 ≥ 6/10 → UNASKED attributed to chatgpt (likely), reasons unasked.session, unasked.adjacent. muse has no signal near 16:03.",
+    "FINAL: chatgpt's adapter synced 17:00 ≥ 16:03 + 32 min = 16:35."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 1",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 2",
+        "occurredAt": "2026-10-06T16:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }, { "agent": "chatgpt" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:00:00-04:00" },
+        { "agent": "chatgpt", "at": "2026-10-06T16:05:00-04:00" }
+      ],
+      "entries": [
+        { "agent": "chatgpt", "at": "2026-10-06T14:04:00-04:00" },
+        { "agent": "chatgpt", "at": "2026-10-06T16:02:00-04:00" }
+      ],
+      "adapterSyncs": [
+        { "agent": "muse", "lastSyncAt": "2026-10-06T17:00:00-04:00" },
+        { "agent": "chatgpt", "lastSyncAt": "2026-10-06T17:00:00-04:00" }
+      ]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o2",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.adjacent"],
+      "agent": "chatgpt",
+      "attributionScore": "4/5"
+    }
+  ]
+}

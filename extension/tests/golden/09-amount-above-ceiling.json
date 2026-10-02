@@ -1,0 +1,39 @@
+{
+  "name": "claimed amount above the spend ceiling: OVER_SCOPE with no receipt visible",
+  "covers": ["ledger_engineer:amount_above_ceiling"],
+  "mode": "batch",
+  "notes": [
+    "Grant: ceiling 5000 USD. c1 claims a $200.00 purchase (20000 USD).",
+    "amountAboveCeiling (§6.1): purchase.made ∈ spendTypes, ceiling set, amount known = max(claim 20000, no candidate) = 20000 > 5000 → rule over_ceiling.",
+    "Over-scope rules come before no_coverage (§6.2): no receipt email and no parser coverage at all, still OVER_SCOPE (red-team strategy 11).",
+    "FINAL at once (§8): the claim's own amount decided it."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:05:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 20000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "coverage": []
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["ceiling.exceeded", "match.none"]
+    }
+  ]
+}

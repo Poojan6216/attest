@@ -1,0 +1,71 @@
+{
+  "name": "confusable lookalike (dotless i) is never VERIFIED and comes back as UNASKED",
+  "covers": ["edge:confusable_dotless_i", "edge:lookalike_orphan_unasked"],
+  "mode": "batch",
+  "notes": [
+    "o1 is sent to prıya@company.com (U+0131 LATIN SMALL LETTER DOTLESS I): a code point above U+007F → confusable (§11).",
+    "Not identical to priya@company.com → ce 0, reason cp.confusable; cd 0 (an address is confusable). tp 1, so 1 → S = 4000/9000 = 4/9 < 1/2 → not assigned.",
+    "c1: rule not_found, FINAL, best candidate o1 (match.best, 4/9) and its cp.confusable; coverage.account_unbound.",
+    "o1 is an orphan: muse session 14:00, idle [13:59, 14:05] covers [14:00, 14:02] → 7/10 → UNASKED, FINAL (adapter 14:50 ≥ 14:34)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "prıya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:59:00-04:00", "to": "2026-10-06T14:05:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": "4/9",
+      "reasonCodes": ["coverage.account_unbound", "match.best", "cp.confusable"]
+    },
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

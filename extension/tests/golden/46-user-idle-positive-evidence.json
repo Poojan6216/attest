@@ -1,0 +1,77 @@
+{
+  "name": "userIdle needs positive evidence: missing data is never idle",
+  "covers": ["edge:unasked_idle_positive_evidence"],
+  "mode": "batch",
+  "notes": [
+    "Three unclaimed sends, each with a muse session ping 3 min earlier (agentSessionActive, 4000 bp).",
+    "o1 (14:03): idle recorded [14:01, 14:03] covers [occurredAt − 2 min, occurredAt] exactly (inclusive) → userIdle 3000 → 7/10 → UNASKED, FINAL (adapter 19:00 ≥ 14:35).",
+    "o2 (16:03): no idle interval recorded at all → userIdle does not fire → 4/10 < 6/10 → no UNASKED receipt.",
+    "o3 (18:03): idle recorded [18:02, 18:10] starts after 18:01, so it does not cover [18:01, 18:03] → 4/10 → no receipt.",
+    "A claim-less outcome other than UNASKED is not kept (§1, §7), so the batch returns only o1's receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T19:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 1",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 2",
+        "occurredAt": "2026-10-06T16:03:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 3",
+        "occurredAt": "2026-10-06T18:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T19:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T19:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:00:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T16:00:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T18:00:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:01:00-04:00", "to": "2026-10-06T14:03:00-04:00" },
+        { "from": "2026-10-06T18:02:00-04:00", "to": "2026-10-06T18:10:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T19:00:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

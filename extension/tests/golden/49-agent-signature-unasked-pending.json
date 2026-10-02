@@ -1,0 +1,52 @@
+{
+  "name": "agent signature in the subject; UNASKED stays PENDING until the agent's adapter catches up",
+  "covers": ["edge:agent_signature", "edge:unasked_pending"],
+  "mode": "batch",
+  "policyPatch": { "unasked": { "signatures": { "muse": ["sent with muse"] } } },
+  "notes": [
+    "Signatures are empty in the shipped policy (never invented); the patch adds one for muse for this scenario only.",
+    "o1 subject 'Invoice 4471 - Sent with Muse' contains 'sent with muse' case-insensitively → agentSignature 5000 bp; muse session at 14:00 (within ±10 of 14:03) → 4000 bp. Total 9000 bp = 9/10 → UNASKED, reasons unasked.session, unasked.signature.",
+    "PENDING (§7): muse's adapter last synced 14:20 < occurredAt + beforeClaimMin + graceMin = 14:35 (a later claim may still explain the send), and 24 h have not passed."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:30:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 4471 - Sent with Muse",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:30:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:20:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.signature"],
+      "agent": "muse",
+      "attributionScore": "9/10"
+    }
+  ]
+}

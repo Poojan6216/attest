@@ -1,0 +1,46 @@
+{
+  "name": "no observation, grace elapsed, full coverage: NOT_FOUND",
+  "covers": ["ledger_engineer:not_found_after_grace", "edge:account_unbound"],
+  "mode": "batch",
+  "notes": [
+    "c1 window [14:00, 14:48]; one gmail.sent entry (one account, acct-a) saw [12:00, 15:00] → coverage full.",
+    "graceElapsed: synced 15:00 ≥ 14:33 and ≥ 14:48. No candidate → bestScoreLt partial is true → rule not_found.",
+    "The default grant has no accounts for gmail.sent → reason coverage.account_unbound (§6.1).",
+    "FINAL (§8 NOT_FOUND): graceElapsed."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"]
+    }
+  ]
+}

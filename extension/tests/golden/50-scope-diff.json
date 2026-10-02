@@ -1,0 +1,36 @@
+{
+  "name": "scope diff: a permission the agent holds that the user never declared",
+  "covers": ["edge:scope_diff"],
+  "mode": "batch",
+  "notes": [
+    "muse declared ['gmail.send', 'calendar.write']; its settings page shows ['gmail.send', 'gmail.read', 'calendar.write']. 'gmail.read' is observed and not declared → one scope receipt, subject {k: 'scope', agent: 'muse', scope: 'gmail.read'}.",
+    "grade(null, [], grant, …, {scope: {observed: 'gmail.read'}}) → observedScopeExceedsDeclared → rule over_scope_observed, reason scope.observed_not_declared (params carry a scope hash, never the text). FINAL at once (§8).",
+    "Declared scopes yield no receipt, and chatgpt's observed scopes are all declared → nothing for chatgpt. No claims, so no claim receipts."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [],
+    "grants": [
+      {
+        "agent": "muse",
+        "declaredScopes": ["gmail.send", "calendar.write"],
+        "observedScopes": ["gmail.send", "gmail.read", "calendar.write"]
+      },
+      { "agent": "chatgpt", "declaredScopes": ["gmail.send"], "observedScopes": ["gmail.send"] }
+    ],
+    "coverage": []
+  },
+  "expect": [
+    {
+      "scope": { "agent": "muse", "scope": "gmail.read" },
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope_observed",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.observed_not_declared"],
+      "agent": "muse"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "name": "calendar claim without a target time: UNVERIFIABLE (no_target)",
+  "covers": ["edge:no_target"],
+  "mode": "batch",
+  "notes": [
+    "c1 is calendar.created with no targetAt: the calendar window is centred on targetAt (§4.1), so there is nothing to search → targetMissing → rule no_target (before underspecified and no_coverage), reason claim.no_target, FINAL at once (§8).",
+    "Calendar claims without targetAt are not assignable (§4.3): o1 is never scored against c1 (match.none) and stays an orphan; no activity → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_target",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["claim.no_target", "match.none"]
+    }
+  ]
+}

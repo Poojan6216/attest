@@ -1,0 +1,69 @@
+{
+  "name": "vague claim is UNVERIFIABLE and does not consume the observation",
+  "covers": ["edge:vague_claim_orphan"],
+  "mode": "batch",
+  "notes": [
+    "c1: 'Done! I've sent the email.' — email.sent with no counterparty and no subject. Identity for email.sent is counterpartyExact or counterpartyName; neither is applicable → underspecified (§5.2) → rule underspecified, reason claim.too_vague, FINAL at once (§8).",
+    "Underspecified claims never take part in assignment (§4.3): c1 is never scored (match.none, score null), so it cannot absorb o1 on time proximity alone.",
+    "o1 is therefore an orphan: muse session 14:00, idle [14:00, 14:10] covers [14:01, 14:03] → 7/10 → UNASKED, FINAL (adapter 14:50 ≥ 14:35)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "text": "Done! I've sent the email."
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 budget",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:10:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "underspecified",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["claim.too_vague", "match.none"]
+    },
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

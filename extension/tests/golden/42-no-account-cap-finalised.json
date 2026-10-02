@@ -1,0 +1,44 @@
+{
+  "name": "coverage without an account hash is capped; partial_coverage finalises after 24 hours",
+  "covers": ["edge:no_account_cap"],
+  "mode": "batch",
+  "notes": [
+    "The only gmail.sent entry has no accountHash and the grant binds no account → counts at most as partial (§6.1).",
+    "c1 window [10-06 14:00, 14:48] is inside it; graceElapsed (synced 10-06 15:00 ≥ 14:48); no candidate → rule partial_coverage, reasons coverage.partial, coverage.no_account.",
+    "FINAL (§8): evaluatedAt 10-07 15:00 ≥ end + finalizeUnverifiableHours = 10-07 14:03."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.no_account", "match.none"]
+    }
+  ]
+}

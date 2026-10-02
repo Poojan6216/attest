@@ -1,0 +1,82 @@
+{
+  "name": "day- and hour-precision claims widen the window instead of failing",
+  "covers": ["edge:day_precision"],
+  "mode": "batch",
+  "notes": [
+    "c1 'Yesterday' resolves to 10-05 12:00 -04:00 with precision day: the unit is [10-05 00:00, 10-06 00:00] in the claim's own offset; window [10-04 23:58, 10-06 00:45]. o1 at 10-05 08:15 is inside the unit → Δ = 0 → tp 1 (a minute-precision reading would centre on 12:00 and miss it). S = 1/1 → verified.",
+    "c2 'around 4pm' has precision hour: unit [16:00, 17:00]; o2 at 16:40 → tp 1 → 1/1.",
+    "Cross pair c1 × o2 (o2 is inside c1's day): ce 0, cd 1, tp 1, so 0 ({q3, deck} vs {budget}) → 4/9 < 1/2, never assigned. o1 is outside c2's window.",
+    "Both FINAL: the sync at 10-06 09:00 ≥ end + 30 for each (10-06 00:30 and 10-05 17:30)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T09:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-05T12:00:00-04:00",
+        "claimedAtPrecision": "day"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-05T16:00:00-04:00",
+        "claimedAtPrecision": "hour"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-05T08:15:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "occurredAt": "2026-10-05T16:40:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T09:00:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-06T09:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

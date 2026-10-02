@@ -1,0 +1,53 @@
+{
+  "name": "orphan observation with attribution 0.7: UNASKED (likely)",
+  "covers": ["ledger_engineer:unasked_attribution"],
+  "mode": "batch",
+  "notes": [
+    "No claims, so o1 is an orphan (§4.3) and gradeBatch calls grade(null, [o1], muse's grant, …, {attribution}).",
+    "muse signals (§7): session ping 14:00 is within ±10 min of 14:03 → agentSessionActive 4000 bp; idle [13:50, 14:10] covers [14:01, 14:03] → userIdle 3000 bp; signatures for muse are [] → no agentSignature; no activity entries → no activityLogAdjacent.",
+    "Score 4000 + 3000 = 7000 bp = 7/10 ≥ unasked.threshold 6000 → rule unasked, attribution 'likely', reasons in table order: unasked.session, unasked.idle.",
+    "FINAL (§7): muse's adapter synced at 14:50 ≥ occurredAt + beforeClaimMin + graceMin = 14:35."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Re: invoice",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:50:00-04:00", "to": "2026-10-06T14:10:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

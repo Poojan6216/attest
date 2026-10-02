@@ -1,0 +1,55 @@
+{
+  "name": "timezone edge: claim 23:58, observation 00:01 the next day",
+  "covers": ["ledger_engineer:timezone_edge"],
+  "mode": "batch",
+  "notes": [
+    "All times in -07:00. c1's unit is [10-06 23:58, 23:59]; o1 at 10-07 00:01 is Δ = 120 000 ms after it, on the next calendar day.",
+    "tp = (edge − Δ)/(edge − tol) = (2 700 000 − 120 000)/(2 700 000 − 60 000) = 2 580 000/2 640 000 = 43/44.",
+    "S = (2500·43/44 + 3500 + 1500 + 1500)/9000 = (107 500/44 + 286 000/44)/9000 = 393 500/396 000 = 787/792 ≥ 17/20 → verified.",
+    "FINAL: sync 10-07 01:00 ≥ end + 30 = 10-07 00:29."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T01:00:00-07:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T23:58:00-07:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-07T00:01:00-07:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-07T01:00:00-07:00",
+        "windowStart": "2026-10-06T22:00:00-07:00",
+        "windowEnd": "2026-10-07T01:00:00-07:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "787/792",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

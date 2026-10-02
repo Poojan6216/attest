@@ -1,0 +1,78 @@
+{
+  "name": "two Gmail accounts and no binding: coverage capped at partial, positive evidence still verifies",
+  "covers": ["edge:multiple_accounts_cap"],
+  "mode": "batch",
+  "notes": [
+    "No grant.accounts. gmail.sent was seen with two distinct account hashes (acct-a, acct-b) → every gmail.sent entry counts at most as partial (§6.1).",
+    "c1 (14:02, no observation): eligible capped entries contain the window but only capped entries do → coverage 'partial'; graceElapsed (17:00 ≥ 14:48; capped entries are eligible) → pending does not fire → rule partial_coverage, reasons coverage.partial then the cap's coverage.multiple_accounts. PENDING until 10-07 14:03.",
+    "c2 (16:02) × o2 exact → 1/1 → verified: no rule before verified looks at 'partial' coverage. FINAL: an eligible entry synced 17:00 ≥ end + 30 = 16:33."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T16:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "occurredAt": "2026-10-06T16:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-b"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.multiple_accounts", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

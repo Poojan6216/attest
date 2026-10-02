@@ -1,0 +1,54 @@
+{
+  "name": "DST fall-back: the observation's wall clock reads earlier but is later",
+  "covers": ["edge:dst"],
+  "mode": "batch",
+  "notes": [
+    "US clocks fall back on Sun 2026-11-01 at 02:00 PDT → 01:00 PST. c1 claimedAt 01:58 -07:00 (= 08:58Z); o1 occurredAt 01:01 -08:00 (= 09:01Z). As wall-clock strings o1 looks 57 minutes earlier; as instants it is 3 minutes later.",
+    "c1 unit [08:58Z, 08:59Z]; Δ = 120 000 ms after → tp = 43/44 → S = 787/792 (as in 12) → verified.",
+    "FINAL: sync 02:00 -08:00 (= 10:00Z) ≥ end + 30 = 09:29Z."
+  ],
+  "input": {
+    "evaluatedAt": "2026-11-01T02:00:00-08:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-11-01T01:58:00-07:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-11-01T01:01:00-08:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-11-01T02:00:00-08:00",
+        "windowStart": "2026-11-01T00:00:00-07:00",
+        "windowEnd": "2026-11-01T02:00:00-08:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "787/792",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

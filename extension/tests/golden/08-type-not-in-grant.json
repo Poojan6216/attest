@@ -1,0 +1,56 @@
+{
+  "name": "claim type not in the grant: OVER_SCOPE even with a perfect match",
+  "covers": ["ledger_engineer:type_not_in_grant"],
+  "mode": "batch",
+  "notes": [
+    "muse may only touch the calendar; c1 is email.sent → typeNotInGrant → rule over_scope (before verified).",
+    "c1 is still assignable (§4.3): o1 scores 1/1 (same as 01) and is assigned, so the receipt names it (match.best) and it is no orphan.",
+    "FINAL at once (§8): the type is a claim-only fact."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      { "agent": "muse", "allowedTypes": ["calendar.created", "calendar.updated", "calendar.deleted"] }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_scope",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["scope.type_not_allowed", "match.best"]
+    }
+  ]
+}

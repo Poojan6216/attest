@@ -1,0 +1,87 @@
+{
+  "name": "around grace: not_found exactly at the boundary, pending a minute later, partial_coverage on a gap",
+  "covers": ["edge:grace_pending_partial_not_found"],
+  "mode": "batch",
+  "notes": [
+    "Two gmail.sent entries (acct-a): E0 saw [11:00, 12:30] (synced 12:30); E1 saw [13:00, 14:48] (synced 14:48). evaluatedAt 14:48.",
+    "c1 (14:02): window [14:00, 14:48] ⊆ E1 → full. graceElapsed needs a sync ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48; E1 synced exactly 14:48 (inclusive) → rule not_found, FINAL, coverage.account_unbound.",
+    "c2 (14:03): window [14:01, 14:49]; E1 ends 14:48 → partial. graceElapsed needs ≥ 14:49 → false → rule pending (it precedes partial_coverage), grace.waiting, PENDING.",
+    "c3 (12:02): window [12:00, 12:48]; E0 overlaps up to 12:30, E1 starts 13:00 → partial (a gap). graceElapsed: E1 synced 14:48 ≥ 12:48 → true. No candidate → rule partial_coverage, coverage.partial; PENDING until 10-07 12:03."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:48:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "lee@company.com",
+        "subjectHint": "Hiring plan",
+        "claimedAt": "2026-10-06T12:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T12:30:00-04:00",
+        "windowStart": "2026-10-06T11:00:00-04:00",
+        "windowEnd": "2026-10-06T12:30:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:48:00-04:00",
+        "windowStart": "2026-10-06T13:00:00-04:00",
+        "windowEnd": "2026-10-06T14:48:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["grace.waiting", "match.none"]
+    },
+    {
+      "ref": "c3",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "match.none"]
+    }
+  ]
+}

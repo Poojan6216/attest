@@ -1,0 +1,73 @@
+{
+  "name": "two claims, one observation: one VERIFIED, one NOT_FOUND, never both",
+  "covers": ["ledger_engineer:two_claims_one_observation"],
+  "mode": "batch",
+  "notes": [
+    "c1 (14:00, 'deck') and c2 (14:02, 'Q3 deck') both name priya@company.com; one sent message o1 at 14:02.",
+    "c1 × o1: c1's unit is [14:00, 14:01]; o1 is 60 000 ms after it = toleranceMin → tp 1; ce 1, cd 1; {deck} vs {q3, deck} → so 1/2. S = (2500 + 3500 + 1500 + 750)/9000 = 8250/9000 = 11/12 (would verify alone).",
+    "c2 × o1: S = 1/1. Greedy best-first (§4.3): (c2, o1) at 1/1 beats (c1, o1) at 11/12 although c1 is earlier → c2 takes o1, one-to-one.",
+    "c1's candidates minus o1 = none → match.none. c1 window [13:58, 14:46] ⊆ coverage [12:00, 15:00]; sync 15:00 ≥ 14:46 → rule not_found, FINAL, coverage.account_unbound (no grant.accounts).",
+    "c2: rule verified, FINAL (15:00 ≥ 14:33)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "deck",
+        "claimedAt": "2026-10-06T14:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "no rule matches: terminal default_unverifiable",
+  "covers": ["edge:default_unverifiable"],
+  "mode": "batch",
+  "policyPatch": {
+    "rules": [
+      { "id": "unasked", "when": { "unaskedLikely": true }, "then": "UNASKED" },
+      { "id": "over_scope_observed", "when": { "observedScopeExceedsDeclared": true }, "then": "OVER_SCOPE" },
+      { "id": "over_scope", "when": { "typeNotInGrant": true }, "then": "OVER_SCOPE" },
+      { "id": "over_allowlist", "when": { "counterpartyNotAllowed": true }, "then": "OVER_SCOPE" },
+      { "id": "over_ceiling", "when": { "amountAboveCeiling": true }, "then": "OVER_SCOPE" },
+      { "id": "over_ceiling_cumulative", "when": { "cumulativeAboveCeiling": true }, "then": "OVER_SCOPE" },
+      { "id": "no_target", "when": { "targetMissing": true }, "then": "UNVERIFIABLE" },
+      { "id": "underspecified", "when": { "underspecified": true }, "then": "UNVERIFIABLE" },
+      { "id": "no_coverage", "when": { "coverage": "none" }, "then": "UNVERIFIABLE" },
+      { "id": "verified", "when": { "bestScoreGte": "verified" }, "then": "VERIFIED" },
+      { "id": "partial", "when": { "bestScoreGte": "partial" }, "then": "PARTIAL" },
+      { "id": "pending", "when": { "graceElapsed": false }, "then": "PENDING" },
+      {
+        "id": "partial_coverage",
+        "when": { "coverage": "partial", "bestScoreLt": "partial" },
+        "then": "UNVERIFIABLE"
+      }
+    ]
+  },
+  "notes": [
+    "With the default rules every claim-bearing case is matched, so default_unverifiable needs a policy without not_found: this patch is the §12 rule list minus not_found.",
+    "c1: full coverage, graceElapsed, no candidate → every remaining rule is false → terminal default_unverifiable → UNVERIFIABLE. It adds no rule reason; coverage.account_unbound is only for NOT_FOUND → reasons [match.none].",
+    "FINAL (§8): evaluatedAt 10-07 15:00 ≥ end + 24 h = 10-07 14:03."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "default_unverifiable",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

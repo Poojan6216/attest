@@ -1,0 +1,70 @@
+{
+  "name": "just below the partial threshold: NOT_FOUND, and the observation stays an orphan",
+  "covers": ["edge:just_below_partial"],
+  "mode": "batch",
+  "notes": [
+    "c1 priya@company.com 'Q3 deck' × o1 raj@company.com 'Q3 budget plan': tp 1, ce 0, cd 1; {q3, deck} vs {q3, budget, plan} → 1/4. S = (2500 + 1500 + 375)/9000 = 4375/9000 = 35/72 < 1/2.",
+    "Pairs below thresholds.partial are never assigned (§4.3) → c1: not_found with match.best (35/72), FINAL; o1 is an orphan.",
+    "o1: muse session 14:00 and idle [13:59, 14:05] covering [14:00, 14:02] → 7/10 → UNASKED, FINAL (adapter 14:50 ≥ 14:34)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 budget plan",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:59:00-04:00", "to": "2026-10-06T14:05:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": "35/72",
+      "reasonCodes": ["coverage.account_unbound", "match.best"]
+    },
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

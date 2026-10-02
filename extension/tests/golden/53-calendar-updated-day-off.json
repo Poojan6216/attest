@@ -1,0 +1,55 @@
+{
+  "name": "calendar update found a day away from the claimed time: PARTIAL",
+  "covers": ["edge:calendar_time_proximity"],
+  "mode": "batch",
+  "notes": [
+    "c1 calendar.updated 'Q3 review' says the event moved to Fri 10-09 14:00; the calendar shows it on Thu 10-08 14:00 (o1).",
+    "Calendar timeProximity: Δ = |occurredAt − targetAt| = 86 400 000 ms; edge = calendarDays = 259 200 000; tol = 60 000. tp = (259 200 000 − 86 400 000)/(259 200 000 − 60 000) = 172 800 000/259 140 000 = 2880/4319.",
+    "S = (2500·2880/4319 + 1500)/4000 = (7 200 000 + 6 478 500)/(4319·4000) = 13 678 500/17 276 000 = 27357/34552 (≈ 0.7918): ≥ 1/2, < 17/20 → partial.",
+    "FINAL (§8 PARTIAL): graceElapsed for a calendar type is a sync ≥ end(14:03) + 30 = 14:33 → 14:40; window [10-06 14:00, 10-12 14:00] ⊆ coverage."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.updated",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-09T14:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.updated",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-08T14:00:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "27357/34552",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

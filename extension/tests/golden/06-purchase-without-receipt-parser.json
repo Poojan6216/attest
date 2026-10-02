@@ -1,0 +1,47 @@
+{
+  "name": "purchase with no receipt parser for the merchant: UNVERIFIABLE",
+  "covers": ["ledger_engineer:purchase_no_parser"],
+  "mode": "batch",
+  "notes": [
+    "c1 purchase.made 'acme' $49.99. The default grant allows every type and has no ceiling; purchase.made ∉ allowlistTypes; not calendar.",
+    "Identity for purchase.made is amountExact or merchantMatch; both applicable (amount and counterparty present) → not underspecified.",
+    "policy.receiptMerchants is [] (no parser shipped) → coverage 'none' for a purchase-like claim (§6.1), although a full gmail.receipt entry exists → rule no_coverage.",
+    "PENDING (§8): evaluatedAt 15:00 < end + 24 h = 10-07 14:03."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 4999,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "01-exact-match-same-minute.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "02-domain-match-subject-partial.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "40284YCWSV9WK1TW0SHNV3JS0R"
+  },
+  "03-pending-grace-not-elapsed.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "04-not-found-after-grace.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "05-gmail-never-synced-in-window.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "06-purchase-without-receipt-parser.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "07-unasked-attribution-0-7.json": {
+    "o1": "4RFCKVAC8YVQAJMAT3NNCTEP61"
+  },
+  "08-type-not-in-grant.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "09-amount-above-ceiling.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "10-two-claims-one-observation.json": {
+    "c1": "4YEAWZ19H5F4BH1NS8TJCRJ7T1",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "11-duplicate-observation-content-hash.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3",
+    "o2": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "12-timezone-midnight-edge.json": {
+    "c1": "3NB3FEGVQ6FESB2582YXG8PMKT",
+    "o1": "2DN1DKANW6TE8ZBFNXMZYRNRND"
+  },
+  "13-demo-section-2.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "7K6RY7NV5PB6JCBQE56FG3ZAA5",
+    "o2": "4RFCKVAC8YVQAJMAT3NNCTEP61"
+  },
+  "14-demo-calendar-coverage-absent.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "7K6RY7NV5PB6JCBQE56FG3ZAA5",
+    "o2": "4RFCKVAC8YVQAJMAT3NNCTEP61"
+  },
+  "15-plus-tag-partial.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7GJ4NTAK55Z9QW0XZ3CAY5YY0F"
+  },
+  "16-plus-tag-free-mail.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "69T43T4MQK4F5CEYXG14WXETPN",
+    "o2": "7E97GD3Z1NH9TF8YRS1E2CRPMG"
+  },
+  "17-free-mail-exact-match.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "5BWARYMSJWB3ZMAJ1SB4NF2KS3",
+    "o2": "7E97GD3Z1NH9TF8YRS1E2CRPMG"
+  },
+  "18-free-mail-domain-alone.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "7ZAGCK9MDDZ6TC3NAQVA4FNG5G",
+    "o2": "6DB3VZG9FQ7119GAZSXJZN6778"
+  },
+  "19-display-name-spoof.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "6Q52EP06HNKPYTRCNKW94BPXCZ",
+    "o2": "182T7VHVHYQ9AJQTNEXZW53PE8"
+  },
+  "20-confusable-dotless-i.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "520NT3GS3PNNNJCF0BKJA8YSTP"
+  },
+  "21-confusable-cyrillic-claim.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "22-confusable-kelvin-and-math-bold.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "3DVA5Y2JX2TPTYBH53FP7J5Q3G",
+    "o2": "6Q603ZPGQ22YXSG8G9ZYEG75V7"
+  },
+  "23-identical-non-ascii-address.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "3STDZPP570YC356SCPQZAF3F2Y",
+    "o2": "10E1XZ5TQK8NTDB0PYCSW4ESMB"
+  },
+  "24-vague-claim-leaves-orphan.json": {
+    "c1": "60ANF8D04DHACFK59B81DXK9PE",
+    "o1": "5XZK8TRAY0FRT3KH07Y843MGBC"
+  },
+  "25-subject-only-email-underspecified.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "26-calendar-without-target.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "5BK1BZ102855P0PC3HJY38EXC8"
+  },
+  "27-day-and-hour-precision.json": {
+    "c1": "7ABSCAR2AK8K4XW0CACACPH3SS",
+    "c2": "5PA6VWD16HDNQP248341JXZ27T",
+    "o1": "0NT3SRG9YNYG2C6DC8VGDQRQDF",
+    "o2": "67H72BBTAJFFP9VBRQJH7ZKCGT"
+  },
+  "28-tolerance-and-window-edges.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "c3": "5C6K9H11JZ7WTEKK77QKZS43QQ",
+    "c4": "47XZHKV74RY6ESZYJZ1Y6X96G6",
+    "c5": "150DCY6EZN7VXQ80BNH07T7R1J",
+    "o1": "5VNB7HJVJDNP5TZ9YC6Y4XM06Y",
+    "o2": "5AQBKFNQ08RCCCHS4VP12HH0W7",
+    "o3": "0H7H0XWXTMBM0XEN2Z493Q0W0W",
+    "o4": "3N8KQ7K62RH68087APHVQPGVEA",
+    "o5": "4T78YXESJ4F5SEHAV1HKZV14HV"
+  },
+  "29-verified-threshold-exact.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "3JTBX1S4G51RHE0RQTVPED6GDQ",
+    "o1": "4C1TT3C41BS85VWYB35CJAZV4S",
+    "o2": "10FSJ8NC4KCZJHCQ3CDEJ565WA"
+  },
+  "30-just-below-partial-orphan.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "23R8HM9EC1K8JBRWMQ26H1WG4X"
+  },
+  "31-assignment-tie-breaks.json": {
+    "c1": "0T8DN0KG7M8TA8MA2JSDTS9GPP",
+    "c2": "2JQR1T3WPH3RWTQZ2QN9A5K9EN",
+    "c3": "5NF9S9WC063CT51BYP9ABPCZ9A",
+    "c4": "644EZ9A6BHPMRTHW1JXNT7HAVR",
+    "o1": "1BHHNYPKCR6CTTXZ5BR0ZGKGT2",
+    "o2": "3TBCF1S2CQ3X4N0JXW6BV0043B"
+  },
+  "32-fixed-pre-assignments.json": {
+    "c9": "3QMXF5DC05N0QB6MYYYQPT9SZ6",
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o9": "0WK21N391A41WZE285R12RX27X",
+    "o3": "7DGXZBZ19NKNANM1ERN8EP16G3",
+    "o2": "40284YCWSV9WK1TW0SHNV3JS0R"
+  },
+  "33-cumulative-ceiling.json": {
+    "c1": "5H7KDSE36WA188QQEPD15C7PF2",
+    "c2": "46GSY7Q6DV8KNS89Z2TKRXSYD5",
+    "o1": "4NK84Y1F8V57D6B843RDX1898D",
+    "o2": "0XSVCZ2PZA36F8MF4RFGTDGPAG"
+  },
+  "34-currency-mismatch.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "3MXGCF3QAWS6AVJNNM0RYD0SX5"
+  },
+  "35-receipt-amount-over-ceiling-pending.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7C2BXQ62BPPH4K9FSEWR4ARFT6"
+  },
+  "36-allowlist-domains.json": {
+    "c1": "53ZPCPTW2FEPZ23WTDJZ2278M6",
+    "c2": "29WY5GSPCMFDQA5FWGF1YY29R3",
+    "c3": "7EH057W74WQNTXKACAA8SJKDHS",
+    "c4": "4CA3SK52VV5WPK9A7A8SKQPRG4",
+    "c5": "6HKXS4NEHH09RS59E65C6TRBJ3",
+    "o1": "30GV41YAXTWX1F9K0S4W5XR85D",
+    "o2": "14QB82WX069VT3SGT8PQGWG03A",
+    "o3": "0HVHMEZJ2W5P1G9B7QMSMKYNNV",
+    "o5": "1GTF0NGP93MJKT26F66Y5WHD31"
+  },
+  "37-allowlist-name-only.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o2": "79W83KSYCHR7A578TF9XSERGHN"
+  },
+  "38-account-binding.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "39-account-binding-wrong-account.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "40-multiple-accounts-cap.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o2": "5D7900J4DDSWK6MRSKNP871N0X"
+  },
+  "41-calendars-hidden-cap.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "42-no-account-cap-finalised.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "43-grace-boundaries.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "7A5MKWDK2FEY5F4RFPV7TM34S5",
+    "c3": "5Z0HZF6R863B5GE91R97XE8E1A"
+  },
+  "44-finalize-never-completed.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "0H8HD7Q39NP5JVN4CP73492CYG"
+  },
+  "45-no-source-types.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "6QGE6MC1T990A62ADFQD9AE78P"
+  },
+  "46-user-idle-positive-evidence.json": {
+    "o1": "2W9XVZWBGHMA86BE4FRACATPJF",
+    "o2": "3ZGSNY05BMDG9JQ4GA9YQAXYGQ",
+    "o3": "667C1V1KZ1Z83TKCHP93KG7HRC"
+  },
+  "47-per-agent-attribution.json": {
+    "o1": "2W9XVZWBGHMA86BE4FRACATPJF",
+    "o2": "3ZGSNY05BMDG9JQ4GA9YQAXYGQ"
+  },
+  "48-adjacency-suppressed-by-claim.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3",
+    "o2": "4RFCKVAC8YVQAJMAT3NNCTEP61",
+    "o3": "2YAGNES79Q6EWEWM25TP1BF163"
+  },
+  "49-agent-signature-unasked-pending.json": {
+    "o1": "2E7B80CYPE2P3WTGFJFJQ6H2GN"
+  },
+  "50-scope-diff.json": {},
+  "51-default-unverifiable.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "52-calendar-created-and-preexisting.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "5BK1BZ102855P0PC3HJY38EXC8",
+    "o2": "7S56RJVC2GRY30R2B41KA1F0ZQ"
+  },
+  "53-calendar-updated-day-off.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "47N0QFZSCZEA2395GRFRAJA8C0"
+  },
+  "54-name-counterparty-tokens.json": {
+    "c1": "53ZPCPTW2FEPZ23WTDJZ2278M6",
+    "c2": "29WY5GSPCMFDQA5FWGF1YY29R3",
+    "c3": "7EH057W74WQNTXKACAA8SJKDHS",
+    "c4": "4CA3SK52VV5WPK9A7A8SKQPRG4",
+    "o1": "30FZRRGE1QVY4CWPD864T1JK6J",
+    "o2": "7BPNPDRGKF0S4HZKJHJ98XHWYF",
+    "o3": "4SZF6HN7XF6SJ9VKZXYEQMSGA6",
+    "o4": "44VHPATD0Z1HHCJGK4RT98MQC5"
+  },
+  "55-future-inputs-ignored.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7DGXZBZ19NKNANM1ERN8EP16G3"
+  },
+  "56-user-override.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N"
+  },
+  "57-unasked-superseded.json": {
+    "c1": "1YHS4W8E64A59BZVV8SNTMD2D4",
+    "o1": "4RFCKVAC8YVQAJMAT3NNCTEP61"
+  },
+  "58-identical-sends-row-keys.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "13EQSPA0JCF4QXZ9V6QFDHBFYM",
+    "o2": "24DCYXE2Z5QJH1FNDCVCJ2S5G6"
+  },
+  "59-dst-fall-back.json": {
+    "c1": "0ZPP3MM69ENK9CE94DBB99S7X2",
+    "o1": "7B9Z6R5CJQ9T3665CP8RX80XWT"
+  },
+  "60-subject-normalisation.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "c3": "5C6K9H11JZ7WTEKK77QKZS43QQ",
+    "o1": "2YKJCZ36HCF5DPBESAYKF52F4C",
+    "o2": "2W7CNCVHNV9R1YK0WJPZPWK5MQ",
+    "o3": "069XDZVMEKM4J6G3XFPHW4SF9H"
+  },
+  "61-finality-per-outcome.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "0H8SZ2J7R06G198A3S5X7F2SR1",
+    "c3": "62ADV7XAMK873HE82J09VYGDCZ",
+    "o1": "0D721XS29GRPNFW4ZBCFSH56WK",
+    "o2": "68KW5QZVP9ZEZP2S9V84TNC5S7",
+    "o3": "1P1WW28ERB44JCPBDX75CV9PRP"
+  },
+  "62-identity-per-type.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "c3": "7EH057W74WQNTXKACAA8SJKDHS",
+    "c4": "68NXRH35M7E3324N2Q4CG7789J",
+    "o1": "5BK1BZ102855P0PC3HJY38EXC8",
+    "o2": "38YNNEZ2XDV21Y4APYXYR74WK8"
+  },
+  "63-purchase-feature-details.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "75P7GNMZN2JYRZHBAWX4PM52T0",
+    "o1": "22JPBFS5X9FZVZ5WT45B6TKVHS",
+    "o2": "1R5KM1P22MSQSB05MMX7GTKADH"
+  },
+  "64-allowlist-from-evidence.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "29WY5GSPCMFDQA5FWGF1YY29R3",
+    "o1": "4BM8GQDZHXVR2F2T6HCXYGB4PN"
+  },
+  "65-spend-window-exclusions.json": {
+    "c1": "6JA63JXF1J7QSHP40WRWXVDPEP",
+    "c2": "6YHWBNYT5WDPNTJVPV1HTM5X60",
+    "c3": "0H66F96ED8NQCM7E7EPE5PPJRR",
+    "c4": "0N6MWA483B5Q7KQEYDSS4HZYX3",
+    "c5": "5QRDJATT2TE2A6HAWQ9K8WQKKE",
+    "c6": "34WE8KBFS0X0GAXCCT7GJBFWQR"
+  },
+  "66-unasked-finalised-by-time.json": {
+    "o1": "2W9XVZWBGHMA86BE4FRACATPJF",
+    "o2": "3ZGSNY05BMDG9JQ4GA9YQAXYGQ"
+  },
+  "67-ceiling-from-receipt-only.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7C2BXQ62BPPH4K9FSEWR4ARFT6"
+  }
+}

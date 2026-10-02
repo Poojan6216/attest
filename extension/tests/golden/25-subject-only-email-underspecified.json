@@ -1,0 +1,52 @@
+{
+  "name": "an email claim with a subject but no recipient is underspecified",
+  "covers": ["edge:subject_only_underspecified"],
+  "mode": "batch",
+  "notes": [
+    "c1 names no counterparty. subjectOverlap is applicable but is not an identity feature for email.sent (§12 identityFeatures: counterpartyExact, counterpartyName) → underspecified → UNVERIFIABLE, claim.too_vague, FINAL at once.",
+    "c1 is never scored, so o1 (which matches its subject exactly) stays an orphan; with no activity it yields no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "underspecified",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["claim.too_vague", "match.none"]
+    }
+  ]
+}

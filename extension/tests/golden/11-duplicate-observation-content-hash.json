@@ -1,0 +1,77 @@
+{
+  "name": "duplicate observation (same contentHash) counted once",
+  "covers": ["ledger_engineer:duplicate_observation"],
+  "mode": "batch",
+  "notes": [
+    "o1 and o2 are the same sent row seen by two syncs (14:10 and 14:40): identical source, type, counterparty, subject, occurredAt and no rowKey → identical contentHash (§10) → identical id; they count once (§4.1).",
+    "c1 × that observation = 1/1 → VERIFIED with exactly one observation id. FINAL (15:00 ≥ 14:33).",
+    "muse was in session and the user idle at 14:02, so if the duplicate were treated as a second, unassigned observation it would come back as an UNASKED receipt; the batch must return only c1's receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00",
+        "observedAt": "2026-10-06T14:10:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:10:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:55:00-04:00", "to": "2026-10-06T14:10:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "assertIds": { "equal": [["o1", "o2"]] },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

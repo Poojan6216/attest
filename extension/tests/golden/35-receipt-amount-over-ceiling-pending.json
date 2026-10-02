@@ -1,0 +1,58 @@
+{
+  "name": "the receipt shows more than the agent claimed: OVER_SCOPE that waits for grace",
+  "covers": ["edge:ceiling_from_evidence"],
+  "mode": "batch",
+  "policyPatch": { "receiptMerchants": ["acme"] },
+  "notes": [
+    "Grant ceiling 5000 USD. c1 claims $30 (3000 USD) at Acme; the receipt o1 says $80 (8000 USD).",
+    "c1 × o1: tp 1, amountExact 0, merchantMatch 1 → S = (2500 + 0 + 2000)/7000 = 4500/7000 = 9/14 ≥ 1/2 → assigned.",
+    "amountAboveCeiling: amount = max(claim 3000, assigned candidate 8000 in USD = spendCurrency) = 8000 > 5000 → rule over_ceiling, reason ceiling.exceeded.",
+    "The outcome depended on the candidate's amount → finalises like PARTIAL (§8): graceElapsed needs a sync ≥ end + 45 = 14:48; the receipt observer last synced 14:30 → PENDING."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:30:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "amountCents": 3000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 8000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:30:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": "9/14",
+      "reasonCodes": ["ceiling.exceeded", "match.best"]
+    }
+  ]
+}

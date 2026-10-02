@@ -1,0 +1,62 @@
+{
+  "name": "inputs from after evaluatedAt are ignored, so replay sees what grading saw",
+  "covers": ["edge:future_inputs_ignored"],
+  "mode": "batch",
+  "notes": [
+    "evaluatedAt 15:00. o1 would match c1 exactly, but its observedAt is 15:30 > evaluatedAt → ignored (§3). The coverage entry synced at 15:30 is ignored too.",
+    "What remains: one entry synced 14:30 seeing [12:00, 14:30] → coverage partial, graceElapsed false (needs ≥ 14:48) → rule pending, PENDING, no candidate (match.none).",
+    "o1 is neither a candidate nor an orphan at this instant → no other receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00",
+        "observedAt": "2026-10-06T15:30:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:30:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:30:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:30:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["grace.waiting", "match.none"]
+    }
+  ]
+}

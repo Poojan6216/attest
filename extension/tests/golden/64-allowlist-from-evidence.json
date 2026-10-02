@@ -1,0 +1,73 @@
+{
+  "name": "allowlist checked on the evidence's address too; that OVER_SCOPE waits for grace",
+  "covers": ["edge:allowlist_from_evidence", "edge:allowlist_exact_address"],
+  "mode": "batch",
+  "notes": [
+    "Grant allowlist: ['priya@company.com'] (an exact address, not a domain). email.sent ∈ allowlistTypes.",
+    "c1 priya@company.com 'Q3 deck' (14:02) × o1 raj@company.com 'Q3 deck' (14:02): tp 1, ce 0, cd 1 (same non-common domain), so 1 → S = 5500/9000 = 11/18 ≥ 1/2 → assigned.",
+    "counterpartyNotAllowed (§6.1): the claim's address matches the entry, but the assigned candidate's raj@company.com matches no entry (not identical; 'company.com' is neither the entry nor ends in '.priya@company.com') → true → rule over_allowlist (before partial).",
+    "That outcome depended on the candidate's address → finalises like PARTIAL (§8): graceElapsed needs a sync ≥ end + 30 = 14:33 (14:40 yes) and ≥ end + 45 = 14:48 (no) → PENDING. A better match may still arrive.",
+    "c2 lee@company.com 'Budget' (12:02): the claim's own address matches no entry → over_allowlist from a claim-only fact → FINAL at once; no observation in [12:00, 12:48] → match.none."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:40:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "lee@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T12:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "counterpartyAllowlist": ["priya@company.com"] }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:40:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_allowlist",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": "11/18",
+      "reasonCodes": ["scope.counterparty_not_allowed", "match.best"]
+    },
+    {
+      "ref": "c2",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_allowlist",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["scope.counterparty_not_allowed", "match.none"]
+    }
+  ]
+}

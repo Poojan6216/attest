@@ -1,0 +1,62 @@
+{
+  "name": "a pending receipt finalises as UNVERIFIABLE after finalizeUnverifiableHours",
+  "covers": ["edge:finalize_never_completed"],
+  "mode": "batch",
+  "notes": [
+    "The user opened Gmail once at 14:20 (window [13:00, 14:20]) and never again. evaluatedAt is the next day, 10-07 14:03.",
+    "c1 (14:02): coverage partial, graceElapsed false (no sync ≥ 14:48) → rule pending. evaluatedAt 10-07 14:03 ≥ end(14:03) + 24 h exactly (inclusive) → FINAL as UNVERIFIABLE, ruleId pending, reason coverage.never_completed (and no grace.waiting).",
+    "c2 (14:10): same rule pending, but end(14:11) + 24 h = 10-07 14:11 > evaluatedAt → still PENDING with grace.waiting."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T14:03:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T14:10:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:20:00-04:00",
+        "windowStart": "2026-10-06T13:00:00-04:00",
+        "windowEnd": "2026-10-06T14:20:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.never_completed", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["grace.waiting", "match.none"]
+    }
+  ]
+}

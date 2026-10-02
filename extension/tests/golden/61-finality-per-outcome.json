@@ -1,0 +1,106 @@
+{
+  "name": "finality per outcome: VERIFIED finalises at end + grace, PARTIAL waits for the whole window",
+  "covers": ["edge:finality_per_outcome"],
+  "mode": "batch",
+  "notes": [
+    "One gmail.sent entry saw [12:00, 14:32:59] and synced 14:32:59 = evaluatedAt.",
+    "c2 priya@ 'Q3 deck' 13:50 × o2 exact → 1/1 → verified. FINAL (§8 VERIFIED): a sync ≥ end(13:51) + 30 = 14:21.",
+    "c1 raj@ 'Budget' 14:02 × o1 exact → 1/1 → verified, but end(14:03) + 30 = 14:33 > 14:32:59 → PENDING.",
+    "c3 sam@company.com 'Hiring plan' 13:55 × o3 lee@company.com 'Hiring update': tp 1, ce 0, cd 1, {hiring, plan} vs {hiring, update} = 1/3 → S = 4500/9000 = 1/2 → partial. PARTIAL needs graceElapsed: ≥ end(13:56) + 30 = 14:26 (yes) and ≥ end + 45 = 14:41 (no) → PENDING.",
+    "Cross pairs are all < 1/2: c3 × o1 (tp 39/44, cd 1) = 163 500/396 000; c2 × o3 (tp 41/44, cd 1) = 168 500/396 000; c2 × o1 (tp 17/22, cd 1) < 1/2. o2 is before c3's window; o2 and o3 are before c1's."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:32:59-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T13:50:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "sam@company.com",
+        "subjectHint": "Hiring plan",
+        "claimedAt": "2026-10-06T13:55:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T13:50:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "lee@company.com",
+        "subjectHint": "Hiring update",
+        "occurredAt": "2026-10-06T13:55:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:32:59-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:32:59-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c3",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "PENDING",
+      "observationRefs": ["o3"],
+      "score": "1/2",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

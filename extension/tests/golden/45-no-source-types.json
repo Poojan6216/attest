@@ -1,0 +1,61 @@
+{
+  "name": "types no observer covers (message.sent, other) are FINAL UNVERIFIABLE at once",
+  "covers": ["edge:no_source_type"],
+  "mode": "batch",
+  "notes": [
+    "sourcesByType['message.sent'] and ['other'] are empty: coverage is always 'none' (§6.1), the claims are never scored (§4.3), and nothing can ever cover them → rule no_coverage, FINAL immediately (§8).",
+    "Reading taken here: the empty identity list of a no-source type does not make the claim 'underspecified'; §8 names no_coverage as the rule for these types (see the contract issue in the README).",
+    "A full gmail.sent entry exists and is irrelevant: gmail.sent is not a source for either type."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:06:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "message.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Running late",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "other",
+        "subjectHint": "Booked a table",
+        "claimedAt": "2026-10-06T14:05:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:06:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:06:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    }
+  ]
+}

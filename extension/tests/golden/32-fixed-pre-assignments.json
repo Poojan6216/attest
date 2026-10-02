@@ -1,0 +1,88 @@
+{
+  "name": "FINAL and overridden pre-assignments are taken first and never moved",
+  "covers": ["edge:fixed_pre_assignment"],
+  "mode": "batch",
+  "notes": [
+    "c9 holds a FINAL VERIFIED receipt with o9 (fixed: o9 → c9), so c9 is not regraded and gets no receipt here. An overridden UNASKED receipt fixes o3 as taken (fixed: o3 → null).",
+    "c1 (priya@company.com 'Q3 deck' at 14:02) would score 1/1 against o9 (30 s before its unit, within tolerance) and 1/1 against o3, but both are fixed and are not c1's candidates.",
+    "c1 × o2 (raj@company.com 'Q3 budget'): tp 1, ce 0, cd 1, so 1/3 → S = 4500/9000 = 1/2 → c1 takes o2 → partial, FINAL (graceElapsed at 15:00).",
+    "muse was in session and the user idle, so o9 or o3 would come back as UNASKED if they were treated as orphans; the batch must return only c1's receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c9",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T13:59:00-04:00"
+      },
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o9",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:01:30-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 budget",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:55:00-04:00", "to": "2026-10-06T14:10:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    },
+    "fixed": [
+      { "claim": "c9", "observation": "o9" },
+      { "claim": null, "observation": "o3" }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/2",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

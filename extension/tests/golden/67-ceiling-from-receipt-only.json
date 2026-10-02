@@ -1,0 +1,57 @@
+{
+  "name": "a purchase claim without an amount is OVER_SCOPE when the assigned receipt is above the ceiling",
+  "covers": ["edge:ceiling_amount_from_evidence_only"],
+  "mode": "batch",
+  "policyPatch": { "receiptMerchants": ["acme"] },
+  "notes": [
+    "Grant ceiling 5000 USD. c1 says 'bought it at Acme' with no amount; the receipt o1 says 8000 USD.",
+    "Applicable for c1 (counterparty, no amount, no subject): timeProximity 2500, merchantMatch 2000; Σw = 4500. Identity: merchantMatch is applicable → not underspecified.",
+    "c1 × o1: tp 1, merchant 'acme' = normalised 'Acme' → 1 → S = 4500/4500 = 1/1 → assigned.",
+    "amountAboveCeiling (§6.1): spend type, ceiling set, and an amount is known through the assigned candidate in spendCurrency: max(none, 8000) = 8000 > 5000 → rule over_ceiling, reason ceiling.exceeded. cumulativeAboveCeiling needs the claim's amount → not applicable (and over_ceiling already matched).",
+    "Depended on the candidate's amount → finalises like PARTIAL: graceElapsed, the gmail.receipt sync at 15:00 ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48 → FINAL."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "acme",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme",
+        "amountCents": 8000,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "spendCeilingCents": 5000, "spendCurrency": "USD" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "OVER_SCOPE",
+      "ruleId": "over_ceiling",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["ceiling.exceeded", "match.best"]
+    }
+  ]
+}

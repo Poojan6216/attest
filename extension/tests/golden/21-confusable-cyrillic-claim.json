@@ -1,0 +1,53 @@
+{
+  "name": "Cyrillic lookalike in the claim is never VERIFIED",
+  "covers": ["edge:confusable_cyrillic"],
+  "mode": "batch",
+  "notes": [
+    "The agent claims priyа@company.com (U+0430 CYRILLIC SMALL LETTER A); Gmail shows priya@company.com. Confusability is symmetric: either address confusable and not identical → ce 0, cp.confusable; cd 0.",
+    "S = 4/9 → not assigned → rule not_found with match.best, FINAL. o1 has no attribution signals → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priyа@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": "4/9",
+      "reasonCodes": ["coverage.account_unbound", "match.best", "cp.confusable"]
+    }
+  ]
+}

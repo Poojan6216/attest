@@ -1,0 +1,51 @@
+{
+  "name": "Gmail observer never saw the claim window: UNVERIFIABLE",
+  "covers": ["ledger_engineer:gmail_never_synced"],
+  "mode": "batch",
+  "notes": [
+    "c1 window [10-06 14:00, 14:48]. Entries: one saw [10-06 07:00, 09:00], the next (next day) only [10-07 12:00, 15:00]. Neither overlaps the window → coverage 'none' → rule no_coverage (before verified, partial, pending, not_found).",
+    "FINAL (§8 no_coverage for a type with sources): evaluatedAt 10-07 15:00 ≥ end + finalizeUnverifiableHours = 10-07 14:03."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T09:00:00-04:00",
+        "windowStart": "2026-10-06T07:00:00-04:00",
+        "windowEnd": "2026-10-06T09:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-07T15:00:00-04:00",
+        "windowStart": "2026-10-07T12:00:00-04:00",
+        "windowEnd": "2026-10-07T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "no_coverage",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.none", "match.none"]
+    }
+  ]
+}

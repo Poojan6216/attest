@@ -1,0 +1,56 @@
+{
+  "name": "recipient domain match, subject partial: exactly 1/2 is PARTIAL",
+  "covers": ["ledger_engineer:domain_partial", "edge:partial_threshold_exact"],
+  "mode": "batch",
+  "notes": [
+    "Σw = 9000 (tp 2500, ce 3500, cd 1500, so 1500).",
+    "o1 raj@company.com vs claim priya@company.com: different local parts, no +tag, ASCII → ce 0, no cp reason; same domain, company.com ∉ commonDomains, neither confusable → cd 1.",
+    "Subjects {q3, deck} vs {q3, budget}: |∩| = 1, |∪| = 3 → so 1/3. tp 1 (same minute).",
+    "S = (2500 + 0 + 1500 + 1500·1/3) / 9000 = 4500/9000 = 1/2. Exactly thresholds.partial (5000 bp): 10000·4500 ≥ 5000·9000 holds with equality → rule partial. In floating point this sum is 0.5 or 0.49999999999999994 by summation order (§5.3).",
+    "FINAL (§8 PARTIAL): graceElapsed, the sync at 15:00 ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 budget",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/2",
+      "reasonCodes": ["match.best"]
+    }
+  ]
+}

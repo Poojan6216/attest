@@ -1,0 +1,55 @@
+{
+  "name": "a user override sits beside the computed grade",
+  "covers": ["edge:user_override"],
+  "mode": "batch",
+  "notes": [
+    "c1 grades exactly as in 04: NOT_FOUND by not_found, FINAL, reasons coverage.account_unbound, match.none.",
+    "Event override {grade: VERIFIED, reason, at} (§8): FINAL → USER_OVERRIDDEN with previousState FINAL. The computed grade and ruleId are kept; the override is stored beside them; reason override.user is appended after the graded reasons."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "events": [
+    {
+      "event": "override",
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "reason": "Sent it from my phone",
+      "at": "2026-10-06T15:05:00-04:00"
+    }
+  ],
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "USER_OVERRIDDEN",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none", "override.user"],
+      "override": "VERIFIED",
+      "previousState": "FINAL"
+    }
+  ]
+}

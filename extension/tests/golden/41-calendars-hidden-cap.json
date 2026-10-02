@@ -1,0 +1,45 @@
+{
+  "name": "Calendar view without every calendar: capped at partial, never NOT_FOUND",
+  "covers": ["edge:calendars_hidden_cap"],
+  "mode": "batch",
+  "notes": [
+    "c1 calendar.created 'Q3 review', targetAt Thu 10-08 14:00 → window [10-05 14:00, 10-11 14:00].",
+    "The only gcal.event entry covers October but lacks allCalendars: true → counts at most as partial (§6.1) → coverage 'partial'.",
+    "graceElapsed (calendar): a sync ≥ end(14:03) + 30 = 14:33 → 14:40. No candidate → rule partial_coverage with coverage.partial and coverage.calendars_hidden. PENDING until end + 24 h."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.calendars_hidden", "match.none"]
+    }
+  ]
+}

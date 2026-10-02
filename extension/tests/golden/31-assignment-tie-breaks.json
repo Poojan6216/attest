@@ -1,0 +1,118 @@
+{
+  "name": "assignment ties break by claimedAt instant (never the string), then claim id",
+  "covers": ["edge:assignment_tie_break"],
+  "mode": "batch",
+  "notes": [
+    "Pair 1: c1 claimedAt 14:03 -04:00 (= 18:03Z) and c2 claimedAt 18:02Z (= 14:02 -04:00) both claim priya@company.com 'Q3 deck'. o1 at 14:02:30 -04:00.",
+    "c1 × o1: c1's unit [14:03, 14:04]; o1 is 30 000 ms before it ≤ toleranceMin → tp 1 → S = 1/1. c2 × o1: o1 is inside c2's unit [18:02Z, 18:03Z] → S = 1/1. Equal scores.",
+    "Tie → earlier claimedAt as an instant (epoch ms): c2 (18:02Z) before c1 (18:03Z). As strings '2026-10-06T14:03…' sorts before '2026-10-06T18:02…', which would wrongly pick c1. c2 takes o1; c1 is left with no candidate → not_found (window [14:01, 14:49] ⊆ coverage, sync 17:00).",
+    "Pair 2: c3 and c4 are the same claim line read twice with different text (two separate claims) at the same instant 16:02, both scoring 1/1 against o2. Tie on score and instant → lower claim id first (assertIds: id(c3) < id(c4)) → c3 takes o2, c4 not_found.",
+    "All FINAL (sync 17:00)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T18:02:00Z"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T16:02:00-04:00",
+        "text": "first line"
+      },
+      {
+        "ref": "c4",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T16:02:00-04:00",
+        "text": "second line"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:30-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T16:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "assertIds": { "ascending": [["c3", "c4"]] },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"]
+    },
+    {
+      "ref": "c2",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c3",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "c4",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.account_unbound", "match.none"]
+    }
+  ]
+}

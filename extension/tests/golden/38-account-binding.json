@@ -1,0 +1,52 @@
+{
+  "name": "grant.accounts binds coverage to the agent's account: NOT_FOUND without account_unbound",
+  "covers": ["edge:account_binding"],
+  "mode": "batch",
+  "notes": [
+    "grant.accounts['gmail.sent'] = [acct-a]. Entries from acct-a and acct-b both saw [12:00, 15:00].",
+    "With accounts bound, only acct-a's entry is eligible; acct-b's is ignored (not a cap), and the ≥ 2 accounts cap applies only without a binding (§6.1) → coverage full.",
+    "No candidate, graceElapsed (15:00 ≥ 14:48) → rule not_found, FINAL; the source is bound, so no coverage.account_unbound."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse", "accounts": { "gmail.sent": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-b"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

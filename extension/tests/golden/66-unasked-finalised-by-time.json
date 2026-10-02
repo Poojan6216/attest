@@ -1,0 +1,77 @@
+{
+  "name": "UNASKED finalises after finalizeUnverifiableHours even if the agent's adapter never caught up",
+  "covers": ["edge:unasked_finalised_by_time"],
+  "mode": "batch",
+  "notes": [
+    "No claims. o1 (10-06 14:03) and o2 (10-06 16:03) are orphans. muse session pings 3 min before each, and recorded idle [14:00, 14:05] and [16:00, 16:05] cover [occurredAt − 2 min, occurredAt] → 4000 + 3000 = 7000 bp = 7/10 ≥ 6/10 → UNASKED for both, reasons unasked.session, unasked.idle.",
+    "Finality (§7): muse's adapter last synced 10-06 14:10, before occurredAt + beforeClaimMin + graceMin for either (14:35, 16:35), so only the time limit can finalise them.",
+    "o1: evaluatedAt 10-07 15:00 ≥ occurredAt + 24 h = 10-07 14:03 → FINAL. o2: 10-07 16:03 > evaluatedAt → PENDING."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-07T15:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 1",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Invoice 2",
+        "occurredAt": "2026-10-06T16:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:00:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T16:00:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:05:00-04:00" },
+        { "from": "2026-10-06T16:00:00-04:00", "to": "2026-10-06T16:05:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:10:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    },
+    {
+      "ref": "o2",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "PENDING",
+      "observationRefs": ["o2"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

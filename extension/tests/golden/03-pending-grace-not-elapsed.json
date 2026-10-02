@@ -1,0 +1,47 @@
+{
+  "name": "no observation, grace not elapsed: PENDING",
+  "covers": ["ledger_engineer:pending_no_observation"],
+  "mode": "batch",
+  "notes": [
+    "c1 window [14:00, 14:48]. The only gmail.sent entry saw [12:00, 14:20] and synced at 14:20.",
+    "Coverage overlaps the window but does not contain it → 'partial', not 'none', so no_coverage does not fire.",
+    "No candidate → verified and partial do not fire (bestScoreGte is false with no candidates).",
+    "graceElapsed needs a sync ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48; 14:20 is neither → rule pending: grade UNVERIFIABLE (placeholder), state PENDING, reason grace.waiting.",
+    "Not finalisable: evaluatedAt 14:20 < end + 24 h."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:20:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:20:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:20:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "pending",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["grace.waiting", "match.none"]
+    }
+  ]
+}

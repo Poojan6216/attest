@@ -1,0 +1,92 @@
+{
+  "name": "activityLogAdjacent does not fire next to the agent's own same-type claim",
+  "covers": ["edge:adjacency_suppressed"],
+  "mode": "batch",
+  "notes": [
+    "c1 (muse, email.sent, 14:02) × o1 exact → 1/1 → verified, FINAL.",
+    "o2 (14:03, vendor@, 'Re: invoice'): c1 × o2 = tp 1 only → 2500/9000 = 5/18 < 1/2 → orphan. A muse activity entry at 14:03 is within ±2 min, but muse has an email.sent claim (c1, 14:02) within ±2 min of 14:03 (assigned or not) → activityLogAdjacent does not fire. No session ping. userIdle alone is not an agent signal → no attribution → no receipt.",
+    "o3 (16:03, legal@, 'Re: contract'): muse entry at 16:04, no muse claim within [16:01, 16:05] → adjacent 4000; idle [16:00, 16:05] covers [16:01, 16:03] → 3000. 7/10 → UNASKED, reasons unasked.idle, unasked.adjacent; FINAL (adapter 17:00 ≥ 16:35)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T17:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Re: invoice",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o3",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "legal@supplier.example",
+        "subjectHint": "Re: contract",
+        "occurredAt": "2026-10-06T16:03:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T17:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T17:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "entries": [
+        { "agent": "muse", "at": "2026-10-06T14:03:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T16:04:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:05:00-04:00" },
+        { "from": "2026-10-06T16:00:00-04:00", "to": "2026-10-06T16:05:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T17:00:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"]
+    },
+    {
+      "ref": "o3",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o3"],
+      "score": null,
+      "reasonCodes": ["unasked.idle", "unasked.adjacent"],
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}
