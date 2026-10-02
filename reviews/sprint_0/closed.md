@@ -81,6 +81,8 @@ Final tree, 2026-10-01, run by the closer on the founder's Mac:
 - `pnpm e2e`: **27/27** passed. @mandatory 5/5 green: network-intercept (allowlist pin; 5-minute session with `violations: []` and `unknown browser-initiated hosts: []`; negative control caught all four canaries) and no-leak (all channels clean; negative control caught 17 channel/seed plants). No Chromium start-up hang occurred in this run; the previous full run (identical code apart from one test file) replaced one hung start and also passed 27/27.
 - `pnpm bench`: green ("RESULTS.md regenerated (0 benches registered)"; no number reported before it is measured; RESULTS.md unchanged).
 - `no-act` and `no-restricted-imports` are proven by deliberate violations in `tests/unit/lint/*.spec.ts`. The capture tool produces a sanitised page (`tests/e2e/capture-tool.spec.ts` green).
-- Not verified here: CI on GitHub (MANUAL items 1–2; the closer may not push).
+- CI on GitHub (added by the integrator after the push): run https://github.com/Poojan6216/attest/actions/runs/36943492956 on `892d160` is green in every step, including `E2E (@mandatory)`, `Check every @mandatory test ran and passed`, and `Upload build` (QA-1/TECH-1 confirmed fixed).
+- A PR that breaks a mandatory test is red (QA-5, task 0.11): draft PR #3 (`fetch` to example.com in the service worker) failed at `E2E (@mandatory)` with `violations: ["example.com"]`, run https://github.com/Poojan6216/attest/actions/runs/36943566697. PR closed, branch deleted.
+- Gate load check on the final build: zero console errors and zero warnings in the service worker, popup, options and side panel; manifest permissions `storage, alarms, sidePanel`; `host_permissions` empty; CSP `script-src 'self'; object-src 'none'`.
 
 Commit (integrator): `chore(sprint-0): close 45 review gaps`
