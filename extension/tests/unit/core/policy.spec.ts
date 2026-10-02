@@ -1,48 +1,88 @@
 /**
- * Sprint 0.8: the policy loader. The shipped policy loads, comes back deep-frozen, and every malformed
- * document is rejected with a PolicyError whose issues name the exact path and problem.
+ * Policy v2 (docs/grading.md §12, §5.3, §13): the shipped document is exactly the contract's §12 block,
+ * loads, and comes back deep-frozen with exact integer basis points. policyHash: policy-hash.spec.ts.
+ * Malformed documents: policy-errors*.spec.ts. Strictness walks: policy-shape.spec.ts.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+
 import fc from 'fast-check';
+import * as prettier from 'prettier';
 import { describe, expect, it } from 'vitest';
 
 import policyJson from '../../../../policy/default.json';
 import {
+  ConditionName,
   DEFAULT_POLICY,
+  FeatureName,
+  isBasisPointMultiple,
   loadPolicy,
   ObservationFieldName,
   type Policy,
-  PolicyError,
   RuleOutcome,
+  SignalName,
   TERMINAL_RULE_ID,
 } from '../../../src/core/policy';
-import { Grade, Observation } from '../../../src/ledger/types';
+import {
+  ActionType,
+  AgentId,
+  Grade,
+  Observation,
+  ObservationSource,
+  RuleId,
+  UnaskedSignal,
+} from '../../../src/core/schema';
+import { BASIS_POINTS } from '../../../src/core/units';
 
-const REMOVE = Symbol('remove');
-type PathSegment = string | number;
+const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
+const POLICY_FILE = path.join(REPO_ROOT, 'policy', 'default.json');
+const GRADING_DOC = path.join(REPO_ROOT, 'docs', 'grading.md');
+const PROPERTY_RUNS = { numRuns: 1_000 };
 
-/** A copy of the shipped policy with one value replaced (or removed with REMOVE). */
-function variant(path: readonly PathSegment[], value: unknown): unknown {
-  const doc: unknown = structuredClone(policyJson);
-  const last = path.at(-1);
-  if (last === undefined) throw new Error('variant needs a non-empty path');
-  let parent = doc as Record<PathSegment, unknown>;
-  for (const segment of path.slice(0, -1)) parent = parent[segment] as Record<PathSegment, unknown>;
-  if (value === REMOVE) Reflect.deleteProperty(parent, last);
-  else parent[last] = value;
+/** Removes `//` comments outside JSON strings; refuses block comments (the §12 block has none). */
+function stripLineComments(jsonc: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < jsonc.length; i += 1) {
+    const ch = jsonc.charAt(i);
+    if (inString) {
+      out += ch;
+      if (ch === '\\') {
+        out += jsonc.charAt(i + 1);
+        i += 1;
+      } else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === '/' && jsonc.charAt(i + 1) === '*') {
+      throw new Error('block comments are not supported');
+    } else if (ch === '/' && jsonc.charAt(i + 1) === '/') {
+      while (i < jsonc.length && jsonc.charAt(i) !== '\n') i += 1;
+      out += '\n';
+    } else out += ch;
+  }
+  return out;
+}
+
+/** The body of the first ```jsonc fence inside `## 12.`, failing if the fence is not in that section. */
+function section12Block(markdown: string): string {
+  const start = markdown.indexOf('\n## 12. ');
+  const next = markdown.indexOf('\n## ', start + 1);
+  const open = markdown.indexOf('```jsonc\n', start);
+  const bodyStart = open + '```jsonc\n'.length;
+  const close = markdown.indexOf('\n```', bodyStart);
+  if (start < 0 || open < 0 || close < 0 || close > next) throw new Error('no jsonc block in grading.md §12');
+  return markdown.slice(bodyStart, close);
+}
+
+/** The loaded policy without the two derived fields: what must equal the document as written. */
+function documentPart(policy: Policy): unknown {
+  const { bp, policyHash, ...doc } = policy;
+  expect(bp).toBeDefined();
+  expect(policyHash).toBeDefined();
   return doc;
 }
 
-function issuesOf(raw: unknown): readonly string[] {
-  try {
-    loadPolicy(raw);
-  } catch (error) {
-    if (error instanceof PolicyError) return error.issues;
-    throw error;
-  }
-  throw new Error('expected loadPolicy to throw a PolicyError');
-}
-
-/** Every object and array inside `value`, including `value` itself. */
 function containers(value: unknown, found: object[] = []): object[] {
   if (typeof value === 'object' && value !== null) {
     found.push(value);
@@ -55,18 +95,40 @@ function mutable<T>(list: readonly T[]): T[] {
   return list as T[];
 }
 
-const OUTCOMES = '"VERIFIED", "PARTIAL", "NOT_FOUND", "UNASKED", "OVER_SCOPE", "UNVERIFIABLE", "PENDING"';
+describe('policy/default.json is the docs/grading.md §12 contract', () => {
+  it('the comment stripper keeps // inside strings and drops it outside', () => {
+    const jsonc = '{ "a": "x//y", // note\n "b": "q\\"//r" // more\n }';
+    expect(JSON.parse(stripLineComments(jsonc))).toEqual({ a: 'x//y', b: 'q"//r' });
+    expect(() => stripLineComments('{ /* no */ }')).toThrow('block comments');
+  });
 
-describe('loadPolicy: the shipped policy/default.json', () => {
-  it('loads and keeps every value and the rule order exactly', () => {
+  it('deep-equals the §12 jsonc block with its comments removed', () => {
+    const block = section12Block(fs.readFileSync(GRADING_DOC, 'utf8'));
+    expect(block).toContain('// last three chosen');
+    const contract: unknown = JSON.parse(stripLineComments(block));
+    expect(policyJson).toEqual(contract);
+    expect(JSON.parse(fs.readFileSync(POLICY_FILE, 'utf8'))).toEqual(contract);
+  });
+
+  it('is Prettier-formatted JSON (2-space indent, trailing newline)', async () => {
+    const text = fs.readFileSync(POLICY_FILE, 'utf8');
+    const options = await prettier.resolveConfig(POLICY_FILE);
+    expect(await prettier.check(text, { ...options, filepath: POLICY_FILE })).toBe(true);
+    expect(text.endsWith('}\n')).toBe(true);
+    expect(text.split('\n')[1]).toBe('  "version": 2,');
+  });
+});
+
+describe('loadPolicy: the shipped document', () => {
+  it('loads, keeping every field and the rule order exactly as written', () => {
     const policy = loadPolicy(policyJson);
-    expect(policy).toEqual(policyJson);
+    expect(documentPart(policy)).toEqual(policyJson);
     expect(policy.rules.map((rule) => rule.id)).toEqual(policyJson.rules.map((rule) => rule.id));
   });
 
   it('DEFAULT_POLICY is the shipped document, loaded', () => {
-    expect(DEFAULT_POLICY).toEqual(policyJson);
-    expect(DEFAULT_POLICY.thresholds.partial).toBeLessThan(DEFAULT_POLICY.thresholds.verified);
+    expect(DEFAULT_POLICY).toEqual(loadPolicy(policyJson));
+    expect(documentPart(DEFAULT_POLICY)).toEqual(policyJson);
   });
 
   it('returns a copy: the caller input is neither frozen nor shared', () => {
@@ -75,235 +137,145 @@ describe('loadPolicy: the shipped policy/default.json', () => {
     expect(Object.isFrozen(input)).toBe(false);
     input.thresholds.verified = 0;
     input.rules.length = 0;
+    input.sourcesByType['email.sent'].length = 0;
     expect(policy.thresholds.verified).toBe(policyJson.thresholds.verified);
     expect(policy.rules).toHaveLength(policyJson.rules.length);
+    expect(policy.sourcesByType['email.sent']).toEqual(['gmail.sent']);
   });
 });
 
 describe('loadPolicy: the loaded policy is frozen at every depth', () => {
-  it('Object.isFrozen holds for every nested object and array', () => {
+  it('every nested object and array is frozen, the bp section included', () => {
     const found = containers(DEFAULT_POLICY);
-    expect(found).toHaveLength(containers(policyJson).length);
+    const bpContainers = containers(DEFAULT_POLICY.bp).length;
+    expect(bpContainers).toBe(5);
+    expect(found).toHaveLength(containers(policyJson).length + bpContainers);
     expect(found.filter((node) => !Object.isFrozen(node))).toEqual([]);
-  });
-
-  it('a freshly loaded policy is frozen too, not just DEFAULT_POLICY', () => {
-    const found = containers(loadPolicy(structuredClone(policyJson)));
-    expect(found.length).toBeGreaterThan(Object.keys(policyJson).length);
-    expect(found.every((node) => Object.isFrozen(node))).toBe(true);
+    expect(containers(loadPolicy(structuredClone(policyJson))).every((node) => Object.isFrozen(node))).toBe(
+      true,
+    );
   });
 
   it('mutation attempts throw in strict mode and change nothing', () => {
     const policy: Policy = DEFAULT_POLICY;
-    const verified = policy.thresholds.verified;
     expect(() => {
       (policy.thresholds as { verified: number }).verified = 1;
     }).toThrow(TypeError);
     expect(() => {
-      (policy.rules[0]?.when as { coverage?: string }).coverage = 'all';
+      (policy.bp.thresholds as { verified: number }).verified = 0;
     }).toThrow(TypeError);
-    expect(() => mutable(policy.rules).pop()).toThrow(TypeError);
-    expect(() => mutable(policy.allowlistedFields['gmail.sent']).reverse()).toThrow(TypeError);
     expect(() => {
-      (policy as { extra?: boolean }).extra = true;
+      (policy as { policyHash: string }).policyHash = '0'.repeat(64);
     }).toThrow(TypeError);
-    expect(Reflect.deleteProperty(policy.windows, 'graceMin')).toBe(false);
-    expect(policy.thresholds.verified).toBe(verified);
-    expect(policy).toEqual(policyJson);
+    expect(() => mutable(policy.featuresByType['email.sent']).push('amountExact')).toThrow(TypeError);
+    expect(() => mutable(policy.unasked.signatures.muse).push('via')).toThrow(TypeError);
+    expect(() => mutable(policy.rules).pop()).toThrow(TypeError);
+    expect(Reflect.deleteProperty(policy.windows, 'toleranceMin')).toBe(false);
+    expect(policy.bp.thresholds.verified).toBe(8500);
+    expect(documentPart(policy)).toEqual(policyJson);
   });
 });
 
-describe('loadPolicy: malformed policies produce specific, path-named errors', () => {
-  const cases: readonly (readonly [string, readonly PathSegment[], unknown, string])[] = [
-    ['missing window', ['windows', 'graceMin'], REMOVE, 'windows.graceMin: is required'],
-    ['negative window', ['windows', 'afterClaimMin'], -5, 'windows.afterClaimMin: must be >= 0'],
-    [
-      'non-finite window',
-      ['windows', 'calendarDays'],
-      Infinity,
-      'windows.calendarDays: must be a finite number',
-    ],
-    ['threshold above 1', ['thresholds', 'verified'], 1.2, 'thresholds.verified: must be <= 1'],
-    [
-      'threshold as a string',
-      ['thresholds', 'partial'],
-      '0.5',
-      'thresholds.partial: expected number, got string',
-    ],
-    [
-      'partial above verified',
-      ['thresholds', 'partial'],
-      0.9,
-      'thresholds.partial: must be < thresholds.verified',
-    ],
-    [
-      'partial equal to verified',
-      ['thresholds', 'partial'],
-      policyJson.thresholds.verified,
-      'thresholds.partial: must be < thresholds.verified',
-    ],
-    ['unknown feature key', ['features', 'timeProximty'], 0.2, 'features.timeProximty: unknown key'],
-    ['missing feature key', ['features', 'merchantMatch'], REMOVE, 'features.merchantMatch: is required'],
-    ['negative feature weight', ['features', 'amountExact'], -0.1, 'features.amountExact: must be >= 0'],
-    [
-      'duplicate rule id',
-      ['rules', 4, 'id'],
-      'verified',
-      'rules[4].id: duplicate rule id "verified" (first used at rules[3])',
-    ],
-    ['unknown condition key', ['rules', 0, 'when', 'covered'], 'none', 'rules[0].when.covered: unknown key'],
-    ['empty when', ['rules', 6, 'when'], {}, 'rules[6].when: must name at least one condition'],
-    ['bad then', ['rules', 3, 'then'], 'MAYBE', `rules[3].then: must be one of ${OUTCOMES}`],
-    ['missing then', ['rules', 3, 'then'], REMOVE, 'rules[3].then: is required'],
-    [
-      'unknown threshold name',
-      ['rules', 3, 'when', 'bestScoreGte'],
-      'certain',
-      'rules[3].when.bestScoreGte: must be one of "verified", "partial"',
-    ],
-    [
-      'coverage other than none',
-      ['rules', 0, 'when', 'coverage'],
-      'partial',
-      'rules[0].when.coverage: must be "none"',
-    ],
-    [
-      'rule id not an identifier',
-      ['rules', 0, 'id'],
-      'No Coverage',
-      'rules[0].id: must be a non-empty lowercase snake_case identifier',
-    ],
-    [
-      'empty rule id',
-      ['rules', 2, 'id'],
-      '',
-      'rules[2].id: must be a non-empty lowercase snake_case identifier',
-    ],
-    [
-      'policy rule claiming the terminal rule id',
-      ['rules', 6, 'id'],
-      'default_unverifiable',
-      'rules[6].id: is reserved for the terminal rule',
-    ],
-    ['no rules', ['rules'], [], 'rules: must not be empty'],
-    [
-      'unknown allowlist source',
-      ['allowlistedFields', 'gmail.draft'],
-      ['subjectHint'],
-      'allowlistedFields["gmail.draft"]: unknown key',
-    ],
-    [
-      'allowlisted field not an Observation field',
-      ['allowlistedFields', 'gmail.sent', 1],
-      'body',
-      'allowlistedFields["gmail.sent"][1]: must be an Observation field name',
-    ],
-    [
-      'duplicate allowlisted field',
-      ['allowlistedFields', 'gmail.receipt', 2],
-      'merchant',
-      'allowlistedFields["gmail.receipt"][2]: duplicate field "merchant"',
-    ],
-    [
-      'empty allowlist',
-      ['allowlistedFields', 'gcal.event'],
-      [],
-      'allowlistedFields["gcal.event"]: must not be empty',
-    ],
-    [
-      'missing allowlist source',
-      ['allowlistedFields', 'gcal.event'],
-      REMOVE,
-      'allowlistedFields["gcal.event"]: is required',
-    ],
-    [
-      'unknown unasked signal',
-      ['unasked', 'signals', 'mouseMoved'],
-      0.1,
-      'unasked.signals.mouseMoved: unknown key',
-    ],
-    ['unasked threshold below 0', ['unasked', 'threshold'], -0.1, 'unasked.threshold: must be >= 0'],
-    ['version 0', ['version'], 0, 'version: must be >= 1'],
-    ['fractional version', ['version'], 1.5, 'version: must be an integer'],
-    ['extra top-level key', ['extra'], true, 'extra: unknown key'],
-  ];
-
-  it.each(cases)('%s', (_name, path, value, expected) => {
-    expect(issuesOf(variant(path, value))).toEqual([expected]);
+describe('loadPolicy: basis points (§5.3)', () => {
+  it('converts the shipped weights and thresholds exactly', () => {
+    expect(DEFAULT_POLICY.bp).toEqual({
+      features: {
+        timeProximity: 2500,
+        counterpartyExact: 3500,
+        counterpartyDomain: 1500,
+        counterpartyName: 2500,
+        subjectOverlap: 1500,
+        amountExact: 2500,
+        merchantMatch: 2000,
+        modelScore: 0,
+      },
+      thresholds: { verified: 8500, partial: 5000 },
+      unasked: {
+        signals: {
+          agentSessionActive: 4000,
+          userIdle: 3000,
+          agentSignature: 5000,
+          activityLogAdjacent: 4000,
+        },
+        threshold: 6000,
+      },
+    });
   });
 
-  it('covers at least 10 distinct malformed cases', () => {
-    expect(new Set(cases.map(([, , , expected]) => expected)).size).toBeGreaterThanOrEqual(10);
+  it('every bp value is an integer that is exactly the decimal times 10,000', () => {
+    const pairs: (readonly [number, number])[] = [
+      ...FeatureName.options.map((k) => [policyJson.features[k], DEFAULT_POLICY.bp.features[k]] as const),
+      ...SignalName.options.map(
+        (k) => [policyJson.unasked.signals[k], DEFAULT_POLICY.bp.unasked.signals[k]] as const,
+      ),
+      [policyJson.thresholds.verified, DEFAULT_POLICY.bp.thresholds.verified],
+      [policyJson.thresholds.partial, DEFAULT_POLICY.bp.thresholds.partial],
+      [policyJson.unasked.threshold, DEFAULT_POLICY.bp.unasked.threshold],
+    ];
+    expect(pairs).toHaveLength(FeatureName.options.length + SignalName.options.length + 3);
+    for (const [decimal, bp] of pairs) {
+      expect(Number.isInteger(bp)).toBe(true);
+      expect(bp / BASIS_POINTS).toBe(decimal);
+    }
   });
 
-  it.each([
-    [null, 'null'],
-    [[], 'array'],
-    ['policy', 'string'],
-    [42, 'number'],
-  ])('a non-object document (%j) is rejected at the root', (raw, kind) => {
-    expect(issuesOf(raw)).toEqual([`(root): expected object, got ${kind}`]);
-  });
-
-  it('reports every problem at once, not just the first', () => {
-    const doc = variant(['thresholds', 'verified'], 1.2) as { windows: Record<string, unknown> };
-    doc.windows.graceMin = -1;
-    expect(issuesOf(doc)).toEqual(['windows.graceMin: must be >= 0', 'thresholds.verified: must be <= 1']);
-    expect(issuesOf({})).toHaveLength(Object.keys(policyJson).length);
-  });
-
-  it('PolicyError carries a typed code, a frozen issue list, and a name', () => {
-    const error = (() => {
-      try {
-        loadPolicy(variant(['extra'], 1));
-      } catch (caught) {
-        return caught;
-      }
-      return undefined;
-    })();
-    expect(error).toBeInstanceOf(PolicyError);
-    expect(error).toBeInstanceOf(Error);
-    if (!(error instanceof PolicyError)) return;
-    expect(error.code).toBe('invalid_policy');
-    expect(error.name).toBe('PolicyError');
-    expect(Object.isFrozen(error.issues)).toBe(true);
-    expect(error.message).toContain('extra: unknown key');
+  it('a weight written as -0 is 0 basis points (never -0); the document keeps it and hashes it as 0', () => {
+    const doc = structuredClone(policyJson);
+    doc.features.timeProximity = -0;
+    doc.unasked.threshold = -0;
+    const zero = structuredClone(policyJson);
+    zero.features.timeProximity = 0;
+    zero.unasked.threshold = 0;
+    const policy = loadPolicy(doc);
+    expect(Object.is(policy.bp.features.timeProximity, 0)).toBe(true);
+    expect(Object.is(policy.bp.unasked.threshold, 0)).toBe(true);
+    expect(Object.is(policy.features.timeProximity, -0)).toBe(true);
+    expect(policy.policyHash).toBe(loadPolicy(zero).policyHash);
   });
 });
 
-describe('loadPolicy: properties', () => {
-  /** qa_tester rule 4: property tests over src/core run at least 1,000 examples each. */
-  const PROPERTY_RUNS = { numRuns: 1_000 };
+describe('loadPolicy: the basis-point grid (§5.3)', () => {
+  it('isBasisPointMultiple accepts 4-place decimals and rejects everything finer', () => {
+    for (const ok of [0, 1, 0.0001, 0.5, 0.85, 0.9999, 0.1234]) expect(isBasisPointMultiple(ok)).toBe(true);
+    for (const bad of [0.1 + 0.2, 0.00005, 0.99995, 1e-5, 0.12345, 0.0001 * 3, Math.PI / 4]) {
+      expect(isBasisPointMultiple(bad)).toBe(false);
+    }
+  });
 
-  it('is total: any JSON value either loads or throws a PolicyError with issues', () => {
+  it('property: k / 10,000 loads as exactly k basis points at any weight', () => {
+    const paths = [
+      ...FeatureName.options.map((key) => ['features', key] as const),
+      ...SignalName.options.map((key) => ['unasked', 'signals', key] as const),
+    ];
     fc.assert(
-      fc.property(fc.jsonValue(), (raw) => {
-        try {
-          loadPolicy(raw);
-        } catch (error) {
-          expect(error).toBeInstanceOf(PolicyError);
-          expect(error instanceof PolicyError && error.issues.length > 0).toBe(true);
-        }
+      fc.property(fc.constantFrom(...paths), fc.integer({ min: 0, max: BASIS_POINTS }), (where, k) => {
+        const doc = structuredClone(policyJson);
+        if (where[0] === 'features') doc.features[where[1]] = k / BASIS_POINTS;
+        else doc.unasked.signals[where[2]] = k / BASIS_POINTS;
+        const policy = loadPolicy(doc);
+        const bp =
+          where[0] === 'features' ? policy.bp.features[where[1]] : policy.bp.unasked.signals[where[2]];
+        expect(bp).toBe(k);
       }),
       PROPERTY_RUNS,
     );
   });
 
-  const UNIT_INTERVAL_PATHS: readonly (readonly PathSegment[])[] = [
-    ...Object.keys(policyJson.thresholds).map((key) => ['thresholds', key]),
-    ...Object.keys(policyJson.features).map((key) => ['features', key]),
-    ...Object.keys(policyJson.unasked.signals).map((key) => ['unasked', 'signals', key]),
-    ['unasked', 'threshold'],
-  ];
-
-  it('any weight or threshold above 1 is rejected naming its path', () => {
+  it('property: ordered thresholds and the unasked threshold convert exactly', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(...UNIT_INTERVAL_PATHS),
-        fc.double({ min: 1, minExcluded: true, max: 1e9, noNaN: true }),
-        (path, value) => {
-          const where = path.join('.');
-          expect(issuesOf(variant(path, value))).toContain(`${where}: must be <= 1`);
+        fc.uniqueArray(fc.integer({ min: 0, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
+        fc.integer({ min: 0, max: BASIS_POINTS }),
+        ([a = 0, b = 0], unasked) => {
+          const doc = structuredClone(policyJson);
+          doc.thresholds = {
+            verified: Math.max(a, b) / BASIS_POINTS,
+            partial: Math.min(a, b) / BASIS_POINTS,
+          };
+          doc.unasked.threshold = unasked / BASIS_POINTS;
+          const { bp } = loadPolicy(doc);
+          expect(bp.thresholds).toEqual({ verified: Math.max(a, b), partial: Math.min(a, b) });
+          expect(bp.unasked.threshold).toBe(unasked);
         },
       ),
       PROPERTY_RUNS,
@@ -311,17 +283,39 @@ describe('loadPolicy: properties', () => {
   });
 });
 
-describe('policy schema vocabularies stay in step with the ledger schemas', () => {
-  it('ObservationFieldName lists exactly the Observation schema keys', () => {
+describe('policy vocabularies come from the core schema', () => {
+  it('ObservationFieldName is exactly the Observation schema keys (rowKeyHash included)', () => {
     expect([...ObservationFieldName.options].sort()).toEqual(Object.keys(Observation.shape).sort());
+    expect(ObservationFieldName.options).toContain('rowKeyHash');
   });
 
-  it('RuleOutcome is every Grade plus PENDING', () => {
+  it('per-type and per-agent maps have exactly one key per ActionType / AgentId / source', () => {
+    for (const map of [policyJson.sourcesByType, policyJson.featuresByType, policyJson.identityFeatures]) {
+      expect(Object.keys(map).sort()).toEqual([...ActionType.options].sort());
+    }
+    expect(Object.keys(policyJson.unasked.signatures).sort()).toEqual([...AgentId.options].sort());
+    expect(Object.keys(policyJson.allowlistedFields).sort()).toEqual([...ObservationSource.options].sort());
+  });
+
+  it('feature and signal names are the keys of features and unasked.signals', () => {
+    expect([...FeatureName.options].sort()).toEqual(Object.keys(policyJson.features).sort());
+    expect([...SignalName.options].sort()).toEqual([...UnaskedSignal.options].sort());
+    expect([...SignalName.options].sort()).toEqual(Object.keys(policyJson.unasked.signals).sort());
+  });
+
+  it('RuleOutcome is every Grade plus PENDING; every rule id is a valid receipt ruleId', () => {
     expect([...RuleOutcome.options].sort()).toEqual([...Grade.options, 'PENDING'].sort());
+    for (const rule of DEFAULT_POLICY.rules) expect(RuleId.safeParse(rule.id).success).toBe(true);
+    expect(RuleId.safeParse(TERMINAL_RULE_ID).success).toBe(true);
   });
 
-  it('TERMINAL_RULE_ID is the build_spec §7 terminal rule, and no shipped rule uses it', () => {
+  it('TERMINAL_RULE_ID is default_unverifiable, and no shipped rule uses it', () => {
     expect(TERMINAL_RULE_ID).toBe('default_unverifiable');
     expect(DEFAULT_POLICY.rules.map((rule) => rule.id)).not.toContain(TERMINAL_RULE_ID);
+  });
+
+  it('every condition the schema knows is used by a shipped rule', () => {
+    const used = new Set(DEFAULT_POLICY.rules.flatMap((rule) => Object.keys(rule.when)));
+    expect([...used].sort()).toEqual([...ConditionName.options].sort());
   });
 });

@@ -1,23 +1,146 @@
 {
-  "version": 1,
-  "windows": { "beforeClaimMin": 2, "afterClaimMin": 45, "graceMin": 30, "calendarDays": 3 },
+  "version": 2,
+  "windows": {
+    "beforeClaimMin": 2,
+    "afterClaimMin": 45,
+    "graceMin": 30,
+    "calendarDays": 3,
+    "toleranceMin": 1,
+    "spendWindowDays": 30,
+    "finalizeUnverifiableHours": 24
+  },
   "thresholds": { "verified": 0.85, "partial": 0.5 },
   "features": {
     "timeProximity": 0.25,
     "counterpartyExact": 0.35,
     "counterpartyDomain": 0.15,
+    "counterpartyName": 0.25,
     "subjectOverlap": 0.15,
     "amountExact": 0.25,
-    "merchantMatch": 0.2
+    "merchantMatch": 0.2,
+    "modelScore": 0
+  },
+  "sourcesByType": {
+    "email.sent": ["gmail.sent"],
+    "calendar.created": ["gcal.event"],
+    "calendar.updated": ["gcal.event"],
+    "calendar.deleted": ["gcal.event"],
+    "purchase.made": ["gmail.receipt"],
+    "subscription.changed": ["gmail.receipt"],
+    "listing.posted": ["gmail.receipt"],
+    "message.sent": [],
+    "other": []
+  },
+  "featuresByType": {
+    "email.sent": [
+      "timeProximity",
+      "counterpartyExact",
+      "counterpartyDomain",
+      "counterpartyName",
+      "subjectOverlap"
+    ],
+    "calendar.created": [
+      "timeProximity",
+      "subjectOverlap",
+      "counterpartyExact",
+      "counterpartyDomain",
+      "counterpartyName"
+    ],
+    "calendar.updated": [
+      "timeProximity",
+      "subjectOverlap",
+      "counterpartyExact",
+      "counterpartyDomain",
+      "counterpartyName"
+    ],
+    "calendar.deleted": [
+      "timeProximity",
+      "subjectOverlap",
+      "counterpartyExact",
+      "counterpartyDomain",
+      "counterpartyName"
+    ],
+    "purchase.made": ["timeProximity", "amountExact", "merchantMatch", "subjectOverlap"],
+    "subscription.changed": ["timeProximity", "amountExact", "merchantMatch", "subjectOverlap"],
+    "listing.posted": ["timeProximity", "amountExact", "merchantMatch", "subjectOverlap"],
+    "message.sent": [],
+    "other": []
+  },
+  "identityFeatures": {
+    "email.sent": ["counterpartyExact", "counterpartyName"],
+    "calendar.created": ["subjectOverlap", "counterpartyExact", "counterpartyName"],
+    "calendar.updated": ["subjectOverlap", "counterpartyExact", "counterpartyName"],
+    "calendar.deleted": ["subjectOverlap", "counterpartyExact", "counterpartyName"],
+    "purchase.made": ["amountExact", "merchantMatch"],
+    "subscription.changed": ["amountExact", "merchantMatch"],
+    "listing.posted": ["amountExact", "merchantMatch"],
+    "message.sent": [],
+    "other": []
+  },
+  "allowlistTypes": ["email.sent", "calendar.created", "calendar.updated", "calendar.deleted"],
+  "spendTypes": ["purchase.made", "subscription.changed"],
+  "commonDomains": [
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "yahoo.com",
+    "icloud.com",
+    "me.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com"
+  ],
+  "receiptMerchants": [],
+  "normalize": {
+    "stopWords": [
+      "a",
+      "an",
+      "the",
+      "and",
+      "or",
+      "of",
+      "to",
+      "for",
+      "on",
+      "in",
+      "at",
+      "with",
+      "from",
+      "by",
+      "is",
+      "it",
+      "this",
+      "that",
+      "your",
+      "my",
+      "our"
+    ]
   },
   "rules": [
-    { "id": "no_coverage", "when": { "coverage": "none" }, "then": "UNVERIFIABLE" },
+    { "id": "unasked", "when": { "unaskedLikely": true }, "then": "UNASKED" },
+    { "id": "over_scope_observed", "when": { "observedScopeExceedsDeclared": true }, "then": "OVER_SCOPE" },
     { "id": "over_scope", "when": { "typeNotInGrant": true }, "then": "OVER_SCOPE" },
+    { "id": "over_allowlist", "when": { "counterpartyNotAllowed": true }, "then": "OVER_SCOPE" },
     { "id": "over_ceiling", "when": { "amountAboveCeiling": true }, "then": "OVER_SCOPE" },
+    { "id": "over_ceiling_cumulative", "when": { "cumulativeAboveCeiling": true }, "then": "OVER_SCOPE" },
+    { "id": "no_target", "when": { "targetMissing": true }, "then": "UNVERIFIABLE" },
+    { "id": "underspecified", "when": { "underspecified": true }, "then": "UNVERIFIABLE" },
+    { "id": "no_coverage", "when": { "coverage": "none" }, "then": "UNVERIFIABLE" },
     { "id": "verified", "when": { "bestScoreGte": "verified" }, "then": "VERIFIED" },
     { "id": "partial", "when": { "bestScoreGte": "partial" }, "then": "PARTIAL" },
-    { "id": "not_found", "when": { "graceElapsed": true, "bestScoreLt": "partial" }, "then": "NOT_FOUND" },
-    { "id": "pending", "when": { "graceElapsed": false }, "then": "PENDING" }
+    { "id": "pending", "when": { "graceElapsed": false }, "then": "PENDING" },
+    {
+      "id": "partial_coverage",
+      "when": { "coverage": "partial", "bestScoreLt": "partial" },
+      "then": "UNVERIFIABLE"
+    },
+    {
+      "id": "not_found",
+      "when": { "graceElapsed": true, "coverage": "full", "bestScoreLt": "partial" },
+      "then": "NOT_FOUND"
+    }
   ],
   "unasked": {
     "signals": {
@@ -26,11 +149,21 @@
       "agentSignature": 0.5,
       "activityLogAdjacent": 0.4
     },
-    "threshold": 0.6
+    "threshold": 0.6,
+    "windows": { "sessionMin": 10, "idleMin": 2, "adjacentMin": 2 },
+    "signatures": { "muse": [], "chatgpt": [], "dots": [], "claude": [] }
   },
   "allowlistedFields": {
-    "gmail.sent": ["counterparty", "subjectHint", "occurredAt", "contentHash"],
-    "gmail.receipt": ["merchant", "amountCents", "currency", "subjectHint", "occurredAt", "contentHash"],
-    "gcal.event": ["subjectHint", "occurredAt", "counterparty", "contentHash"]
+    "gmail.sent": ["counterparty", "subjectHint", "occurredAt", "rowKeyHash", "contentHash"],
+    "gmail.receipt": [
+      "merchant",
+      "amountCents",
+      "currency",
+      "subjectHint",
+      "occurredAt",
+      "rowKeyHash",
+      "contentHash"
+    ],
+    "gcal.event": ["subjectHint", "occurredAt", "counterparty", "rowKeyHash", "contentHash"]
   }
 }
