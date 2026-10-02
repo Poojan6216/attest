@@ -504,6 +504,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-02] [1.4] Match scoring: every feature (time, exact address, domain, name, subject overlap, amount, merchant) is an exact fraction, weights come only from the policy in basis points, and only the claim decides which features count. It reproduces every hand-computed score in the 77 golden scenarios exactly.
 [2026-10-02] [1.2] Redaction: everything Attest records from a page passes through one function that keeps only the allowlisted fields, computes the id and content hash itself (never trusting the page), and caps the subject hint at 80 characters. A 1,000-case test plants all 15 seeded secrets in extra fields and proves none ever comes out.
 [2026-10-02] [1.3] Candidate matching: time windows (minute, hour or day precision, safe across midnight and daylight-saving days), finding each claim's candidate observations, and one-to-one assignment so one email can never verify two claims. Measured: 5,000 claims against 50,000 observations in 289.6 ms (limit 2,000 ms), via pnpm bench, in RESULTS.md.
+[2026-10-02] [1.6] Receipt state machine: regrade, user override (with a required reason, reversible), revert, and supersede for UNASKED receipts; every state/event pair is tested, and a receipt finalises to NOT_FOUND only after Attest has looked past the grace window, never before.
 ```
 
 ---
