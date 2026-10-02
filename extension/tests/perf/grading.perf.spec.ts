@@ -10,7 +10,9 @@
  *
  * A fast wrong answer must not pass: every claim gets exactly one receipt, evidence is one-to-one, the result
  * holds real VERIFIED, NOT_FOUND and UNASKED receipts, and every 50th claim's receipt equals `grade()` called
- * directly on its candidates found by brute force (no index), minus the observations other receipts hold.
+ * directly on its candidates found by brute force (no index), minus the observations other receipts hold. Every
+ * receipt comes with the inputs it was graded with (§3): the claim's grant in force and its context, and the
+ * policy hash; every 50th claim-less receipt is graded again by `grade()` from those inputs alone, as replay does.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -30,7 +32,8 @@ import { isAssignable } from '../../src/core/features';
 import { grade } from '../../src/core/grade';
 import { canonicalJson } from '../../src/core/hash';
 import { DEFAULT_POLICY } from '../../src/core/policy';
-import type { Claim, Observation, Receipt } from '../../src/core/schema';
+import type { BatchReceipt } from '../../src/core/batch';
+import type { Claim, Observation } from '../../src/core/schema';
 import { MS_PER_MINUTE } from '../../src/core/units';
 import { claimWindow, precisionBounds } from '../../src/core/window';
 import { priorSpendCents } from '../../src/core/scope';
@@ -62,13 +65,16 @@ function bruteCandidates(
     .filter((o): o is Observation => o !== undefined);
 }
 
-/** Every 50th claim's receipt, recomputed with grade() from brute-force candidates and the batch's evidence. */
-function checkSample(workload: GradingWorkload, receipts: readonly Receipt[]): void {
+/**
+ * Every 50th claim's receipt, recomputed with grade() from brute-force candidates and the batch's evidence; its
+ * stored inputs must be exactly the grant in force, the context and the policy hash it was graded with.
+ */
+function checkSample(workload: GradingWorkload, graded: readonly BatchReceipt[]): void {
   const evaluatedMs = Date.parse(workload.coverage.evaluatedAt);
   const held = new Map<string, string>();
-  for (const r of receipts)
+  for (const { receipt: r } of graded)
     for (const id of r.observationIds) if (r.claimId !== undefined) held.set(id, r.claimId);
-  const byClaim = new Map(receipts.map((r) => [r.claimId, r]));
+  const byClaim = new Map(graded.map((entry) => [entry.receipt.claimId, entry]));
   workload.claims.forEach((claim, i) => {
     if (i % SAMPLE_EVERY !== 0) return;
     const own = bruteCandidates(claim, workload.observations, evaluatedMs).filter(
@@ -78,7 +84,40 @@ function checkSample(workload: GradingWorkload, receipts: readonly Receipt[]): v
     if (grant === undefined) throw new Error('no grant');
     const context = { priorSpendCents: priorSpendCents(claim, workload.activity.claims, DEFAULT_POLICY) };
     const direct = grade(claim, own, grant, DEFAULT_POLICY, workload.coverage, context);
-    expect(canonicalJson(byClaim.get(claim.id)), `claim ${String(i)}`).toBe(canonicalJson(direct));
+    const entry = byClaim.get(claim.id);
+    expect(canonicalJson(entry?.receipt), `claim ${String(i)}`).toBe(canonicalJson(direct));
+    expect(entry?.inputs.grant, `claim ${String(i)}`).toBe(grant);
+    expect(entry?.inputs.context, `claim ${String(i)}`).toEqual(context);
+    expect(entry?.inputs.policyHash, `claim ${String(i)}`).toBe(DEFAULT_POLICY.policyHash);
+  });
+}
+
+/** Each observation id's first sighting (§4.1: the representative a batch grades an orphan with). */
+function firstSightings(observations: readonly Observation[]): Map<string, Observation> {
+  const first = new Map<string, Observation>();
+  for (const o of observations) {
+    const held = first.get(o.id);
+    const earlier =
+      held === undefined ||
+      Date.parse(o.observedAt) < Date.parse(held.observedAt) ||
+      (Date.parse(o.observedAt) === Date.parse(held.observedAt) && o.observedAt < held.observedAt);
+    if (earlier) first.set(o.id, o);
+  }
+  return first;
+}
+
+/** Every 50th claim-less receipt, graded again by grade() from its stored inputs and the batch's coverage. */
+function checkClaimless(workload: GradingWorkload, graded: readonly BatchReceipt[]): void {
+  const byId = firstSightings(workload.observations);
+  const claimless = graded.filter((entry) => entry.receipt.claimId === undefined);
+  expect(claimless.length).toBeGreaterThan(0);
+  claimless.forEach(({ receipt, inputs }, i) => {
+    if (i % SAMPLE_EVERY !== 0) return;
+    const orphans = receipt.observationIds
+      .map((id) => byId.get(id))
+      .filter((o): o is Observation => o !== undefined);
+    const again = grade(null, orphans, inputs.grant, DEFAULT_POLICY, workload.coverage, inputs.context);
+    expect(canonicalJson(again), `claim-less ${String(i)}`).toBe(canonicalJson(receipt));
   });
 }
 
@@ -89,28 +128,30 @@ describe('perf gate (task 1.5): gradeBatch over 5,000 claims × 50,000 observati
         const workload = buildGradingWorkload();
         return { workload, index: createMemoryIndex(workload.observations, BUCKET_MINUTES) };
       },
-      async ({ workload, index }) => ({ workload, receipts: await gradeAll(workload, index) }),
+      async ({ workload, index }) => ({ workload, graded: await gradeAll(workload, index) }),
     );
     console.log(describeRuns(`gradeBatch for ${String(CLAIM_COUNT)} claims`, measured));
 
     for (const { result } of measured.runs) {
-      const { workload, receipts } = result;
+      const { workload, graded } = result;
+      const receipts = graded.map((entry) => entry.receipt);
       expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
       expect(workload.claims).toHaveLength(CLAIM_COUNT);
       const claimReceipts = receipts.filter((r) => r.claimId !== undefined);
       expect(new Set(claimReceipts.map((r) => r.claimId)).size).toBe(CLAIM_COUNT);
       const evidence = claimReceipts.flatMap((r) => r.observationIds);
       expect(new Set(evidence).size).toBe(evidence.length);
-      const count = (grade: Receipt['grade']) => receipts.filter((r) => r.grade === grade).length;
+      const count = (grade: string) => receipts.filter((r) => r.grade === grade).length;
       expect(count('VERIFIED')).toBeGreaterThan(CLAIM_COUNT / 10);
       expect(count('NOT_FOUND')).toBeGreaterThan(CLAIM_COUNT / 10);
       expect(count('UNASKED')).toBeGreaterThan(0);
     }
     const first = measured.runs[0]?.result;
     if (first === undefined) throw new Error('no run');
-    checkSample(first.workload, first.receipts);
-    // Every run graded identical inputs, so their receipts must be identical (no memo carried a result over).
-    const canonical = measured.runs.map((r) => canonicalJson(r.result.receipts));
+    checkSample(first.workload, first.graded);
+    checkClaimless(first.workload, first.graded);
+    // Every run graded identical inputs, so their results must be identical (no memo carried a result over).
+    const canonical = measured.runs.map((r) => canonicalJson(r.result.graded));
     expect(new Set(canonical).size).toBe(1);
 
     expect(measured.medianCpuMs).toBeLessThan(GATE_MS);

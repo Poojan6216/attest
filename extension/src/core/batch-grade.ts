@@ -19,7 +19,34 @@ import { type BestCandidate, visibleCoverage } from './grade-best';
 import { type ClaimEvidence, grade, gradeClaim, type SharedEvidence } from './grade';
 import type { Policy } from './policy';
 import { candidatesHashById, coverageHash, grantHash } from './receipt';
-import type { AgentId, Claim, Coverage, Grant, Observation, Receipt, Sha256, Ulid } from './schema';
+import type {
+  AgentId,
+  Claim,
+  Coverage,
+  GradeContext,
+  Grant,
+  Observation,
+  Receipt,
+  Sha256,
+  Ulid,
+} from './schema';
+
+/**
+ * What a caller stores beside a batch receipt so replay can grade it again (§3, §9 `receiptInputs`): the grant in
+ * force and the context it was graded with, and the policy's hash. The coverage is the batch's own, so it is not
+ * repeated per receipt.
+ */
+export interface BatchInputs {
+  readonly grant: Grant;
+  readonly context: GradeContext;
+  readonly policyHash: Sha256;
+}
+
+/** One receipt of a batch and the inputs it was graded with (§3). */
+export interface BatchReceipt {
+  readonly receipt: Receipt;
+  readonly inputs: BatchInputs;
+}
 
 /** What every claim receipt of one batch shares. */
 export interface ReceiptBatch {
@@ -153,22 +180,17 @@ function claimReceipt(
   scored: ScoredClaim | null,
   batch: ReceiptBatch,
   shared: BatchEvidence,
-): Receipt {
+): BatchReceipt {
   const length = scored?.found.rows.length ?? 0;
   const [kept, order] = [shared.scratch(0, length), shared.scratch(1, length)];
   const count = scored === null ? 0 : keptPositions(scored, batch, kept);
-  const context = { priorSpendCents: batch.priorSpend(claim) };
+  const context: GradeContext = { priorSpendCents: batch.priorSpend(claim) };
   const grant = grantOf(batch.grants, claim.agent);
   const { policy } = batch;
+  const inputs: BatchInputs = { grant, context, policyHash: policy.policyHash };
   if (scored !== null && scored.found.table.ranks() === null) {
-    return grade(
-      claim,
-      observationsAt(scored, kept.subarray(0, count)),
-      grant,
-      policy,
-      batch.coverage,
-      context,
-    );
+    const candidates = observationsAt(scored, kept.subarray(0, count));
+    return { receipt: grade(claim, candidates, grant, policy, batch.coverage, context), inputs };
   }
   const candidatesHash = (): string =>
     scored === null
@@ -180,18 +202,19 @@ function claimReceipt(
     candidatesHash,
     eligible: shared.eligible(claim, grant),
   };
-  return gradeClaim(claim, evidence, grant, policy, context);
+  return { receipt: gradeClaim(claim, evidence, grant, policy, context), inputs };
 }
 
 /**
- * One receipt per claim, in claim order (§3, §4.3, §6.3): `scored` holds the batch's assignable claims (the others
- * have no candidates), and `grade` sees each claim's candidates minus those assigned to other claims or taken.
+ * One receipt per claim, in claim order (§3, §4.3, §6.3), each with its inputs: `scored` holds the batch's
+ * assignable claims (the others have no candidates), and `grade` sees each claim's candidates minus those assigned
+ * to other claims or taken.
  */
 export function claimReceipts(
   claims: readonly Claim[],
   scored: ReadonlyMap<Claim, ScoredClaim>,
   batch: ReceiptBatch,
   shared: BatchEvidence,
-): Receipt[] {
+): BatchReceipt[] {
   return claims.map((claim) => claimReceipt(claim, scored.get(claim) ?? null, batch, shared));
 }

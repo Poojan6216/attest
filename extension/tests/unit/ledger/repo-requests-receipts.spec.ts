@@ -135,12 +135,33 @@ describe('getReceipt', () => {
       reason: 'I cancelled it',
       at: '2026-10-01T12:00:00-04:00',
     } as const;
+    // §8 (v1.4): an override carries its override.user reason, last; override.at ≥ computedAt.
+    const pending = makeReceipt();
     const overridden = makeReceipt({
       state: 'USER_OVERRIDDEN',
       override: { ...override, previousState: 'PENDING' },
+      reasons: [...pending.reasons, { code: 'override.user', params: { grade: override.grade } }],
     });
     await putReceipt(db, overridden);
     expect(await getReceipt(db, overridden.id)).toEqual(overridden);
+  });
+
+  it('refuses a receipt that breaks a v1.4 invariant, and stores nothing (§8)', async () => {
+    const override = { grade: 'VERIFIED', reason: 'Sent it myself', previousState: 'PENDING' } as const;
+    const userReason = { code: 'override.user', params: { grade: 'VERIFIED' } } as const;
+    const base = makeReceipt();
+    const invalid = [
+      // override.at before computedAt
+      makeReceipt({
+        state: 'USER_OVERRIDDEN',
+        override: { ...override, at: '2026-10-01T10:30:59-04:00' },
+        reasons: [...base.reasons, userReason],
+      }),
+      // an override with no override.user reason
+      makeReceipt({ state: 'USER_OVERRIDDEN', override: { ...override, at: '2026-10-01T12:00:00-04:00' } }),
+    ];
+    for (const receipt of invalid) await expectLedgerError(putReceipt(db, receipt), 'invalid_input');
+    expect(await db.receipts.count()).toBe(0);
   });
 
   it('returns undefined for an unknown id', async () => {

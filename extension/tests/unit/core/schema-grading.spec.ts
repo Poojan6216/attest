@@ -8,6 +8,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
+import { idFromHash } from '../../../src/core/hash';
 import {
   Activity,
   Attribution,
@@ -30,7 +31,6 @@ interface Table {
   readonly invalid: readonly Invalid[];
 }
 
-const ULID = '01JA0000000000000000000001';
 const HASH = 'cd'.repeat(32);
 const T0 = '2026-10-06T14:02:00-04:00';
 const T1 = '2026-10-06T15:00:00-04:00';
@@ -51,8 +51,9 @@ const GCAL = { ...GMAIL, observerId: 'gcal', source: 'gcal.event', allCalendars:
 
 const ATTRIBUTION = { agent: 'muse', scoreBp: 7000, signals: ['agentSessionActive', 'userIdle'] };
 
+/** §10 (v1.4): a claim's id is idFromHash(rawHash), checked by the schema. */
 const CLAIM = {
-  id: ULID,
+  id: idFromHash(HASH),
   agent: 'muse',
   type: 'email.sent',
   claimedAt: T0,

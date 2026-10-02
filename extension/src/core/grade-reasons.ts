@@ -12,8 +12,9 @@
  *    per source still in grace, replaced by `coverage.never_completed` once it finalises by time. So the
  *    `verified`, `partial`, `not_found` and `default_unverifiable` rules add no rule code;
  *  - `allowlist.unchecked` when `counterpartyNotAllowed` was not applicable and the grade is not OVER_SCOPE;
- *  - coverage reasons: the capping codes only when the rule names `coverage: partial`; `coverage.account_unbound`
- *    on NOT_FOUND, per relevant source with no `grant.accounts` binding;
+ *  - coverage reasons: the capping codes (each with the `source` it capped, `coverage.no_parser` included) only
+ *    when the rule names `coverage: partial`; `coverage.account_unbound` on NOT_FOUND, per relevant source with no
+ *    `grant.accounts` binding;
  *  - `match.best` (or `match.none` when nothing was scored) and the best candidate's `cp.*`, on claim receipts
  *    only.
  * Params are ids, hashes, enum values and integers only (§6.4): never an address, a name or a subject.
@@ -154,8 +155,7 @@ function coverageReasons(input: ReasonInput): Reason[] {
   const out: Reason[] = [];
   if (rule?.when.coverage === 'partial') {
     for (const cap of input.conditions.coverage()?.capReasons ?? []) {
-      const params = cap.code === 'coverage.no_parser' ? {} : { source: cap.source };
-      out.push(reason(reasonCode(cap.code), params));
+      out.push(reason(reasonCode(cap.code), { source: cap.source }));
     }
   }
   if (input.grade === 'NOT_FOUND') {

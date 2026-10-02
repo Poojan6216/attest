@@ -5,6 +5,7 @@
  *  - Claim.claimedAtEnd (§4.1): `day` precision only, in `(claimedAt, start(day, t) + 25 h]`, where the day is
  *    the one containing `claimedAt` in `claimedAt`'s own written offset.
  *  - Observation (§10): `id === idFromHash(contentHash)`.
+ *  - Claim (§8, §10, v1.4): `id === idFromHash(rawHash)`.
  *  - Receipt.signals (§8): keys are the §5.1 feature names plus `score`, nothing else.
  *  - ReceiptOverride and OverrideGrade (§8): an override is to VERIFIED or NOT_FOUND.
  */
@@ -40,8 +41,9 @@ const HASH = 'ab'.repeat(32);
 const OTHER_HASH = 'cd'.repeat(32);
 const T1 = '2026-10-06T15:00:00-04:00';
 
+/** §10 (v1.4): a claim's id is idFromHash(rawHash), checked by the schema (schema-v14.spec.ts). */
 const CLAIM = {
-  id: ULID,
+  id: idFromHash(HASH),
   agent: 'muse',
   type: 'email.sent',
   claimedAt: '2026-10-06T00:00:00-04:00',
@@ -51,6 +53,10 @@ const CLAIM = {
   extractor: { id: 'muse.activity', version: '1.0.0', confidence: 1 },
   rawHash: HASH,
 };
+
+/** A minute claim whose id derives from its rawHash, and the same claim with another rawHash (and its id). */
+const MINUTE_CLAIM = { ...CLAIM, claimedAtPrecision: 'minute' };
+const claimWithRaw = (rawHash: string) => ({ ...MINUTE_CLAIM, rawHash, id: idFromHash(rawHash) });
 
 /** A day claim at `claimedAt` ending at `claimedAtEnd`. */
 const day = (claimedAt: string, claimedAtEnd: string) => ({ ...CLAIM, claimedAt, claimedAtEnd });
@@ -145,6 +151,27 @@ const TABLES: readonly Table[] = [
       // A bad hash is reported once, at its own path: the cross-check has nothing to compare.
       ['an uppercase contentHash', { ...EMAIL, contentHash: OTHER_HASH.toUpperCase() }, ['contentHash']],
       ['a missing contentHash', { ...EMAIL, contentHash: undefined }, ['contentHash']],
+    ],
+  },
+  {
+    name: 'Claim (id = idFromHash(rawHash), v1.4)',
+    schema: Claim,
+    valid: [
+      MINUTE_CLAIM,
+      claimWithRaw(sha256Hex('Sent email to Priya')),
+      claimWithRaw(OTHER_HASH),
+      claimWithRaw('0'.repeat(64)),
+      { ...claimWithRaw('f'.repeat(64)), requestId: ULID, counterparty: 'Priya' },
+    ],
+    invalid: [
+      ['an id from another hash', { ...MINUTE_CLAIM, id: idFromHash(OTHER_HASH) }, ['id']],
+      ['a hand-picked valid ULID', { ...MINUTE_CLAIM, id: ULID }, ['id']],
+      ['a new rawHash under the old id', { ...MINUTE_CLAIM, rawHash: OTHER_HASH }, ['id']],
+      ['the right id in lowercase', { ...MINUTE_CLAIM, id: MINUTE_CLAIM.id.toLowerCase() }, ['id']],
+      ['the requestId as its id', { ...MINUTE_CLAIM, id: ULID, requestId: ULID }, ['id']],
+      // A bad hash is reported once, at its own path: the cross-check has nothing to compare.
+      ['an uppercase rawHash', { ...MINUTE_CLAIM, rawHash: HASH.toUpperCase() }, ['rawHash']],
+      ['a missing rawHash', { ...MINUTE_CLAIM, rawHash: undefined }, ['rawHash']],
     ],
   },
   {

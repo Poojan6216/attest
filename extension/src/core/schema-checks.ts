@@ -1,8 +1,9 @@
 /**
  * Cross-field invariants of the core schemas (docs/grading.md §3, §4.1, §7, §8, §10, §15), kept apart so
- * schema.ts stays one readable page. It imports nothing from ./schema (only ./hash and ./units, which sit
- * below it), so the two never form an import cycle. Each check returns the problems it found as
- * `[field, message]`; `refineWith` turns them into Zod issues whose path names the offending field. The closed
+ * schema.ts stays one readable page (the Receipt's own invariants are in ./schema-receipt). It imports nothing
+ * from ./schema (only ./hash and ./units, which sit below it), so the two never form an import cycle. Each check
+ * returns the problems it found as `[field, message]` (or a nested path); `refineWith` turns them into Zod
+ * issues whose path names the offending field. The closed
  * vocabularies live here too: a reason's params depend on its code (§15), and a receipt's signals are the §5.1
  * feature names plus `score` (§8). PURE (Hard Rule 4).
  */
@@ -11,14 +12,17 @@ import type { z } from 'zod';
 import { idFromHash } from './hash';
 import { MINUTES_PER_HOUR, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
-export type Problem = readonly [field: string, message: string];
+/** A problem at one field, or at a nested path such as `['override', 'at']`. */
+export type Problem = readonly [field: string | readonly string[], message: string];
 
 /** A Zod `superRefine` callback that reports every problem `check` finds at its field's path. */
 export function refineWith<T>(
   check: (value: T) => readonly Problem[],
 ): (value: T, ctx: z.RefinementCtx<T>) => void {
   return (value, ctx) => {
-    for (const [field, message] of check(value)) ctx.addIssue({ code: 'custom', path: [field], message });
+    for (const [field, message] of check(value)) {
+      ctx.addIssue({ code: 'custom', path: typeof field === 'string' ? [field] : [...field], message });
+    }
   };
 }
 
@@ -36,58 +40,6 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
  */
 export function instantMs(isoTs: string): number {
   return EXPLICIT_OFFSET.test(isoTs) ? new Date(isoTs).getTime() : Number.NaN;
-}
-
-type State = 'PENDING' | 'FINAL' | 'USER_OVERRIDDEN';
-
-/** The receipt fields the invariants read. */
-export interface ReceiptFacts {
-  readonly grade: string;
-  readonly state: State;
-  readonly claimId?: string | undefined;
-  readonly attribution?: 'likely' | undefined;
-  readonly override?: { readonly previousState: Exclude<State, 'USER_OVERRIDDEN'> } | undefined;
-  readonly supersededBy?: string | undefined;
-  readonly finalAt?: string | undefined;
-}
-
-/** `override` iff USER_OVERRIDDEN; `finalAt` iff the state before any override is FINAL (§3, §8). */
-function stateProblems(receipt: ReceiptFacts): Problem[] {
-  const problems: Problem[] = [];
-  const overridden = receipt.state === 'USER_OVERRIDDEN';
-  if (overridden && receipt.override === undefined) {
-    problems.push(['override', 'required when state is USER_OVERRIDDEN']);
-  }
-  if (!overridden && receipt.override !== undefined) {
-    problems.push(['override', 'allowed only when state is USER_OVERRIDDEN']);
-  }
-  const underlying = overridden ? receipt.override?.previousState : receipt.state;
-  if (underlying === 'FINAL' && receipt.finalAt === undefined) {
-    problems.push(['finalAt', 'required once the receipt is FINAL']);
-  }
-  if (underlying === 'PENDING' && receipt.finalAt !== undefined) {
-    problems.push(['finalAt', 'a PENDING receipt has no finalAt']);
-  }
-  return problems;
-}
-
-/** grade UNASKED ⇔ attribution 'likely' and no claim; only UNASKED receipts are superseded (§2, §7, §8). */
-function unaskedProblems(receipt: ReceiptFacts): Problem[] {
-  const problems: Problem[] = [];
-  if (receipt.grade === 'UNASKED') {
-    if (receipt.attribution === undefined) problems.push(['attribution', "an UNASKED receipt says 'likely'"]);
-    if (receipt.claimId !== undefined) problems.push(['claimId', 'an UNASKED receipt has no claim']);
-    return problems;
-  }
-  if (receipt.attribution !== undefined) problems.push(['attribution', 'allowed only on an UNASKED receipt']);
-  if (receipt.supersededBy !== undefined) {
-    problems.push(['supersededBy', 'only an UNASKED receipt can be superseded']);
-  }
-  return problems;
-}
-
-export function receiptProblems(receipt: ReceiptFacts): Problem[] {
-  return [...stateProblems(receipt), ...unaskedProblems(receipt)];
 }
 
 /** An observer's window is a real interval, and `allCalendars` is a calendar fact only (§3). */
@@ -145,10 +97,19 @@ function dayStartMs(isoTs: string): number {
 const LONGEST_DAY_MS = MS_PER_DAY + MS_PER_HOUR;
 
 /**
+ * §10: `id = idFromHash(hash)`, so one content (one raw claim) has exactly one id and no row can choose its own.
+ * Checked only once the hash is a valid hash (a bad one is already reported at its own path).
+ */
+function derivedIdProblems(id: string, hash: string, hashField: string): Problem[] {
+  if (typeof hash !== 'string' || !SHA256_HEX.test(hash)) return [];
+  return id === idFromHash(hash) ? [] : [['id', `must be idFromHash(${hashField})`]];
+}
+
+/**
  * `claimedAtEnd` (§4.1) is only for `day` precision (an adapter's DST-safe next local midnight) and lies in
  * `(claimedAt, start(day, t) + 25 h]`: strictly after `claimedAt`, and no later than the longest local day.
  */
-export function claimProblems(claim: {
+function claimedAtEndProblems(claim: {
   readonly claimedAt: string;
   readonly claimedAtPrecision: string;
   readonly claimedAtEnd?: string | undefined;
@@ -167,16 +128,25 @@ export function claimProblems(claim: {
 }
 
 /**
- * §10: an observation's id is `idFromHash(contentHash)`, so one content has exactly one id and no row can choose
- * its own. Checked only once `contentHash` is a valid hash (a bad one is already reported at its own path).
+ * A claim's cross-field invariants: `id = idFromHash(rawHash)` (§8, §10), so one raw claim has exactly one id,
+ * and `claimedAtEnd` (§4.1).
  */
+export function claimProblems(claim: {
+  readonly id: string;
+  readonly rawHash: string;
+  readonly claimedAt: string;
+  readonly claimedAtPrecision: string;
+  readonly claimedAtEnd?: string | undefined;
+}): Problem[] {
+  return [...derivedIdProblems(claim.id, claim.rawHash, 'rawHash'), ...claimedAtEndProblems(claim)];
+}
+
+/** §10: an observation's id is `idFromHash(contentHash)`, so one content has exactly one id. */
 export function observationProblems(observation: {
   readonly id: string;
   readonly contentHash: string;
 }): Problem[] {
-  const { id, contentHash } = observation;
-  if (typeof contentHash !== 'string' || !SHA256_HEX.test(contentHash)) return [];
-  return id === idFromHash(contentHash) ? [] : [['id', 'must be idFromHash(contentHash)']];
+  return derivedIdProblems(observation.id, observation.contentHash, 'contentHash');
 }
 
 // ── Receipt signals (§5.1, §8) ──────────────────────────────────────────────────────────────────

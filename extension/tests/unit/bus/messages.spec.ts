@@ -93,6 +93,8 @@ describe('BusMessage payload items', () => {
     const cases: unknown[] = [
       { ...VALID['adapter.claims'], requests: [{ ...REQUEST, textHint: 'x'.repeat(201) }] },
       { ...VALID['adapter.claims'], claims: [{ ...CLAIM, rawHash: HASH.toUpperCase() }] },
+      // §10 (v1.4): a claim whose id is not idFromHash(rawHash) never crosses the bus.
+      { ...VALID['adapter.claims'], claims: [{ ...CLAIM, rawHash: HASH }] },
       { ...VALID['adapter.claims'], claims: [{ ...CLAIM, claimedAt: '2026-10-01 09:30' }] },
       { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, amountCents: 12.5 }] },
       { ...VALID['observer.observations'], observations: [{ ...OBSERVATION, id: 'not-a-ulid' }] },

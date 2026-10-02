@@ -11,6 +11,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
+import { canonicalJson } from '../../../src/core/hash';
 import { Reason, ReasonCode, ReasonParams, Receipt } from '../../../src/core/schema';
 
 type Path = readonly (string | number)[];
@@ -330,4 +331,21 @@ describe('Reason params never carry content (property)', () => {
     // Not vacuous: valid params were offered and accepted often enough to have been checked.
     expect(parsedWithParams).toBeGreaterThan(10);
   }, 60_000);
+});
+
+describe('§15 v1.4: numeric params are non-negative integers, and -0 is written 0', () => {
+  it('accepts -0 as zero; canonical JSON (and so every hash) writes it 0', () => {
+    const parsed = Reason.parse({ code: 'ceiling.exceeded', params: { amountCents: -0, ceilingCents: 0 } });
+    expect(canonicalJson(parsed.params)).toBe('{"amountCents":0,"ceilingCents":0}');
+  });
+
+  it.each([
+    ['a negative amount', { amountCents: -1, ceilingCents: 0 }, 'amountCents'],
+    ['a fractional ceiling', { amountCents: 0, ceilingCents: 0.5 }, 'ceilingCents'],
+    ['a numeric string', { amountCents: '100', ceilingCents: 0 }, 'amountCents'],
+    ['an infinite ceiling', { amountCents: 0, ceilingCents: Number.POSITIVE_INFINITY }, 'ceilingCents'],
+  ])('rejects %s at that param', (_label, params, param) => {
+    const result = Reason.safeParse({ code: 'ceiling.exceeded', params });
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([['params', param]]);
+  });
 });

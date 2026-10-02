@@ -8,11 +8,11 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { seededRandom } from '../../../../bench/core';
-import { type BatchFixed, gradeBatch } from '../../../src/core/batch';
+import { type BatchFixed, type BatchReceipt, gradeBatch } from '../../../src/core/batch';
 import { createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson } from '../../../src/core/hash';
 import { loadPolicy } from '../../../src/core/policy';
-import type { Activity, Coverage, Observation, Receipt } from '../../../src/core/schema';
+import type { Activity, Coverage, Observation } from '../../../src/core/schema';
 import { type LoadedScenario, loadScenario, scenarioFiles } from '../../golden/load';
 
 const BUCKET_MINUTES = 15;
@@ -59,8 +59,11 @@ interface Inputs {
   readonly fixed: readonly BatchFixed[];
 }
 
+/** The gradeBatch inputs of a scenario, and nothing else of it (the loader also holds maps and expectations). */
 function inputsOf(loaded: LoadedScenario): Inputs {
-  return { ...loaded, claims: loaded.batchClaims, observations: [...loaded.observations.values()] };
+  const { grants, coverage, activity, fixed } = loaded;
+  const observations = [...loaded.observations.values()];
+  return { claims: loaded.batchClaims, observations, grants, coverage, activity, fixed };
 }
 
 /** Every list of the inputs in a seeded random order (the sets are unchanged). */
@@ -83,7 +86,8 @@ function permuted(inputs: Inputs, seed: number): Inputs {
   };
 }
 
-async function grade(loaded: LoadedScenario, inputs: Inputs, mode: IndexMode): Promise<Receipt[]> {
+/** gradeBatch's whole result: every receipt and the inputs it was graded with (§3). */
+async function grade(loaded: LoadedScenario, inputs: Inputs, mode: IndexMode): Promise<BatchReceipt[]> {
   const index = indexOf(inputs.observations, mode);
   const policy = loadPolicy(loaded.policyJson);
   const { claims, grants, coverage, activity, fixed } = inputs;
@@ -97,13 +101,13 @@ describe('gradeBatch determinism (Hard Rule 4)', () => {
 
   it('orders every result by receipt id, strictly ascending', async () => {
     for (const loaded of BATCH) {
-      const ids = (await grade(loaded, inputsOf(loaded), 'memory')).map((receipt) => receipt.id);
+      const ids = (await grade(loaded, inputsOf(loaded), 'memory')).map(({ receipt }) => receipt.id);
       expect(ids, loaded.file).toEqual([...ids].sort());
       expect(new Set(ids).size, loaded.file).toBe(ids.length);
     }
   });
 
-  it('gives the same receipts for any input order, index return order and over-return (1,000 runs)', async () => {
+  it('gives the same receipts and inputs for any input order, index return order and over-return (1,000 runs)', async () => {
     const baselines = await Promise.all(
       BATCH.map(async (loaded) => canonicalJson(await grade(loaded, inputsOf(loaded), 'memory'))),
     );
@@ -115,8 +119,8 @@ describe('gradeBatch determinism (Hard Rule 4)', () => {
         async (which, seed, mode) => {
           const loaded = BATCH[which];
           if (loaded === undefined) throw new Error('no scenario');
-          const receipts = await grade(loaded, permuted(inputsOf(loaded), seed), mode);
-          expect(canonicalJson(receipts), loaded.file).toBe(baselines[which]);
+          const graded = await grade(loaded, permuted(inputsOf(loaded), seed), mode);
+          expect(canonicalJson(graded), loaded.file).toBe(baselines[which]);
         },
       ),
       { numRuns: 1_000 },

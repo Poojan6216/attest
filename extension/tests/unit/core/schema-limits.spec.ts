@@ -37,7 +37,7 @@ const keyed = (n: number, value: number | string): Record<string, number | strin
 const REQUEST = { id: ULID, agent: 'muse', conversationId: 'c', textHint: '', textHash: HASH, ts: T };
 const EXTRACTOR = { id: 'muse', version: '1', confidence: 1 };
 const CLAIM = {
-  id: ULID,
+  id: idFromHash(HASH), // §10 (v1.4): idFromHash(rawHash)
   agent: 'muse',
   type: 'email.sent',
   claimedAt: T,

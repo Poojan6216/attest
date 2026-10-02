@@ -62,7 +62,7 @@ interface Overrides {
 
 async function run(loaded: LoadedScenario, overrides: Overrides = {}): Promise<Receipt[]> {
   const index = createMemoryIndex([...loaded.observations.values()], 15);
-  return gradeBatch(
+  const graded = await gradeBatch(
     overrides.claims ?? loaded.batchClaims,
     index,
     overrides.grants ?? loaded.grants,
@@ -71,6 +71,7 @@ async function run(loaded: LoadedScenario, overrides: Overrides = {}): Promise<R
     loaded.activity,
     overrides.fixed ?? loaded.fixed,
   );
+  return graded.map((entry) => entry.receipt);
 }
 
 const claimId = (loaded: LoadedScenario, ref: string): Ulid => {

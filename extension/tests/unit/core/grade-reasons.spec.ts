@@ -221,7 +221,7 @@ describe('coverage reasons (§15)', () => {
     ]);
   });
 
-  it('coverage.no_parser has no params (§15: the closed table lists none)', () => {
+  it('coverage.no_parser names the source it capped (§15 v1.4: {source})', () => {
     const purchase = claimOf(
       { type: 'purchase.made', counterparty: 'acme', amountCents: 4999, currency: 'USD' },
       ['subjectHint'],
@@ -230,7 +230,7 @@ describe('coverage reasons (§15)', () => {
     expect([receipt.ruleId, receipt.state]).toEqual(['partial_coverage', 'PENDING']);
     expect(receipt.reasons).toEqual([
       { code: 'coverage.partial', params: { source: 'gmail.receipt' } },
-      { code: 'coverage.no_parser', params: {} },
+      { code: 'coverage.no_parser', params: { source: 'gmail.receipt' } },
       { code: 'match.none', params: {} },
     ]);
   });

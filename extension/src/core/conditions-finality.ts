@@ -11,7 +11,7 @@
  * | UNVERIFIABLE by a rule naming `targetMissing` or     | immediately (claim-intrinsic)                          |
  * |   `underspecified`, or for a type with no sources   |                                                        |
  * | any other UNVERIFIABLE (`no_coverage`, `partial_coverage`, `default_unverifiable`) and PENDING | `evaluatedAt ≥ end(p,t) + finalizeUnverifiableHours` |
- * | UNASKED (claim-less)                                | the agent's adapter synced at `occurredAt + beforeClaimMin + graceMin`, or `evaluatedAt ≥ occurredAt + finalizeUnverifiableHours` (§7) |
+ * | UNASKED (claim-less)                                | the agent's adapter synced at `anchor + beforeClaimMin + graceMin`, or `evaluatedAt ≥ anchor + finalizeUnverifiableHours`; anchor per §7 |
  * | any other claim-less outcome                        | immediately                                            |
  *
  * `finalAt` is `coverage.evaluatedAt`: the evaluatedAt of the grading that met the condition (§3). The clock is
@@ -30,7 +30,7 @@ import { instantMs } from './normalize';
 import type { PolicyRule, RuleOutcome } from './policy';
 import type { Claim, Coverage, GradeContext, Grant, IsoTs, Observation } from './schema';
 import { MS_PER_HOUR, MS_PER_MINUTE } from './units';
-import { precisionBounds } from './window';
+import { precisionBounds, isCalendarType } from './window';
 
 export interface FinalityInput {
   readonly outcome: RuleOutcome;
@@ -43,7 +43,10 @@ export interface FinalityInput {
   readonly coverage: Coverage;
   readonly context: GradeContext;
   readonly policy: CoveragePolicy;
-  /** True iff the rule held only because of the assigned candidate (§8, OVER_SCOPE rows). */
+  /**
+   * True iff the outcome would not be OVER_SCOPE without the assigned candidate's amount, currency or address (§8,
+   * OVER_SCOPE rows; grade.ts decides it: the matched rule rested on the candidate, and no claim-only rule holds).
+   */
   readonly candidateDependent: boolean;
   /** The claim's eligible coverage when the caller already has it (computed from the inputs above otherwise). */
   readonly eligible?: EligibleCoverage;
@@ -79,11 +82,12 @@ function claimIntrinsic(rule: PolicyRule | null): boolean {
 function unaskedFinal(input: FinalityInput): boolean {
   const { orphan, policy } = input;
   if (orphan === null) throw new GradeError('claimless_subject');
-  const occurredMs = instantMs(orphan.occurredAt);
+  // The same anchor attribution measures from (§7): when a calendar change was first seen, not the event start.
+  const anchorMs = instantMs(isCalendarType(orphan.type) ? orphan.observedAt : orphan.occurredAt);
   const syncAt = input.context.attribution?.adapterLastSyncAt;
   const waitMs = (policy.windows.beforeClaimMin + policy.windows.graceMin) * MS_PER_MINUTE;
-  if (syncAt !== undefined && instantMs(syncAt) >= occurredMs + waitMs) return true;
-  const deadlineMs = occurredMs + policy.windows.finalizeUnverifiableHours * MS_PER_HOUR;
+  if (syncAt !== undefined && instantMs(syncAt) >= anchorMs + waitMs) return true;
+  const deadlineMs = anchorMs + policy.windows.finalizeUnverifiableHours * MS_PER_HOUR;
   return instantMs(input.coverage.evaluatedAt) >= deadlineMs;
 }
 

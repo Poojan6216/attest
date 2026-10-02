@@ -29,13 +29,13 @@ import { Claim, CoveragePing, Observation } from '../../../src/ledger/types';
 import type { LogRecord } from '../../../src/log';
 import {
   captureLogs,
+  claimId,
   makeClaim,
   makeHealth,
   makeObservation,
   makePing,
   observationId,
   sha,
-  ulid,
   uniqueDbName,
 } from './fixtures';
 
@@ -195,9 +195,10 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
 
   it('a valid claim replaces an unreadable row holding its rawHash', async () => {
     await writeRaw('claims', [{ ...toClaimRow(Claim.parse(makeClaim())), agent: 'gemini' }]);
-    const fresh = makeClaim({ id: ulid(102) });
-    expect(await upsertClaim(db, fresh)).toEqual({ id: ulid(102), inserted: true });
-    expect(await getClaim(db, ulid(102))).toEqual(fresh);
+    // §10 v1.4: the same rawHash always has the same id, so the fresh row takes the stale row's id.
+    const fresh = makeClaim({ observedAt: '2026-10-01T11:00:00-04:00' });
+    expect(await upsertClaim(db, fresh)).toEqual({ id: claimId(101), inserted: true });
+    expect(await getClaim(db, claimId(101))).toEqual(fresh);
     expect(await claimsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([fresh]);
     expect(await db.claims.count()).toBe(1);
   });

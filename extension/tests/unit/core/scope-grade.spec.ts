@@ -181,7 +181,7 @@ describe('the spend ceiling through gradeBatch (§3: priorSpendCents reads activ
       DEFAULT_POLICY,
       NO_COVERAGE,
       Activity.parse({ sessions: [], idle: [], entries: [], adapterSyncs: [], claims }),
-    );
+    ).then((results) => results.map((result) => result.receipt));
   const ruleOf = (receipts: readonly Receipt[], claim: Claim) =>
     receipts.find((receipt) => receipt.claimId === claim.id)?.ruleId;
 

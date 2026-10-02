@@ -1,8 +1,8 @@
 /**
  * Core perf bench (sprint tasks 1.3 and 1.5; ledger_engineer rule 9; qa_tester rule 7): over 5,000 claims and
  * 50,000 observations, candidate lookup and the whole `gradeBatch` must each take under 2 s in Node. Workloads
- * are synthetic and deterministic (seeded mulberry32, no Math.random), so the gate tests (tests/unit/core/
- * candidates-perf.spec.ts, batch-perf.spec.ts) measure what this bench measures. Each figure is the wall-clock
+ * are synthetic and deterministic (seeded mulberry32, no Math.random), so the gate tests (tests/perf/
+ * candidates.perf.spec.ts, grading.perf.spec.ts) measure what this bench measures. Each figure is the wall-clock
  * median of 5 cold runs, with the CPU median beside it (the gates' clock inside a parallel suite), written to
  * bench/results/core-<yyyy-mm-dd>.json for `pnpm bench` to render into RESULTS.md (Hard Rule 12). Grading reuses
  * the lookup's observations and claim timings; a second seeded stream gives each claim an agent and an identity
@@ -13,7 +13,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { gradeBatch } from '../extension/src/core/batch';
+import { type BatchReceipt, gradeBatch } from '../extension/src/core/batch';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../extension/src/core/candidates';
 import { idFromHash } from '../extension/src/core/hash';
 import { DEFAULT_POLICY } from '../extension/src/core/policy';
@@ -285,8 +285,8 @@ export function buildGradingWorkload(seed = SEED): GradingWorkload {
   return { ...core, claims, grants: gradingGrants(), coverage: gradingCoverage(), activity };
 }
 
-/** `gradeBatch` over the whole workload (every claim PENDING, nothing fixed), with the shipped policy. */
-export async function gradeAll(workload: GradingWorkload, index: ObservationIndex): Promise<Receipt[]> {
+/** `gradeBatch` over the whole workload (all PENDING, nothing fixed, shipped policy): receipts with their inputs. */
+export async function gradeAll(workload: GradingWorkload, index: ObservationIndex): Promise<BatchReceipt[]> {
   const { claims, grants, coverage, activity } = workload;
   return gradeBatch(claims, index, grants, DEFAULT_POLICY, coverage, activity);
 }
@@ -355,7 +355,8 @@ async function measure(): Promise<Record<string, number | string | boolean>> {
 }
 
 /** Receipt counts by kind, so a run that grades nothing (a vacuous fast path) shows in the result file. */
-function receiptCounts(receipts: readonly Receipt[]): Record<string, number> {
+function receiptCounts(graded: readonly BatchReceipt[]): Record<string, number> {
+  const receipts = graded.map((entry) => entry.receipt);
   const count = (grade: Receipt['grade']) => receipts.filter((r) => r.grade === grade).length;
   const verified = { gradingVerified: count('VERIFIED'), gradingNotFound: count('NOT_FOUND') };
   return { gradingReceipts: receipts.length, ...verified, gradingUnasked: count('UNASKED') };
@@ -363,7 +364,7 @@ function receiptCounts(receipts: readonly Receipt[]): Record<string, number> {
 
 /** `gradeBatch` over the grading workload: median of RUNS cold runs (fresh objects and index each run). */
 async function measureGrading(): Promise<Record<string, number | boolean>> {
-  const runs: Timed<Receipt[]>[] = [];
+  const runs: Timed<BatchReceipt[]>[] = [];
   for (let run = 0; run < RUNS; run += 1) {
     const workload = buildGradingWorkload();
     const index = createMemoryIndex(workload.observations, BUCKET_MINUTES);

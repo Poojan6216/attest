@@ -31,9 +31,11 @@ const T = Date.parse('2026-10-06T14:03:00-04:00');
 const iso = (ms: number): string => isoWithOffset(ms, OFFSET);
 const min = (minutes: number): number => T + minutes * MS_PER_MINUTE;
 
+/** An email orphan at T, first seen 20 min later: a non-calendar orphan is anchored on occurredAt (§7). */
 const orphan = (fields: Partial<AttributionOrphan> = {}): AttributionOrphan => ({
   type: 'email.sent',
   occurredAt: iso(T),
+  observedAt: iso(min(20)),
   ...fields,
 });
 

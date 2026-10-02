@@ -29,7 +29,6 @@ function compareNumbers(a: number, b: number): number {
   return a < b ? -1 : 1;
 }
 
-/** `index` with every observation first seen after `evaluatedMs` left out of every read (§3). */
 /** The rows first seen by `evaluatedMs`, in order. */
 function seenBy(rows: readonly Observation[], evaluatedMs: number): Observation[] {
   const seen: Observation[] = [];
@@ -37,6 +36,7 @@ function seenBy(rows: readonly Observation[], evaluatedMs: number): Observation[
   return seen;
 }
 
+/** `index` with every observation first seen after `evaluatedMs` left out of every read (§3). */
 export function visibleAt(index: ObservationIndex, evaluatedMs: number): ObservationIndex {
   return {
     byTypeAndBucket: async (type, fromMs, toMs) =>
@@ -101,32 +101,48 @@ function compareKeyed(a: Keyed, b: Keyed): number {
   );
 }
 
-/** Adds the rows of `type` from `source` that lie in `window` to `found`, each with its instant. */
-function keepInWindow(
+/**
+ * True iff `atMs` lies in one of `windows` (closed, disjoint and ascending, as `seenWindows` merges them): the
+ * last window starting at or before `atMs` must reach it.
+ */
+function inWindows(windows: readonly Interval[], atMs: number): boolean {
+  let low = 0;
+  let high = windows.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if ((windows[middle]?.startMs ?? atMs) <= atMs) low = middle + 1;
+    else high = middle;
+  }
+  const window = windows[low - 1];
+  return window !== undefined && atMs <= window.endMs;
+}
+
+/** Adds the rows of `type` that lie in a window their OWN source was seen in (§3) to `found`, with their instant. */
+function keepSeen(
   found: Keyed[],
   rows: readonly Observation[],
   type: ActionType,
-  source: ObservationSource,
-  { startMs, endMs }: Interval,
+  windows: ReadonlyMap<ObservationSource, readonly Interval[]>,
 ): void {
   for (const observation of rows) {
-    if (observation.type !== type || observation.source !== source) continue;
+    if (observation.type !== type) continue;
+    const own = windows.get(observation.source);
+    if (own === undefined) continue;
     const atMs = occurredMs(observation);
-    if (atMs >= startMs && atMs <= endMs) found.push({ observation, atMs });
+    if (inWindows(own, atMs)) found.push({ observation, atMs });
   }
 }
 
-/** Observations of `type` from `source` that lie in one of `windows`, read window by window. */
+/** Observations of `type` in a window of their own source, read once over the union of every source's windows. */
 async function readWindows(
   index: ObservationIndex,
   type: ActionType,
-  source: ObservationSource,
-  windows: readonly Interval[],
+  windows: ReadonlyMap<ObservationSource, readonly Interval[]>,
+  union: readonly Interval[],
 ): Promise<Keyed[]> {
   const found: Keyed[] = [];
-  for (const window of windows) {
-    const rows = await index.byTypeAndBucket(type, window.startMs, window.endMs);
-    keepInWindow(found, rows, type, source, window);
+  for (const window of union) {
+    keepSeen(found, await index.byTypeAndBucket(type, window.startMs, window.endMs), type, windows);
   }
   return found;
 }
@@ -141,7 +157,8 @@ function addOnce(byHash: Map<string, Keyed>, rows: readonly Keyed[]): void {
 }
 
 /**
- * Every observation of a covered type that its own source's observer saw, once per `contentHash`, in candidate
+ * Every observation of a type with sources whose `occurredAt` lies in a window its OWN source's observer saw (§3:
+ * the observation's source, whether or not the policy lists it for the type), once per `contentHash`, in candidate
  * order (each instant read once, not once per comparison), with its `occurredAt` instant. `index` should already
  * be `visibleAt(evaluatedAt)`.
  */
@@ -151,12 +168,11 @@ export async function coveredObservations(
   policy: OrphanPolicy,
 ): Promise<Keyed[]> {
   const windows = seenWindows(coverage);
+  const union = mergeIntervals([...windows.values()].flat());
   const byHash = new Map<string, Keyed>();
   for (const type of ActionType.options) {
-    for (const source of policy.sourcesByType[type]) {
-      const seen = windows.get(source);
-      if (seen !== undefined) addOnce(byHash, await readWindows(index, type, source, seen));
-    }
+    if (policy.sourcesByType[type].length > 0)
+      addOnce(byHash, await readWindows(index, type, windows, union));
   }
   return [...byHash.values()].sort(compareKeyed);
 }

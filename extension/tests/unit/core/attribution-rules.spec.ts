@@ -33,9 +33,11 @@ const T = Date.parse('2026-10-06T14:03:00-04:00');
 const iso = (ms: number): string => isoWithOffset(ms, OFFSET);
 const min = (minutes: number): number => T + minutes * MS_PER_MINUTE;
 
+/** An email orphan at T, first seen 20 min later: a non-calendar orphan is anchored on occurredAt (§7). */
 const orphan = (fields: Partial<AttributionOrphan> = {}): AttributionOrphan => ({
   type: 'email.sent',
   occurredAt: iso(T),
+  observedAt: iso(min(20)),
   ...fields,
 });
 
@@ -52,11 +54,17 @@ const session = (agent: AgentId, ms: number) => ({ agent, at: iso(ms) });
 const entry = (agent: AgentId, ms: number) => ({ agent, at: iso(ms) });
 const idle = (fromMs: number, toMs: number) => ({ from: iso(fromMs), to: iso(toMs) });
 const sync = (agent: AgentId, at: string) => ({ agent, lastSyncAt: IsoTs.parse(at) });
+/**
+ * An ASSIGNABLE claim (§4.3) of `agent` at `ms`: an email claim naming its counterparty (a calendar claim also
+ * needs targetAt), read at `ms`. Vague claims are attribution-v14.spec.ts's subject.
+ */
 const claim = (agent: AgentId, ms: number, fields: Partial<AttributionClaim> = {}): AttributionClaim => ({
   agent,
   type: 'email.sent',
+  counterparty: 'priya@company.com',
   claimedAt: iso(ms),
   claimedAtPrecision: 'minute',
+  observedAt: iso(ms),
   ...fields,
 });
 
@@ -106,10 +114,9 @@ describe("activityLogAdjacent is suppressed by the agent's own same-type claim (
     expect(adjacentOnly([claim('muse', min(-1))])).toBeNull();
   });
 
-  it('a claim of another type does not explain it', () => {
-    expect(adjacentOnly([claim('muse', min(-1), { type: 'calendar.created' })])?.signals).toEqual([
-      'activityLogAdjacent',
-    ]);
+  it('a claim of another type does not explain it (even an assignable one)', () => {
+    const calendar = { type: 'calendar.created', targetAt: iso(min(60)), subjectHint: 'Q3 review' } as const;
+    expect(adjacentOnly([claim('muse', min(-1), calendar)])?.signals).toEqual(['activityLogAdjacent']);
   });
 
   it("another agent's claim does not explain it", () => {
@@ -170,6 +177,14 @@ describe('agentSignature: case-insensitive substring of the subject hint', () =>
     ['a partial signature', 'sent with mus'],
   ])('%s do not match (no NFKC, ASCII-only case folding)', (_label, subject) => {
     expect(signatureOf(subject)).toEqual([]);
+  });
+
+  it('a Kelvin sign in the subject is not the letter k (String#toLowerCase would fold it to k)', () => {
+    const policy = withUnasked({ signatures: { ...SIGNATURES, muse: ['booked by muse'] } });
+    const signalsOf = (subjectHint: string) =>
+      attribute(orphan({ subjectHint }), activity(), policy)?.signals ?? [];
+    expect(signalsOf('BOOKED BY MUSE')).toEqual(['agentSignature']);
+    expect(signalsOf('BOOKED BY MUSE')).toEqual([]);
   });
 
   it('an observation with no subject hint has no signature', () => {

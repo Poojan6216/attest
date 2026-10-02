@@ -64,7 +64,8 @@ async function run(loaded: LoadedScenario, observations?: readonly Observation[]
   const index = createMemoryIndex(observations ?? [...loaded.observations.values()], 15);
   const policy = loadPolicy(loaded.policyJson);
   const { batchClaims, grants, coverage, activity, fixed } = loaded;
-  return gradeBatch(batchClaims, index, grants, policy, coverage, activity, fixed);
+  const graded = await gradeBatch(batchClaims, index, grants, policy, coverage, activity, fixed);
+  return graded.map((entry) => entry.receipt);
 }
 
 function observation(loaded: LoadedScenario, ref: string): Observation {
@@ -108,6 +109,62 @@ describe('gradeBatch: an orphan lies in a window its own source was seen in (§3
       activity: MUSE_ACTIVE,
     });
     expect(summary(loaded, await run(loaded))).toEqual({ o1: ['UNASKED', 'unasked', ['o1']] });
+  });
+
+  it("reads its own source's window even when that source is not one of its type's sources (§3)", async () => {
+    // o2 is an email.sent row from the calendar observer. email.sent's relevant source is gmail.sent, but §3 asks
+    // only for "a coverage interval of their own source": gcal.event saw 12:00–15:00, so o2 is an orphan.
+    const calendar = { ...GMAIL, source: 'gcal.event', allCalendars: true };
+    const loaded = load({
+      observations: [{ ...ORPHAN, ref: 'o2', source: 'gcal.event' }],
+      coverage: [calendar],
+      activity: MUSE_ACTIVE,
+    });
+    expect(summary(loaded, await run(loaded))).toEqual({ o2: ['UNASKED', 'unasked', ['o2']] });
+    // With a policy giving email.sent both sources, each row needs its own source's window: o1 (gmail.sent) has
+    // none, o2 (gcal.event) has one.
+    const both = load(
+      {
+        observations: [ORPHAN, { ...ORPHAN, ref: 'o2', source: 'gcal.event' }],
+        coverage: [calendar],
+        activity: MUSE_ACTIVE,
+      },
+      { sourcesByType: { 'email.sent': ['gmail.sent', 'gcal.event'] } },
+    );
+    expect(summary(both, await run(both))).toEqual({ o2: ['UNASKED', 'unasked', ['o2']] });
+  });
+
+  it('several disjoint windows: closed at both ends, exact to the millisecond, nothing in the gap', async () => {
+    // gmail.sent saw [12:00, 13:00] and [14:00, 15:00]. Every row has muse's session and the user's idle (7/10).
+    const t = (hhmmss: string) => `2026-10-06T${hhmmss}-04:00`;
+    const rows = [
+      '11:59:59.999',
+      '12:00:00',
+      '13:00:00',
+      '13:00:00.001',
+      '13:59:59.999',
+      '14:00:00',
+      '15:00:00',
+    ];
+    const loaded = load({
+      observations: rows.map((time, i) => sent(`o${String(i)}`, 'vendor@supplier.example', 'Re: x', t(time))),
+      coverage: [
+        { ...GMAIL, lastSyncAt: t('13:00:00'), windowEnd: t('13:00:00') },
+        { ...GMAIL, windowStart: t('14:00:00') },
+      ],
+      activity: {
+        sessions: ['12:00:00', '13:00:00', '14:00:00', '15:00:00'].map((time) => ({
+          agent: 'muse',
+          at: t(time),
+        })),
+        idle: [{ from: t('11:00:00'), to: EVALUATED_AT }],
+        adapterSyncs: [{ agent: 'muse', lastSyncAt: EVALUATED_AT }],
+      },
+    });
+    const unasked = (ref: string) => [ref, ['UNASKED', 'unasked', [ref]]];
+    expect(summary(loaded, await run(loaded))).toEqual(
+      Object.fromEntries(['o1', 'o2', 'o5', 'o6'].map(unasked)),
+    );
   });
 
   it('ignores a window that only a pass synced after evaluatedAt saw (§3)', async () => {

@@ -1,7 +1,9 @@
 /**
  * Batch grading (docs/grading.md §3, §4.3, §6.3, §7; module contract §13 `batch.ts`). `gradeBatch` is the only
  * path from the background to receipts: it grades exactly the PENDING `claims` it is given, with FINAL and
- * USER_OVERRIDDEN claims as fixed pre-assignments, and returns
+ * USER_OVERRIDDEN claims as fixed pre-assignments, and returns each receipt with the inputs it was graded with
+ * (`{receipt, inputs: {grant, context, policyHash}}`; the coverage is the batch's own), so the caller can store
+ * `receiptInputs` for replay (§3, §9):
  *
  *  - one receipt per claim: candidates are retrieved and scored for every assignable claim (§4.3: never for an
  *    underspecified claim, a calendar claim without `targetAt`, or a type with no sources), observations are
@@ -14,9 +16,11 @@
  *    `over_scope_observed`). A claim-less grade with any other outcome yields no receipt (§3).
  *
  * Inputs from after `coverage.evaluatedAt` are ignored (§3): observations first seen later (`visibleAt`),
- * coverage synced later (`seenWindows`; `grade` applies the same rule to eligibility) and grants written later
- * (`grantsInForce`). The output is ordered by receipt id, so it never depends on input order or index return
- * order. It stores nothing: the caller replaces each subject's row (§3).
+ * coverage synced later (`seenWindows`; `grade` applies the same rule to eligibility), grants written later
+ * (`grantsInForce`) and claims first seen later (`claimsSeenBy`: neither graded, nor given evidence, nor counted
+ * in `priorSpendCents`); attribution.ts cuts the activity it reads at `evaluatedAt` itself (`attributor`). The
+ * output is ordered by receipt id, so it never depends on input order or index return order. It stores nothing:
+ * the caller replaces each subject's row (§3).
  *
  * Speed (the task 1.5 grading perf gate): each type's rows are read once into a table (batch-retrieve.ts,
  * batch-table.ts), every pair is scored once (batch-score.ts), and each claim's evidence (best candidate,
@@ -27,7 +31,7 @@
  * PURE: no I/O but the injected index, no clock, no logging (Hard Rule 4). Async only because the index is.
  */
 import { BatchError } from './batch-error';
-import { BatchEvidence, claimReceipts } from './batch-grade';
+import { BatchEvidence, type BatchInputs, type BatchReceipt, claimReceipts } from './batch-grade';
 import { grantOf, grantsInForce } from './batch-grants';
 import { coveredObservations, type Keyed, visibleAt } from './batch-orphans';
 import { candidatesOfAll } from './batch-retrieve';
@@ -39,10 +43,11 @@ import { isAssignable, planClaims, TextFacts } from './features';
 import { grade, gradeOrphan } from './grade';
 import { instantMs } from './normalize';
 import type { Policy, RuleOutcome } from './policy';
-import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, Receipt, Ulid } from './schema';
+import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, Ulid } from './schema';
 import { scopeSubjects, spendIndex } from './scope';
 
 export { BatchError, type BatchErrorCode } from './batch-error';
+export type { BatchInputs, BatchReceipt } from './batch-grade';
 
 /**
  * A pre-assignment (§4.3): a FINAL or USER_OVERRIDDEN claim receipt fixes its observation to its claim
@@ -115,6 +120,16 @@ function uniformClaim(claim: Claim): Claim {
     extractor: claim.extractor,
     rawHash: claim.rawHash,
   };
+}
+
+/**
+ * §3: the claims first seen by `evaluatedMs` (`observedAt ≤ evaluatedAt`), in input order. A later claim does
+ * not exist yet for this batch: replay at an earlier instant sees exactly what grading saw.
+ */
+function claimsSeenBy(claims: readonly Claim[], evaluatedMs: number): Claim[] {
+  const seen: Claim[] = [];
+  for (const claim of claims) if (instantMs(claim.observedAt) <= evaluatedMs) seen.push(claim);
+  return seen;
 }
 
 /** Fixed pairs and taken observations, after checking no graded claim is also fixed (it is FINAL). */
@@ -195,54 +210,64 @@ function unaskedReceipts(
   activity: Activity,
   batch: Batch,
   evidence: BatchEvidence,
-): Receipt[] {
+): BatchReceipt[] {
   const { policy, coverage } = batch;
   const attribute = attributor(activity, policy, coverage.evaluatedAt);
-  const receipts: Receipt[] = [];
+  const receipts: BatchReceipt[] = [];
   for (const { observation: orphan, atMs } of covered) {
     if (assignment.has(orphan.id) || batch.taken.has(orphan.id)) continue;
     const attribution = attribute(orphan, atMs);
     if (attribution === null) continue;
     const grant = grantOf(batch.grants, attribution.agent);
-    const context = { priorSpendCents: 0, attribution };
+    const context: GradeContext = { priorSpendCents: 0, attribution };
     if (claimlessOutcome(grant, context, batch) !== 'UNASKED') continue;
-    receipts.push(gradeOrphan(orphan, evidence.shared(grant), grant, policy, context));
+    const receipt = gradeOrphan(orphan, evidence.shared(grant), grant, policy, context);
+    receipts.push({ receipt, inputs: inputsOf(grant, context, policy) });
   }
   return receipts;
 }
 
 /** OVER_SCOPE receipts for observed scopes the user never declared (§6.1 `observedScopeExceedsDeclared`). */
-function scopeReceipts(batch: Batch): Receipt[] {
-  const receipts: Receipt[] = [];
+function scopeReceipts(batch: Batch): BatchReceipt[] {
+  const { policy, coverage } = batch;
+  const receipts: BatchReceipt[] = [];
   for (const grant of batch.grants.values()) {
     for (const observed of scopeSubjects(grant)) {
-      const context = { priorSpendCents: 0, scope: { observed } };
+      const context: GradeContext = { priorSpendCents: 0, scope: { observed } };
       if (claimlessOutcome(grant, context, batch) !== 'OVER_SCOPE') continue;
-      receipts.push(grade(null, [], grant, batch.policy, batch.coverage, context));
+      const receipt = grade(null, [], grant, policy, coverage, context);
+      receipts.push({ receipt, inputs: inputsOf(grant, context, policy) });
     }
   }
   return receipts;
 }
 
-function compareIds(a: Receipt, b: Receipt): number {
-  return compareText(a.id, b.id);
+/** The inputs a claim-less receipt was graded with besides the batch's coverage (§3). */
+function inputsOf(grant: Grant, context: GradeContext, policy: Policy): BatchInputs {
+  return { grant, context, policyHash: policy.policyHash };
+}
+
+function compareIds(a: BatchReceipt, b: BatchReceipt): number {
+  return compareText(a.receipt.id, b.receipt.id);
 }
 
 /** Ordered by receipt id; two receipts with one id are a corrupt batch (`duplicate_receipt`). */
-function byReceiptId(receipts: readonly Receipt[]): Receipt[] {
-  const sorted = [...receipts].sort(compareIds);
+function byReceiptId(graded: readonly BatchReceipt[]): BatchReceipt[] {
+  const sorted = [...graded].sort(compareIds);
   for (let i = 1; i < sorted.length; i += 1) {
-    if (sorted[i - 1]?.id === sorted[i]?.id) throw new BatchError('duplicate_receipt');
+    if (sorted[i - 1]?.receipt.id === sorted[i]?.receipt.id) throw new BatchError('duplicate_receipt');
   }
   return sorted;
 }
 
 /**
  * Grades a batch (§3): `claims` are the PENDING claims to grade; `fixed` the FINAL and USER_OVERRIDDEN
- * pre-assignments. Returns claim, UNASKED and `over_scope_observed` receipts ordered by receipt id.
+ * pre-assignments. Returns claim, UNASKED and `over_scope_observed` receipts ordered by receipt id, each with
+ * the grant, context and policy hash it was graded with (the coverage is `coverage`). A claim first seen after
+ * `evaluatedAt` is ignored (§3): no receipt, no evidence, no spend.
  *
- * Throws `BatchError` for a claim given twice or also fixed, an agent with no grant in force (or two at one
- * instant), or two receipts with one id; `CandidatesError('fixed_conflict')` for fixed pairs that are not
+ * Throws `BatchError` for a claim given twice (seen or not) or also fixed, an agent with no grant in force (or two
+ * at one instant), or two receipts with one id; `CandidatesError('fixed_conflict')` for fixed pairs that are not
  * one-to-one; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6).
  */
 export async function gradeBatch(
@@ -253,18 +278,20 @@ export async function gradeBatch(
   coverage: Coverage,
   activity: Activity,
   fixed: readonly BatchFixed[] = [],
-): Promise<Receipt[]> {
+): Promise<BatchReceipt[]> {
   const evaluatedMs = instantMs(coverage.evaluatedAt);
   const { fixedPairs, taken } = splitFixed(claims, fixed);
   const uniform = new Map<Claim, Claim>();
   const graded: Claim[] = [];
-  for (const claim of claims) {
+  for (const claim of claimsSeenBy(claims, evaluatedMs)) {
     const copy = uniformClaim(claim);
     uniform.set(claim, copy);
     graded.push(copy);
   }
   const history: Claim[] = [];
-  for (const claim of activity.claims) history.push(uniform.get(claim) ?? uniformClaim(claim));
+  for (const claim of claimsSeenBy(activity.claims, evaluatedMs)) {
+    history.push(uniform.get(claim) ?? uniformClaim(claim));
+  }
   const read: Activity = { ...activity, claims: history };
   const inForce = grantsInForce(grants, evaluatedMs);
   const batch: Batch = { policy, coverage, grants: inForce, fixedPairs, taken, claimless: new Map() };

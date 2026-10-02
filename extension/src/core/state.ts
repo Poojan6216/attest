@@ -2,10 +2,12 @@
  * The receipt state machine (docs/grading.md §8; module contract §13). `transition(receipt, event)` applies one
  * user or lifecycle event to a stored receipt and returns a new receipt; the input is never mutated.
  *
- *   PENDING ───────── regrade(next) ─────────▶ next  (PENDING or FINAL, as grade() decided)
- *   PENDING | FINAL ── override(grade, reason, at) ─▶ USER_OVERRIDDEN  (previousState stored)
+ *   PENDING ───────── regrade(next) ─────────▶ next  (PENDING or FINAL, as grade() decided; same id,
+ *                                                     next.computedAt ≥ computedAt, UNASKED stays UNASKED)
+ *   PENDING | FINAL ── override(grade, reason, at ≥ computedAt) ─▶ USER_OVERRIDDEN  (previousState stored)
  *   USER_OVERRIDDEN ── revert ────────────────▶ previousState  (the exact prior receipt)
- *   UNASKED, any state ── supersede(claimId) ─▶ the same state, supersededBy = claimId
+ *   UNASKED, any state ── supersede(claimId) ─▶ the same state, supersededBy = claimId (replacing an earlier
+ *                                                     claim; the same claim changes nothing)
  *
  * Every other (state, event) pair throws IllegalTransitionError with a code. This module never decides
  * finality: grade() sets `state` and `finalAt` (conditions.isFinalizable), and `regrade` only installs grade()'s
@@ -14,15 +16,16 @@
  * replay shows an override, never a changed grade.
  *
  * Lifecycle reasons (§15): `override.user` {grade} while overridden and `superseded` {claimId} while superseded,
- * always after the graded reasons and in table order. They are derived from `override` and `supersededBy`, and
- * a stored receipt whose lifecycle reasons disagree with those fields is rejected, so `revert` restores the
- * exact receipt that was overridden. Every result is parsed with the Receipt schema, so it satisfies the receipt
- * invariants (override iff USER_OVERRIDDEN, finalAt iff FINAL before any override, attribution and
- * supersededBy on UNASKED only).
+ * always after the graded reasons and in table order. They are derived from `override` and `supersededBy`; the
+ * Receipt schema rejects a receipt whose lifecycle reasons disagree with those fields (§8), so `revert` restores
+ * the exact receipt that was overridden. Stored receipts, `next` and every result are parsed with the Receipt
+ * schema, so they satisfy every receipt invariant (override iff USER_OVERRIDDEN with `override.at ≥
+ * computedAt`, finalAt iff FINAL before any override, attribution and supersededBy on UNASKED only, the
+ * lifecycle reasons).
  *
  * PURE: no clock, no I/O, no logging (Hard Rule 4).
  */
-import { canonicalJson } from './hash';
+import { instantMs } from './normalize';
 import { type Reason, Receipt, ReceiptOverride, type ReceiptState, Ulid } from './schema';
 import { IllegalTransitionError } from './state-error';
 
@@ -74,18 +77,10 @@ function lifecycleReasons(receipt: Pick<Receipt, 'override' | 'supersededBy'>): 
   return reasons;
 }
 
-/** The receipt's reasons are its graded reasons followed by exactly the lifecycle reasons its fields imply. */
-function lifecycleConsistent(receipt: Receipt): boolean {
-  const expected = [...gradedReasons(receipt.reasons), ...lifecycleReasons(receipt)];
-  return canonicalJson(expected) === canonicalJson(receipt.reasons);
-}
-
-/** A stored receipt as the schema reads it, with consistent lifecycle reasons; else `invalid_receipt`. */
+/** A stored receipt as the schema reads it (its lifecycle reasons included, §8); else `invalid_receipt`. */
 function parseStored(receipt: Receipt): Receipt {
   const parsed = Receipt.safeParse(receipt);
-  if (!parsed.success || !lifecycleConsistent(parsed.data)) {
-    throw new IllegalTransitionError('invalid_receipt', undefined);
-  }
+  if (!parsed.success) throw new IllegalTransitionError('invalid_receipt', undefined);
   return parsed.data;
 }
 
@@ -97,21 +92,46 @@ function finish(fields: Receipt, from: ReceiptState): Receipt {
   return parsed.data;
 }
 
-/** PENDING → next. FINAL receipts are never re-graded, and an overridden receipt is not either (§8). */
+/**
+ * Whether `receipt` can be grade()'s output (§8): grade() sets neither an override nor a supersession, so a
+ * USER_OVERRIDDEN or superseded `next` would install a lifecycle event that no `override` or `supersede` applied.
+ */
+function isGraded(receipt: Receipt): boolean {
+  return receipt.state !== 'USER_OVERRIDDEN' && receipt.supersededBy === undefined;
+}
+
+/**
+ * PENDING → next (§8): grade()'s receipt for the same subject (same id), PENDING or FINAL, computed no earlier
+ * than the stored one (instants, not strings); an UNASKED receipt only to an UNASKED one (a PENDING UNASKED that
+ * re-evaluates to anything else is deleted by the caller). FINAL, overridden and superseded receipts are never
+ * re-graded.
+ */
 function regrade(current: Receipt, next: Receipt): Receipt {
   if (current.state === 'FINAL') throw new IllegalTransitionError('regrade_final', current.state);
   if (current.state === 'USER_OVERRIDDEN') {
     throw new IllegalTransitionError('regrade_overridden', current.state);
   }
+  if (current.supersededBy !== undefined)
+    throw new IllegalTransitionError('regrade_superseded', current.state);
   const parsed = Receipt.safeParse(next);
-  if (!parsed.success || parsed.data.state === 'USER_OVERRIDDEN' || !lifecycleConsistent(parsed.data)) {
+  if (!parsed.success || !isGraded(parsed.data)) {
     throw new IllegalTransitionError('invalid_event', current.state);
   }
-  if (parsed.data.id !== current.id) throw new IllegalTransitionError('subject_mismatch', current.state);
-  return parsed.data;
+  const graded = parsed.data;
+  if (graded.id !== current.id) throw new IllegalTransitionError('subject_mismatch', current.state);
+  if (instantMs(graded.computedAt) < instantMs(current.computedAt)) {
+    throw new IllegalTransitionError('regrade_stale', current.state);
+  }
+  if (current.grade === 'UNASKED' && graded.grade !== 'UNASKED') {
+    throw new IllegalTransitionError('regrade_not_unasked', current.state);
+  }
+  return graded;
 }
 
-/** PENDING | FINAL → USER_OVERRIDDEN, storing previousState; the computed grade and finalAt are kept. */
+/**
+ * PENDING | FINAL → USER_OVERRIDDEN, storing previousState; the computed grade and finalAt are kept. The
+ * override must not predate the receipt (`at ≥ computedAt`, instants, §8).
+ */
 function override(current: Receipt, event: Extract<ReceiptEvent, { event: 'override' }>): Receipt {
   if (current.state === 'USER_OVERRIDDEN') {
     throw new IllegalTransitionError('already_overridden', current.state);
@@ -122,7 +142,9 @@ function override(current: Receipt, event: Extract<ReceiptEvent, { event: 'overr
     at: event.at,
     previousState: current.state,
   });
-  if (!parsed.success) throw new IllegalTransitionError('invalid_event', current.state);
+  if (!parsed.success || instantMs(parsed.data.at) < instantMs(current.computedAt)) {
+    throw new IllegalTransitionError('invalid_event', current.state);
+  }
   return finish({ ...current, state: 'USER_OVERRIDDEN', override: parsed.data }, current.state);
 }
 
@@ -136,7 +158,10 @@ function revert(current: Receipt): Receipt {
   return finish({ ...rest, state: stored.previousState }, current.state);
 }
 
-/** UNASKED receipts only, in any state: set (or replace) supersededBy; the state is unchanged. */
+/**
+ * UNASKED receipts only, in any state: set supersededBy, replacing an earlier claim (the same claim changes
+ * nothing); the state is unchanged. The background applies it once the superseding claim's receipt is FINAL.
+ */
 function supersede(current: Receipt, claimId: string): Receipt {
   if (current.grade !== 'UNASKED') throw new IllegalTransitionError('not_unasked', current.state);
   const parsed = Ulid.safeParse(claimId);

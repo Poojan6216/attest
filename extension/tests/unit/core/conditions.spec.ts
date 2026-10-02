@@ -182,6 +182,29 @@ describe('coverage: caps and several sources (§6.1)', () => {
       { code: 'coverage.no_account', source: 'gmail.sent' },
     ]);
   });
+
+  it('several sources: levels are per source, never pooled across sources (§6.1 v1.4)', () => {
+    const policy = policyWith({ sourcesByType: { 'email.sent': ['gmail.sent', 'gcal.event'] } });
+    const calendar = (over: Partial<ScenarioCoverage> = {}) =>
+      entry({ source: 'gcal.event', allCalendars: true, ...over });
+    // Each source alone sees half the window [14:00, 14:48]; together they would contain it, but no source does.
+    const early = entry({ windowEnd: at('14:20') });
+    const late = calendar({ windowStart: at('14:20') });
+    const split = level(claim, [early, late], grantOf(), policy);
+    expect([split.level, ...split.sources.map((s) => s.level)]).toEqual(['partial', 'partial', 'partial']);
+    const partialNone = level(claim, [early], grantOf(), policy);
+    expect([partialNone.level, ...partialNone.sources.map((s) => s.level)]).toEqual([
+      'partial',
+      'partial',
+      'none',
+    ]);
+    const fullPartial = level(claim, [entry(), late], grantOf(), policy);
+    expect([fullPartial.level, ...fullPartial.sources.map((s) => s.level)]).toEqual([
+      'partial',
+      'full',
+      'partial',
+    ]);
+  });
 });
 
 describe('graceElapsed: the observers synced after the whole window could have happened (§6.1)', () => {

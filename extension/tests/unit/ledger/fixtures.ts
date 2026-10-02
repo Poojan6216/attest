@@ -41,6 +41,11 @@ export function observationId(n: number): string {
   return idFromHash(sha(n));
 }
 
+/** The id of the claim whose rawHash is `sha(n)`: §8, §10 (v1.4) `id = idFromHash(rawHash)`. */
+export function claimId(n: number): string {
+  return idFromHash(sha(n));
+}
+
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
 
 let dbCounter = 0;
@@ -71,9 +76,15 @@ export function makeObservation(overrides: Partial<ObservationInput> = {}): Obse
   };
 }
 
+/**
+ * A valid claim: rawHash `sha(101)` unless overridden, and an id derived from whatever rawHash it ends up with
+ * (the schema checks `id = idFromHash(rawHash)`, §10 v1.4). Overriding `id` builds a claim whose id does not
+ * match, which the schema rejects.
+ */
 export function makeClaim(overrides: Partial<ClaimInput> = {}): ClaimInput {
+  const rawHash = overrides.rawHash ?? sha(101);
   return {
-    id: ulid(101),
+    id: HEX_SHA256.test(rawHash) ? idFromHash(rawHash) : claimId(101),
     agent: 'muse',
     requestId: ulid(201),
     type: 'email.sent',
@@ -84,7 +95,7 @@ export function makeClaim(overrides: Partial<ClaimInput> = {}): ClaimInput {
     observedAt: '2026-10-01T10:30:00-04:00',
     sourceKind: 'activity_view',
     extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.9 },
-    rawHash: sha(101),
+    rawHash,
     ...overrides,
   };
 }
@@ -105,7 +116,7 @@ export function makeReceipt(overrides: Partial<ReceiptInput> = {}): ReceiptInput
   return {
     id: ulid(301),
     agent: 'muse',
-    claimId: ulid(101),
+    claimId: claimId(101),
     observationIds: [observationId(1)],
     requestId: ulid(201),
     grade: 'VERIFIED',

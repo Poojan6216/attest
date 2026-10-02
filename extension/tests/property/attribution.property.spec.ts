@@ -1,6 +1,9 @@
 /**
- * Property tests for attribute() (docs/grading.md §7), 1,000 runs each:
- *  - equal to an independent oracle that reads §7 literally with linear scans (no index, no binary search);
+ * Property tests for attribute() (docs/grading.md §3, §4.3, §7, contract v1.4), 1,000 runs each:
+ *  - equal to an independent oracle that reads §7 literally with linear scans (no index, no binary search):
+ *    windows anchored on the earliest observedAt for calendar observations and on occurredAt otherwise, only
+ *    assignable claims (decided by hand from §4.3 for the generated claims) suppressing activityLogAdjacent,
+ *    and nothing from after evaluatedAt read (idle intervals cut at it);
  *  - independent of the input order of every activity list;
  *  - the result always parses with the strict Attribution schema, carries an agent-specific signal, and its
  *    score is exactly min(Σ fired weights, BASIS_POINTS) in integer basis points;
@@ -62,11 +65,18 @@ const idleArb = fc
     from: isoWithOffset(from, offset),
     to: isoWithOffset(from + minutes * MS_PER_MINUTE, offset),
   }));
+/** Counterparties and subjects whose §5.2 applicability is known by hand (see `assignable`). */
+const COUNTERPARTIES = [undefined, 'priya@company.com', 'Priya', '!!!'] as const;
+const SUBJECTS = [undefined, 'Q3 review', 'the'] as const;
 const claimArb = fc.record({
   agent: agentArb,
   type: fc.constantFrom(...TYPES),
+  counterparty: fc.constantFrom(...COUNTERPARTIES),
+  subjectHint: fc.constantFrom(...SUBJECTS),
+  targetAt: fc.option(isoArb, { nil: undefined }),
   claimedAt: isoArb,
   claimedAtPrecision: fc.constantFrom('minute' as const, 'minute' as const, 'hour' as const),
+  observedAt: isoArb,
 });
 const syncArb = fc.record({ agent: agentArb, lastSyncAt: isoArb.map((value) => IsoTs.parse(value)) });
 
@@ -80,6 +90,7 @@ const activityArb = fc.record({
 const orphanArb = fc.record({
   type: fc.constantFrom(...TYPES),
   occurredAt: fc.constantFrom(T, T + 1, T - 1).map((ms) => isoWithOffset(ms, -240)),
+  observedAt: isoArb,
   subjectHint: fc.constantFrom('Invoice', 'INVOICE - SENT WITH MUSE', 'notes via ChatGPT', 'Claude summary'),
 });
 const evaluatedAtArb = fc.option(isoArb, { nil: undefined });
@@ -88,13 +99,25 @@ const ms = (iso: string): number => Date.parse(iso);
 
 // ── The oracle: §7 read literally, linear scans only ────────────────────────────────────────────────────
 
+/**
+ * §4.3 for the generated claims, by hand: email needs a counterparty with a token (an address or 'Priya', not
+ * '!!!'); a calendar claim needs targetAt and a subject with a token ('Q3 review', not the stop word 'the') or
+ * such a counterparty.
+ */
+function assignable(claim: AttributionClaim): boolean {
+  const counterparty = claim.counterparty === 'priya@company.com' || claim.counterparty === 'Priya';
+  if (claim.type === 'email.sent') return counterparty;
+  return claim.targetAt !== undefined && (claim.subjectHint === 'Q3 review' || counterparty);
+}
+
 function oracleSignals(
   agent: AgentId,
   orphan: AttributionOrphan,
   activity: AttributionActivity,
+  limit: number,
 ): UnaskedSignal[] {
-  const t = ms(orphan.occurredAt);
-  const within = (at: number, radius: number) => Math.abs(at - t) <= radius * MS_PER_MINUTE;
+  const t = orphan.type.startsWith('calendar.') ? ms(orphan.observedAt) : ms(orphan.occurredAt);
+  const within = (at: number, radius: number) => at <= limit && Math.abs(at - t) <= radius * MS_PER_MINUTE;
   const fired = new Set<UnaskedSignal>();
   if (activity.sessions.some((s) => s.agent === agent && within(ms(s.at), W.sessionMin))) {
     fired.add('agentSessionActive');
@@ -105,6 +128,7 @@ function oracleSignals(
   }
   const explained = activity.claims.some((claim) => {
     if (claim.agent !== agent || claim.type !== orphan.type) return false;
+    if (ms(claim.observedAt) > limit || !assignable(claim)) return false;
     const unit = precisionBounds(claim);
     const distance = t < unit.startMs ? unit.startMs - t : t > unit.endMs ? t - unit.endMs : 0;
     return distance <= W.adjacentMin * MS_PER_MINUTE;
@@ -113,8 +137,9 @@ function oracleSignals(
     fired.add('activityLogAdjacent');
   }
   if (fired.size === 0) return [];
-  const idle = activity.idle.some((i) => ms(i.from) <= t - W.idleMin * MS_PER_MINUTE && ms(i.to) >= t);
-  if (idle) fired.add('userIdle');
+  const covers = (i: { from: string; to: string }) =>
+    ms(i.from) <= t - W.idleMin * MS_PER_MINUTE && Math.min(ms(i.to), limit) >= t;
+  if (activity.idle.some(covers)) fired.add('userIdle');
   return UnaskedSignal.options.filter((signal) => fired.has(signal));
 }
 
@@ -134,9 +159,10 @@ function oracle(
   activity: AttributionActivity,
   evaluatedAt: string | undefined,
 ): AttributionType | null {
+  const limit = evaluatedAt === undefined ? Number.POSITIVE_INFINITY : ms(evaluatedAt);
   const candidates = AgentId.options
     .map((agent) => {
-      const signals = oracleSignals(agent, orphan, activity);
+      const signals = oracleSignals(agent, orphan, activity, limit);
       const total = signals.reduce((sum, signal) => sum + POLICY.bp.unasked.signals[signal], 0);
       return { agent, signals, scoreBp: Math.min(total, BASIS_POINTS) };
     })

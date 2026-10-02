@@ -1,10 +1,11 @@
 /**
- * Task 1.6: each event's payload rules and edges (docs/grading.md §8, §15). Override needs a grade of VERIFIED
- * or NOT_FOUND, a visible reason and a timestamp; override then revert restores the exact prior receipt;
- * regrade replaces only its own subject's PENDING row; supersede touches UNASKED receipts only and keeps the
- * lifecycle reasons last and in table order; a stored receipt that breaks the schema or whose lifecycle reasons
- * disagree with its fields is refused. Every refusal is an IllegalTransitionError whose message carries no
- * user text (Hard Rule 10).
+ * Task 1.6 and contract v1.4: each event's payload rules and edges (docs/grading.md §8, §15). Override needs a
+ * grade of VERIFIED or NOT_FOUND, a visible reason and a timestamp no earlier than the receipt's computedAt;
+ * override then revert restores the exact prior receipt; regrade replaces only its own subject's PENDING row
+ * with a receipt computed no earlier, and an UNASKED receipt only with an UNASKED one; supersede touches UNASKED
+ * receipts only, replaces an earlier claim and keeps the lifecycle reasons last and in table order; a stored
+ * receipt that breaks the schema or whose lifecycle reasons disagree with its fields is refused. Every refusal
+ * is an IllegalTransitionError whose message carries no user text (Hard Rule 10).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -186,11 +187,24 @@ describe('regrade: only its own PENDING row', () => {
   it('refuses a next receipt that breaks the schema or its lifecycle reasons', () => {
     const noFinalAt = { ...CLAIM_PENDING, state: 'FINAL' } as const;
     expectRefusal(() => transition(CLAIM_PENDING, { event: 'regrade', next: noFinalAt }), 'invalid_event');
-    const lifecycle = Receipt.parse({
-      ...CLAIM_FINAL,
-      reasons: [{ code: 'superseded', params: { claimId: C1 } }],
-    });
-    expectRefusal(() => transition(CLAIM_PENDING, { event: 'regrade', next: lifecycle }), 'invalid_event');
+    const lifecycle = { ...CLAIM_FINAL, reasons: [{ code: 'superseded', params: { claimId: C1 } }] };
+    expect(Receipt.safeParse(lifecycle).success).toBe(false);
+    const regrade = { event: 'regrade', next: lifecycle };
+    expectRefusal(() => Reflect.apply(transition, undefined, [CLAIM_PENDING, regrade]), 'invalid_event');
+  });
+
+  it('refuses a superseded next receipt: grade() never supersedes, only the supersede event does', () => {
+    const pending = Receipt.parse({ ...UNASKED_FINAL, state: 'PENDING', finalAt: undefined });
+    const forged = supersede(UNASKED_FINAL, C1);
+    expectRefusal(() => transition(pending, { event: 'regrade', next: forged }), 'invalid_event', 'PENDING');
+    // A stored superseded receipt is refused before its next is read: it is never regraded.
+    const swapped = supersede(pending, C2);
+    expectRefusal(
+      () => transition(swapped, { event: 'regrade', next: forged }),
+      'regrade_superseded',
+      'PENDING',
+    );
+    expect(transition(pending, { event: 'regrade', next: UNASKED_FINAL })).toStrictEqual(UNASKED_FINAL);
   });
 
   it('refuses a receipt overridden from PENDING (an overridden receipt is never regraded)', () => {
@@ -199,6 +213,97 @@ describe('regrade: only its own PENDING row', () => {
       () => transition(override(CLAIM_PENDING), { event: 'regrade', next }),
       'regrade_overridden',
     );
+  });
+});
+
+/** grade()'s receipt for the claim subject, computed at `computedAt` (FINAL there). */
+const claimFinalAt = (computedAt: string) =>
+  Receipt.parse({ ...CLAIM_FINAL, computedAt, finalAt: computedAt });
+/** `receipt` without the field `key` (no undefined-valued key is left behind). */
+const omit = (receipt: Receipt, key: keyof Receipt) =>
+  Object.fromEntries(Object.entries(receipt).filter(([name]) => name !== key));
+const UNASKED_PENDING = Receipt.parse({ ...omit(UNASKED_FINAL, 'finalAt'), state: 'PENDING' });
+
+describe('regrade: computed no earlier than the stored receipt (§8, v1.4)', () => {
+  it('refuses a next receipt computed before the stored one: regrade_stale', () => {
+    const earlier = claimFinalAt('2026-10-06T14:47:59-04:00');
+    expectRefusal(
+      () => transition(CLAIM_PENDING, { event: 'regrade', next: earlier }),
+      'regrade_stale',
+      'PENDING',
+    );
+  });
+
+  it('accepts the same instant, written in another offset', () => {
+    const same = claimFinalAt('2026-10-06T18:48:00Z');
+    expect(transition(CLAIM_PENDING, { event: 'regrade', next: same })).toStrictEqual(same);
+  });
+
+  it('compares instants, not strings', () => {
+    // '…T18:47:00Z' sorts after '…T14:48:00-04:00' as a string but is one minute earlier as an instant.
+    const stringLater = claimFinalAt('2026-10-06T18:47:00Z');
+    expectRefusal(() => transition(CLAIM_PENDING, { event: 'regrade', next: stringLater }), 'regrade_stale');
+    // '…T15:00:00-04:00' sorts before '…T18:48:00Z' as a string but is later as an instant.
+    const pendingZ = Receipt.parse({ ...CLAIM_PENDING, computedAt: '2026-10-06T18:48:00Z' });
+    const later = claimFinalAt('2026-10-06T15:00:00-04:00');
+    expect(transition(pendingZ, { event: 'regrade', next: later })).toStrictEqual(later);
+  });
+});
+
+describe('regrade: an UNASKED receipt stays UNASKED (§7, §8, v1.4)', () => {
+  /** The same orphan subject (same id) re-evaluated to something else: the caller deletes the row instead. */
+  const notUnasked = (grade: 'UNVERIFIABLE' | 'OVER_SCOPE') =>
+    Receipt.parse({
+      ...omit(UNASKED_FINAL, 'attribution'),
+      grade,
+      confidence: 0,
+      ruleId: 'default_unverifiable',
+      reasons: [],
+    });
+
+  it.each(['UNVERIFIABLE', 'OVER_SCOPE'] as const)('refuses an UNASKED → %s regrade', (grade) => {
+    expectRefusal(
+      () => transition(UNASKED_PENDING, { event: 'regrade', next: notUnasked(grade) }),
+      'regrade_not_unasked',
+      'PENDING',
+    );
+  });
+
+  it('refuses to regrade a superseded receipt, which would drop supersededBy: regrade_superseded', () => {
+    const superseded = transition(UNASKED_PENDING, { event: 'supersede', claimId: C2 });
+    expectRefusal(
+      () => transition(superseded, { event: 'regrade', next: UNASKED_FINAL }),
+      'regrade_superseded',
+      'PENDING',
+    );
+  });
+
+  it('installs a later UNASKED receipt for the same orphan', () => {
+    expect(transition(UNASKED_PENDING, { event: 'regrade', next: UNASKED_FINAL })).toStrictEqual(
+      UNASKED_FINAL,
+    );
+  });
+
+  it('checks the subject before the grade', () => {
+    const other = Receipt.parse({ ...notUnasked('UNVERIFIABLE'), id: ulid(13) });
+    expectRefusal(() => transition(UNASKED_PENDING, { event: 'regrade', next: other }), 'subject_mismatch');
+  });
+});
+
+describe('override: never before the receipt was computed (§8, v1.4)', () => {
+  const at = (receipt: Receipt, when: string) =>
+    transition(receipt, { event: 'override', grade: 'VERIFIED', reason: REASON, at: when });
+
+  it('refuses an override.at before computedAt with invalid_event, from PENDING and FINAL', () => {
+    for (const receipt of [CLAIM_PENDING, CLAIM_FINAL, UNASKED_FINAL]) {
+      expectRefusal(() => at(receipt, '2026-10-06T14:47:59-04:00'), 'invalid_event', receipt.state);
+    }
+  });
+
+  it('accepts override.at equal to computedAt, as an instant in any offset', () => {
+    expect(at(CLAIM_FINAL, T0).override?.at).toBe(T0);
+    expect(at(CLAIM_FINAL, '2026-10-06T18:48:00Z').state).toBe('USER_OVERRIDDEN');
+    expectRefusal(() => at(CLAIM_FINAL, '2026-10-06T18:47:59Z'), 'invalid_event');
   });
 });
 

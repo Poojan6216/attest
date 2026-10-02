@@ -290,7 +290,8 @@ describe('isCalendarType', () => {
 describe('a schema-parsed Claim is a WindowClaim', () => {
   it('a 25-hour day claim from the Claim schema yields the true-midnight window', () => {
     const parsed: Claim = Claim.parse({
-      id: idFromHash(sha256Hex('window-claim')),
+      // Claim.id must derive from rawHash (docs/grading.md §8 invariants, §10).
+      id: idFromHash(sha256Hex('window-claim-raw')),
       agent: 'muse',
       type: 'email.sent',
       counterparty: 'priya@company.com',

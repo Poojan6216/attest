@@ -508,6 +508,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-02] [1.7] UNASKED detection: for an action nobody claimed, each agent gets its own score from session activity, user idleness (only with real evidence, never assumed), known signatures, and adjacent activity-log entries; UNASKED fires only above the policy threshold, and every sentence says 'likely' (a test checks no text ever states an agent did it as fact).
 [2026-10-02] [1.8] Spend and scope limits: claimed type not allowed, permissions observed beyond what was declared, a single purchase over the ceiling, and cumulative spend (two $30 purchases against a $50 ceiling: the second is OVER_SCOPE).
 [2026-10-02] [1.5] Grading is done and fast: grade() decides every receipt by the policy rules (same inputs give the same receipt, proven over 5,000 random cases twice), all 84 golden scenarios pass through the real code, and grading 5,000 claims against 50,000 observations takes about 1.0 s (limit 2 s; it was 23 s before two optimisation passes, with receipts proven identical before and after).
+[2026-10-02] [1.v14] Contract v1.4 semantics landed in the core: gradeBatch returns each receipt with the inputs it was graded with, claims seen after the grading instant are ignored, orphans follow their own source's coverage, attribution and finality share one anchor for calendar events, and a superseded receipt can no longer be regraded — all 6,063 tests, the perf gate (1.38 s of 2 s) and E2E green
 ```
 
 ---

@@ -68,7 +68,16 @@ async function run(loaded: LoadedScenario, overrides: Overrides = {}): Promise<R
   const { coverage, activity } = loaded;
   const grants = overrides.grants ?? loaded.grants;
   const fixed = overrides.fixed ?? loaded.fixed;
-  return gradeBatch(claims, index, grants, loadPolicy(loaded.policyJson), coverage, activity, fixed);
+  const graded = await gradeBatch(
+    claims,
+    index,
+    grants,
+    loadPolicy(loaded.policyJson),
+    coverage,
+    activity,
+    fixed,
+  );
+  return graded.map((entry) => entry.receipt);
 }
 
 function claimOf(loaded: LoadedScenario, ref: string) {

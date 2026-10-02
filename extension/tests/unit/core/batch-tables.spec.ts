@@ -67,8 +67,8 @@ const ACTIVITY = Activity.parse({ sessions: [], idle: [], entries: [], adapterSy
 
 async function claimReceipt(observations: readonly Observation[]): Promise<Receipt | undefined> {
   const index = createMemoryIndex(observations, 15);
-  const receipts = await gradeBatch([CLAIM], index, [GRANT], DEFAULT_POLICY, COVERAGE, ACTIVITY);
-  return receipts.find((receipt) => receipt.claimId === CLAIM.id);
+  const graded = await gradeBatch([CLAIM], index, [GRANT], DEFAULT_POLICY, COVERAGE, ACTIVITY);
+  return graded.find(({ receipt }) => receipt.claimId === CLAIM.id)?.receipt;
 }
 
 const direct = (candidates: readonly Observation[]) =>

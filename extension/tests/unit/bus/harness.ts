@@ -31,7 +31,9 @@ export const SECRET = 'SSN 078-05-1120 card 4111 1111 1111 1111 pass hunter2';
 
 export const HASH = 'ab'.repeat(32);
 export const ULID_REQUEST = '01J9Z8K3M4N5P6Q7R8S9T0V1W2';
-export const ULID_CLAIM = '01J9Z8K3M4N5P6Q7R8S9T0V1W3';
+/** §10 (v1.4): a claim's id is idFromHash(rawHash), and the schema checks it. */
+export const CLAIM_RAW_HASH = 'cd'.repeat(32);
+export const ULID_CLAIM = idFromHash(CLAIM_RAW_HASH);
 /** §10 (v1.3): an observation's id is idFromHash(contentHash), and the schema checks it. */
 export const ULID_OBSERVATION = idFromHash(HASH);
 export const TS = '2026-10-01T09:30:00Z';
@@ -142,7 +144,7 @@ export const CLAIM: Claim = Claim.parse({
   observedAt: TS_OFFSET,
   sourceKind: 'activity_view',
   extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.92 },
-  rawHash: HASH,
+  rawHash: CLAIM_RAW_HASH,
 });
 
 export const OBSERVATION: Observation = Observation.parse({

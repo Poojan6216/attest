@@ -17,6 +17,7 @@ import {
   upsertObservation,
 } from '../../../src/ledger/repo';
 import {
+  claimId,
   expectLedgerError,
   makeClaim,
   makeGrant,
@@ -50,7 +51,7 @@ async function populate(db: LedgerDb, reverse = false): Promise<void> {
   const order = <T>(items: T[]): T[] => (reverse ? [...items].reverse() : items);
   for (const n of order([2, 1])) {
     await upsertObservation(db, makeObservation({ contentHash: sha(n) }));
-    await upsertClaim(db, makeClaim({ id: ulid(100 + n), rawHash: sha(100 + n) }));
+    await upsertClaim(db, makeClaim({ rawHash: sha(100 + n) }));
     await putRequest(db, makeRequest({ id: ulid(200 + n) }));
     await putReceipt(db, makeReceipt({ id: ulid(300 + n), agent: n === 1 ? 'muse' : 'claude' }));
   }
@@ -80,7 +81,7 @@ describe('exportLedger', () => {
     expect(Object.keys(exported.tables).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
     const { tables } = exported;
     expect(tables.observations.map((o) => o.id)).toEqual([observationId(1), observationId(2)].sort());
-    expect(tables.claims.map((c) => c.id)).toEqual([ulid(101), ulid(102)]);
+    expect(tables.claims.map((c) => c.id)).toEqual([claimId(101), claimId(102)].sort());
     expect(tables.receipts.map((r) => r.id)).toEqual([ulid(301), ulid(302)]);
     expect(tables.grants.map((g) => g.agent)).toEqual(['chatgpt', 'muse']);
     expect(tables.adapterHealth.map((h) => h.adapterId)).toEqual(['gmail', 'muse']);

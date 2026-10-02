@@ -1,7 +1,9 @@
 /**
- * Property tests for the receipt state machine (docs/grading.md §8; task 1.6), 1,000 runs each:
- *  - a random sequence of valid events, checked step by step against an independent model of the §8 table:
- *    each legal event lands in the model's state, each illegal one throws the model's code and changes nothing,
+ * Property tests for the receipt state machine (docs/grading.md §8; task 1.6, contract v1.4), 1,000 runs each:
+ *  - a random sequence of well-formed events, checked step by step against an independent model of the §8
+ *    table and its v1.4 payload rules (regrade: computed no earlier, UNASKED stays UNASKED; override: at no
+ *    earlier than computedAt): each legal event lands in the model's state, each illegal one throws the model's
+ *    code and changes nothing,
  *    every receipt parses with the Receipt schema with its lifecycle reasons last and in §15 order, and no
  *    event but `regrade` changes the computed grade (or any other computed field);
  *  - the same with arbitrary, mostly invalid payloads and unknown event kinds: the only failure is an
@@ -66,8 +68,12 @@ const computedArb = (kind: Kind) =>
 
 type Computed = ReturnType<typeof computedArb> extends fc.Arbitrary<infer T> ? T : never;
 
-function build(kind: Kind, computed: Computed, id?: string): Receipt {
-  const subject = kind === 'claim' ? CLAIM_SUBJECT : UNASKED_SUBJECT;
+/** The orphan subject's id without attribution: a claim-less receipt of another grade for the same orphan. */
+const ORPHAN_OTHER_SUBJECT = { id: UNASKED_SUBJECT.id };
+
+function build(kind: Kind | 'orphanOther', computed: Computed, id?: string): Receipt {
+  const subject =
+    kind === 'claim' ? CLAIM_SUBJECT : kind === 'unasked' ? UNASKED_SUBJECT : ORPHAN_OTHER_SUBJECT;
   return Receipt.parse({
     ...subject,
     ...(id === undefined ? {} : { id }),
@@ -88,10 +94,17 @@ const overrideArb = fc.record({
   at: isoArb,
 });
 
-/** Valid events for `kind`'s subject: every payload is well-formed, so only the (state, event) pair decides. */
+/**
+ * Well-formed events for `kind`'s subject: the (state, event) pair and the v1.4 payload rules decide. For an
+ * UNASKED subject, a regrade may carry the same orphan re-evaluated to another grade (refused, §8).
+ */
 const eventArb = (kind: Kind): fc.Arbitrary<ReceiptEvent> =>
   fc.oneof(
     computedArb(kind).map((computed): ReceiptEvent => ({ event: 'regrade', next: build(kind, computed) })),
+    computedArb('claim').map((computed): ReceiptEvent => ({
+      event: 'regrade',
+      next: build(kind === 'claim' ? 'claim' : 'orphanOther', computed),
+    })),
     overrideArb,
     fc.constant({ event: 'revert' as const }),
     ulidArb.map((claimId): ReceiptEvent => ({ event: 'supersede', claimId })),
@@ -105,14 +118,25 @@ const scenarioArb = fc.constantFrom<Kind>('claim', 'unasked').chain((kind) =>
   }),
 );
 
+const instant = (iso: string): number => Date.parse(iso);
+
+/** §8 regrade from PENDING (v1.4): computed no earlier, and an UNASKED receipt only to an UNASKED one. */
+function regradeModel(current: Receipt, next: Receipt): ReceiptState | IllegalTransitionCode {
+  if (instant(next.computedAt) < instant(current.computedAt)) return 'regrade_stale';
+  if (current.grade === 'UNASKED' && next.grade !== 'UNASKED') return 'regrade_not_unasked';
+  return next.state;
+}
+
 /** The §8 table, independently: the state a legal event leads to, or the code an illegal one throws. */
 function model(current: Receipt, event: ReceiptEvent): ReceiptState | IllegalTransitionCode {
   switch (event.event) {
     case 'regrade':
       if (current.state === 'FINAL') return 'regrade_final';
-      return current.state === 'USER_OVERRIDDEN' ? 'regrade_overridden' : event.next.state;
+      if (current.state === 'USER_OVERRIDDEN') return 'regrade_overridden';
+      return current.supersededBy === undefined ? regradeModel(current, event.next) : 'regrade_superseded';
     case 'override':
-      return current.state === 'USER_OVERRIDDEN' ? 'already_overridden' : 'USER_OVERRIDDEN';
+      if (current.state === 'USER_OVERRIDDEN') return 'already_overridden';
+      return instant(event.at) < instant(current.computedAt) ? 'invalid_event' : 'USER_OVERRIDDEN';
     case 'revert':
       return current.override?.previousState ?? 'not_overridden';
     case 'supersede':
@@ -249,8 +273,12 @@ describe('state machine: override then revert', () => {
             ? transition(receipt, { event: 'supersede', claimId: supersededBy })
             : receipt;
         });
+      // §8 (v1.4): an override is never before the receipt was computed; `after` ms later, as a Z timestamp.
+      const after = fc.integer({ min: 0, max: 400 * 24 * 3_600_000 });
       fc.assert(
-        fc.property(receiptArb, overrideArb, (receipt, event) => {
+        fc.property(receiptArb, overrideArb, after, (receipt, override, delay) => {
+          const at = new Date(Date.parse(receipt.computedAt) + delay).toISOString();
+          const event = { ...override, at };
           const overridden = transition(receipt, event);
           expect(overridden.state).toBe('USER_OVERRIDDEN');
           expect(overridden.grade).toBe(receipt.grade);

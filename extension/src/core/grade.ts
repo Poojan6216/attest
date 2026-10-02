@@ -150,6 +150,37 @@ function eligibleOf(conditions: Conditions): { eligible?: EligibleCoverage } {
   return eligible === null ? {} : { eligible };
 }
 
+/**
+ * §8: an OVER_SCOPE outcome waits for grace like PARTIAL only when it "would not be OVER_SCOPE without that
+ * candidate's amount, currency or address": the matched rule rested on the candidate (`candidateDependent`) and,
+ * graded with no candidate at all, the first matching rule does not conclude OVER_SCOPE. A claim-only fact that a
+ * later rule names (cumulative spend, say) keeps it OVER_SCOPE whatever evidence arrives, so it is FINAL at once.
+ * Only OVER_SCOPE reads this (conditions-finality.ts).
+ */
+function waitsForCandidate(
+  claim: Claim | null,
+  evidence: Evidence,
+  decision: Decision,
+  grant: Grant,
+  policy: Policy,
+  context: GradeContext,
+): boolean {
+  const { rule, conditions } = decision;
+  if (claim === null || decision.outcome !== 'OVER_SCOPE' || rule === null) return false;
+  if (!candidateDependent(rule.when, conditions)) return false;
+  const facts = {
+    claim,
+    grant,
+    policy,
+    coverage: evidence.coverage,
+    context,
+    bestScore: null,
+    assigned: null,
+  };
+  const without = evaluateConditions({ ...facts, ...eligibleOf(conditions) });
+  return firstMatch(policy.rules, without)?.then !== 'OVER_SCOPE';
+}
+
 /** §6, §8, §3: decides one grading from its evidence and writes the receipt. */
 function judge(
   claim: Claim | null,
@@ -171,7 +202,7 @@ function judge(
     coverage,
     context,
     policy,
-    candidateDependent: rule !== null && candidateDependent(rule.when, conditions),
+    candidateDependent: waitsForCandidate(claim, evidence, decision, grant, policy, context),
     ...eligibleOf(conditions),
   });
   const receiptGrade: Grade = outcome === 'PENDING' ? 'UNVERIFIABLE' : outcome;
@@ -220,6 +251,10 @@ export function grade(
   context: GradeContext,
 ): Receipt {
   checkAgents(claim, grant, context);
+  // A scope subject comes with no observation at all: one first seen after evaluatedAt is a second subject too.
+  if (claim === null && context.scope !== undefined && candidates.length > 0) {
+    throw new GradeError('claimless_subject');
+  }
   const visible = visibleInputs(candidates, coverage);
   const subject = subjectOf(claim, visible.candidates, grant, context);
   const best = claim === null ? null : bestCandidate(claim, visible.candidates, policy);

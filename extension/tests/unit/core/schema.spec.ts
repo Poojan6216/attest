@@ -3,13 +3,14 @@
  * schema, at least five valid cases (each parses to exactly itself) and five invalid ones, each rejected at
  * one specific path. Grading-input schemas are in schema-grading.spec.ts, primitives and enums in
  * schema-primitives.spec.ts, caps in schema-limits.spec.ts, Reason and its closed params in
- * schema-reasons.spec.ts, ReceiptOverride and the v1.3 cross-field checks in schema-cross-checks.spec.ts.
+ * schema-reasons.spec.ts, ReceiptOverride and the v1.3 cross-field checks in schema-cross-checks.spec.ts,
+ * Receipt and its invariants in schema-receipt.spec.ts.
  */
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import { idFromHash } from '../../../src/core/hash';
-import { Claim, Grant, HealthReport, Observation, Receipt, Request } from '../../../src/core/schema';
+import { Claim, Grant, HealthReport, Observation, Request } from '../../../src/core/schema';
 
 type Path = readonly (string | number)[];
 type Invalid = readonly [label: string, value: unknown, path: Path];
@@ -41,8 +42,9 @@ const REQUEST = {
   ts: T0,
 };
 
+/** §10 (v1.4): a claim's id is idFromHash(rawHash), checked by the schema. */
 const CLAIM = {
-  id: ULID,
+  id: idFromHash(HASH),
   agent: 'muse',
   type: 'email.sent',
   claimedAt: T0,
@@ -77,32 +79,6 @@ const GRANT = {
 };
 
 const HEALTH = { adapterId: 'gmail.sent', version: '1.0.0', status: 'OK', reasons: [], checkedAt: T0 };
-
-const OVERRIDE = { grade: 'NOT_FOUND', reason: 'I cancelled it myself', at: T1, previousState: 'PENDING' };
-
-const RECEIPT = {
-  id: ULID_B,
-  agent: 'muse',
-  claimId: ULID,
-  observationIds: [ULID],
-  grade: 'VERIFIED',
-  confidence: 1,
-  ruleId: 'verified',
-  reasons: [{ code: 'match.best', params: { observationId: ULID } }],
-  signals: { timeProximity: 1, score: 1 },
-  state: 'PENDING',
-  policyHash: HASH,
-  inputsHash: HASH,
-  computedAt: T1,
-};
-const FINAL = { ...RECEIPT, state: 'FINAL', finalAt: T1 };
-const UNASKED = {
-  ...without(RECEIPT, 'claimId'),
-  grade: 'UNASKED',
-  ruleId: 'unasked',
-  attribution: 'likely',
-  reasons: [{ code: 'unasked.session', params: { agent: 'muse' } }],
-};
 
 const TABLES: readonly Table[] = [
   {
@@ -196,6 +172,7 @@ const TABLES: readonly Table[] = [
       ['an unknown sourceKind', { ...CLAIM, sourceKind: 'email' }, ['sourceKind']],
       ['a malformed requestId', { ...CLAIM, requestId: 'req-1' }, ['requestId']],
       ['a smuggled transcript', { ...CLAIM, transcript: 'Sure, emailing Priya now' }, []],
+      ['an id not derived from rawHash (v1.4)', { ...CLAIM, id: ULID }, ['id']],
     ],
   },
   {
@@ -285,58 +262,6 @@ const TABLES: readonly Table[] = [
       ['a reason over 120', { ...HEALTH, reasons: [x(121)] }, ['reasons', 0]],
       ['a checkedAt of now', { ...HEALTH, checkedAt: 'now' }, ['checkedAt']],
       ['a smuggled dom', { ...HEALTH, dom: '<div>' }, []],
-    ],
-  },
-  {
-    name: 'Receipt',
-    schema: Receipt,
-    valid: [
-      RECEIPT,
-      FINAL,
-      UNASKED,
-      { ...UNASKED, state: 'FINAL', finalAt: T1, supersededBy: ULID },
-      { ...RECEIPT, state: 'USER_OVERRIDDEN', override: OVERRIDE },
-      { ...FINAL, state: 'USER_OVERRIDDEN', override: { ...OVERRIDE, previousState: 'FINAL' } },
-      {
-        ...without(RECEIPT, 'claimId'),
-        grade: 'OVER_SCOPE',
-        ruleId: 'over_scope_observed',
-        observationIds: [],
-      },
-      { ...RECEIPT, grade: 'UNVERIFIABLE', ruleId: 'pending', confidence: 0, reasons: [], signals: {} },
-    ],
-    invalid: [
-      ['FINAL without finalAt', without(FINAL, 'finalAt'), ['finalAt']],
-      ['PENDING with finalAt', { ...RECEIPT, finalAt: T1 }, ['finalAt']],
-      ['USER_OVERRIDDEN without override', { ...RECEIPT, state: 'USER_OVERRIDDEN' }, ['override']],
-      ['an override on a FINAL receipt', { ...FINAL, override: OVERRIDE }, ['override']],
-      [
-        'overridden from FINAL without finalAt',
-        { ...RECEIPT, state: 'USER_OVERRIDDEN', override: { ...OVERRIDE, previousState: 'FINAL' } },
-        ['finalAt'],
-      ],
-      [
-        'overridden from PENDING with finalAt',
-        { ...FINAL, state: 'USER_OVERRIDDEN', override: OVERRIDE },
-        ['finalAt'],
-      ],
-      ['UNASKED without attribution', without(UNASKED, 'attribution'), ['attribution']],
-      ['UNASKED with a claim', { ...UNASKED, claimId: ULID }, ['claimId']],
-      ['attribution on VERIFIED', { ...RECEIPT, attribution: 'likely' }, ['attribution']],
-      ['supersededBy on VERIFIED', { ...RECEIPT, supersededBy: ULID }, ['supersededBy']],
-      ['attribution stated as fact', { ...UNASKED, attribution: 'certain' }, ['attribution']],
-      ['a missing agent', without(RECEIPT, 'agent'), ['agent']],
-      ['a missing policyHash', without(RECEIPT, 'policyHash'), ['policyHash']],
-      ['a leftover index date', { ...RECEIPT, date: '2026-10-06' }, []],
-      ['a free-text reason', { ...RECEIPT, reasons: ['Sent email found'] }, ['reasons', 0]],
-      ['a ruleId with spaces', { ...RECEIPT, ruleId: 'not found' }, ['ruleId']],
-      ['a confidence above 1', { ...RECEIPT, confidence: 1.01 }, ['confidence']],
-      [
-        'a signal key with a space',
-        { ...RECEIPT, signals: { 'time proximity': 1 } },
-        ['signals', 'time proximity'],
-      ],
-      ['a signal that is no §5.1 feature', { ...RECEIPT, signals: { userIdle: 1 } }, ['signals', 'userIdle']],
     ],
   },
 ];

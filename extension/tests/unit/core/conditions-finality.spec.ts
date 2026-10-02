@@ -162,6 +162,43 @@ describe('isFinalizable: claim-less outcomes and refusals (§7, §8)', () => {
     expect(unasked(context(), '2026-10-07T13:59:59.999-04:00')).toBe(false);
   });
 
+  it('UNASKED for a calendar change measures from when it was first seen, not from the event start', () => {
+    // The same anchor attribution uses (§7): an event created at 14:10 for next Tuesday 10:00.
+    const created = buildObservation(
+      {
+        ref: 'o2',
+        source: 'gcal.event',
+        type: 'calendar.created',
+        occurredAt: at('10:00', '13'),
+        observedAt: at('14:10'),
+      },
+      [],
+      at('14:10'),
+      PolicyView.parse(defaultPolicyJson),
+    );
+    const context = (adapterLastSyncAt?: string): GradeContext => ({
+      priorSpendCents: 0,
+      attribution: Attribution.parse({
+        agent: 'muse',
+        scoreBp: 7000,
+        signals: ['agentSessionActive', 'userIdle'],
+        ...(adapterLastSyncAt === undefined ? {} : { adapterLastSyncAt }),
+      }),
+    });
+    const unasked = (c: GradeContext, evaluatedAt: string) =>
+      final({
+        outcome: 'UNASKED',
+        claim: null,
+        orphan: created,
+        context: c,
+        coverage: coverageAt(at('14:10'), evaluatedAt),
+      });
+    expect(unasked(context(at('14:42')), at('15:00'))).toBe(true);
+    expect(unasked(context('2026-10-06T14:41:59.999-04:00'), at('15:00'))).toBe(false);
+    expect(unasked(context(), at('14:10', '07'))).toBe(true);
+    expect(unasked(context(), '2026-10-07T14:09:59.999-04:00')).toBe(false);
+  });
+
   it('every other claim-less outcome is final at once', () => {
     const scope = rule('over_scope_observed', { observedScopeExceedsDeclared: true }, 'OVER_SCOPE');
     expect(

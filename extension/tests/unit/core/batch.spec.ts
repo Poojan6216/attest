@@ -54,7 +54,7 @@ function load(input: Record<string, unknown>): LoadedScenario {
 async function run(loaded: LoadedScenario, fixed: readonly BatchFixed[] = loaded.fixed): Promise<Receipt[]> {
   const index = createMemoryIndex([...loaded.observations.values()], 15);
   const policy = loadPolicy(loaded.policyJson);
-  return gradeBatch(
+  const graded = await gradeBatch(
     loaded.batchClaims,
     index,
     loaded.grants,
@@ -63,6 +63,7 @@ async function run(loaded: LoadedScenario, fixed: readonly BatchFixed[] = loaded
     loaded.activity,
     fixed,
   );
+  return graded.map((entry) => entry.receipt);
 }
 
 function idOf(loaded: LoadedScenario, ref: string): string {
@@ -184,6 +185,8 @@ describe('gradeBatch: claims that are never scored (§4.3)', () => {
           type: 'calendar.created',
           subjectHint: 'Q3 review',
           occurredAt: '2026-10-06T14:05:00-04:00',
+          // §7: a calendar orphan is attributed from when it was first seen, here in muse's session and idle.
+          observedAt: '2026-10-06T14:05:00-04:00',
         },
       ],
       coverage: [{ ...GMAIL, source: 'gcal.event', allCalendars: true }],

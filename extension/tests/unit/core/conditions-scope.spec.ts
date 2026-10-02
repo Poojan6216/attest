@@ -125,6 +125,14 @@ describe('counterpartyNotAllowed (§6.1)', () => {
     const spoof = observationOf({ counterparty: '"priya@company.com" <attacker@evil.example>' });
     expect(check(claimOf({ counterparty: 'Priya' }), ['company.com'], spoof)?.value).toBe(true);
   });
+
+  it('no known address at all: a candidate whose counterparty email() cannot read counts as none (v1.4)', () => {
+    const unreadable = observationOf({ counterparty: 'Priya Sharma' });
+    expect(check(claimOf({ counterparty: 'Priya' }), ['company.com'], unreadable)).toBeNull();
+    const ambiguous = observationOf({ counterparty: '<a@company.com>, <b@evil.example>' });
+    expect(check(claimOf({ counterparty: 'Priya' }), ['company.com'], ambiguous)).toBeNull();
+    expect(check(claimOf({}, ['counterparty']), ['company.com'], unreadable)).toBeNull();
+  });
 });
 
 describe('amountAboveCeiling (§6.1)', () => {
@@ -156,6 +164,27 @@ describe('amountAboveCeiling (§6.1)', () => {
     const check = amountAboveCeiling(purchase({ amountCents: 9000, currency: 'EUR' }), null, ceiling, P);
     expect(check).toMatchObject({ value: true, exceeded: false, mismatchCurrency: 'EUR', claimOnly: true });
     expect(check?.amountCents).toBeUndefined();
+  });
+
+  it('the guard needs an amount known in any currency: then it is true or false, never not applicable', () => {
+    const receipt = (over: Record<string, unknown>, omit: readonly string[] = []) =>
+      observationOf({ source: 'gmail.receipt', type: 'purchase.made', merchant: 'Acme', ...over }, [
+        'counterparty',
+        ...omit,
+      ]);
+    const noAmount = purchase({}, ['currency']);
+    const foreign = amountAboveCeiling(noAmount, receipt({ amountCents: 900, currency: 'CAD' }), ceiling, P);
+    expect(foreign).toMatchObject({
+      value: true,
+      exceeded: false,
+      mismatchCurrency: 'CAD',
+      claimOnly: false,
+    });
+    expect(foreign?.amountCents).toBeUndefined();
+    const bare = amountAboveCeiling(noAmount, receipt({ amountCents: 9000 }, ['currency']), ceiling, P);
+    expect(bare).toMatchObject({ value: false, exceeded: false, claimOnly: false });
+    expect(bare?.amountCents).toBeUndefined();
+    expect(amountAboveCeiling(noAmount, receipt({}, ['amountCents', 'currency']), ceiling, P)).toBeNull();
   });
 });
 

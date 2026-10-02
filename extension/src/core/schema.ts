@@ -22,11 +22,11 @@ import {
   REASON_PARAM_KINDS,
   type ReasonParamKind,
   RECEIPT_SIGNALS,
-  receiptProblems,
   refineReasonParams,
   refineWith,
   signalProblems,
 } from './schema-checks';
+import { receiptProblems } from './schema-receipt';
 import { BASIS_POINTS } from './units';
 
 /** Length caps on every free-text string and every array (SECURITY-4, Hard Rule 2; Decisions [0.close]). */
@@ -141,7 +141,7 @@ export const Request = z.strictObject({
 
 export const Claim = z
   .strictObject({
-    id: Ulid,
+    id: Ulid, // = idFromHash(rawHash) (§10), checked in claimProblems
     agent: AgentId,
     requestId: Ulid.optional(),
     type: ActionType,
@@ -290,7 +290,7 @@ export const ReceiptOverride = z.strictObject({
   previousState: z.enum(['PENDING', 'FINAL']),
 });
 
-/** Invariants (schema-checks): override iff USER_OVERRIDDEN; finalAt iff FINAL; UNASKED iff 'likely', no claim. */
+/** Invariants (schema-receipt.ts, §8): override, finalAt, UNASKED, override.at ≥ computedAt, lifecycle reasons. */
 export const Receipt = z
   .strictObject({
     id: Ulid,

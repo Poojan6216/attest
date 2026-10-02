@@ -3,27 +3,44 @@
  *
  * `attribute(orphan, activity, policy)` asks which agent LIKELY performed an observed action that no claim
  * explains. It reads allowlisted activity only (session pings, recorded idle periods, activity-log entries,
- * adapter syncs, claims) and the observation's subject hint, never content. Each agent is scored on its own:
+ * adapter syncs, claims) and the observation's subject hint, never content. Every window is measured from the
+ * orphan's ANCHOR: for a `calendar.*` observation its earliest `observedAt` (when the change was first seen; the
+ * caller passes the representative sighting, as gradeBatch does), for every other type its `occurredAt`. Each
+ * agent is scored on its own:
  *
- *  - `agentSessionActive`: a session ping of the agent within ±`unasked.windows.sessionMin` of `occurredAt`;
- *  - `userIdle` (agent-independent): ONE recorded idle interval covers `[occurredAt − idleMin, occurredAt]`.
- *    Positive evidence only: no recorded interval means "not idle", never "idle";
- *  - `agentSignature`: the subject hint contains one of `unasked.signatures[agent]`, ASCII case-insensitively;
- *  - `activityLogAdjacent`: an activity entry of the agent within ±`adjacentMin`, unless a claim of that
- *    agent of the observation's type is within ±`adjacentMin` (assigned or not): the claim's time is its
- *    precision unit `[start(p,t), end(p,t)]` (§4.1).
+ *  - `agentSessionActive`: a session ping of the agent within ±`unasked.windows.sessionMin` of the anchor;
+ *  - `userIdle` (agent-independent): ONE recorded idle interval covers `[anchor − idleMin, anchor]` (inclusive;
+ *    intervals are never merged). Positive evidence only: no recorded interval means "not idle", never "idle";
+ *  - `agentSignature`: the subject hint contains one of `unasked.signatures[agent]`, with ASCII-only case
+ *    folding on both sides (§11: no NFKC, no `toLowerCase`);
+ *  - `activityLogAdjacent`: an activity entry of the agent within ±`adjacentMin`, unless an ASSIGNABLE claim
+ *    (§4.3, `features.isAssignable`) of that agent of the observation's type is within ±`adjacentMin` (assigned
+ *    or not): the claim's time is its precision unit `[start(p,t), end(p,t)]` (§4.1). A vague claim never
+ *    suppresses the signal, so it cannot hide an UNASKED. An entry's own `type` is informational and not read.
  *
  * An agent's score is the sum of its own fired signals' weights plus `userIdle`, capped at BASIS_POINTS, in
  * exact integer basis points (`policy.bp.unasked.signals`, §5.3). Only agents with at least one agent-specific
  * signal are candidates (`userIdle` alone attributes nothing); the likely agent has the highest score, then the
- * most fired signals, then the lowest agent id. The result is returned whatever its score: `grade()` compares
- * it with `unasked.threshold` (condition `unaskedLikely`). `adapterLastSyncAt` is the attributed agent's latest
- * adapter sync (at or before `evaluatedAt` when one is given), which decides UNASKED finality.
+ * most fired signals (`userIdle` included), then the lowest agent id by UTF-16 code unit. The result is returned
+ * whatever its score: `grade()` compares it with `unasked.threshold` (condition `unaskedLikely`).
+ * `adapterLastSyncAt` is the attributed agent's latest adapter sync, which decides UNASKED finality.
+ *
+ * With `evaluatedAt` (§3), nothing from after it is read, so replay at that instant sees exactly what grading
+ * saw: sessions, entries and adapter syncs after it are ignored, claims first observed after it are ignored, and
+ * an idle interval counts only up to it (the part of an interval after `evaluatedAt` is no evidence yet).
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4). Nothing here ever states that an agent acted: the result
  * is a score, and every receipt built from it says "likely" (reason-text.ts).
  */
-import { checkedSafe, indexBy, type IntervalIndex, intervalIndex, point } from './attribution-index';
+import {
+  checkedSafe,
+  indexBy,
+  type IntervalIndex,
+  intervalIndex,
+  point,
+  untilLimit,
+} from './attribution-index';
+import { type FeatureClaim, type FeaturePolicy, isAssignable } from './features';
 import { asciiLower, instantMs } from './normalize';
 import type { Policy } from './policy';
 import {
@@ -36,24 +53,28 @@ import {
   UnaskedSignal,
 } from './schema';
 import { BASIS_POINTS, MS_PER_MINUTE } from './units';
-import { precisionBounds, type WindowClaim } from './window';
+import { type Interval, isCalendarType, precisionBounds } from './window';
 
 export { AttributionError, type AttributionErrorCode } from './attribution-index';
 
-/** The observation fields attribution reads. A parsed `Observation` satisfies it. */
+/**
+ * The observation fields attribution reads. A parsed `Observation` satisfies it. `observedAt` anchors a
+ * `calendar.*` observation (§7); pass the earliest sighting of its `contentHash`, as gradeBatch does.
+ */
 export interface AttributionOrphan {
   readonly type: ActionType;
   readonly occurredAt: string;
+  readonly observedAt: string;
   readonly subjectHint?: string | undefined;
 }
 
-/** The claim fields attribution reads (adjacency suppression). A parsed `Claim` satisfies it. */
-export interface AttributionClaim extends Pick<
-  WindowClaim,
-  'claimedAt' | 'claimedAtPrecision' | 'claimedAtEnd'
-> {
+/**
+ * The claim fields attribution reads (adjacency suppression): what `isAssignable` reads, the agent, and when the
+ * claim was first read (`observedAt`, filtered by `evaluatedAt`). A parsed `Claim` satisfies it.
+ */
+export interface AttributionClaim extends FeatureClaim {
   readonly agent: AgentId;
-  readonly type: ActionType;
+  readonly observedAt: string;
 }
 
 interface AgentAt {
@@ -62,8 +83,8 @@ interface AgentAt {
 }
 
 /**
- * An activity-log entry. Its optional `type` is accepted and not read: §7 fires `activityLogAdjacent` on any
- * entry of the agent and asks only whether a CLAIM of the observation's type is near.
+ * An activity-log entry. Its optional `type` is informational and not read: §7 fires `activityLogAdjacent` on
+ * any entry of the agent and asks only whether an assignable CLAIM of the observation's type is near.
  */
 interface ActivityEntry extends AgentAt {
   readonly type?: ActionType | undefined;
@@ -78,12 +99,13 @@ export interface AttributionActivity {
   readonly claims: readonly AttributionClaim[];
 }
 
-/** The policy fields attribution reads. A loaded `Policy` satisfies it. */
-export type AttributionPolicy = Pick<Policy, 'bp' | 'unasked'>;
+/** The policy fields attribution reads (`isAssignable` reads the feature fields). A loaded `Policy` satisfies it. */
+export type AttributionPolicy = FeaturePolicy & Pick<Policy, 'unasked'>;
 
 /**
- * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller already
- * has it, is `instantMs(orphan.occurredAt)` (a batch has every orphan's instant from its index).
+ * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller
+ * already has it, is `instantMs(orphan.occurredAt)` (a batch has every orphan's instant from its index); a
+ * `calendar.*` orphan is anchored on its `observedAt` instead (§7), whatever `occurredMs` says.
  */
 export type Attributor = (orphan: AttributionOrphan, occurredMs?: number) => Attribution | null;
 
@@ -100,7 +122,7 @@ interface AgentIndex {
   readonly agent: AgentId;
   readonly sessions: IntervalIndex | undefined;
   readonly entries: IntervalIndex | undefined;
-  /** The agent's claims by type, each as its precision unit (§4.1). */
+  /** The agent's suppressing claims (`suppressingClaims`) by type, each as its precision unit (§4.1). */
   readonly claims: ReadonlyMap<ActionType, IntervalIndex>;
   /** The agent's signatures, ASCII-lowercased. */
   readonly signatures: readonly string[];
@@ -135,12 +157,16 @@ interface Best {
   adjacent: boolean;
 }
 
+/** §3: the instant after which nothing is read: `evaluatedAt`'s, or +∞ without one. */
+function limitOf(evaluatedAt: string | undefined): number {
+  return evaluatedAt === undefined ? Number.POSITIVE_INFINITY : instantMs(evaluatedAt);
+}
+
 /**
- * Each agent's latest adapter sync, by instant; equal instants written differently resolve to the smallest
- * string, so the result does not depend on input order. Syncs after `evaluatedAt` (when given) are ignored.
+ * Each agent's latest adapter sync at or before `limitMs`, by instant; equal instants written differently resolve
+ * to the smallest string, so the result does not depend on input order.
  */
-function latestSyncs(syncs: AttributionActivity['adapterSyncs'], evaluatedAt?: string): Map<AgentId, IsoTs> {
-  const limitMs = evaluatedAt === undefined ? Number.POSITIVE_INFINITY : instantMs(evaluatedAt);
+function latestSyncs(syncs: AttributionActivity['adapterSyncs'], limitMs: number): Map<AgentId, IsoTs> {
   const latest = new Map<AgentId, { readonly ms: number; readonly at: IsoTs }>();
   for (const sync of syncs) {
     const ms = instantMs(sync.lastSyncAt);
@@ -153,21 +179,46 @@ function latestSyncs(syncs: AttributionActivity['adapterSyncs'], evaluatedAt?: s
   return new Map([...latest].map(([agent, { at }]) => [agent, at]));
 }
 
+/**
+ * Per agent, the claims that can suppress its `activityLogAdjacent` (§7): ASSIGNABLE (§4.3) and first read at or
+ * before `limitMs`. Only a claim whose precision unit lies within 2 × `adjacentMin` of one of the agent's
+ * entries can ever matter (the entry and the claim are each within `adjacentMin` of the anchor), so no other
+ * claim is planned: the result is the same, and a batch plans a handful of claims instead of every one.
+ */
+function suppressingClaims(
+  claims: readonly AttributionClaim[],
+  entries: ReadonlyMap<AgentId, IntervalIndex>,
+  policy: AttributionPolicy,
+  limitMs: number,
+): Map<AgentId, AttributionClaim[]> {
+  const { adjacent } = windowsMs(policy);
+  const reach = checkedSafe(adjacent + adjacent);
+  const claimsOf = new Map<AgentId, AttributionClaim[]>();
+  for (const claim of claims) {
+    const agentEntries = entries.get(claim.agent);
+    if (agentEntries === undefined || instantMs(claim.observedAt) > limitMs) continue;
+    const unit = precisionBounds(claim);
+    if (!agentEntries.exists(checkedSafe(unit.endMs + reach), checkedSafe(unit.startMs - reach))) continue;
+    if (!isAssignable(claim, policy)) continue;
+    const held = claimsOf.get(claim.agent);
+    if (held === undefined) claimsOf.set(claim.agent, [claim]);
+    else held.push(claim);
+  }
+  return claimsOf;
+}
+
 function indexActivity(
   activity: AttributionActivity,
   policy: AttributionPolicy,
   evaluatedAt?: string,
 ): ActivityIndex {
+  const limitMs = limitOf(evaluatedAt);
   const at = (item: AgentAt) => point(instantMs(item.at));
-  const sessions = indexBy(activity.sessions, (item) => item.agent, at);
-  const entries = indexBy(activity.entries, (item) => item.agent, at);
-  const lastSync = latestSyncs(activity.adapterSyncs, evaluatedAt);
-  const claimsOf = new Map<AgentId, AttributionClaim[]>();
-  for (const claim of activity.claims) {
-    const held = claimsOf.get(claim.agent);
-    if (held === undefined) claimsOf.set(claim.agent, [claim]);
-    else held.push(claim);
-  }
+  const agentOf = (item: AgentAt) => item.agent;
+  const sessions = indexBy(activity.sessions, agentOf, at, limitMs);
+  const entries = indexBy(activity.entries, agentOf, at, limitMs);
+  const lastSync = latestSyncs(activity.adapterSyncs, limitMs);
+  const claimsOf = suppressingClaims(activity.claims, entries, policy, limitMs);
   const agents = AgentId.options.map((agent): AgentIndex => ({
     agent,
     sessions: sessions.get(agent),
@@ -179,11 +230,14 @@ function indexActivity(
   const active = agents.filter(
     (agent) => agent.sessions !== undefined || agent.entries !== undefined || agent.signatures.length > 0,
   );
+  const idle: Interval[] = [];
+  for (const { from, to } of activity.idle) {
+    const interval = untilLimit({ startMs: instantMs(from), endMs: instantMs(to) }, limitMs);
+    if (interval !== null) idle.push(interval);
+  }
   return {
     agents: active,
-    idle: intervalIndex(
-      activity.idle.map((idle) => ({ startMs: instantMs(idle.from), endMs: instantMs(idle.to) })),
-    ),
+    idle: intervalIndex(idle),
     anySignature: active.some((agent) => agent.signatures.length > 0),
   };
 }
@@ -219,7 +273,8 @@ interface Weighing {
   readonly policy: AttributionPolicy;
   readonly best: Best;
   type: ActionType;
-  occurredMs: number;
+  /** The orphan's anchor instant (§7): earliest `observedAt` for `calendar.*`, else `occurredAt`. */
+  anchorMs: number;
   /** The subject hint, ASCII-lowercased ('' without one, or when no agent has a signature). */
   subject: string;
   idle: boolean;
@@ -227,17 +282,17 @@ interface Weighing {
 
 /**
  * Weighs `agent` for the orphan (§7) and keeps it in `best` when it beats `held`, the best so far (returns the
- * best after it): a higher score (the sum
- * of its fired signals' weights, `userIdle` included, capped at BASIS_POINTS), then more fired signals, then the
- * lower agent id. An agent with no agent-specific signal is no candidate.
+ * best after it): a higher score (the sum of its fired signals' weights, `userIdle` included, capped at
+ * BASIS_POINTS), then more fired signals (`userIdle` included), then the lower agent id by UTF-16 code unit. An
+ * agent with no agent-specific signal is no candidate.
  */
 function weigh(agent: AgentIndex, w: Weighing, held: AgentIndex | null): AgentIndex | null {
-  const { windows, best, occurredMs, idle } = w;
-  const session = near(agent.sessions, occurredMs, windows.session);
+  const { windows, best, anchorMs, idle } = w;
+  const session = near(agent.sessions, anchorMs, windows.session);
   const signature = signed(agent.signatures, w.subject);
   const adjacent =
-    near(agent.entries, occurredMs, windows.adjacent) &&
-    !near(agent.claims.get(w.type), occurredMs, windows.adjacent);
+    near(agent.entries, anchorMs, windows.adjacent) &&
+    !near(agent.claims.get(w.type), anchorMs, windows.adjacent);
   if (!session && !signature && !adjacent) return held;
   const weights = w.policy.bp.unasked.signals;
   const total =
@@ -272,9 +327,15 @@ function attributionOf(best: Best, agent: AgentIndex, idle: boolean): Attributio
   return agent.lastSync === undefined ? attribution : { ...attribution, adapterLastSyncAt: agent.lastSync };
 }
 
+/** §7: the instant every window of `orphan` is measured from. `occurredMs`, when given, is its occurredAt's. */
+function anchorOf(orphan: AttributionOrphan, occurredMs: number | undefined): number {
+  if (isCalendarType(orphan.type)) return instantMs(orphan.observedAt);
+  return occurredMs ?? instantMs(orphan.occurredAt);
+}
+
 /**
  * Indexes `activity` once and returns a function that attributes any orphan against it, so a batch pays for
- * sorting once instead of per orphan. Same results as `attribute` for every orphan.
+ * sorting and planning claims once instead of per orphan. Same results as `attribute` for every orphan.
  */
 export function attributor(
   activity: AttributionActivity,
@@ -284,12 +345,13 @@ export function attributor(
   const index = indexActivity(activity, policy, evaluatedAt);
   const windows = windowsMs(policy);
   const best: Best = { scoreBp: 0, count: 0, session: false, signature: false, adjacent: false };
-  const w: Weighing = { windows, policy, best, type: 'other', occurredMs: 0, subject: '', idle: false };
-  return (orphan, occurredMs = instantMs(orphan.occurredAt)) => {
+  const w: Weighing = { windows, policy, best, type: 'other', anchorMs: 0, subject: '', idle: false };
+  return (orphan, occurredMs) => {
+    const anchorMs = anchorOf(orphan, occurredMs);
     w.subject = index.anySignature && orphan.subjectHint !== undefined ? asciiLower(orphan.subjectHint) : '';
-    w.idle = index.idle.exists(checkedSafe(occurredMs - windows.idle), occurredMs);
+    w.idle = index.idle.exists(checkedSafe(anchorMs - windows.idle), anchorMs);
     w.type = orphan.type;
-    w.occurredMs = occurredMs;
+    w.anchorMs = anchorMs;
     let winner: AgentIndex | null = null;
     for (const agent of index.agents) winner = weigh(agent, w, winner);
     return winner === null ? null : attributionOf(best, winner, w.idle);
@@ -297,9 +359,10 @@ export function attributor(
 }
 
 /**
- * §7: the likely agent for `orphan`, or null when no agent-specific signal fired. Throws `NormalizeError` for
- * a timestamp that is not ISO with an offset, and `AttributionError('unsafe_window')` for a window bound
- * outside the safe-integer range. To attribute many orphans against one activity, use `attributor`.
+ * §7: the likely agent for `orphan`, or null when no agent-specific signal fired. With `evaluatedAt`, nothing
+ * from after it is read (§3). Throws `NormalizeError` for a timestamp that is not ISO with an offset,
+ * `AttributionError('unsafe_window')` for a window bound outside the safe-integer range, and `WindowError` for
+ * a claim whose precision unit cannot be read. To attribute many orphans against one activity, use `attributor`.
  */
 export function attribute(
   orphan: AttributionOrphan,

@@ -2,7 +2,8 @@
  * Time lookups for UNASKED attribution (docs/grading.md §7). Every attribution signal asks one question of a
  * set of closed intervals of epoch milliseconds: "is there an interval [s, e] with s ≤ maxStart and
  * e ≥ minEnd?" A session ping or an activity entry at t is the interval [t, t]; a recorded idle period is
- * [from, to]; a claim is its precision unit [start(p,t), end(p,t)] (§4.1).
+ * [from, to]; a claim is its precision unit [start(p,t), end(p,t)] (§4.1). With `evaluatedAt` (§3), activity is
+ * cut at its instant (`untilLimit`): a ping after it is dropped, an idle period that straddles it ends at it.
  *
  *  - within ±w of t:             exists(t + w, t − w)
  *  - covers [t − w, t] entirely: exists(t − w, t)
@@ -74,18 +75,33 @@ export function point(ms: number): Interval {
   return { startMs: ms, endMs: ms };
 }
 
-/** One index per key, built from `items` grouped by `keyOf`; a key with no items has no index. */
+/**
+ * §3: the part of `interval` at or before `limitMs`, or null when it starts after it. An interval that straddles
+ * the limit ends at it; a point at or before it is kept as is. Evidence from after `evaluatedAt` is never read.
+ */
+export function untilLimit(interval: Interval, limitMs: number): Interval | null {
+  if (interval.startMs > limitMs) return null;
+  return interval.endMs <= limitMs ? interval : { startMs: interval.startMs, endMs: limitMs };
+}
+
+/**
+ * One index per key, built from `items` grouped by `keyOf`, each interval cut at `limitMs` (`untilLimit`;
+ * +∞ keeps every interval whole). A key with no interval left has no index.
+ */
 export function indexBy<Item, Key>(
   items: readonly Item[],
   keyOf: (item: Item) => Key,
   intervalOf: (item: Item) => Interval,
+  limitMs: number = Number.POSITIVE_INFINITY,
 ): ReadonlyMap<Key, IntervalIndex> {
   const groups = new Map<Key, Interval[]>();
   for (const item of items) {
+    const interval = untilLimit(intervalOf(item), limitMs);
+    if (interval === null) continue;
     const key = keyOf(item);
     const group = groups.get(key);
-    if (group === undefined) groups.set(key, [intervalOf(item)]);
-    else group.push(intervalOf(item));
+    if (group === undefined) groups.set(key, [interval]);
+    else group.push(interval);
   }
   return new Map([...groups].map(([key, group]) => [key, intervalIndex(group)]));
 }
