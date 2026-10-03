@@ -1,7 +1,7 @@
 /**
  * Cross-field invariants of the core schemas (docs/grading.md §3, §4.1, §7, §8, §10, §15), kept apart so
  * schema.ts stays one readable page (the Receipt's own invariants are in ./schema-receipt). It imports nothing
- * from ./schema (only ./hash and ./units, which sit below it), so the two never form an import cycle. Each check
+ * from ./schema (only ./hash, ./normalize-time and ./units, which sit below it), so the two never form an import cycle. Each check
  * returns the problems it found as `[field, message]` (or a nested path); `refineWith` turns them into Zod
  * issues whose path names the offending field. The closed
  * vocabularies live here too: a reason's params depend on its code (§15), and a receipt's signals are the §5.1
@@ -10,6 +10,7 @@
 import type { z } from 'zod';
 
 import { idFromHash } from './hash';
+import { NormalizeError, instantMs as isoInstantMs } from './normalize-time';
 import { MINUTES_PER_HOUR, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
 /** A problem at one field, or at a nested path such as `['override', 'at']`. */
@@ -26,20 +27,25 @@ export function refineWith<T>(
   };
 }
 
-/** `Z` or `±hh:mm` at the end: the only timestamps whose instant does not depend on the host's time zone. */
-const EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/;
-/** The same suffix, with the numeric offset's parts named. */
+/** `Z` or `±hh:mm` at the end, with the numeric offset's parts named. */
 const OFFSET_PARTS = /(?:Z|(?<sign>[+-])(?<hours>\d{2}):(?<minutes>\d{2}))$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 /**
- * Epoch ms of an IsoTs, or NaN for a string without an explicit offset. Zod runs these checks even when a
- * field failed its own IsoTs check (already reported at that field), and `Date` reads an offset-less string
- * in the host's time zone, so such a string is never read (Hard Rule 4). Every check treats NaN as "nothing
- * to compare", so a bad timestamp is reported once, at its own path, the same way in every time zone.
+ * Epoch ms of an IsoTs, or NaN for any string that is not one (an offset-less string included). Zod runs these
+ * checks even when a field failed its own IsoTs check (already reported at that field). The text is read by
+ * normalize-time's `instantMs` (the ISO fields and `Date.UTC`), never by the engine's `Date` parser, which reads
+ * an offset-less string in the host's time zone and other text by its own rules (Hard Rule 4). Every check
+ * treats NaN as "nothing to compare", so a bad timestamp is reported once, at its own path, the same way
+ * everywhere.
  */
 export function instantMs(isoTs: string): number {
-  return EXPLICIT_OFFSET.test(isoTs) ? new Date(isoTs).getTime() : Number.NaN;
+  try {
+    return isoInstantMs(isoTs);
+  } catch (error) {
+    if (error instanceof NormalizeError) return Number.NaN;
+    throw error;
+  }
 }
 
 /** An observer's window is a real interval, and `allCalendars` is a calendar fact only (§3). */

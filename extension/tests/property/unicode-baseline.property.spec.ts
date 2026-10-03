@@ -60,7 +60,10 @@ const outside = fc.oneof(
 );
 const replacement = fc.oneof(outside, fc.constantFrom(...NONCHARACTERS));
 
-/** 15.0 text the readers make decisions about: words, address parts, money, clock words, spaces, marks. */
+/**
+ * 15.0 text the readers make decisions about: words, address parts, money, clock words, spaces, marks, and lone
+ * surrogates (halves of a UTF-16 pair with no partner).
+ */
 const PIECES = [
   ...'Acme|STORE|Priya|Re:|the|Q3|deck|x.com|p|+tag|@|<|>|"|.|,|$|USD|1|0|9|10|1,234.50|9,99|\'|-'.split('|'),
   ...'2:03|PM|p.m.|min|ago|Yesterday|Oct|Thu|at|:| |  |\t|\n'.split('|'),
@@ -68,31 +71,63 @@ const PIECES = [
     '|',
   ),
   ...'\u0308|\u0130|\u03A3|\u0391\u03A3|\u03C2|\uFB01|\uFF31|\uFF13|\u212A|\u1100|\u1161|\uD55C'.split('|'),
-  ...'\u0E01|\u{1D400}|\u{1171E}|\u{11F00}'.split('|'),
+  ...'\u0E01|\u{1D400}|\u{1171E}|\u{11F00}|\u034F'.split('|'),
 ];
+/**
+ * Lone surrogates: every high half with every low half pairs into a 15.0 character or a plane-5 code point, none
+ * of which a hole can hold (checked below), so two of them side by side keep the substitution exact.
+ */
+const HIGH_HALVES = ['\uD835', '\uD900'];
+const LOW_HALVES = ['\uDFCF', '\uDC00', '\uDC29'];
+/**
+ * The two halves of one character with marks a reader removes between them, which must never pair once the marks
+ * are gone: an outlined digit (16.0), U+50000 (the simulated later engine's "1"), 15.0 digits and letters NFKC
+ * folds (bold 1, bold p, DIGIT ONE COMMA), and the astral hole.
+ */
+const SPLIT = ['\u{1CCF1}', '\u{50000}', '\u{1D7CF}', '\u{1D429}', '\u{1F102}', '\u{1FFFE}', '\u{1D400}'];
+const BETWEEN = ['\u200B', '\u00AD', '\uFEFF', '\u2066', '\u{E0080}', '\u034F', '\u0301', '\u0308'];
+const splitOf = (characters: readonly string[]) =>
+  fc
+    .tuple(
+      fc.constantFrom(...characters),
+      fc.array(fc.constantFrom(...BETWEEN), { minLength: 1, maxLength: 2 }),
+    )
+    .map(([character, marks]) => `${character.charAt(0)}${marks.join('')}${character.charAt(1)}`);
+/** Whether a hole can hold `character`: stripInvisible pairs split halves, so the substitution must not meet it. */
+const fillable = (character: string): boolean => {
+  const c = character.codePointAt(0) ?? 0;
+  return ASSIGNED_SINCE.includes(c) || UNASSIGNED.includes(c) || isNoncharacter(c);
+};
+const UNFILLABLE_SPLIT = SPLIT.filter((character) => !fillable(character));
 const HOLES = 3;
 const hole = fc.integer({ min: 0, max: HOLES - 1 });
-const digitOrHole = fc.oneof(fc.constantFrom(...Array.from('0123456789')), hole);
+const DIGITS = Array.from('0123456789');
 /**
- * A template: pieces and holes (0, 1 or 2), filled once with one set of code points and once with another. Free
- * text, and amounts and times whose digits may be holes (an outlined digit is a digit to a 16.0 NFKC).
+ * A template: pieces, split pairs and holes (0, 1 or 2), filled once with one set of code points and once with
+ * another. Free text, and amounts and times whose digits may be holes (an outlined digit is a digit to a 16.0
+ * NFKC) or split pairs.
  */
-const template = fc.oneof(
-  fc.array(fc.oneof(fc.constantFrom(...PIECES), hole), { maxLength: 14 }),
-  fc
-    .tuple(
-      fc.constantFrom('$', '\u20AC', 'USD ', ''),
-      fc.array(digitOrHole, { minLength: 1, maxLength: 5 }),
-      fc.constantFrom('', '.50', ' USD', ',99 \u20AC'),
-    )
-    .map(([before, digits, after]) => [before, ...digits, after]),
-  fc
-    .tuple(
-      fc.array(digitOrHole, { minLength: 1, maxLength: 2 }),
-      fc.constantFrom(' min ago', ' hours ago', ':03 PM', ' Oct', ' days ago'),
-    )
-    .map(([digits, after]) => [...digits, after]),
-);
+const templateOf = (split: fc.Arbitrary<string>) => {
+  const digitOrHole = fc.oneof(fc.constantFrom(...DIGITS), hole, split);
+  const piece = fc.constantFrom(...PIECES, ...HIGH_HALVES, ...LOW_HALVES);
+  return fc.oneof(
+    fc.array(fc.oneof(piece, hole, split), { maxLength: 14 }),
+    fc
+      .tuple(
+        fc.constantFrom('$', '\u20AC', 'USD ', ''),
+        fc.array(digitOrHole, { minLength: 1, maxLength: 5 }),
+        fc.constantFrom('', '.50', ' USD', ',99 \u20AC'),
+      )
+      .map(([before, digits, after]) => [before, ...digits, after]),
+    fc
+      .tuple(
+        fc.array(digitOrHole, { minLength: 1, maxLength: 2 }),
+        fc.constantFrom(' min ago', ' hours ago', ':03 PM', ' Oct', ' days ago'),
+      )
+      .map(([digits, after]) => [...digits, after]),
+  );
+};
+const template = templateOf(splitOf(SPLIT));
 type Template = readonly (string | number)[];
 
 function fill(parts: Template, codes: readonly number[]): string {
@@ -133,32 +168,42 @@ describe('every reader treats a code point Unicode 15.0 does not assign as unass
     expect(OUTLINED.every((c) => ASSIGNED_SINCE.includes(c))).toBe(true);
     expect(LETTERS.filter((c) => ASSIGNED_SINCE.includes(c)).length).toBeGreaterThan(0);
     expect(UNASSIGNED.length).toBeGreaterThan(0);
+    const pairs = HIGH_HALVES.flatMap((high) => LOW_HALVES.map((low) => `${high}${low}`));
+    expect(pairs.filter(fillable)).toEqual([]);
+    expect(UNFILLABLE_SPLIT).toContain('\u{50000}');
   });
 
   it('gives the same result, up to the substitution, when each such code point is replaced by another', () => {
+    const substitutable = templateOf(splitOf(UNFILLABLE_SPLIT));
     const codes = (arbitrary: fc.Arbitrary<number>) =>
       fc.uniqueArray(arbitrary, { minLength: HOLES, maxLength: HOLES });
     fc.assert(
-      fc.property(template, template, codes(outside), codes(replacement), (text, stop, from, to) => {
-        const swap = new Map(
-          from.map((code, i): [string, string] => [
-            String.fromCodePoint(code),
-            String.fromCodePoint(to[i] ?? 0),
-          ]),
-        );
-        const substitute = (value: string) => Array.from(value, (c) => swap.get(c) ?? c).join('');
-        const [before, after] = [fill(text, from), fill(text, to)];
-        const [stopBefore, stopAfter] = [
-          ['the', fill(stop, from)],
-          ['the', fill(stop, to)],
-        ];
-        for (const [label, read] of READERS) {
-          expect([label, read(after, stopAfter)]).toEqual([
-            label,
-            mapStrings(read(before, stopBefore), substitute),
-          ]);
-        }
-      }),
+      fc.property(
+        substitutable,
+        substitutable,
+        codes(outside),
+        codes(replacement),
+        (text, stop, from, to) => {
+          const swap = new Map(
+            from.map((code, i): [string, string] => [
+              String.fromCodePoint(code),
+              String.fromCodePoint(to[i] ?? 0),
+            ]),
+          );
+          const substitute = (value: string) => Array.from(value, (c) => swap.get(c) ?? c).join('');
+          const [before, after] = [fill(text, from), fill(text, to)];
+          const [stopBefore, stopAfter] = [
+            ['the', fill(stop, from)],
+            ['the', fill(stop, to)],
+          ];
+          for (const [label, read] of READERS) {
+            expect([label, read(after, stopAfter)]).toEqual([
+              label,
+              mapStrings(read(before, stopBefore), substitute),
+            ]);
+          }
+        },
+      ),
       RUNS,
     );
   }, 120_000);
@@ -247,6 +292,29 @@ describe('every reader keeps a code point Unicode 15.0 does not assign from a la
         const [text, stop] = [fill(parts, fill3), ['the', fill(stopParts, fill3)]];
         for (const [label, read] of READERS) {
           expect([label, onLaterEngine(() => read(text, stop))]).toEqual([label, read(text, stop)]);
+        }
+      }),
+      RUNS,
+    );
+  }, 120_000);
+});
+
+/** Readers whose result keeps the text as read (an address) are compared with each lone half replaced there too. */
+const wellFormed = (text: string): string => text.toWellFormed();
+
+describe('a lone surrogate reads as the U+FFFD it displays as, whatever is removed around it (property)', () => {
+  it('gives every reader the same answer as on the text with each lone half replaced by U+FFFD', () => {
+    const codes = fc.uniqueArray(outside, { minLength: HOLES, maxLength: HOLES });
+    fc.assert(
+      fc.property(template, template, codes, (parts, stopParts, fill3) => {
+        const [text, stop] = [fill(parts, fill3), ['the', fill(stopParts, fill3)]];
+        for (const [label, read] of READERS) {
+          // stripInvisible removes marks and keeps the rest as is: the step every reader runs after asBaseline.
+          if (label === 'stripInvisible') continue;
+          expect([label, mapStrings(read(text, stop), wellFormed)]).toEqual([
+            label,
+            read(wellFormed(text), stop.map(wellFormed)),
+          ]);
         }
       }),
       RUNS,

@@ -4,9 +4,10 @@
  *
  * `grade` trusts its caller for the assignment (§4.3), but never for what a candidate IS: every candidate of a
  * claim must be one `candidates()` could have returned for it, by the same predicates (`claimWindow` and
- * `inClaimWindow` in window.ts, `fromRelevantSource` and `firstSeenFromMs` in order.ts). Anything else is a caller's
- * bug, refused with `GradeError('foreign_candidate')` rather than graded: a FINAL receipt is never regraded, so one
- * wrong list would leave a permanent false VERIFIED (or PARTIAL, or an OVER_SCOPE from a stranger's amount).
+ * `inClaimWindow` in window.ts, `fromRelevantSource`, `firstSeenFromMs` and `passesFirstSeen` in order.ts). Anything
+ * else is a caller's bug, refused with `GradeError('foreign_candidate')` rather than graded: a FINAL receipt is never
+ * regraded, so one wrong list would leave a permanent false VERIFIED (or PARTIAL, or an OVER_SCOPE from a stranger's
+ * amount).
  *
  * Checked: the type is the claim's; the source is one the policy lists for that type (§6.1 relevant sources:
  * evidence the claim's coverage never reads cannot verify it); `occurredAt` lies in the claim window (a calendar
@@ -24,7 +25,7 @@
  */
 import { observedMs, occurredMs } from './candidates-time';
 import { GradeError } from './grade-error';
-import { firstSeenFromMs, fromRelevantSource } from './order';
+import { firstSeenFromMs, fromRelevantSource, passesFirstSeen } from './order';
 import type { Policy } from './policy';
 import type { Claim, Observation } from './schema';
 import { claimWindow, inClaimWindow } from './window';
@@ -46,7 +47,7 @@ export function checkCandidates(claim: Claim, candidates: readonly Observation[]
       candidate.type !== claim.type ||
       !fromRelevantSource(candidate, claim.type, policy) ||
       !inClaimWindow(window, occurredMs(candidate)) ||
-      (firstSeenFrom !== null && observedMs(candidate) < firstSeenFrom);
+      !passesFirstSeen(observedMs(candidate), firstSeenFrom);
     if (foreign) throw new GradeError('foreign_candidate');
   }
 }

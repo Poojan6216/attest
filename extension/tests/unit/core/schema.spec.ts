@@ -259,7 +259,9 @@ const TABLES: readonly Table[] = [
     invalid: [
       ['an unknown status', { ...HEALTH, status: 'BROKEN' }, ['status']],
       ['an empty adapterId', { ...HEALTH, adapterId: '' }, ['adapterId']],
-      ['a reason over 120', { ...HEALTH, reasons: [x(121)] }, ['reasons', 0]],
+      ['a reason code over 64', { ...HEALTH, reasons: [x(65)] }, ['reasons', 0]],
+      ['a reason that is a sentence', { ...HEALTH, reasons: ['Selector missing'] }, ['reasons', 0]],
+      ['a multi-line version', { ...HEALTH, version: '1.0\n.0' }, ['version']],
       ['a checkedAt of now', { ...HEALTH, checkedAt: 'now' }, ['checkedAt']],
       ['a smuggled dom', { ...HEALTH, dom: '<div>' }, []],
     ],

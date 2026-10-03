@@ -28,8 +28,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Scope checks: an action type outside the grant, a counterparty outside the allowlist, one purchase or the rolling total over the spend ceiling, and permissions an agent holds beyond the ones you declared.
 - Replay: `pnpm attest replay <export.json>` re-derives every stored receipt from its stored inputs and lists each mismatch ([docs/grading.md §9](docs/grading.md#replay-procedure)). The extension's own export carries those inputs from Sprint 2.6/3.6; until then replay runs on synthetic ledgers.
 - [docs/grading.md](docs/grading.md): the grading contract, with every grade, rule, feature and window, the receipt state diagram, the replay procedure and worked examples.
-- 97 golden scenarios with hand-computed expectations, property tests for determinism, redaction and replay, and perf gates for candidate lookup and batch grading (5,000 claims against 50,000 observations; measured numbers in [RESULTS.md](RESULTS.md)).
-- `pnpm check-docs`, run by `pnpm lint`: every relative link, anchor, quoted `pnpm` script and policy rule id in the docs must exist; docs/grading.md §15 must document every key of the golden file format; and no Markdown file may hold an absolute path from one machine.
+- 98 golden scenarios ([extension/tests/golden/](extension/tests/golden/)) with hand-computed expectations, property tests for determinism, redaction and replay, a test that runs `src/core` with every clock, randomness, time-zone, locale, timer and network global poisoned, and perf gates for candidate lookup and batch grading (5,000 claims against 50,000 observations; measured numbers in [RESULTS.md](RESULTS.md)).
+- `pnpm check-docs`, run by `pnpm lint`: every relative link, anchor, quoted `pnpm` script and policy rule id in the docs must exist (a `cd` inside a subshell `( … )` ends with it); docs/grading.md §15 must document every key of the golden file format; no Markdown file may hold an absolute path from one machine; and Decisions.md entries from the Sprint 1 close on say what was decided, not how the work was organised.
 - `pnpm test:coverage`: `src/core` coverage, failing below 95% of lines. CI runs it.
 
 ### Changed
@@ -49,10 +49,16 @@ All notable changes to this project are documented here. The format follows [Kee
 - Text is read the way Unicode 15.0 (Chrome 120, the oldest Chrome Attest supports) reads it, on every engine, so a receipt grades and replays the same in every supported Chrome and in Node.
 - A policy is refused when one of its rules concludes a grade without the evidence that grade needs (for example a VERIFIED rule with no match at the verified threshold), and grading refuses any policy the loader did not produce.
 - A spend claim (a purchase or a subscription change) with no currency counts toward the rolling spend ceiling: two $30 purchases against a $50 ceiling make the second OVER SCOPE, with or without a currency on either.
-- Evidence counts for a claim only when it comes from a source the policy reads for that kind of claim. A row from another source can still produce an UNASKED receipt.
-- A counterparty, merchant or subject must be one line. An observed row whose allowed field fails its check is refused whole, never stored without that fact (from Sprint 2 the observer then reports DEGRADED); the ledger also refuses an observation holding a field its source may not store.
+- Evidence counts only when it comes from a source the policy reads for that kind of action: a row from another source neither verifies a claim nor produces an UNASKED receipt.
+- A counterparty, merchant or subject must be one line. An observed row whose allowed field fails its check, or is held by a getter, a setter or a prototype rather than as plain data, is refused whole, never stored without that fact (from Sprint 2 the observer then reports DEGRADED); the ledger also refuses an observation holding a field its source may not store.
+- The ledger keeps the earliest time a fact was first seen, whatever order the sightings arrive in, and refuses a claim or observation that differs from the one it already stores under the same hash, rather than keeping either silently.
+- Health reports carry reason codes such as `selector.missing`, never page text, and adapter, observer and extractor ids are short tokens.
+- A purchase never counts as its own earlier spend under the rolling spend ceiling: the same purchase read twice (an activity view shown again seconds later) is one claim, counted once.
+- A claim too vague to match, or a calendar claim with no event time, is never called NOT FOUND, whatever order a policy puts its rules in; a policy whose partial-match threshold is 0 is refused.
+- An override changes only the gradings that start after it, and a claim overridden to VERIFIED keeps its evidence: no other claim can take that email or event. Replay rebuilds each grading exactly as it ran.
+- Text holding half of a broken character pair (a lone surrogate) reads as the replacement character U+FFFD on every engine, so removing an invisible mark can never join two halves into a character the text did not hold.
 - `pnpm attest replay` escapes control and invisible characters from the export before it prints them, so a crafted file cannot drive your terminal.
-- Lint: `src/core` may import only its own modules, `zod` and the policy file, and may not use `WeakRef` or `FinalizationRegistry`, or turn a date into text through the host's time zone (`date.toString()`, `String(date)`).
+- Lint: `src/core` may import only its own modules, `zod` and the policy file, and may not use `WeakRef`, `FinalizationRegistry` or `Temporal`, read `.constructor`, parse text with `new Date(text)`, or turn a date into text through the host's time zone (`date.toString()`, `String(date)`). No shipped file may hold an ambient `declare`, which could hide a real global from these rules. The Unicode fence reads the syntax tree of `src/core`, not its text.
 
 ### Removed
 

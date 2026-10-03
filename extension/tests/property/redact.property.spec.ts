@@ -11,14 +11,17 @@
  * Seeds also arrive as VALID values through every channel project() must not read: a content field the
  * source does not allowlist, an inherited property, a getter, an own `__proto__` key, and the elements of an
  * array row. A projection that read any of them would either keep a seed or project a row that must throw.
+ * An inherited property or a getter on a field the source DOES allowlist refuses the row (`invalid_field`,
+ * OBS-3): it is never read, and never silently left out of a stored row either (Hard Rules 5, 6).
  *
  * For every example: the output's keys are a subset of the source's allowlist ∪ {id, source, type, observedAt,
  * rowKeyHash, contentHash}; no seed value or canary appears anywhere in JSON.stringify(output); every
  * allowlisted valid own value is kept exactly (subjectHint cut at SUBJECT_HINT code points) and nothing else
  * is; the derived fields are computed from the arguments only; no getter is ever invoked; the output parses;
- * a row holding an allowlisted own value that is not a valid fact is refused whole with
- * RedactError('invalid_field'), whose message and fields name no seed (Hard Rules 5, 10: never stored without
- * a fact it carried); and any other row without a valid, allowlisted, own occurredAt throws
+ * a row holding an allowlisted own value that is not a valid fact, or an allowlisted field held by a getter or
+ * inherited, is refused whole with RedactError('invalid_field'), whose message and fields name no seed (Hard
+ * Rules 5, 10: never stored without a fact it carried); and any other row without a valid, allowlisted, own
+ * occurredAt throws
  * RedactError('missing_occurred_at'). Valid generated strings come from an alphabet that cannot spell any
  * seed, so a seed in the output means a leak.
  */
@@ -186,6 +189,8 @@ const example = fc.record({
   smuggled: fc.record(SMUGGLED),
   offAllowlist: fc.boolean(),
   channel: fc.constantFrom(...CHANNELS),
+  /** In the inherited and getters channels: whether allowlisted fields are smuggled too (they refuse the row). */
+  accessorAllowlisted: fc.boolean(),
 });
 type Example = typeof example extends fc.Arbitrary<infer T> ? T : never;
 
@@ -195,6 +200,8 @@ const counts = {
   refused: 0,
   /** Rows refused for a seed on the second line of an allowlisted text fact (SEC-3). */
   multiLine: 0,
+  /** Rows refused for an allowlisted field held by a getter or inherited (OBS-3). */
+  accessor: 0,
   loaded: 0,
   handBuilt: 0,
   channels: Object.fromEntries(CHANNELS.map((channel) => [channel, 0])),
@@ -237,9 +244,26 @@ const reads = { getters: 0 };
 const withProps = <T extends object>(target: T, props: Record<string, unknown>): T =>
   Object.defineProperties(target, Object.getOwnPropertyDescriptors(props));
 
-/** Wraps the own row so the smuggled fields it lacks sit where only a broken reader would find them. */
-function wrap(own: Record<string, unknown>, channel: Channel, smuggled: Record<string, unknown>): unknown {
-  const extra = Object.fromEntries(Object.entries(smuggled).filter(([key]) => !Object.hasOwn(own, key)));
+const ACCESSOR_CHANNELS: ReadonlySet<Channel> = new Set(['inherited', 'getters']);
+
+/**
+ * The smuggled fields the own row lacks (`extra`), and the values of the allowlisted ones a getter or a prototype
+ * holds (`held`). Each of those refuses the row (OBS-3), so the inherited and getters channels carry them only
+ * with `accessorAllowlisted`, and the other half of those rows project.
+ */
+function smuggle(input: Example, own: Record<string, unknown>, allowlist: readonly string[]) {
+  const accessor = ACCESSOR_CHANNELS.has(input.channel);
+  const carried = ([key]: readonly [string, unknown]): boolean =>
+    !Object.hasOwn(own, key) && (input.accessorAllowlisted || !accessor || !allowlist.includes(key));
+  const extra = Object.fromEntries(Object.entries(input.smuggled).filter(carried));
+  const heldFields = CONTENT_FIELDS.filter(
+    (field) => accessor && allowlist.includes(field) && field in extra,
+  );
+  return { extra, held: heldFields.map((field) => extra[field]) };
+}
+
+/** Wraps the own row so the smuggled `extra` fields sit where only a broken reader would find them. */
+function wrap(own: Record<string, unknown>, channel: Channel, extra: Record<string, unknown>): unknown {
   const getter = (value: unknown) => ({
     enumerable: true,
     get: () => {
@@ -306,12 +330,14 @@ function check(input: Example): void {
   const policy = policyFor(input);
   const allowlist: readonly string[] = policy.allowlistedFields[input.source];
   const own = ownOf(input, allowlist);
-  const raw = wrap(own, input.channel, input.smuggled);
+  const { extra, held } = smuggle(input, own, allowlist);
+  const raw = wrap(own, input.channel, extra);
   const ctx = { type: input.type, observedAt: input.observedAt, rowKey: input.rowKey };
   const content = expectedContent(input, allowlist);
   const run = () => project(input.source, raw, ctx, policy);
-  const refused = refusedFields(input, allowlist);
+  const refused = [...refusedFields(input, allowlist), ...held];
   if (refused.length > 0) {
+    if (held.length > 0) counts.accessor += 1;
     expectRefused(run, refused);
     return;
   }
@@ -359,6 +385,7 @@ describe('redact (property)', () => {
     expect(counts.rejected).toBeGreaterThan(50);
     expect(counts.refused).toBeGreaterThan(100);
     expect(counts.multiLine).toBeGreaterThan(20);
+    expect(counts.accessor).toBeGreaterThan(50);
     expect(counts.loaded).toBeGreaterThan(20);
     expect(counts.handBuilt).toBeGreaterThan(20);
     for (const channel of CHANNELS) expect(counts.channels[channel], channel).toBeGreaterThan(20);

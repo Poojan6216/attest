@@ -8,7 +8,10 @@
 export const LEDGER_ERROR_CODES = [
   /** A write or query argument failed its Zod schema. */
   'invalid_input',
-  /** A write reused an existing primary key for a different content/raw hash. */
+  /**
+   * A write reused an existing primary key for a different content/raw hash, or an existing content/raw hash
+   * for a different fact (anything but `observedAt` differs).
+   */
   'id_conflict',
   /** The migration list is empty, unordered, or leaves a ledger table undeclared. */
   'invalid_migrations',

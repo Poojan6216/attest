@@ -17,6 +17,8 @@ import { buildScenario, type LoadedScenario, receiptIdFor } from '../../golden/l
 import { Scenario } from '../../golden/scenario-schema';
 
 const EVALUATED_AT = '2026-10-06T15:00:00-04:00';
+/** When the hand-built pre-assignments below were fixed: by a batch before this one (batch-fixed.ts). */
+const FIXED_AFTER = IsoTs.parse('2026-10-06T12:00:00-04:00');
 const GMAIL = {
   source: 'gmail.sent',
   lastSyncAt: EVALUATED_AT,
@@ -164,7 +166,7 @@ describe('gradeBatch: FINAL UNASKED observations stay assignable; overridden one
 
   it('an overridden UNASKED receipt fixes its observation as taken: no claim gets it, no UNASKED again', async () => {
     const loaded = UNASKED_THEN_CLAIMED();
-    const fixed = [{ observationId: observationOf(loaded, 'o1').id, claimId: null }];
+    const fixed = [{ observationId: observationOf(loaded, 'o1').id, claimId: null, after: FIXED_AFTER }];
     expect(summary(loaded, await run(loaded, { claims: ['c1'], fixed }))).toEqual({
       c1: ['NOT_FOUND', 'not_found', 'FINAL', [], 'muse'],
     });
@@ -188,7 +190,13 @@ const OVERRIDDEN = () =>
 describe('gradeBatch: overrides fix their stored evidence; an override to NOT_FOUND fixes none (§4.3)', () => {
   it('an override to VERIFIED keeps c9 → o9 fixed: c1 never sees o9', async () => {
     const loaded = OVERRIDDEN();
-    const fixed = [{ observationId: observationOf(loaded, 'o9').id, claimId: claimOf(loaded, 'c9').id }];
+    const fixed = [
+      {
+        observationId: observationOf(loaded, 'o9').id,
+        claimId: claimOf(loaded, 'c9').id,
+        after: FIXED_AFTER,
+      },
+    ];
     expect(summary(loaded, await run(loaded, { claims: ['c1'], fixed }))).toEqual({
       c1: ['NOT_FOUND', 'not_found', 'FINAL', [], 'muse'],
     });
@@ -210,8 +218,8 @@ describe('gradeBatch: overrides fix their stored evidence; an override to NOT_FO
     const loaded = OVERRIDDEN();
     const o9 = observationOf(loaded, 'o9').id;
     const fixed = [
-      { observationId: o9, claimId: claimOf(loaded, 'c9').id },
-      { observationId: o9, claimId: null },
+      { observationId: o9, claimId: claimOf(loaded, 'c9').id, after: FIXED_AFTER },
+      { observationId: o9, claimId: null, after: FIXED_AFTER },
     ];
     expect(summary(loaded, await run(loaded, { claims: ['c1'], fixed }))).toEqual({
       c1: ['NOT_FOUND', 'not_found', 'FINAL', [], 'muse'],

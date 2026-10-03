@@ -19,6 +19,10 @@
  *    no case mapping, canonical combining class 0, in none of the tables. That is exactly how a 15.0 engine
  *    treats a newer character. `onBaseline` puts the original code points back, in order, into a result that
  *    keeps them (a folded name); every step it runs keeps each noncharacter, in order.
+ *  - A lone surrogate (half of a UTF-16 pair with no partner) becomes U+FFFD, the replacement character it
+ *    displays as, and stays U+FFFD. Every reader swaps before it removes anything, so removing an invisible or
+ *    nonspacing mark between two halves can never pair them into a character the text did not hold:
+ *    "\uD833\u200B\uDCF1" would otherwise become U+1CCF1, which a 16.0 NFKC reads as "1" and a 15.0 one keeps.
  *  - An unassigned code point that 15.0 already makes Default_Ignorable (U+2065, U+FFF0–U+FFF8, the reserved tag
  *    and variation-selector ranges) is left as it is: every reader strips it as `invisible`.
  *  - `lowerBaseline` decides the one context-dependent lowercase mapping (final sigma) from the 15.0 tables, and
@@ -71,8 +75,17 @@ export const BASELINE_CLASS = {
 const NON_ASCII = /\P{ASCII}/u;
 const BMP_HOLE = '\uFDD0';
 const ASTRAL_HOLE = '\u{1FFFE}';
-/** A code point 15.0 neither assigns nor makes default-ignorable, or a hole character already in the text. */
-const OUTSIDE_BASELINE = new RegExp(`[^${ASSIGNED}${RESERVED_IGNORABLE}]|[\\u{FDD0}\\u{1FFFE}]`, 'gu');
+/** U+FFFD REPLACEMENT CHARACTER (So in every version: no decomposition, no case mapping, never a token). */
+const REPLACEMENT = '\uFFFD';
+/**
+ * A code point 15.0 neither assigns nor makes default-ignorable, a hole character already in the text, or a lone
+ * surrogate (with the `u` flag a class of surrogates matches only a half with no partner).
+ */
+const OUTSIDE_BASELINE = new RegExp(
+  `[^${ASSIGNED}${RESERVED_IGNORABLE}]|[\\u{FDD0}\\u{1FFFE}]|[\\u{D800}-\\u{DFFF}]`,
+  'gu',
+);
+const LONE_SURROGATE = /^[\u{D800}-\u{DFFF}]$/u;
 const HOLE = /[\uFDD0\u{1FFFE}]/gu;
 /** A code point 15.0 neither assigns nor makes default-ignorable (a hole is a noncharacter: assigned). */
 const UNASSIGNED = new RegExp(`[^${ASSIGNED}${RESERVED_IGNORABLE}]`, 'u');
@@ -83,10 +96,14 @@ const FINAL_SIGMA = '\u03C2';
 const CASED_CHARACTER = new RegExp(`^[${CASED}]$`, 'u');
 const CASE_IGNORABLE_CHARACTER = new RegExp(`^[${CASE_IGNORABLE}]$`, 'u');
 
-/** `text` with every code point outside the baseline replaced by a hole; each one replaced is pushed to `held`. */
+/**
+ * `text` with every code point outside the baseline replaced by a hole, each one pushed to `held`, and every lone
+ * surrogate replaced by U+FFFD (never held: put back, two halves could pair).
+ */
 function swap(text: string, held: string[] | null): string {
   if (!NON_ASCII.test(text)) return text;
   return text.replace(OUTSIDE_BASELINE, (code) => {
+    if (LONE_SURROGATE.test(code)) return REPLACEMENT;
     held?.push(code);
     return code.length === 1 ? BMP_HOLE : ASTRAL_HOLE;
   });
@@ -94,8 +111,10 @@ function swap(text: string, held: string[] | null): string {
 
 /**
  * `text` with each code point Unicode 15.0 does not assign replaced by a noncharacter of the same UTF-16 length,
- * for a reader whose result never holds those code points (tokens, an amount, a time, a yes/no): the engine's
- * `normalize()` and `toLowerCase()` then treat them as a 15.0 engine does. ASCII text is returned as is.
+ * and each lone surrogate by U+FFFD, for a reader whose result never holds those code points (tokens, an amount,
+ * a time, a yes/no): the engine's `normalize()` and `toLowerCase()` then treat them as a 15.0 engine does, and no
+ * later removal can join two surrogate halves. Every reader calls it before it removes any character. ASCII text
+ * is returned as is.
  */
 export function asBaseline(text: string): string {
   return swap(text, null);
@@ -103,8 +122,8 @@ export function asBaseline(text: string): string {
 
 /**
  * `fold(asBaseline(text))` with the replaced code points put back, in order, where their noncharacters ended up:
- * for a reader whose result keeps them (`name()`). `fold` may normalise, change case, and replace or remove
- * characters of the baseline classes, but must keep every noncharacter, in order.
+ * for a reader whose result keeps them (`name()`). A lone surrogate stays U+FFFD. `fold` may normalise, change
+ * case, and replace or remove characters of the baseline classes, but must keep every noncharacter, in order.
  */
 export function onBaseline(text: string, fold: (baseline: string) => string): string {
   const held: string[] = [];

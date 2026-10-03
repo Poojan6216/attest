@@ -10,7 +10,7 @@
  * PENDING until `finalizeUnverifiableHours`), coverage passes with gaps, an undeclared observed scope (OVER_SCOPE
  * scope receipts), an allowlist, a disallowed type, a grant that changes mid-ledger, a policy that changes
  * mid-ledger, activity that makes some orphans UNASKED, and a few rows read by an observer the policy does not list
- * for their type (still orphans in a window of their own source, §3).
+ * for their type (never a candidate nor an orphan, even in a window of their own source: §3, §4.1).
  */
 import defaultPolicyJson from '../../../policy/default.json';
 
@@ -46,7 +46,7 @@ const PASS_EVERY_MS = 3 * MS_PER_HOUR;
 const PASS_WINDOW_MS = 4 * MS_PER_HOUR;
 /** The share of coverage passes skipped: each skip leaves a gap that caps coverage at partial. */
 const PASS_SKIP = 0.08;
-/** The share of observations read by a source the policy does not list for their type (§3: still orphans). */
+/** The share of observations read by a source the policy does not list for their type (§3: never orphans). */
 const STRAY_SOURCE = 0.05;
 type Source = (typeof SOURCES)[number];
 

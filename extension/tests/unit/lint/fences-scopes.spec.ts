@@ -83,6 +83,48 @@ describe('network is fenced in all extension code (Hard Rule 1)', () => {
   });
 });
 
+describe('shipped code declares no globals (PI-2, Hard Rules 1 and 4)', () => {
+  it('an ambient declaration fails in every shipped scope, and the network global it hides is still seen', async () => {
+    await expectFence([
+      [
+        'src/ui/probe.ts',
+        "declare const localStorage: Storage;\nlocalStorage.setItem('k', 'v');\n",
+        'no-restricted-syntax',
+      ],
+      [
+        'src/bus/send.ts',
+        'declare const process: { env: object };\nexport const e = process.env;\n',
+        'no-restricted-syntax',
+      ],
+      [
+        'src/ledger/repo.ts',
+        'declare global { const indexedDB: object }\nexport const i = indexedDB;\n',
+        'no-restricted-syntax',
+      ],
+      [
+        'entrypoints/background.ts',
+        "declare const fetch: (u: string) => Promise<unknown>;\nvoid fetch('https://x');\n",
+        'no-restricted-syntax',
+      ],
+      [
+        'entrypoints/background.ts',
+        "declare const fetch: (u: string) => Promise<unknown>;\nvoid fetch('https://x');\n",
+        'attest/no-network',
+      ],
+      [
+        'entrypoints/content/gmail.content.ts',
+        "declare function fetch(u: string): Promise<unknown>;\nvoid fetch('https://x');\n",
+        'attest/no-act',
+      ],
+    ]);
+  });
+
+  it('control: tests may still declare the globals they inject (the e2e `chrome`)', async () => {
+    const code = 'declare const chrome: { runtime: { id: string } };\nexport const id = chrome.runtime.id;\n';
+    expect(await ruleIds('tests/e2e/probe.spec.ts', code)).toEqual([]);
+  });
+});
+
 describe('code on a vendor page reaches the ledger only through the bus (TECH-2, SECURITY-V4)', () => {
   it('content scripts, adapters and observers cannot import the ledger, worker, crypto, telemetry, model or UI', async () => {
     const imports = [

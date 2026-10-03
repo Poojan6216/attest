@@ -4,7 +4,9 @@
  * root on virtual files:
  *  - every line counts, blank and comment lines included, and every function counts, the describe and it
  *    callbacks of a test file included (Decisions [1.v14-core]);
- *  - `x as unknown as T` fails in every scope, src/core, the bus, UI, entrypoints, tests, bench and scripts;
+ *  - `x as unknown as T` fails in every scope, src/core, the bus, UI, entrypoints, tests, bench and scripts, and so
+ *    does any assertion stacked on another, however spelled (`x as Opaque as T`, `x as unknown satisfies unknown as
+ *    T`, `<T><unknown>x`, `(x as unknown)! as T`; PI-7);
  *  - the only files exempt from the size limits are the generated Unicode tables, exactly the files
  *    scripts/gen-unicode-baseline.ts writes;
  *  - no file in either tree switches a limit off with an inline comment (a test file could, unlike app code).
@@ -131,6 +133,39 @@ describe('no `as unknown as`', () => {
       expect(await limits(file, single), file).toEqual([]);
       expect(await limits(file, parsed), file).toEqual([]);
     }
+  });
+
+  it('any assertion stacked on another fails in every scope of both configs, however it is spelled (PI-7)', async () => {
+    const stacked = [
+      'type Opaque = unknown;\nexport const probe = (x: number): string => x as Opaque as string;\n',
+      'export const probe = (x: number): string => x as unknown satisfies unknown as string;\n',
+      'export const probe = (x: { a: number }): { b: string } => x as object as { b: string };\n',
+      'export const probe = (x: number): string => (x as never) as string;\n',
+      'export const probe = (x: number): string => (x as unknown)! as string;\n',
+    ];
+    for (const file of ALL_SCOPES) {
+      for (const code of stacked) {
+        const found = await limits(file, code);
+        expect(found, `${file}: ${code}`).toHaveLength(1);
+        expect(found[0], `${file}: ${code}`).toMatch(
+          /^no-restricted-syntax: No `as unknown as`, and no assertion stacked/,
+        );
+      }
+    }
+    const angle = 'export const probe = (x: number): string => <string>(<unknown>x);\n';
+    for (const file of ['src/core/probe.ts', 'tests/unit/probe.spec.ts', '../scripts/probe.ts'])
+      expect(await limits(file, angle), file).toHaveLength(1);
+  });
+
+  it('control: an `as const` under an assertion, and `as const satisfies T`, pass', async () => {
+    const code = [
+      "export const a = ['x', 'y'] as const as readonly string[];",
+      "export const b = { k: 'v' } as const satisfies Record<string, string>;",
+      'export const c = (x: unknown): number => x as number;',
+      '',
+    ].join('\n');
+    for (const file of ['src/core/probe.ts', 'tests/unit/probe.spec.ts', '../bench/probe.ts'])
+      expect(await limits(file, code), file).toEqual([]);
   });
 
   it('the scopes that set their own no-restricted-syntax keep their other entries', async () => {

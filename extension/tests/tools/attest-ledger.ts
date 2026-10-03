@@ -3,8 +3,8 @@
  * and the `attest replay` CLI tests.
  *
  * `LedgerSim` plays the background over a World (attest-world.ts). At each batch instant it passes every claim
- * whose stored receipt is not FINAL or overridden to `gradeBatch`, with the FINAL and USER_OVERRIDDEN
- * pre-assignments derived from the rows it holds right then, and stores what comes back as the ledger does:
+ * whose stored receipt is not FINAL or overridden to `gradeBatch`, with core's `preAssignments` of the rows it holds
+ * right then (gradeBatch keeps those in force at the batch's instant), and stores what comes back as the ledger does:
  *  - a new subject's receipt is inserted; a PENDING row is replaced through state.ts `regrade`;
  *  - a FINAL or overridden row is kept and the regrade discarded (UNASKED and scope receipts, §3);
  *  - a PENDING claim-less row the batch no longer produces is deleted (§7);
@@ -13,14 +13,15 @@
  * the observation it holds (`supersede`). `snapshot()` is what an export holds.
  *
  * The pre-assignments here are read from the live rows (what is FINAL or overridden now), while replay reads them
- * from the stored rows' timestamps afterwards: the property test holds the two together.
+ * from the stored rows afterwards; both go through batch-fixed.ts, and the property tests hold the two together,
+ * including overrides stamped at a batch's very instant or just after it but read by it (`simulate`).
  */
-import { gradeBatch, type BatchFixed } from '../../src/core/batch';
+import { gradeBatch, preAssignments } from '../../src/core/batch';
 import { createMemoryIndex, type ObservationIndex } from '../../src/core/candidates';
 import type { Policy } from '../../src/core/policy';
 import { receiptId } from '../../src/core/receipt';
 import type { LedgerSnapshot, ReceiptInputs } from '../../src/core/replay';
-import { Coverage, type OverrideGrade, type Receipt, type Ulid } from '../../src/core/schema';
+import { Claim, Coverage, type OverrideGrade, type Receipt, type Ulid } from '../../src/core/schema';
 import { transition } from '../../src/core/state';
 
 import { isoAt, pick, seededRandom, syntheticWorld, type World, type WorldOptions } from './attest-world';
@@ -28,23 +29,6 @@ import { isoAt, pick, seededRandom, syntheticWorld, type World, type WorldOption
 /** The memory index's bucket width in minutes: an index tuning parameter, not policy. */
 const BUCKET_MINUTES = 15;
 const OVERRIDE_GRADES: readonly OverrideGrade[] = ['VERIFIED', 'NOT_FOUND'];
-
-/** The pre-assignments the background passes to a batch (§4.3), from the rows it holds now. */
-export function preAssignments(receipts: Iterable<Receipt>): BatchFixed[] {
-  const fixed: BatchFixed[] = [];
-  for (const receipt of receipts) {
-    const { claimId, override, observationIds } = receipt;
-    if (claimId === undefined) {
-      const [orphan] = observationIds;
-      if (override !== undefined && orphan !== undefined)
-        fixed.push({ observationId: orphan, claimId: null });
-      continue;
-    }
-    if (receipt.state === 'PENDING' || override?.grade === 'NOT_FOUND') continue;
-    for (const observationId of observationIds) fixed.push({ observationId, claimId });
-  }
-  return fixed;
-}
 
 export class LedgerSim {
   /** The stored receipts by id: one row per subject. */
@@ -134,7 +118,7 @@ export class LedgerSim {
 }
 
 export interface SimulationOptions extends WorldOptions {
-  /** Overrides the user makes between two batches, at random instants strictly between them. */
+  /** Overrides the user makes after each batch but the last (see `overrideInstant`). */
   readonly overridesPerGap: number;
 }
 
@@ -144,7 +128,42 @@ export interface Simulation {
   readonly snapshot: LedgerSnapshot;
 }
 
-/** Overrides `count` random claim or UNASKED receipts not yet overridden, at instants in `(fromMs, toMs)`. */
+/** The share of claims first read exactly at a batch instant (§3: `observedAt ≤ evaluatedAt`, so that batch has them). */
+const READ_AT_BATCH = 0.1;
+/** The longest an override stamped after a batch's instant can precede that batch's read of its pre-assignments. */
+const RACE_MS = 5_000;
+
+/**
+ * The world with a `READ_AT_BATCH` share of its claims first read at a batch instant: the first one at or after the
+ * claim's own `observedAt`. Drawn from its own seeded stream, so the rest of the world is as `syntheticWorld` built it.
+ */
+export function readAtBatches(world: World, seed: number): World {
+  const random = seededRandom(seed ^ 0x0b5e);
+  const instants = world.batchTimes.map((at) => Date.parse(at));
+  const claims = world.claims.map((claim) => {
+    const seenMs = Date.parse(claim.observedAt);
+    const atMs = instants.find((ms) => ms >= seenMs);
+    if (random() >= READ_AT_BATCH || atMs === undefined) return claim;
+    return Claim.parse({ ...claim, observedAt: isoAt(atMs, 0) });
+  });
+  return { ...world, claims };
+}
+
+/**
+ * When an override made between the batches at `fromMs` and `toMs` is stamped: mostly strictly between them; one in
+ * ten at `fromMs` (the batch just run), one in ten at `toMs` (the next batch's very instant, stamped before it reads
+ * its pre-assignments), and one in ten up to `RACE_MS` after `toMs` (stamped after the next batch's `evaluatedAt` but
+ * before that batch reads its pre-assignments). Each is applied before the next batch runs.
+ */
+function overrideInstant(random: () => number, fromMs: number, toMs: number): number {
+  const roll = random();
+  if (roll < 0.1) return fromMs;
+  if (roll < 0.2) return toMs;
+  if (roll < 0.3) return toMs + 1 + Math.floor(random() * RACE_MS);
+  return fromMs + 1 + Math.floor(random() * (toMs - fromMs - 1));
+}
+
+/** Overrides `count` random claim or UNASKED receipts not yet overridden (`overrideInstant`). */
 function overrideSome(
   sim: LedgerSim,
   random: () => number,
@@ -157,14 +176,14 @@ function overrideSome(
       (r) => r.state !== 'USER_OVERRIDDEN' && (r.claimId !== undefined || r.observationIds.length > 0),
     );
     if (open.length === 0 || toMs - fromMs < 2) return;
-    const atMs = fromMs + 1 + Math.floor(random() * (toMs - fromMs - 1));
+    const atMs = overrideInstant(random, fromMs, toMs);
     sim.override(pick(random, open).id, pick(random, OVERRIDE_GRADES), isoAt(atMs, 0));
   }
 }
 
-/** Builds the world for `options` and grades it batch by batch, with overrides between batches. */
+/** Builds the world for `options` (`readAtBatches`) and grades it batch by batch, with overrides between batches. */
 export async function simulate(options: SimulationOptions): Promise<Simulation> {
-  const world = syntheticWorld(options);
+  const world = readAtBatches(syntheticWorld(options), options.seed);
   const sim = new LedgerSim(world);
   const random = seededRandom(options.seed ^ 0x5eed);
   const { batchTimes } = world;

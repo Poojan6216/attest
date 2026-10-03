@@ -3,6 +3,10 @@
  * restates or shortens it: a timeout at or under 60 s is noise at best, and at worst a load-dependent failure with
  * no defect (qa_tester rule 10). A test that needs longer says so itself, with a literal or a file constant above
  * 60 s (the 120 s, 300 s and 600 s properties). Hooks keep their own timeouts: Vitest's hookTimeout is separate.
+ * The scan reads a timeout however it is written (PI-8): positional, `{ timeout: … }`, shorthand `{ timeout }`, a
+ * spread of a file-level options object, and the suite-wide bound itself, `vi.setConfig({ testTimeout })` or any
+ * `testTimeout` property. A value it cannot read (an imported constant, a spread of anything but a file-level object
+ * literal) counts as offending.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -61,44 +65,115 @@ function constantsOf(file: ts.SourceFile): Constants {
   return { numbers, objects };
 }
 
+/** A property's written name (`key`, `'key'`, `['key']`), or undefined when its key is computed from a value. */
+function keyOf(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) return name.expression.text;
+  return undefined;
+}
+
+/**
+ * The values `key` takes in an options object: written (`key: …`, `'key': …`, `['key']: …`), shorthand (`{ key }`,
+ * read as the file-level constant of that name) or spread from a file-level object literal. A spread of anything
+ * else, or a key computed from a value (`[KEY]: …`), cannot be read, so it stands for its own value (and is
+ * reported as unreadable).
+ */
+function valuesOf(
+  object: ts.ObjectLiteralExpression,
+  key: string,
+  constants: Constants,
+  depth = 0,
+): ts.Expression[] {
+  return object.properties.flatMap((property): ts.Expression[] => {
+    if (ts.isPropertyAssignment(property)) {
+      const name = keyOf(property.name);
+      if (name === undefined && ts.isComputedPropertyName(property.name)) return [property.name.expression];
+      return name === key ? [property.initializer] : [];
+    }
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === key) return [property.name];
+    if (!ts.isSpreadAssignment(property)) return [];
+    const spread = ts.isIdentifier(property.expression)
+      ? constants.objects.get(property.expression.text)
+      : undefined;
+    return spread === undefined || depth > constants.objects.size
+      ? [property.expression]
+      : valuesOf(spread, key, constants, depth + 1);
+  });
+}
+
+/** An argument as an options object: written in place, or a file-level object constant. */
+function optionsOf(arg: ts.Expression, constants: Constants): ts.ObjectLiteralExpression | undefined {
+  if (ts.isObjectLiteralExpression(arg)) return arg;
+  return ts.isIdentifier(arg) ? constants.objects.get(arg.text) : undefined;
+}
+
 /** The timeout arguments of a test call: a value after the callback, or `timeout` in an options object. */
 function timeoutArguments(call: ts.CallExpression, constants: Constants): ts.Expression[] {
   const args = [...call.arguments];
-  const optionsOf = (arg: ts.Expression): ts.ObjectLiteralExpression | undefined =>
-    ts.isObjectLiteralExpression(arg)
-      ? arg
-      : ts.isIdentifier(arg)
-        ? constants.objects.get(arg.text)
-        : undefined;
-  const objects = args.flatMap((arg) => optionsOf(arg) ?? []);
-  const options = objects.flatMap((object) =>
-    object.properties.flatMap((property) =>
-      ts.isPropertyAssignment(property) && property.name.getText() === 'timeout'
-        ? [property.initializer]
-        : [],
-    ),
-  );
+  const options = args.flatMap((arg) => {
+    const object = optionsOf(arg, constants);
+    return object === undefined ? [] : valuesOf(object, 'timeout', constants);
+  });
   const last = args.at(-1);
   const positional =
-    args.length >= 3 && last !== undefined && !ts.isFunctionLike(last) && optionsOf(last) === undefined
+    args.length >= 3 &&
+    last !== undefined &&
+    !ts.isFunctionLike(last) &&
+    optionsOf(last, constants) === undefined
       ? [last]
       : [];
   return [...positional, ...options];
 }
 
-/** Every timeout a test call in `source` sets. */
+/** `vi.setConfig(…)` / `vitest.setConfig(…)`: the suite-wide bound, changed from inside a test file. */
+function isSetConfig(call: ts.CallExpression): boolean {
+  const target = call.expression;
+  return (
+    ts.isPropertyAccessExpression(target) &&
+    target.name.text === 'setConfig' &&
+    ts.isIdentifier(target.expression) &&
+    ['vi', 'vitest'].includes(target.expression.text)
+  );
+}
+
+/**
+ * The `testTimeout` values a file sets: every `testTimeout` property written anywhere, and in `setConfig` calls
+ * also a spread or an argument that cannot be read.
+ */
+function testTimeoutArguments(node: ts.Node, constants: Constants): ts.Expression[] {
+  if (ts.isPropertyAssignment(node) && keyOf(node.name) === 'testTimeout') return [node.initializer];
+  if (ts.isShorthandPropertyAssignment(node) && node.name.text === 'testTimeout') return [node.name];
+  if (!ts.isCallExpression(node) || !isSetConfig(node)) return [];
+  return node.arguments.flatMap((arg) => {
+    if (ts.isObjectLiteralExpression(arg))
+      return valuesOf(arg, 'testTimeout', constants).filter((value) => !written(value, arg));
+    const object = optionsOf(arg, constants);
+    return object === undefined ? [arg] : [];
+  });
+}
+
+/** Whether `value` is a `testTimeout` property written in `object` itself (already found where it is written). */
+function written(value: ts.Expression, object: ts.ObjectLiteralExpression): boolean {
+  const property = value.parent;
+  const named = ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property);
+  return named && property.parent === object;
+}
+
+/** Every timeout a test call in `source` sets, and every suite-wide bound it sets. */
 function timeoutsIn(fileName: string, source: string): Timeout[] {
   const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
   const constants = constantsOf(file);
   const found: Timeout[] = [];
+  const record = (arg: ts.Expression): void => {
+    const line = file.getLineAndCharacterOfPosition(arg.getStart(file)).line + 1;
+    const ms = ts.isIdentifier(arg) ? constants.numbers.get(arg.text) : numberOf(arg);
+    found.push({ where: `${fileName}:${String(line)}`, text: arg.getText(file), ms });
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && TEST_CALLS.has(callee(node.expression) ?? '')) {
-      for (const arg of timeoutArguments(node, constants)) {
-        const line = file.getLineAndCharacterOfPosition(arg.getStart(file)).line + 1;
-        const ms = ts.isIdentifier(arg) ? constants.numbers.get(arg.text) : numberOf(arg);
-        found.push({ where: `${fileName}:${String(line)}`, text: arg.getText(file), ms });
-      }
+      for (const arg of timeoutArguments(node, constants)) record(arg);
     }
+    for (const arg of testTimeoutArguments(node, constants)) record(arg);
     ts.forEachChild(node, visit);
   };
   visit(file);
@@ -133,7 +208,9 @@ describe('test timeouts: one suite-wide bound (TECH-R3)', () => {
     expect(replay.length).toBeGreaterThan(0);
     for (const { ms } of replay) expect(ms).toBe(600_000);
   });
+});
 
+describe('test timeouts: the scanner reads every spelling (negative controls)', () => {
   it('the scanner sees a timeout however it is written', () => {
     const probe = [
       'const SHORT = 30_000;',
@@ -158,5 +235,51 @@ describe('test timeouts: one suite-wide bound (TECH-R3)', () => {
       'probe.spec.ts:11 DYNAMIC',
       'probe.spec.ts:4 10_000',
     ]);
+  });
+});
+
+/** Every other way to write a timeout (PI-8): shorthand, spreads, quoted and computed keys, the suite-wide bound. */
+const SPELLINGS = [
+  'const timeout = 1_000;',
+  'const OPTS = { timeout: 2_000 };',
+  'const LONG = { timeout: 600_000 };',
+  "const GATE = { tags: ['gate'] };",
+  "it('shorthand', { timeout }, () => {});",
+  "it('spread', { ...OPTS }, () => {});",
+  "it('spread imported', { ...IMPORTED }, () => {});",
+  'vi.setConfig({ testTimeout: 1_000 });',
+  'vitest.setConfig(CONFIG);',
+  'vi.setConfig({ ...SHARED });',
+  'const testTimeout = 5_000;',
+  'vi.setConfig({ testTimeout });',
+  "it('long', { ...LONG }, () => {});",
+  "describe('gate', { ...GATE }, () => {});",
+  'vi.setConfig({ testTimeout: 120_000, hookTimeout: 1_000 });',
+  "it('quoted', { 'timeout': 3_000 }, () => {});",
+  "it('computed', { ['timeout']: 4_000 }, () => {});",
+  "it('computed key', { [KEY]: 600_000 }, () => {});",
+  "vi.setConfig({ ['testTimeout']: 5_000 });",
+  "const config = { 'testTimeout': 6_000 };",
+].join('\n');
+
+/** What the scanner must report in SPELLINGS: every value at or under 60 s, and every one it cannot read. */
+const SPELLINGS_OFFENDING = [
+  'probe.spec.ts:5 timeout',
+  'probe.spec.ts:2 2_000',
+  'probe.spec.ts:7 IMPORTED',
+  'probe.spec.ts:8 1_000',
+  'probe.spec.ts:9 CONFIG',
+  'probe.spec.ts:10 SHARED',
+  'probe.spec.ts:12 testTimeout',
+  'probe.spec.ts:16 3_000',
+  'probe.spec.ts:17 4_000',
+  'probe.spec.ts:18 KEY',
+  'probe.spec.ts:19 5_000',
+  'probe.spec.ts:20 6_000',
+];
+
+describe('test timeouts: shorthand, spreads and the suite-wide bound (PI-8)', () => {
+  it('the scanner sees shorthand, spread options and the suite-wide bound set from a test file', () => {
+    expect(offending(timeoutsIn('probe.spec.ts', SPELLINGS))).toEqual(SPELLINGS_OFFENDING);
   });
 });

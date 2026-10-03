@@ -45,6 +45,20 @@ tester.run('attest/no-network', noNetwork, {
   ],
 });
 
+// A `declare` emits nothing: the name still reads the real global, so it is still reported (PI-2).
+tsTester.run('attest/no-network through ambient declarations', noNetwork, {
+  valid: ['const fetch = (x: string) => x; fetch("1");'],
+  invalid: [
+    invalid("declare const fetch: (u: string) => Promise<unknown>; fetch('https://x');", 'network'),
+    invalid("declare function fetch(u: string): Promise<unknown>; fetch('https://x');", 'network'),
+    invalid(
+      "declare global { const WebSocket: new (u: string) => object } new WebSocket('wss://x');",
+      'network',
+    ),
+    invalid('declare let XMLHttpRequest: new () => object; const X = XMLHttpRequest; new X();', 'network'),
+  ],
+});
+
 tester.run('attest/log-call', logCall, {
   valid: [
     "log.info('background.started');",
@@ -75,8 +89,18 @@ tsTester.run('attest/core-determinism', coreDeterminism, {
     'export const isDate = (x: unknown) => x instanceof Date;',
     'export const m = Math.max(1, 2) + Math.floor(1.5);',
     'export const sorted = (a: string[]) => [...a].sort();',
+    'export const d = (ms: number) => new Date(ms);',
+    'const Date = { now: () => 1 }; export const t = Date.now();',
   ],
   invalid: [
+    invalid('declare const Date: DateConstructor; export const t = Date.now();', 'date'),
+    invalid('declare const Date: DateConstructor; const D = Date; D.now();', 'date'),
+    invalid('declare const Math: { random(): number }; export const r = Math.random();', 'math'),
+    invalid('declare global { const Math: { random(): number } } export const r = Math.random();', 'math'),
+    invalid('const none: [] = []; export const t = new Date(...none);', 'date'),
+    invalid('export const t = (y: number, m: number) => new Date(y, m);', 'date'),
+    invalid("export const t = new Date('2026-01-01T00:00:00');", 'dateArgument'),
+    invalid('export const t = new Date(`2026-01-01`);', 'dateArgument'),
     invalid('export const t = Date.now();', 'date'),
     invalid('export const p = Date.parse(s);', 'date'),
     invalid('export const t = new Date();', 'date'),

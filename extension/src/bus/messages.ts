@@ -2,10 +2,11 @@
  * Every message that crosses a context boundary (content script ↔ service worker ↔ UI page).
  *
  * One Zod discriminated union on `type`; every member is a strict object, so a sender cannot smuggle
- * a field the schema does not name (Hard Rule 2). Payload items are the canonical core schemas
- * (src/core/schema.ts), so the bus, the ledger and grading agree on what a Claim or an Observation is; the
- * coverage ping is the ledger's storage shape until Sprint 2.6 reworks coverage. `send()` validates before
- * sending and `listen()` validates on receive: parse at every boundary.
+ * a field the schema does not name (Hard Rule 2). Adapter and observer ids and versions are `ComponentId`
+ * tokens, never text (OBS-1). Payload items are the canonical core schemas (src/core/schema.ts), so the bus,
+ * the ledger and grading agree on what a Claim or an Observation is; the coverage ping is the ledger's storage
+ * shape until Sprint 2.6 reworks coverage. `send()` validates before sending and `listen()` validates on
+ * receive: parse at every boundary.
  *
  * The schema cannot know which fields each observer source may store, or whether a contentHash is the hash of
  * its row: that needs the policy. The ledger writer checks both (`upsertObservation` runs
@@ -17,7 +18,7 @@
  */
 import { z } from 'zod';
 
-import { Claim, HealthReport, IsoTs, Observation, Request, SCHEMA_LIMITS } from '../core/schema';
+import { Claim, ComponentId, HealthReport, IsoTs, Observation, Request, SCHEMA_LIMITS } from '../core/schema';
 import { CoveragePing } from '../ledger/types';
 
 /** The eight ledger tables (build_spec §6, sprint 0.6). `ledger.changed` names which ones moved. */
@@ -57,8 +58,8 @@ export const AdapterHealthMessage = z.strictObject({
 /** What an agent adapter extracted from one page read. */
 export const AdapterClaimsMessage = z.strictObject({
   type: z.literal('adapter.claims'),
-  adapterId: z.string().min(1).max(SCHEMA_LIMITS.ID),
-  version: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  adapterId: ComponentId,
+  version: ComponentId,
   requests: z.array(Request).max(SCHEMA_LIMITS.BATCH),
   claims: z.array(Claim).max(SCHEMA_LIMITS.BATCH),
 });
@@ -66,8 +67,8 @@ export const AdapterClaimsMessage = z.strictObject({
 /** What a Gmail/Calendar observer extracted from one page read (derived facts only). */
 export const ObserverObservationsMessage = z.strictObject({
   type: z.literal('observer.observations'),
-  observerId: z.string().min(1).max(SCHEMA_LIMITS.ID),
-  version: z.string().min(1).max(SCHEMA_LIMITS.ID),
+  observerId: ComponentId,
+  version: ComponentId,
   observations: z.array(Observation).max(SCHEMA_LIMITS.BATCH),
 });
 

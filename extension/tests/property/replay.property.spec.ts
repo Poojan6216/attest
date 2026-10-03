@@ -11,8 +11,11 @@
  *  - small ledgers (1–20 claims, 1–100 observations, 2–4 batches), 1,000 of them per property (qa_tester rule 4):
  *    the same for grade and ruleId, an inputsHash mismatch when one receipt's inputs row moves, a receiptInputs
  *    mismatch when one row is lost, and the same report whatever the input order.
- * The world mixes in rows read by a source the policy does not list for their type (attest-world.ts), so UNASKED
- * receipts the batch issues for them are replayed too (§3; Sprint 1 tech review TECH-C1).
+ * The world mixes in rows read by a source the policy does not list for their type (attest-world.ts): such a row
+ * neither verifies a claim nor accuses an agent, so no receipt names it, even inside a window of its own source (§3,
+ * §4.1; Hard Rule 5). LedgerSim reads some claims first at a batch's very instant (that batch grades them, §3) and
+ * stamps some overrides at a batch instant or just after one that batch then reads (batch-fixed.ts), so replay is
+ * held to those boundaries too.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +24,7 @@ import { canonicalJson } from '../../src/core/hash';
 import { DEFAULT_POLICY } from '../../src/core/policy';
 import { observationIntegrityProblems } from '../../src/core/redact';
 import { type LedgerSnapshot, replay, type ReplayReport } from '../../src/core/replay';
-import { Grade, type Receipt, Sha256 } from '../../src/core/schema';
+import { Grade, type Observation, type Receipt, Sha256 } from '../../src/core/schema';
 import { simulate } from '../tools/attest-ledger';
 import { sourceOf } from '../tools/attest-world';
 
@@ -49,17 +52,36 @@ function expectReproduced(report: ReplayReport, snapshot: LedgerSnapshot): void 
   expect(report.receipts).toBe(snapshot.receipts.length);
 }
 
+/** Whether `row` comes from a source the policy does not list for its type (attest-world's stray rows). */
+const isStray = (row: Observation): boolean => row.source !== sourceOf(row.type);
+
+/** Receipts naming a stray row: none, since such a row is neither a candidate (§4.1) nor an orphan (§3). */
+function strayReceipts(snapshot: LedgerSnapshot): number {
+  const stray = new Set(snapshot.observations.filter(isStray).map((row) => row.id));
+  return snapshot.receipts.filter((receipt) => receipt.observationIds.some((id) => stray.has(id))).length;
+}
+
 /**
- * UNASKED receipts for a row read by a source other than its type's own (attest-world's stray rows: §3 orphans the
- * batch issues whatever sources the policy lists for the type; Sprint 1 tech review TECH-C1).
+ * Stray rows first seen by the last batch, inside a window of a pass of their own source that a batch read: each
+ * would be an orphan candidate if the policy's sources were not checked, so `strayReceipts` is not vacuous.
  */
-function strayUnasked(snapshot: LedgerSnapshot): number {
-  const byId = new Map(snapshot.observations.map((observation) => [observation.id, observation]));
-  return snapshot.receipts.filter((receipt) => {
-    const [id] = receipt.observationIds;
-    const row = receipt.grade === 'UNASKED' && id !== undefined ? byId.get(id) : undefined;
-    return row !== undefined && row.source !== sourceOf(row.type);
+function strayInOwnWindow(snapshot: LedgerSnapshot): number {
+  const passes = [...snapshot.receiptInputs.values()].flatMap((inputs) => inputs.coverage.observers);
+  const lastMs = Math.max(...snapshot.receipts.map((receipt) => Date.parse(receipt.computedAt)));
+  return snapshot.observations.filter((row) => {
+    const t = Date.parse(row.occurredAt);
+    if (!isStray(row) || Date.parse(row.observedAt) > lastMs) return false;
+    return passes.some(
+      (pass) =>
+        pass.source === row.source && Date.parse(pass.windowStart) <= t && t <= Date.parse(pass.windowEnd),
+    );
   }).length;
+}
+
+/** Claims first read at the very instant of a batch (a receipt's `computedAt`): that batch graded them (§3). */
+function readAtBatch(snapshot: LedgerSnapshot): number {
+  const instants = new Set(snapshot.receipts.map((receipt) => Date.parse(receipt.computedAt)));
+  return snapshot.claims.filter((claim) => instants.has(Date.parse(claim.observedAt))).length;
 }
 
 /** The ledger is not vacuous: several batches, real grades, and receipts that lived through more than one batch. */
@@ -78,7 +100,9 @@ function expectRealLedger(snapshot: LedgerSnapshot, report: ReplayReport): void 
   }
   expect(snapshot.receipts.filter((receipt) => receipt.override !== undefined).length).toBeGreaterThan(0);
   expect(snapshot.receipts.filter((receipt) => receipt.observationIds.length > 0).length).toBeGreaterThan(0);
-  expect(strayUnasked(snapshot)).toBeGreaterThan(0);
+  expect(strayReceipts(snapshot)).toBe(0);
+  expect(strayInOwnWindow(snapshot)).toBeGreaterThan(0);
+  expect(readAtBatch(snapshot)).toBeGreaterThan(0);
   // Every row, stray ones included, is one project() could return (its source's allowlisted fields, §10 hash).
   const unprojectable = snapshot.observations.filter(
     (observation) => observationIntegrityProblems(observation, DEFAULT_POLICY).length > 0,
@@ -147,8 +171,9 @@ describe('replay of a synthetic ledger (task 1.9 Done-when)', () => {
 /** qa_tester rule 4: every core property runs at least 1,000 examples. */
 const SMALL_RUNS = 1_000;
 
-/** Small ledgers holding a stray-source UNASKED receipt: asserted after the property, so it is never vacuous. */
-const tally = { strayLedgers: 0 };
+/** Small ledgers with a stray row in its own source's window, and with a claim read at a batch instant: asserted
+ * after the property, so it is never vacuous. */
+const tally = { strayLedgers: 0, readAtBatch: 0 };
 
 /** Small ledgers, so 1,000 of them stay cheap: any size from one claim and one observation up. */
 const ledgerArb = fc.record({
@@ -166,7 +191,9 @@ describe('replay of many small synthetic ledgers', () => {
       fc.asyncProperty(ledgerArb, async ({ pick, ...options }) => {
         const { snapshot } = await simulate(options);
         expectReproduced(await replay(snapshot), snapshot);
-        if (strayUnasked(snapshot) > 0) tally.strayLedgers += 1;
+        expect(strayReceipts(snapshot)).toBe(0);
+        if (strayInOwnWindow(snapshot) > 0) tally.strayLedgers += 1;
+        if (readAtBatch(snapshot) > 0) tally.readAtBatch += 1;
         if (snapshot.receipts.length === 0) return;
         const target = receiptAt(snapshot, pick);
         const grade = otherGrade(target.grade, pick);
@@ -180,6 +207,8 @@ describe('replay of many small synthetic ledgers', () => {
       { numRuns: SMALL_RUNS },
     );
     expect(tally.strayLedgers).toBeGreaterThan(SMALL_RUNS / 20);
+    expect(tally.readAtBatch).toBeGreaterThan(SMALL_RUNS / 20);
+    console.log(`replay property tally: ${JSON.stringify(tally)}`);
   }, 600_000);
 });
 

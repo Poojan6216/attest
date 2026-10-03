@@ -41,6 +41,6 @@
 3. Tech — Read agents/tech_reviewer.md, review code quality and architecture → `tech.md` (code quality gaps)
 4. Close — Read agents/sprint_closer.md. Here are the review outputs: [qa.md + security.md + tech.md]. Fix all gaps → `closed.md`
 
-**Gate:** `src/core` imports nothing impure (lint + grep test for `Date.now|Math.random|crypto.getRandomValues|fetch`: `extension/tests/unit/core/core-purity.spec.ts`, lint side `tests/unit/lint/fences-core.spec.ts`) → determinism property test green at 5,000 → 40+ golden scenarios green → replay 100% on a synthetic ledger → redaction property test green → §2 demo test green with VERIFIED / NOT_FOUND / UNASKED → core coverage ≥ 95% → `closed.md` says VERIFIED CLEAN.
+**Gate:** `src/core` imports nothing impure (lint + grep test for `Date.now|Math.random|crypto.getRandomValues|fetch`: `extension/tests/unit/core/core-purity.spec.ts`, lint side `tests/unit/lint/fences-core.spec.ts`, runtime side `extension/tests/unit/core/core-poison.spec.ts`: src/core run with every impure global poisoned) → determinism property test green at 5,000 → 40+ golden scenarios green → replay 100% on a synthetic ledger → redaction property test green → §2 demo test green with VERIFIED / NOT_FOUND / UNASKED → core coverage ≥ 95% → `closed.md` says VERIFIED CLEAN.
 
 📝 Out of scope (deferred): any DOM reading (Sprint 2–3); the Dexie-backed `ObservationIndex` (Sprint 2); the model feature (Sprint 5) — leave `features.modelScore` as an optional input with weight 0 in policy.

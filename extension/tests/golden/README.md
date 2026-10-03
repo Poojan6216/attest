@@ -1,8 +1,9 @@
 # Golden scenarios
 
-Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` (v1.5) **alone**,
-never from `src/core`. They are the independent statement of what `grade()` and `gradeBatch()` must do: the code
-is written to satisfy them, not the other way round (sprint 1: "write scenarios first").
+Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` **alone** (v1.5;
+`69` re-derived and `98` written under v1.6), never from `src/core`. They are the independent statement of what
+`grade()` and `gradeBatch()` must do: the code is written to satisfy them, not the other way round (sprint 1: "write
+scenarios first").
 
 | File                                    | Role                                                                                              |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -157,6 +158,23 @@ Everything is exact: basis points and reduced fractions, never floats (§5.3). W
 the unit, 2 700 000 after it, 259 200 000 around a calendar target. `28` and `29` exercise the millisecond
 boundaries (9503999/9504000, 17/20 exactly, 8078399/9504000).
 
+## What v1.6 changed in the files
+
+v1.6 is the Sprint 1 review close (the status note of `docs/grading.md`). One of its rules changes what a file
+expects: a spend claim with no currency is counted in the grant's `spendCurrency`, by the cumulative ceiling and by
+`priorSpendCents` (§6.1, §6.3).
+
+- **`69` re-derived.** Its c1 and c2 were both currency-less 3000 claims under a 5000 USD ceiling. Under v1.6 c1 is
+  c2's prior spend, so 3000 + 3000 > 5000 would make c2 OVER_SCOPE from claim-only facts and FINAL at once, and `69`
+  would stop testing what it is for: an OVER_SCOPE that rests on the assigned candidate waits like PARTIAL (§8). c2
+  now claims 2000 (3000 + 2000 = 5000 is not over the ceiling), so it stays PENDING; the notes cite §6.1 and §6.3
+  v1.6.
+- **`98` added.** `69`'s original input, expected under v1.6: both claims are `over_ceiling` (the receipt's CAD),
+  and c2 is FINAL at once, because without its candidate `over_ceiling_cumulative` would still conclude OVER_SCOPE.
+- No other file's input or expectation changed. v1.6 pre-assignments carry the batches they are in force in (§4.3);
+  a file's `fixed` pairs were made before every instant the file grades at, so each is in force in every grading of
+  the file (§15).
+
 ## What v1.4 (and v1.5) changed in the files
 
 v1.4 settled the wave C questions (Decisions [1.contract] v1.4); v1.5 only changed how `inputsHash` names the
@@ -298,7 +316,8 @@ The Sprint 1 close added `95`–`97`, computed from v1.5 alone, for the score cr
 `95` a regrade whose only candidate was first observed after the first pass, with a better row observed only
 after the regrade (candidates are read at the receipt's own grading instant, §3, §8); `96` two tied best candidates
 whose `cp.*` codes differ, the lower id occurring later (`assertIds`; §8 ties by observation id, §15 `cp.*` from the
-best only); `97` a `calendar.created` claim whose pre-existing event outscores the new one (§4.1 first-seen).
+best only); `97` a `calendar.created` claim whose pre-existing event outscores the new one (§4.1 first-seen). It also
+re-derived `69` and added `98` under v1.6 (above).
 
 ## Adding a scenario
 

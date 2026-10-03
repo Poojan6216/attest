@@ -150,6 +150,12 @@ const WEIGHT_CASES: readonly Case[] = [
     'thresholds.partial: must be < thresholds.verified',
   ),
   one(
+    'partial threshold 0 (a score of 0 is no evidence)',
+    ['thresholds', 'partial'],
+    0,
+    'thresholds.partial: must be > 0',
+  ),
+  one(
     'signal weight 0.00005',
     ['unasked', 'signals', 'userIdle'],
     0.00005,

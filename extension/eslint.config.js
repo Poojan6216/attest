@@ -13,6 +13,7 @@ import {
 import {
   ACT_RESTRICTED_IMPORTS,
   ACT_SCOPES,
+  AMBIENT_SYNTAX,
   APP,
   APP_RESTRICTED_IMPORTS,
   appGlobals,
@@ -49,16 +50,22 @@ export const SIZE_RULES = {
 };
 
 /**
- * No `as unknown as` (tech_reviewer): it switches the type checker off for that value. Parse at the boundary with
- * Zod, or narrow. Every scope's no-restricted-syntax list below includes it (flat config replaces the list).
+ * No `as unknown as` (tech_reviewer), and no assertion stacked on another in any spelling (PI-7): `x as Opaque as T`
+ * with `type Opaque = unknown`, `x as unknown satisfies unknown as T`, `<T><unknown>x`, `(x as unknown)! as T`.
+ * Each switches the type checker off for that value. Parse at the boundary with Zod, or narrow. An assertion on an
+ * `as const` is not a second assertion (`[…] as const as readonly T[]` only widens). Every scope's
+ * no-restricted-syntax list below includes it (flat config replaces the list).
  */
+const STACKED_ASSERTION =
+  ":matches(TSAsExpression, TSTypeAssertion, TSSatisfiesExpression).expression:not([typeAnnotation.typeName.name='const'])";
 export const DOUBLE_ASSERTION_SYNTAX = [
-  {
-    selector: "TSAsExpression > TSAsExpression.expression[typeAnnotation.type='TSUnknownKeyword']",
-    message:
-      'No `as unknown as`: it switches the type checker off. Parse with Zod or narrow the type instead (tech_reviewer).',
-  },
-];
+  `:matches(TSAsExpression, TSTypeAssertion) > ${STACKED_ASSERTION}`,
+  `:matches(TSAsExpression, TSTypeAssertion) > TSNonNullExpression.expression > ${STACKED_ASSERTION}`,
+].map((selector) => ({
+  selector,
+  message:
+    'No `as unknown as`, and no assertion stacked on another (`x as A as B`, `x as A satisfies B as C`): it switches the type checker off. Parse with Zod or narrow the type instead (tech_reviewer).',
+}));
 
 /**
  * The only files exempt from the size limits: generated, never edited by hand, and as long as the Unicode
@@ -144,15 +151,21 @@ export default tseslint.config(
   },
   {
     // Everything that ships: no network (HR1), no web storage or IndexedDB outside the ledger (HR2), no console
-    // (HR10), no Node, no ad-hoc runtime messaging, literal log calls (HR10), and no inline disables
-    // (SECURITY-V5).
+    // (HR10), no Node, no ad-hoc runtime messaging, no ambient declarations hiding a global (HR1, HR4), literal log
+    // calls (HR10), and no inline disables (SECURITY-V5).
     files: APP,
     plugins: { attest },
     linterOptions: { noInlineConfig: true },
     rules: {
       ...appGlobals({ indexedDB: false, console: false, dom: true }),
       'no-restricted-imports': ['error', APP_RESTRICTED_IMPORTS],
-      'no-restricted-syntax': ['error', ...MESSAGING_SYNTAX, ...NODE_TYPE_SYNTAX, ...DOUBLE_ASSERTION_SYNTAX],
+      'no-restricted-syntax': [
+        'error',
+        ...MESSAGING_SYNTAX,
+        ...NODE_TYPE_SYNTAX,
+        ...AMBIENT_SYNTAX,
+        ...DOUBLE_ASSERTION_SYNTAX,
+      ],
       'attest/no-network': 'error',
       'attest/log-call': 'error',
     },
@@ -180,7 +193,9 @@ export default tseslint.config(
   {
     // src/bus is the one place runtime messaging lives.
     files: ['src/bus/**'],
-    rules: { 'no-restricted-syntax': ['error', ...NODE_TYPE_SYNTAX, ...DOUBLE_ASSERTION_SYNTAX] },
+    rules: {
+      'no-restricted-syntax': ['error', ...NODE_TYPE_SYNTAX, ...AMBIENT_SYNTAX, ...DOUBLE_ASSERTION_SYNTAX],
+    },
   },
   {
     files: NETWORK_EXEMPT_FILES,

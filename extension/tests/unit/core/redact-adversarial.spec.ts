@@ -60,8 +60,14 @@ describe('prototype keys never carry content', () => {
     expect(Object.prototype).not.toHaveProperty('subjectHint');
   });
 
-  it('a literal __proto__ (a real prototype) is inherited, so it is never read', () => {
-    const out = sent({ __proto__: { subjectHint: SECRET, occurredAt: OCCURRED }, occurredAt: OCCURRED });
+  it('a literal __proto__ (a real prototype) holding an allowlisted field refuses the row, unread (OBS-3)', () => {
+    expectRefused(() =>
+      sent({ __proto__: { subjectHint: SECRET, occurredAt: OCCURRED }, occurredAt: OCCURRED }),
+    );
+  });
+
+  it('a literal __proto__ holding only fields the allowlist does not name is never read', () => {
+    const out = sent({ __proto__: { body: SECRET, merchant: SECRET }, occurredAt: OCCURRED });
     expect(out).toStrictEqual(MINIMAL_SENT());
     expectClean(out);
   });

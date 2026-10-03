@@ -26,7 +26,7 @@ import { features, isAssignable } from './features';
 import { instantMs } from './normalize';
 import type { Policy } from './policy';
 import { ratioGteBasisPoints } from './ratio';
-import type { FixedAt } from './replay-timeline';
+import type { FixedAt } from './batch-fixed';
 import type { Claim, Observation, Ulid } from './schema';
 
 /** A batch as it was at one instant, for one policy. */

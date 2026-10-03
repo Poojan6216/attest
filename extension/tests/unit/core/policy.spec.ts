@@ -266,10 +266,10 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
     );
   });
 
-  it('property: ordered thresholds and the unasked threshold convert exactly', () => {
+  it('property: ordered thresholds (partial above 0) and the unasked threshold convert exactly', () => {
     fc.assert(
       fc.property(
-        fc.uniqueArray(fc.integer({ min: 0, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
+        fc.uniqueArray(fc.integer({ min: 1, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
         fc.integer({ min: 0, max: BASIS_POINTS }),
         ([a = 0, b = 0], unasked) => {
           const doc = structuredClone(policyJson);

@@ -6,7 +6,8 @@
  *    GitHub resolves it, even on a case-insensitive file system), and every `#anchor` (in the same document or
  *    in another Markdown file) names a heading or an HTML id there (GitHub's anchor rules);
  * 2. every `pnpm <script>` quoted in code (inline code span, fenced or indented block) names a script in the
- *    package.json of the package it runs in: the repo root's, unless a `cd` earlier in the same code block,
+ *    package.json of the package it runs in: the repo root's, unless a `cd` earlier in the same code block (and
+ *    not inside a subshell `( … )` that has closed),
  *    `-C`/`--dir`, `--filter`, `-w` or a recursive run says otherwise (pnpm's own commands such as `install` and
  *    `exec` need no script);
  * 3. every rule id in policy/default.json appears in docs/grading.md as an inline code span (`verified`), so
@@ -14,7 +15,9 @@
  * 4. every key of the golden scenario schema (extension/tests/golden/scenario-schema.ts) appears in a code block of
  *    docs/grading.md §15, the file format (check-docs-scenario.ts);
  * 5. no Markdown file in the repository holds an absolute local path such as `/Users/<name>` or a `/private/tmp`
- *    scratch directory (check-docs-paths.ts).
+ *    scratch directory (check-docs-paths.ts);
+ * 6. no Decisions.md entry from the Sprint 1 close on describes how the work was organised (`fixer`, `brief`,
+ *    `ownership`, `this run`, …) instead of the decision (check-docs-decisions.ts).
  * It prints one line per problem (`file:line: message`) and exits 1 when there is any, 0 otherwise.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -22,9 +25,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { splitBlocks } from './check-docs-blocks';
-import { cwdAfter, pnpmInvocations } from './check-docs-commands';
+import { AT_REPO_ROOT, pnpmInvocations, shellAfter, type ShellState } from './check-docs-commands';
 import { scanMarkdown, segments, type MarkdownScan } from './check-docs-markdown';
 import { scriptsFor, workspacePackages, type Workspace } from './check-docs-packages';
+import { checkDecisions, DECISIONS_FILE } from './check-docs-decisions';
 import { checkLocalPaths } from './check-docs-paths';
 import { SCENARIO_SCHEMA, scenarioKeyProblems } from './check-docs-scenario';
 
@@ -46,6 +50,8 @@ export interface DocCheckResult {
   readonly scenarioKeys: number;
   /** Markdown files read for absolute local paths. */
   readonly markdownFiles: number;
+  /** Decisions.md lines checked for wording about how the work was organised (0 without the file). */
+  readonly decisionLines: number;
 }
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -192,14 +198,14 @@ function checkLinks(root: string, file: string, scan: MarkdownScan, anchorsOf: A
   return count;
 }
 
-/** Checks every quoted pnpm command; a `cd` carries from one line of a code block to the next. */
+/** Checks every quoted pnpm command; a `cd` (and an open subshell) carries from one line of a code block to the next. */
 function checkCommands(file: string, scan: MarkdownScan, workspace: Workspace, report: Report) {
   let count = 0;
-  const cwds = new Map<number, string | null>();
+  const shells = new Map<number, ShellState>();
   for (const code of scan.code) {
-    const cwd = cwds.has(code.block) ? (cwds.get(code.block) ?? null) : '.';
-    cwds.set(code.block, cwdAfter(code.text, cwd));
-    for (const invocation of pnpmInvocations(code.text, cwd)) {
+    const shell = shells.get(code.block) ?? AT_REPO_ROOT;
+    shells.set(code.block, shellAfter(code.text, shell));
+    for (const invocation of pnpmInvocations(code.text, shell)) {
       count += 1;
       if (invocation.script === null) continue;
       const found = scriptsFor(workspace, invocation.target);
@@ -268,6 +274,7 @@ export function checkDocs(root: string): DocCheckResult {
   const scenario = scenarioKeyProblems(readText(root, SCENARIO_SCHEMA), readText(root, GRADING_DOC));
   problems.push(...scenario.problems);
   const markdownFiles = checkLocalPaths(root, report);
+  const decisionLines = checkDecisions(readText(root, DECISIONS_FILE), report);
   problems.sort((a, b) => byCodeUnit(a.file, b.file) || a.line - b.line || byCodeUnit(a.message, b.message));
   return {
     problems,
@@ -277,6 +284,7 @@ export function checkDocs(root: string): DocCheckResult {
     ruleIds,
     scenarioKeys: scenario.checked,
     markdownFiles,
+    decisionLines,
   };
 }
 
@@ -305,6 +313,7 @@ export function runCli(argv: readonly string[], output: CliOutput, defaultRoot: 
     `${String(result.ruleIds)} rule ids`,
     `${String(result.scenarioKeys)} scenario keys`,
     `${String(result.markdownFiles)} Markdown files read for local paths`,
+    `${String(result.decisionLines)} Decisions.md lines checked for wording`,
   ].join(', ');
   if (result.problems.length > 0) {
     output.error(`check-docs: ${String(result.problems.length)} problem(s) (${counts})`);

@@ -213,10 +213,11 @@ const CASES: readonly Case[] = [
   ['HealthReport.adapterId', HealthReport, (n) => ({ ...HEALTH, adapterId: x(n) }), L.ID, ['adapterId']],
   ['HealthReport.version', HealthReport, (n) => ({ ...HEALTH, version: x(n) }), L.ID, ['version']],
   [
+    // A reason is a code (OBS-1), so it is capped like every other identifier.
     'HealthReport.reasons item',
     HealthReport,
     (n) => ({ ...HEALTH, reasons: [x(n)] }),
-    L.ITEM,
+    L.ID,
     ['reasons', 0],
   ],
   [

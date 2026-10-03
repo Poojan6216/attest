@@ -241,7 +241,7 @@ describe('check-docs command line', () => {
     expect(runCli(['--root', root], { log: sink, error: sink })).toBe(1);
     expect(lines).toEqual([
       "README.md:1: broken link 'nope.md': nope.md does not exist",
-      'check-docs: 1 problem(s) (4 files, 6 relative links, 2 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths)',
+      'check-docs: 1 problem(s) (4 files, 6 relative links, 2 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths, 0 Decisions.md lines checked for wording)',
     ]);
   });
 
@@ -251,7 +251,7 @@ describe('check-docs command line', () => {
     const io = { log: (l: string) => out.push(l), error: (l: string) => err.push(l) };
     expect(runCli(['--root', fixture()], io)).toBe(0);
     expect(out).toEqual([
-      'check-docs: OK (4 files, 6 relative links, 4 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths)',
+      'check-docs: OK (4 files, 6 relative links, 4 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths, 0 Decisions.md lines checked for wording)',
     ]);
     expect(runCli(['--rooot'], io)).toBe(2);
     expect(err).toEqual(['usage: tsx scripts/check-docs.ts [--root <dir>]']);

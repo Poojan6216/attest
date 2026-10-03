@@ -152,6 +152,69 @@ describe('compareFractions() is compareRatio() in Number, exactly (§5.3)', () =
   });
 });
 
+const sign = (x: bigint): -1 | 0 | 1 => (x === 0n ? 0 : x < 0n ? -1 : 1);
+const crossSign = (a: number, b: number, c: number, d: number): -1 | 0 | 1 =>
+  sign(BigInt(a) * BigInt(d) - BigInt(c) * BigInt(b));
+
+/** 2^53 + k for k = −1 … 4, each as its prime factors (every one a safe integer). */
+const NEAR_2_53: readonly (readonly bigint[])[] = [
+  [6_361n, 69_431n, 20_394_401n],
+  Array.from({ length: 53 }, () => 2n),
+  [3n, 107n, 28_059_810_762_433n],
+  [2n, 17n, 858_001n, 308_761_441n],
+  [5n, 7n, 11n, 1_187n, 19_709_623_201n],
+  [2n, 2n, 3n, 3n, 307n, 2_857n, 6_529n, 43_691n],
+];
+
+/** `product` written as x·y with x and y both ≥ 2 (so both are safe integers), the primes `mask` picks in x. */
+function split(primes: readonly bigint[], mask: readonly boolean[]): [number, number] {
+  const product = primes.reduce((total, prime) => total * prime, 1n);
+  const first = primes[0] ?? 1n;
+  let x = primes.reduce((total, prime, i) => (mask[i] === true ? total * prime : total), 1n);
+  if (x === 1n) x = first;
+  if (x === product) x = product / first;
+  return [Number(x), Number(product / x)];
+}
+
+describe('compareFractions() where the float cross products tie or straddle 2^53 (§5.3)', () => {
+  it('(n + j)/(n + i) against (n + j + t)/(n + i + t): cross products t·(j − i) apart, n up to 2^53', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.integer({ min: 3, max: Number.MAX_SAFE_INTEGER - 6 }),
+          fc.integer({ min: 94_906_200, max: 94_906_300 }),
+          fc.integer({ min: Number.MAX_SAFE_INTEGER - 1_000, max: Number.MAX_SAFE_INTEGER - 6 }),
+        ),
+        fc.integer({ min: -3, max: 3 }),
+        fc.integer({ min: -3, max: 3 }),
+        fc.integer({ min: 0, max: 3 }),
+        (n, i, j, t) => {
+          const [a, b, c, d] = [n + j, n + i, n + j + t, n + i + t];
+          expect(compareFractions(a, b, c, d)).toBe(crossSign(a, b, c, d));
+          expect(compareFractions(c, d, a, b)).toBe(crossSign(c, d, a, b));
+        },
+      ),
+      { numRuns: 10_000 },
+    );
+  });
+
+  it('cross products 2^53 + k against 2^53 + m (k, m from −1 to 4), each split into factors any way', () => {
+    const products = NEAR_2_53.map((primes) => primes.reduce((total, prime) => total * prime, 1n));
+    expect(products).toEqual([-1n, 0n, 1n, 2n, 3n, 4n].map((k) => 2n ** 53n + k));
+    const mask = fc.array(fc.boolean(), { minLength: 53, maxLength: 53 });
+    const near = fc.constantFrom(...NEAR_2_53);
+    fc.assert(
+      fc.property(near, mask, near, mask, (left, leftMask, right, rightMask) => {
+        const [a, d] = split(left, leftMask);
+        const [c, b] = split(right, rightMask);
+        expect(compareFractions(a, b, c, d)).toBe(crossSign(a, b, c, d));
+        expect(compareFractions(c, d, a, b)).toBe(crossSign(c, d, a, b));
+      }),
+      RUNS,
+    );
+  });
+});
+
 describe('toDisplayOf() is toDisplay() of the same rational, in Number where exact', () => {
   it('equals toDisplay(ratio(n, d)) for any safe operands, small, large and near 2^53', () => {
     fc.assert(

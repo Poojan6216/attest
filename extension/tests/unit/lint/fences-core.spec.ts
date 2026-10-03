@@ -4,8 +4,11 @@
  * and `../../../policy/default.json`, and nothing else, so the modules next door that read the clock or the
  * extension's settings (`../clock`, `../config`, `../setup`) fail too. Globals whose answer depends on the
  * clock, randomness, the host or the garbage collector (WeakRef, FinalizationRegistry) fail. Each probe must
- * fail lint; each control (what src/core legitimately does today) must not.
- * tests/unit/core/core-purity.spec.ts checks the real files for the same things without lint.
+ * fail lint; each control (what src/core legitimately does today) must not. The last blocks hold the bypasses found
+ * after the Sprint 1 close (PI-1 to PI-4): a spread or multi-field `new Date`, an ambient declaration that hides a
+ * global, the Date constructor reached through `.constructor`, and `Symbol.toPrimitive`.
+ * tests/unit/core/core-purity.spec.ts checks the real files for the same things without lint, and
+ * tests/unit/core/core-poison.spec.ts runs the core with every impure global poisoned.
  */
 import path from 'node:path';
 
@@ -143,7 +146,126 @@ describe('src/core globals and syntax (Hard Rule 4)', () => {
 
   it('control: src/core may build dates from inputs and use WeakMap memos', async () => {
     const code =
-      'export const t = (iso: string) => new Date(iso).getTime();\nexport const memo = new WeakMap<object, number>();\n';
+      'export const t = (ms: number) => new Date(ms).getTime();\nexport const memo = new WeakMap<object, number>();\n';
     expect(await ruleIds(code)).toEqual([]);
+  });
+});
+
+/** Each probe must fail with every rule listed (the verifier's probes, PI-1 to PI-4). */
+async function expectCaught(cases: readonly (readonly [string, readonly string[]])[]): Promise<void> {
+  for (const [code, rules] of cases) {
+    const found = await ruleIds(code);
+    for (const rule of rules) expect(found, code).toContain(rule);
+  }
+}
+
+const SYNTAX = 'no-restricted-syntax';
+const DETERMINISM = 'attest/core-determinism';
+
+describe('new Date takes exactly one value, never a spread, fields or written text (PI-1)', () => {
+  it('a spread, several fields and a written string fail', async () => {
+    await expectCaught([
+      [
+        'const none: [] = [];\nexport const p = (): number => new Date(...none).getTime();\n',
+        [SYNTAX, DETERMINISM],
+      ],
+      ['export const p = (): string => new Date(...([] as const)).toISOString();\n', [SYNTAX, DETERMINISM]],
+      [
+        'export const p = (y: number, m: number, d: number): number => new Date(y, m, d).getTime();\n',
+        [SYNTAX, DETERMINISM],
+      ],
+      ['export const p = (y: number, m: number): Date => new Date(y, m);\n', [SYNTAX, DETERMINISM]],
+      ["export const p = (): number => new Date('2026-01-01T00:00:00').getTime();\n", [DETERMINISM]],
+      ['export const p = (): number => new Date(`2026-01-01`).getTime();\n', [DETERMINISM]],
+    ]);
+  });
+});
+
+describe('src/core declares no globals (PI-2)', () => {
+  it('an ambient declaration fails, and the global it hides is still seen', async () => {
+    await expectCaught([
+      [
+        'declare const Date: DateConstructor;\nconst D = Date;\nexport const p = (): number => D.now();\n',
+        [SYNTAX, DETERMINISM],
+      ],
+      [
+        'declare const Math: { random: () => number };\nconst M = Math;\nexport const p = (): number => M.random();\n',
+        [SYNTAX, DETERMINISM],
+      ],
+      [
+        'declare const Temporal: { Now: { instant: () => { epochMilliseconds: number } } };\nexport const p = (): number => Temporal.Now.instant().epochMilliseconds;\n',
+        [SYNTAX],
+      ],
+      [
+        'declare const performance: { now: () => number };\nexport const p = (): number => performance.now();\n',
+        [SYNTAX],
+      ],
+      ['declare let x: number;\nexport const p = x;\n', [SYNTAX]],
+      ['declare function now(): number;\nexport const p = now();\n', [SYNTAX]],
+      ['declare class Clock { now(): number }\nexport const p = new Clock().now();\n', [SYNTAX]],
+      ['declare enum E { A }\nexport const p = E.A;\n', [SYNTAX]],
+      ['declare global { const T: number }\nexport const p = 1;\n', [SYNTAX]],
+      ['declare namespace N { const t: number }\nexport const p = N.t;\n', [SYNTAX]],
+      ["declare module 'x' { const t: number }\nexport const p = 1;\n", [SYNTAX]],
+    ]);
+  });
+
+  it('Temporal is a restricted global (a clock and a time-zone database)', async () => {
+    await expectCaught([
+      ['export const p = (): unknown => Temporal;\n', ['no-restricted-globals']],
+      ['export const p = (): unknown => globalThis.Temporal;\n', ['no-restricted-properties']],
+    ]);
+  });
+
+  it('control: function overloads, class constructors and plain shadowing names pass', async () => {
+    const code = [
+      'export function f(a: string): string;',
+      'export function f(a: number): number;',
+      'export function f(a: string | number): string | number {',
+      '  return a;',
+      '}',
+      'export class E extends Error {',
+      '  constructor(readonly code: string) {',
+      '    super(code);',
+      '  }',
+      '}',
+      'export const g = (window: number): number => window + 1;',
+      '',
+    ].join('\n');
+    expect(await ruleIds(code)).toEqual([]);
+  });
+});
+
+describe('no constructor reached from a value, no Symbol.toPrimitive (PI-3, PI-4)', () => {
+  it('.constructor in every spelling fails', async () => {
+    await expectCaught([
+      ['export const p = (): number => (new Date(0).constructor as DateConstructor).now();\n', [SYNTAX]],
+      [
+        'const D = Object.getPrototypeOf(new Date(0)) as Date;\nexport const p = (): number => (D.constructor as DateConstructor).now();\n',
+        [SYNTAX],
+      ],
+      [
+        "export const p = (): number => (Reflect.get(new Date(0).constructor, 'now') as () => number)();\n",
+        [SYNTAX],
+      ],
+      [
+        "const KEY = 'constructor';\nexport const p = (): number => (new Date(0)[KEY] as DateConstructor).now();\n",
+        [SYNTAX],
+      ],
+      ["export const p = (o: object): unknown => Reflect.get(o, 'constructor');\n", [SYNTAX]],
+      ["export const p = (o: Record<string, unknown>): unknown => o['constructor'];\n", [SYNTAX]],
+      ['export const p = (o: Record<string, unknown>): unknown => o[`constructor`];\n', [SYNTAX]],
+      [
+        "export const p = (): unknown => ([].constructor.constructor as FunctionConstructor)('return 1')();\n",
+        [SYNTAX],
+      ],
+    ]);
+  });
+
+  it('Symbol.toPrimitive fails, called or held', async () => {
+    await expectCaught([
+      ["export const p = (ms: number): string => new Date(ms)[Symbol.toPrimitive]('string');\n", [SYNTAX]],
+      ['export const K = Symbol.toPrimitive;\n', [SYNTAX]],
+    ]);
   });
 });

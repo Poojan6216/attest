@@ -72,7 +72,12 @@ export class GoldenLoadError extends Error {
 export interface BuiltFixed {
   observationId: Ulid;
   claimId: Ulid | null;
+  /** When it was fixed: by a batch before every scenario instant (batch-fixed.ts: in force strictly after it). */
+  after: IsoTs;
 }
+
+/** The instant every `fixed` pair of a scenario was fixed after: earlier than any scenario instant. */
+const FIXED_AFTER = IsoTs.parse('1970-01-01T00:00:00+00:00');
 
 export interface BuiltGradeCall {
   claim: Claim | null;
@@ -340,6 +345,7 @@ export function buildScenario(file: string, scenario: Scenario): LoadedScenario 
     fixed: fixed.map((pair) => ({
       observationId: observationId(built, pair.observation),
       claimId: pair.claim === null ? null : claimId(built, pair.claim),
+      after: FIXED_AFTER,
     })),
     ...(gradeCall === undefined ? {} : { gradeCall }),
     events: (scenario.events ?? []).map((event) => buildEvent(built, event)),

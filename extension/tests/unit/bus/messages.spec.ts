@@ -10,6 +10,7 @@ import {
   BUS_MESSAGE_TYPES,
   BusMessage,
   type BusMessageType,
+  CoveragePingMessage,
   isBusMessageType,
   LedgerTable,
   ObserverObservationsMessage,
@@ -19,7 +20,7 @@ import {
   UiResultMessage,
   uiFailure,
 } from '../../../src/bus/messages';
-import { Claim, HealthReport, Observation, Request } from '../../../src/core/schema';
+import { Claim, ComponentId, HealthReport, Observation, Request } from '../../../src/core/schema';
 import { CLAIM, HASH, MALFORMED, OBSERVATION, REQUEST, SECRET, TS, VALID } from './harness';
 
 describe('BusMessage', () => {
@@ -142,6 +143,55 @@ describe('BusMessage payload items: the Sprint 1 fields', () => {
     expect(BusMessage.safeParse(empty).success).toBe(true);
     const none = { ...VALID['observer.observations'], observations: [] };
     expect(BusMessage.safeParse(none).success).toBe(true);
+  });
+});
+
+describe('ids, versions and health reasons are tokens, never page text (OBS-1, Hard Rule 2)', () => {
+  /** Probe p8: a message body padded to the old 120-character reason cap. */
+  const BODY = 'Hi Priya,\nthe door code is 4417 and my SSN is 078-05-1120.\nThanks, P'.padEnd(120, '.');
+  /** Probe p9: an id that quotes the page. */
+  const QUOTED = 'door code\n4417 SSN 078-05-1120';
+  const health = VALID['adapter.health'].health;
+  const extractor = CLAIM.extractor;
+
+  it('refuses probe p8: a health report whose reasons are message bodies or sentences', () => {
+    const bodies = { ...health, reasons: Array.from({ length: 32 }, () => BODY) };
+    expect(BusMessage.safeParse({ type: 'adapter.health', health: bodies }).success).toBe(false);
+    for (const reason of [BODY.slice(0, 40), 'Selector missing', 'selector.missing\n', 'Hi Priya']) {
+      const one = { ...health, reasons: ['selector.missing', reason] };
+      expect(BusMessage.safeParse({ type: 'adapter.health', health: one }).success, reason).toBe(false);
+    }
+  });
+
+  it('refuses probe p9: an id or version that quotes the page, in every message that carries one', () => {
+    const builds: readonly ((id: string) => unknown)[] = [
+      (id) => ({ ...VALID['adapter.health'], health: { ...health, adapterId: id } }),
+      (id) => ({ ...VALID['adapter.health'], health: { ...health, version: id } }),
+      (id) => ({ ...VALID['adapter.claims'], adapterId: id }),
+      (id) => ({ ...VALID['adapter.claims'], version: id }),
+      (id) => ({ ...VALID['adapter.claims'], claims: [{ ...CLAIM, extractor: { ...extractor, id } }] }),
+      (id) => ({
+        ...VALID['adapter.claims'],
+        claims: [{ ...CLAIM, extractor: { ...extractor, version: id } }],
+      }),
+      (id) => ({ ...VALID['observer.observations'], observerId: id }),
+      (id) => ({ ...VALID['observer.observations'], version: id }),
+      (id) => ({ ...VALID['coverage.ping'], ping: { ...VALID['coverage.ping'].ping, observerId: id } }),
+    ];
+    for (const build of builds) {
+      expect(BusMessage.safeParse(build('muse.activity')).success).toBe(true);
+      for (const id of [QUOTED, 'door code 4417', 'priya@company.com', '']) {
+        expect(BusMessage.safeParse(build(id)).success, id).toBe(false);
+      }
+    }
+  });
+
+  it('every id and version of the bus is the core ComponentId', () => {
+    expect(AdapterClaimsMessage.shape.adapterId).toBe(ComponentId);
+    expect(AdapterClaimsMessage.shape.version).toBe(ComponentId);
+    expect(ObserverObservationsMessage.shape.observerId).toBe(ComponentId);
+    expect(ObserverObservationsMessage.shape.version).toBe(ComponentId);
+    expect(CoveragePingMessage.shape.ping.shape.observerId).toBe(ComponentId);
   });
 });
 

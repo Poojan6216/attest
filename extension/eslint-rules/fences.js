@@ -178,6 +178,25 @@ export function appGlobals(allow) {
   });
 }
 
+/**
+ * No ambient declarations in shipped code (PI-2, Hard Rules 1 and 4). `declare const fetch: …` or
+ * `declare const Date: DateConstructor` emits nothing, so the name still reads the real global at run time, but it
+ * looks local to scope analysis and so to no-restricted-globals. No shipped file has one; tests (the e2e `chrome`
+ * declarations) may. scope-globals.js also sees through them, so attest/no-network and attest/core-determinism
+ * hold even where this list is not applied.
+ */
+export const AMBIENT_SYNTAX = [
+  'VariableDeclaration[declare=true]',
+  'TSDeclareFunction[declare=true]',
+  'ClassDeclaration[declare=true]',
+  'TSEnumDeclaration[declare=true]',
+  'TSModuleDeclaration',
+].map((selector) => ({
+  selector,
+  message:
+    'Shipped code declares no globals and no namespaces: an ambient declaration hides the real global from every fence (Hard Rules 1, 4).',
+}));
+
 /** Runtime messaging only through src/bus (TECH-4, extension_engineer rule 2). */
 export const MESSAGING_NAMES =
   'sendMessage|onMessage|onMessageExternal|connect|onConnect|onConnectExternal|connectNative|sendNativeMessage';

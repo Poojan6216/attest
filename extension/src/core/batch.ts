@@ -1,7 +1,8 @@
 /**
  * Batch grading (docs/grading.md §3, §4.3, §6.3, §7; module contract §13 `batch.ts`). `gradeBatch` is the only
  * path from the background to receipts: it grades exactly the PENDING `claims` it is given, with FINAL and
- * USER_OVERRIDDEN claims as fixed pre-assignments, and returns each receipt with the inputs it was graded with
+ * USER_OVERRIDDEN claims as fixed pre-assignments (those in force at `evaluatedAt`, batch-fixed.ts: the background
+ * passes `preAssignments(storedReceipts)`), and returns each receipt with the inputs it was graded with
  * (`{receipt, inputs: {grant, context, policyHash}}`; the coverage is the batch's own), so the caller can store
  * `receiptInputs` for replay (§3, §9):
  *
@@ -11,12 +12,14 @@
  *    minus those assigned to other claims or fixed as taken, with `priorSpendCents` read from
  *    `activity.claims` (§6.3, which holds FINAL and USER_OVERRIDDEN claims too) plus any graded claim it omits
  *    (`historyOf`), a missing currency read as the grant's `spendCurrency`;
- *  - one UNASKED receipt per orphan that `grade` calls UNASKED: an observation of a covered type in a window
- *    its own source's observer saw, assigned to no claim and not taken, attributed with `attributor` (§7);
+ *  - one UNASKED receipt per orphan that `grade` calls UNASKED: an observation from a source the policy lists for
+ *    its type, in a window its own source's observer saw, assigned to no claim and not taken, attributed with
+ *    `attributor` (§7);
  *  - one OVER_SCOPE receipt per observed scope of a grant in force that `grade` calls OVER_SCOPE (rule
  *    `over_scope_observed`). A claim-less grade with any other outcome yields no receipt (§3).
  *
- * Inputs from after `coverage.evaluatedAt` are ignored (§3): observations first seen later (`visibleAt`),
+ * Inputs from after `coverage.evaluatedAt` are ignored (§3): pre-assignments not yet (or no longer) in force
+ * (`fixedInForce`, the rule replay rebuilds the batch with), observations first seen later (`visibleAt`),
  * coverage synced later (`seenWindows`; `grade` applies the same rule to eligibility), grants written later
  * (`grantsInForce`) and claims first seen later (`claimsSeenBy`: neither graded, nor given evidence, nor counted
  * in `priorSpendCents`); attribution.ts cuts the activity it reads at `evaluatedAt` itself (`attributor`). The
@@ -32,6 +35,7 @@
  * PURE: no I/O but the injected index, no clock, no logging (Hard Rule 4). Async only because the index is.
  */
 import { BatchError } from './batch-error';
+import { type BatchFixed, fixedInForce } from './batch-fixed';
 import { BatchEvidence, type BatchInputs, type BatchReceipt, claimReceipts } from './batch-grade';
 import { grantOf, grantsInForce } from './batch-grants';
 import { coveredObservations, type Keyed, visibleAt } from './batch-orphans';
@@ -55,16 +59,8 @@ import { scopeSubjects, spendIndex } from './scope';
 import { compareText as compareTextShared } from './order';
 
 export { BatchError, type BatchErrorCode } from './batch-error';
+export { type BatchFixed, preAssignments } from './batch-fixed';
 export type { BatchInputs, BatchReceipt } from './batch-grade';
-
-/**
- * A pre-assignment (§4.3): a FINAL or USER_OVERRIDDEN claim receipt fixes its observation to its claim
- * (`claimId`); an overridden UNASKED receipt fixes its observation as taken (`claimId: null`).
- */
-export interface BatchFixed {
-  readonly observationId: Ulid;
-  readonly claimId: Ulid | null;
-}
 
 /** The batch facts every stage reads, computed once. */
 interface Batch {
@@ -162,15 +158,15 @@ function historyOf(
   return history;
 }
 
-/** Fixed pairs and taken observations, after checking no graded claim is also fixed (it is FINAL). */
-function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[]) {
-  const fixedPairs: FixedPair[] = [];
-  const taken = new Set<Ulid>();
-  for (const { observationId, claimId } of fixed) {
-    if (claimId === null) taken.add(observationId);
-    else fixedPairs.push({ observationId, claimId });
-  }
-  const fixedClaims = new Set(fixedPairs.map((pair) => pair.claimId));
+/**
+ * The fixed pairs and taken observations in force at `evaluatedMs` (batch-fixed.ts: the rule replay rebuilds the
+ * batch with), after checking that no claim passed for grading has a pre-assignment at all, in force or not: a
+ * claim with one is FINAL or overridden, never graded again (§4.3, §8).
+ */
+function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[], evaluatedMs: number) {
+  const { fixed: fixedPairs, taken } = fixedInForce(fixed, evaluatedMs);
+  const fixedClaims = new Set<Ulid>();
+  for (const { claimId } of fixed) if (claimId !== null) fixedClaims.add(claimId);
   const seen = new Set<Ulid>();
   for (const claim of claims) {
     if (seen.has(claim.id)) throw new BatchError('duplicate_claim');
@@ -316,14 +312,16 @@ function byReceiptId(graded: readonly BatchReceipt[]): BatchReceipt[] {
 
 /**
  * Grades a batch (§3): `claims` are the PENDING claims to grade; `fixed` the FINAL and USER_OVERRIDDEN
- * pre-assignments. Returns claim, UNASKED and `over_scope_observed` receipts ordered by receipt id, each with
- * the grant, context and policy hash it was graded with (the coverage is `coverage`). A claim first seen after
- * `evaluatedAt` is ignored (§3): no receipt, no evidence, no spend.
+ * pre-assignments (`preAssignments` of the stored receipts), of which those in force at `evaluatedAt` are fixed
+ * (batch-fixed.ts `inForceAt`). Returns claim, UNASKED and `over_scope_observed` receipts ordered by receipt id,
+ * each with the grant, context and policy hash it was graded with (the coverage is `coverage`). A claim first seen
+ * after `evaluatedAt` is ignored (§3): no receipt, no evidence, no spend.
  *
  * Throws `PolicyError('policy_not_loaded')` for a policy `loadPolicy` did not return, before reading anything;
- * `BatchError` for a claim given twice (seen or not) or also fixed, an agent with no grant in force (or two at one
- * instant), or two receipts with one id; `CandidatesError('fixed_conflict')` for fixed pairs that are not
- * one-to-one; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6). A graded
+ * `BatchError` for a claim given twice (seen or not) or also named by a pre-assignment (in force or not), an agent
+ * with no grant in force (or two at one instant), or two receipts with one id; `CandidatesError('fixed_conflict')`
+ * for fixed pairs in force that are not one-to-one; `NormalizeError('invalid_iso')` for a pre-assignment instant that
+ * is not an IsoTs; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6). A graded
  * claim that `activity.claims` omits still counts in the spend history and still suppresses adjacency (§3, §6.3,
  * §7: `historyOf`).
  */
@@ -338,7 +336,7 @@ export async function gradeBatch(
 ): Promise<BatchReceipt[]> {
   assertLoadedPolicy(policy);
   const evaluatedMs = instantMs(coverage.evaluatedAt);
-  const { fixedPairs, taken } = splitFixed(claims, fixed);
+  const { fixedPairs, taken } = splitFixed(claims, fixed, evaluatedMs);
   const uniform = new Map<Claim, Claim>();
   const graded: Claim[] = [];
   for (const claim of claimsSeenBy(claims, evaluatedMs)) {

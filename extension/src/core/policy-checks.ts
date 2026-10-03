@@ -38,10 +38,20 @@ function windowIssues({ windows }: PolicyDocument): PolicyIssue[] {
     .map(([edge]) => ({ path: ['windows', 'toleranceMin'], message: `must be < ${edge}` }));
 }
 
-/** A score can be partial without being verified only if the partial threshold is strictly lower. */
+/**
+ * §2, §4.3: PARTIAL means some evidence matches, so the partial threshold must be above 0: at 0 a candidate that
+ * matches nothing (score 0) would be assigned, named as the claim's evidence, kept from orphan detection and graded
+ * PARTIAL, and NOT_FOUND could never be reached (Hard Rule 5). A score can be partial without being verified only
+ * if the partial threshold is strictly lower.
+ */
 function thresholdIssues({ thresholds }: PolicyDocument): PolicyIssue[] {
-  if (roundedBasisPoints(thresholds.partial) < roundedBasisPoints(thresholds.verified)) return [];
-  return [{ path: ['thresholds', 'partial'], message: 'must be < thresholds.verified' }];
+  const partial = roundedBasisPoints(thresholds.partial);
+  const issues: PolicyIssue[] = [];
+  if (partial === 0) issues.push({ path: ['thresholds', 'partial'], message: 'must be > 0' });
+  if (!(partial < roundedBasisPoints(thresholds.verified))) {
+    issues.push({ path: ['thresholds', 'partial'], message: 'must be < thresholds.verified' });
+  }
+  return issues;
 }
 
 /**

@@ -100,3 +100,37 @@ describe('check-docs: pnpm invocations', () => {
     ]);
   });
 });
+
+describe('check-docs: a cd inside a subshell ends with it (PI-9)', () => {
+  const TEST_TZ_AT_ROOT = "'pnpm test:tz': no script 'test:tz' in package.json";
+
+  it.each([
+    ['then a root command on the same line', '```sh\n(cd extension && pnpm test) && pnpm test:tz\n```'],
+    [
+      'on its own line, then a root command on the next',
+      '```sh\n(cd extension && pnpm test)\npnpm test:tz\n```',
+    ],
+    ['spanning two lines, then a root command', '```sh\n(cd extension\npnpm test:tz)\npnpm test:tz\n```'],
+    [
+      'inside a subshell that went back to the root',
+      '```sh\ncd extension && (cd .. && pnpm test:tz) && pnpm test:tz\n```',
+    ],
+  ])('%s: the command after it runs where the subshell started', (_label, code) => {
+    expect(problemsWith(`# R\n\n${code}\n`)).toEqual([TEST_TZ_AT_ROOT]);
+  });
+
+  it('an inline span: `(cd extension; pnpm test); pnpm test:perf` runs test:perf at the root', () => {
+    expect(problemsWith('# R\n\nRun `(cd extension; pnpm test); pnpm test:perf`.\n')).toEqual([
+      "'pnpm test:perf': no script 'test:perf' in package.json",
+    ]);
+  });
+
+  it('a cd outside any subshell still carries, and a ) with no subshell open changes nothing', () => {
+    expect(problemsWith('# R\n\n```sh\ncd extension\npnpm test:tz\n```\n')).toEqual([]);
+    expect(problemsWith('# R\n\n```sh\ncd extension; x) pnpm test:tz\n```\n')).toEqual([]);
+    expect(pnpmInvocations('(cd extension && pnpm test) && pnpm test').map((i) => i.target)).toEqual([
+      { kind: 'dir', dir: 'extension' },
+      { kind: 'dir', dir: '.' },
+    ]);
+  });
+});

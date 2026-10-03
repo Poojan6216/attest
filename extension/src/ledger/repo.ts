@@ -11,31 +11,30 @@
  *    carry a field its source never stores nor choose its own id (Hard Rule 2). Reads return the parsed
  *    domain types.
  *  - Observations and claims are idempotent: keyed on contentHash / rawHash inside one rw transaction.
- *    A repeat is a no-op that returns the stored id; it never overwrites a readable row and never leaks a
- *    ConstraintError. A stored row no read can return (it fails its schema) is replaced, not kept as a ghost.
+ *    A repeat returns the stored id and never leaks a ConstraintError. It must be the same fact: one that
+ *    differs in anything but `observedAt` throws `LedgerError('id_conflict')` and changes nothing (Hard Rule 6).
+ *    The stored row keeps the earliest `observedAt` of all its sightings, in whatever order they arrive
+ *    (docs/grading.md §4.1, Hard Rule 5). A stored row no read can return (it fails its schema) is replaced,
+ *    not kept as a ghost.
  *  - Adapter health and coverage keep the latest report: an older timestamp never replaces a newer one.
  *  - Reads strip derived index fields and Zod-parse; an invalid row is skipped and logged by id only.
  */
-import type { Table } from 'dexie';
 import { z } from 'zod';
 
 import { assertLoadedPolicy, type Policy } from '../core/policy';
 import { observationIntegrityProblems } from '../core/redact';
 import { log } from '../log';
-import { loggableId, logTableId, readRow, readRows, type LedgerDb } from './db';
+import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import {
   accountKeyOf,
-  epochMs,
   normalizeToken,
   toClaimRow,
   toCoverageRow,
   toObservationRow,
   toReceiptRow,
   toRequestRow,
-  type ClaimRow,
   type LedgerTableName,
-  type ObservationRow,
 } from './index-fields';
 import { openLedger } from './migrations';
 import {
@@ -57,12 +56,15 @@ import {
   type ReceiptInput,
   type RequestInput,
 } from './types';
+import {
+  claimsByHash,
+  insertUnlessHashExists,
+  isOlder,
+  observationsByHash,
+  type UpsertResult,
+} from './upsert';
 
-export interface UpsertResult {
-  /** The stored row's id: the new one when inserted, the existing one when the hash was already known. */
-  readonly id: string;
-  readonly inserted: boolean;
-}
+export type { UpsertResult } from './upsert';
 
 export interface WriteResult {
   /** False when the incoming report was older than the stored one and was ignored. */
@@ -83,69 +85,6 @@ function agentDateKey(table: LedgerTableName, agent: AgentId, date: string): [Ag
   return [parseInput(table, AgentId, agent), parseInput(table, LocalDate, date)];
 }
 
-/** A table whose rows are idempotent on a unique hash. */
-interface HashedTable<Row> {
-  readonly table: 'observations' | 'claims';
-  readonly store: Table<Row, string>;
-  readonly schema: z.ZodType;
-  readonly hashIndex: 'contentHash' | 'rawHash';
-}
-
-/** Deletes a stored row that no read can return, so a valid write can take its place. */
-async function dropUnreadable<Row>(target: HashedTable<Row>, id: string): Promise<void> {
-  await target.store.delete(id);
-  log.warn('ledger.row_replaced', { table: logTableId(target.table), id: loggableId(target.table, id) });
-}
-
-/**
- * Inserts `row` unless a readable row with the same unique hash exists. One rw transaction, so concurrent
- * upserts of the same hash serialise: exactly one inserts, the rest return its id.
- *
- * A stored row that fails its schema is invisible to every read. If it held this hash (or this id), a
- * no-op would hide the new, valid fact forever: evidence Attest saw would never reach grading (Hard
- * Rule 5). So an unreadable row is replaced, never treated as "already stored".
- */
-async function insertUnlessHashExists<Row extends { readonly id: string }>(
-  db: LedgerDb,
-  target: HashedTable<Row>,
-  hash: string,
-  row: Row,
-): Promise<UpsertResult> {
-  const { table, store, schema, hashIndex } = target;
-  const readable = (stored: unknown): boolean => readRow(table, schema, stored) !== undefined;
-  return db.transaction('rw', store, async (): Promise<UpsertResult> => {
-    const [existingId] = await store.where(hashIndex).equals(hash).primaryKeys();
-    if (existingId !== undefined) {
-      if (readable(await store.get(existingId))) return { id: existingId, inserted: false };
-      await dropUnreadable(target, existingId);
-    }
-    const sameId = await store.get(row.id);
-    if (sameId !== undefined) {
-      if (readable(sameId)) {
-        throw new LedgerError('id_conflict', 'A row with this id already exists with a different hash', {
-          table,
-          id: row.id,
-        });
-      }
-      await dropUnreadable(target, row.id);
-    }
-    await store.add(row);
-    return { id: row.id, inserted: true };
-  });
-}
-
-function observationsByHash(db: LedgerDb): HashedTable<ObservationRow> {
-  return { table: 'observations', store: db.observations, schema: Observation, hashIndex: 'contentHash' };
-}
-
-function claimsByHash(db: LedgerDb): HashedTable<ClaimRow> {
-  return { table: 'claims', store: db.claims, schema: Claim, hashIndex: 'rawHash' };
-}
-
-function isOlder(incomingTs: string, storedTs: string): boolean {
-  return epochMs(incomingTs) < epochMs(storedTs);
-}
-
 // ── Observations ────────────────────────────────────────────────────────────────────────────────
 
 /** Throws `invalid_input` (field names only) unless `project()` could have returned `observation` (SEC-V1). */
@@ -160,10 +99,11 @@ function assertProjected(observation: Observation, policy: Policy): void {
 }
 
 /**
- * Inserts an observation, or returns the existing id when its contentHash is already stored. `policy` is the
- * loaded policy whose allowlist the observation was projected under; a row it could not have produced is
- * refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a widened
- * allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
+ * Inserts an observation, or returns the existing id when its contentHash is already stored (keeping the
+ * earlier `observedAt` of the two, §4.1; a stored row that differs in anything else throws `id_conflict`).
+ * `policy` is the loaded policy whose allowlist the observation was projected under; a row it could not have
+ * produced is refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a
+ * widened allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
  */
 export async function upsertObservation(
   db: LedgerDb,
@@ -174,7 +114,11 @@ export async function upsertObservation(
   const observation = parseInput('observations', Observation, input);
   assertProjected(observation, policy);
   const row = toObservationRow(observation);
-  return insertUnlessHashExists(db, observationsByHash(db), observation.contentHash, row);
+  return insertUnlessHashExists(db, observationsByHash(db), {
+    hash: observation.contentHash,
+    fact: observation,
+    row,
+  });
 }
 
 export async function getObservation(db: LedgerDb, id: string): Promise<Observation | undefined> {
@@ -215,10 +159,18 @@ export async function observationsByCounterpartyToken(db: LedgerDb, token: strin
 
 // ── Claims ──────────────────────────────────────────────────────────────────────────────────────
 
-/** Inserts a claim, or returns the existing id when its rawHash is already stored. */
+/**
+ * Inserts a claim, or returns the existing id when its rawHash is already stored (keeping the earlier
+ * `observedAt`). The raw text is never stored, so the rawHash cannot be checked against it: a claim that
+ * differs from the stored one in anything but `observedAt` throws `LedgerError('id_conflict')` instead.
+ */
 export async function upsertClaim(db: LedgerDb, input: ClaimInput): Promise<UpsertResult> {
   const claim = parseInput('claims', Claim, input);
-  return insertUnlessHashExists(db, claimsByHash(db), claim.rawHash, toClaimRow(claim));
+  return insertUnlessHashExists(db, claimsByHash(db), {
+    hash: claim.rawHash,
+    fact: claim,
+    row: toClaimRow(claim),
+  });
 }
 
 export async function getClaim(db: LedgerDb, id: string): Promise<Claim | undefined> {

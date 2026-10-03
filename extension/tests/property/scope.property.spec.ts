@@ -4,7 +4,9 @@
  * properties pin the two together, under any grant `spendCurrency` (or none), over histories that mix agents,
  * currencies (and none), spend and non-spend
  * types, offsets, ties at one instant, window edges, and claim ids listed more than once, with the copies of an
- * id anywhere in (claimedAt, id) order, as when a batch passes its claims together with the ledger's (§3).
+ * id anywhere in (claimedAt, id) order, as when a batch passes its claims together with the ledger's (§3). Both are
+ * also held to the §6.3 sum written out independently (scope-reference.ts), so a rule they share (the claim never
+ * counts its own id) is checked against the contract, not only against each other.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_POLICY } from '../../src/core/policy';
 import { priorSpendCents, type SpendClaim, spendIndex } from '../../src/core/scope';
 import { MS_PER_DAY, MS_PER_MINUTE } from '../../src/core/units';
+import { referencePriorSpend } from './scope-reference';
 
 const RUNS = { numRuns: 1_000 };
 const START_MS = Date.parse('2026-09-01T00:00:00Z');
@@ -96,5 +99,28 @@ describe('spendIndex is priorSpendCents (§6.3)', () => {
       expect(priorSpendCents(graded, claims, DEFAULT_POLICY)).toBe(500);
       expect(spendIndex(claims, DEFAULT_POLICY)(graded)).toBe(500);
     }
+  });
+});
+
+describe('priorSpendCents and spendIndex are the §6.3 sum written out', () => {
+  it('never the claim’s own id, with one index asked under several spendCurrency values in turn', () => {
+    fc.assert(
+      fc.property(
+        history,
+        fc.array(spendClaim, { maxLength: 4 }),
+        fc.array(spendCurrency, { minLength: 2, maxLength: 4 }),
+        (claims, outside, currencies) => {
+          const prior = spendIndex(claims, DEFAULT_POLICY);
+          for (const spend of currencies) {
+            for (const claim of [...claims, ...outside]) {
+              const expected = referencePriorSpend(claim, claims, DEFAULT_POLICY, spend);
+              expect(priorSpendCents(claim, claims, DEFAULT_POLICY, spend)).toBe(expected);
+              expect(prior(claim, spend)).toBe(expected);
+            }
+          }
+        },
+      ),
+      RUNS,
+    );
   });
 });

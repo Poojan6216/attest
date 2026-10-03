@@ -1,7 +1,7 @@
 /**
  * The per-claim oracle `gradeBatch` is held to (docs/grading.md §3, §4.1, §4.3, §6.3; Hard Rule 4): each claim
  * receipt of a batch must be `grade()` on that claim's own `candidates()`, minus the observations the batch
- * assigned to other claims (§4.3 `exclusiveCandidates`), with the `priorSpendCents` of the batch's spend history
+ * assigned to other claims (§4.3 `exclusiveCandidates`), with the §6.3 prior spend of the batch's spend history, written out without using scope.ts (tests/property/scope-reference.ts `referencePriorSpend`: never the claim's own id)
  * (`activity.claims` plus any graded claim it omits, a missing currency read as the grant's `spendCurrency`). Replay
  * grades exactly so, so a batch that differs from it cannot be reproduced.
  *
@@ -15,7 +15,7 @@ import { canonicalJson } from '../../../src/core/hash';
 import { instantMs } from '../../../src/core/normalize';
 import type { Policy } from '../../../src/core/policy';
 import type { Activity, Claim, Coverage, Grant, Observation, Receipt, Ulid } from '../../../src/core/schema';
-import { priorSpendCents } from '../../../src/core/scope';
+import { referencePriorSpend } from '../../property/scope-reference';
 
 /** One batch's inputs (one grant per agent). */
 export interface World {
@@ -56,7 +56,7 @@ export async function oracleReceipt(
   const own = found.filter((observation) => (owners.get(observation.id) ?? claim.id) === claim.id);
   const grant = world.grants.find((held) => held.agent === claim.agent);
   if (grant === undefined) throw new Error(`no grant for ${claim.agent}`);
-  const prior = priorSpendCents(claim, spendHistory(world), policy, grant.spendCurrency);
+  const prior = referencePriorSpend(claim, spendHistory(world), policy, grant.spendCurrency);
   return grade(claim, own, grant, policy, coverage, { priorSpendCents: prior });
 }
 

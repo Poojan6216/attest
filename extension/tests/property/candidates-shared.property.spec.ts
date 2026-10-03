@@ -4,11 +4,12 @@
  *  - `mergeIntervals` against a fixpoint merge written from scratch; `representative` against "the first by (id,
  *    observedAt instant, observedAt text)", whatever order the rows are folded in;
  *  - the batch's retrieval (batch-retrieve.ts `candidatesOfAll`) against `candidates()` claim by claim, the path
- *    replay rebuilds batches with (re-sightings, twin ids, rows read by a source not listed for their type, and a
- *    corrupt content hash at two instants, which sends a type down the claim-by-claim path);
+ *    replay rebuilds batches with (re-sightings, twin ids, rows read by a source not listed for their type, rows
+ *    first seen exactly at a calendar.created claim's first-seen bound, and a corrupt content hash at two instants,
+ *    which sends a type down the claim-by-claim path);
  *  - orphan discovery (batch-orphans.ts `coveredObservations` over `visibleAt`) against §3 written out with
- *    Date.parse: first seen by evaluatedAt, a type with sources, inside a window of a pass of its OWN source synced
- *    by evaluatedAt, once per content hash (the representative), in candidate order.
+ *    Date.parse: first seen by evaluatedAt, from a source the policy lists for its type, inside a window of a pass of
+ *    its own source synced by evaluatedAt, once per content hash (the representative), in candidate order.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -20,9 +21,9 @@ import { candidatesOfAll } from '../../src/core/batch-retrieve';
 import { candidates, createMemoryIndex } from '../../src/core/candidates';
 import { TextFacts } from '../../src/core/features';
 import { idFromHash } from '../../src/core/hash';
-import { mergeIntervals, representative } from '../../src/core/order';
+import { firstSeenFromMs, mergeIntervals, representative } from '../../src/core/order';
 import { loadPolicy } from '../../src/core/policy';
-import { type ActionType, Coverage, Observation, Ulid } from '../../src/core/schema';
+import { type ActionType, type Claim, Coverage, Observation, Ulid } from '../../src/core/schema';
 import type { Interval } from '../../src/core/window';
 import { buildClaim, isoAt, MS_PER_MINUTE } from '../tools/attest-world';
 
@@ -44,7 +45,7 @@ const compareText = (a: string, b: string) => (a === b ? 0 : a < b ? -1 : 1);
 const minutesAt = (minutes: number, offset = 0) => isoAt(BASE_MS + minutes * MS_PER_MINUTE, offset);
 
 /** How often the runs reached each case: asserted after each property so it can never pass vacuously. */
-const tally = { candidates: 0, corrupt: 0, orphans: 0, strayOrphans: 0 };
+const tally = { candidates: 0, corrupt: 0, atBound: 0, orphans: 0, strayExcluded: 0 };
 
 // ── order.ts against definitions written from scratch ──────────────────────────────────────────
 
@@ -155,16 +156,33 @@ const sightingArb = fc.record({
   seenMinutes: fc.integer({ min: -24 * 60, max: SPAN_MINUTES + 60 }),
   offset: offsetArb,
   shifted: fc.boolean(),
+  /** Sometimes: seen exactly at the first-seen bound of a claim that has one (and of that claim's content). */
+  atBound: rarely(fc.nat({ max: 7 }), 2),
 });
 const rowsArb = fc.record({
   contents: fc.array(contentArb, { minLength: 1, maxLength: 10 }),
   sightings: fc.array(sightingArb, { minLength: 1, maxLength: 30 }),
 });
 
-/** Twin 0 is the honest row; twins 1 and 2 carry another id with the same content hash (a corrupt index). */
-function buildRows({ contents, sightings }: Generated<typeof rowsArb>): Observation[] {
+/** A claim's content (index into the generated contents) and its first-seen bound (null: no first-seen rule). */
+interface Bound {
+  readonly content: number;
+  readonly boundMs: number | null;
+}
+
+/**
+ * Twin 0 is the honest row; twins 1 and 2 carry another id with the same content hash (a corrupt index). A sighting
+ * with `atBound` is of the content of one of the claims that have a first-seen bound (`bounds`), seen exactly at it.
+ */
+function buildRows(
+  { contents, sightings }: Generated<typeof rowsArb>,
+  bounds: readonly Bound[] = [],
+): Observation[] {
+  const bounded = bounds.filter((bound) => bound.boundMs !== null);
   return sightings.flatMap((s) => {
-    const k = s.content % contents.length;
+    const pinned = s.atBound === null ? undefined : bounded[s.atBound % Math.max(1, bounded.length)];
+    const boundMs = pinned?.boundMs ?? null;
+    const k = boundMs === null || pinned === undefined ? s.content % contents.length : pinned.content;
     const c = contents[k];
     if (c === undefined) return [];
     const shift = s.shifted && c.shiftMinutes !== null ? c.shiftMinutes : 0;
@@ -174,7 +192,7 @@ function buildRows({ contents, sightings }: Generated<typeof rowsArb>): Observat
         source: c.source ?? OWN_SOURCE[c.type] ?? 'gmail.sent',
         type: c.type,
         occurredAt: minutesAt(c.atMinutes + shift, c.offset),
-        observedAt: minutesAt(s.seenMinutes, s.offset),
+        observedAt: boundMs === null ? minutesAt(s.seenMinutes, s.offset) : isoAt(boundMs, s.offset),
       }),
     ];
   });
@@ -189,6 +207,35 @@ const claimArb = fc.record({
   offset: offsetArb,
   target: fc.boolean(),
 });
+
+/** Each claim's content and first-seen bound, for `buildRows`. */
+function boundsOf(
+  generated: readonly Generated<typeof claimArb>[],
+  claims: readonly Claim[],
+  count: number,
+): Bound[] {
+  return claims.map((claim, i) => ({
+    content: (generated[i]?.content ?? 0) % count,
+    boundMs: firstSeenFromMs(claim, POLICY),
+  }));
+}
+
+/**
+ * Whether a candidate in `found` was first seen exactly at `claim`'s first-seen bound (the earliest sighting of its
+ * content hash among `observations` is the bound): the equality the rule's `≥` must keep.
+ */
+function firstSeenAtBound(
+  claim: Claim,
+  found: readonly Observation[],
+  observations: readonly Observation[],
+): boolean {
+  const boundMs = firstSeenFromMs(claim, POLICY);
+  if (boundMs === null) return false;
+  return found.some((candidate) => {
+    const seen = observations.filter((o) => o.contentHash === candidate.contentHash);
+    return Math.min(...seen.map((o) => Date.parse(o.observedAt))) === boundMs;
+  });
+}
 
 /** Claims near the generated contents (so they have candidates), some of another type, some without a target. */
 function buildClaims(generated: readonly Generated<typeof claimArb>[], rows: Generated<typeof rowsArb>) {
@@ -216,8 +263,8 @@ describe('the batch paths against the reference paths', () => {
         fc.array(claimArb, { minLength: 1, maxLength: 8 }),
         fc.constantFrom(1, 15, 1440),
         async (rows, generated, bucket) => {
-          const observations = buildRows(rows);
           const claims = buildClaims(generated, rows);
+          const observations = buildRows(rows, boundsOf(generated, claims, rows.contents.length));
           const index = createMemoryIndex(observations, bucket);
           const found = await candidatesOfAll(
             claims,
@@ -230,6 +277,7 @@ describe('the batch paths against the reference paths', () => {
             const own = found.get(claim);
             expect(own?.rows.map((row) => own.table.rows[row])).toEqual(expected);
             if (expected.length > 0) tally.candidates += 1;
+            if (firstSeenAtBound(claim, expected, observations)) tally.atBound += 1;
           }
         },
       ),
@@ -237,6 +285,7 @@ describe('the batch paths against the reference paths', () => {
     );
     expect(tally.candidates).toBeGreaterThan(RUNS / 2);
     expect(tally.corrupt).toBeGreaterThan(RUNS / 10);
+    expect(tally.atBound).toBeGreaterThan(RUNS / 20);
   }, 120_000);
 });
 
@@ -263,18 +312,23 @@ function buildCoverage(passes: readonly Generated<typeof passArb>[]): Coverage {
   return Coverage.parse({ evaluatedAt: isoAt(EVALUATED_MS), observers });
 }
 
+/** Whether a pass of `o`'s own source synced by evaluatedAt saw its `occurredAt`. */
+function seenByOwnSource(o: Observation, coverage: Coverage): boolean {
+  const t = Date.parse(o.occurredAt);
+  return coverage.observers.some(
+    (e) =>
+      e.source === o.source &&
+      Date.parse(e.lastSyncAt) <= EVALUATED_MS &&
+      Date.parse(e.windowStart) <= t &&
+      t <= Date.parse(e.windowEnd),
+  );
+}
+
 /** §3 written out with Date.parse, for every row: no window merge, no index, no shared helper. */
 function orphanOracle(observations: readonly Observation[], coverage: Coverage) {
   const covered = observations.filter((o) => {
-    const t = Date.parse(o.occurredAt);
-    if (Date.parse(o.observedAt) > EVALUATED_MS || POLICY.sourcesByType[o.type].length === 0) return false;
-    return coverage.observers.some(
-      (e) =>
-        e.source === o.source &&
-        Date.parse(e.lastSyncAt) <= EVALUATED_MS &&
-        Date.parse(e.windowStart) <= t &&
-        t <= Date.parse(e.windowEnd),
-    );
+    if (Date.parse(o.observedAt) > EVALUATED_MS) return false;
+    return POLICY.sourcesByType[o.type].includes(o.source) && seenByOwnSource(o, coverage);
   });
   const groups = new Map<string, Observation[]>();
   for (const o of covered) groups.set(o.contentHash, [...(groups.get(o.contentHash) ?? []), o]);
@@ -291,7 +345,7 @@ function orphanOracle(observations: readonly Observation[], coverage: Coverage) 
 }
 
 describe('orphan discovery against §3 written out', () => {
-  it('coveredObservations over visibleAt equals the oracle, rows from unlisted sources included', async () => {
+  it('coveredObservations over visibleAt equals the oracle: rows from unlisted sources are never orphans', async () => {
     await fc.assert(
       fc.asyncProperty(
         rowsArb,
@@ -304,15 +358,20 @@ describe('orphan discovery against §3 written out', () => {
           const expected = orphanOracle(observations, coverage);
           expect(await coveredObservations(index, coverage, POLICY)).toEqual(expected);
           tally.orphans += expected.length;
-          tally.strayOrphans += expected.filter(
-            (one) => OWN_SOURCE[one.observation.type] !== one.observation.source,
+          // Rows a window of their own source saw, from a source their type does not list: excluded.
+          tally.strayExcluded += observations.filter(
+            (o) =>
+              Date.parse(o.observedAt) <= EVALUATED_MS &&
+              POLICY.sourcesByType[o.type].length > 0 &&
+              !POLICY.sourcesByType[o.type].includes(o.source) &&
+              seenByOwnSource(o, coverage),
           ).length;
         },
       ),
       { numRuns: RUNS },
     );
     expect(tally.orphans).toBeGreaterThan(RUNS / 5);
-    expect(tally.strayOrphans).toBeGreaterThan(RUNS / 50);
+    expect(tally.strayExcluded).toBeGreaterThan(RUNS / 50);
     console.log(`candidates-shared tally: ${JSON.stringify(tally)}`);
   }, 120_000);
 });

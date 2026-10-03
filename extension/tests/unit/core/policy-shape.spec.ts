@@ -215,12 +215,12 @@ function listedWeightsPositive(features: Record<string, number>): boolean {
 }
 
 describe('policy schema: the whole valid domain loads unchanged', () => {
-  it('any version >= 1, valid windows, ordered grid thresholds and grid weights are accepted', () => {
+  it('any version >= 1, valid windows, ordered grid thresholds above 0 and grid weights are accepted', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 1, max: 1_000_000 }),
         windows,
-        fc.uniqueArray(fc.integer({ min: 0, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
+        fc.uniqueArray(fc.integer({ min: 1, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
         weights(Object.keys(policyJson.features)).filter(listedWeightsPositive),
         weights(Object.keys(policyJson.unasked.signals)),
         weight,

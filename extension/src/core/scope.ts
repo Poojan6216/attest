@@ -92,9 +92,11 @@ function amountOf(prior: SpendClaim): number {
  * `(claimedAt ms, id)` order. A missing currency, on the claim or on a prior, reads as `spendCurrency` (the grant's,
  * `spendCurrencyOf`): with one set, a currency-less claim and a claim in `spendCurrency` count each other, as the
  * §6.1 Amount counts them; with none, a currency-less claim counts only priors without one. The claim itself
- * never counts. A claim id listed more than once counts once (at its largest qualifying amount), so passing
- * the batch claims together with the ledger's claims cannot double-count. Amounts are never negative, so
- * the result is ≥ 0 and a refund cannot lower it. A total beyond `Number.MAX_SAFE_INTEGER` is reported as
+ * never counts, whatever copy holds its id: a claim read at 10:00:10 and again at 10:00:50 shares its id (§10),
+ * and counting the earlier copy would charge one $30 purchase twice against its own ceiling (Hard Rule 5). Any
+ * other claim id listed more than once counts once (at its largest qualifying amount), so passing the batch
+ * claims together with the ledger's claims cannot double-count. Amounts are never negative, so the result is
+ * ≥ 0 and a refund cannot lower it. A total beyond `Number.MAX_SAFE_INTEGER` is reported as
  * that value: it already exceeds every ceiling the schema allows (≤ 10^12), so the decision is unchanged.
  *
  * A claim whose own type is not a spend type has no cumulative spend (condition `cumulativeAboveCeiling`
@@ -114,6 +116,7 @@ export function priorSpendCents(
   const currency = spendCurrencyOf(claim.currency, spendCurrency);
   const amounts = new Map<string, number>();
   for (const prior of claims) {
+    if (prior.id === claim.id) continue;
     const counted = spendCurrencyOf(prior.currency, spendCurrency) === currency;
     if (prior.agent !== claim.agent || !counted || !spendTypes.has(prior.type)) continue;
     const ms = claimedMs(prior);
@@ -135,6 +138,8 @@ interface SpendRun {
   readonly ms: readonly number[];
   readonly ids: readonly string[];
   readonly sums: readonly number[];
+  /** Each id's position in the run (ids are unique in a regular run). */
+  readonly at: ReadonlyMap<string, number>;
 }
 
 /**
@@ -160,7 +165,21 @@ function buildRun(priors: readonly SpendClaim[]): SpendRun | null {
   const sums = [0];
   for (const [i, entry] of entries.entries()) sums.push((sums[i] ?? 0) + entry.amount);
   if ((sums[entries.length] ?? 0) > Number.MAX_SAFE_INTEGER) return null;
-  return { ms: entries.map((entry) => entry.ms), ids: entries.map((entry) => entry.id), sums };
+  const ids = entries.map((entry) => entry.id);
+  const at = new Map(ids.map((id, i) => [id, i]));
+  return { ms: entries.map((entry) => entry.ms), ids, sums, at };
+}
+
+/**
+ * The total of `run`'s entries in positions [from, to), less the claim's own entry when it lies there: the claim
+ * never counts itself (`priorSpendCents`), even through a copy of its id at an earlier instant.
+ */
+function totalWithout(run: SpendRun, from: number, to: number, claimId: string): number {
+  if (to <= from) return 0;
+  const total = (run.sums[to] ?? 0) - (run.sums[from] ?? 0);
+  const own = run.at.get(claimId);
+  if (own === undefined || own < from || own >= to) return total;
+  return total - ((run.sums[own + 1] ?? 0) - (run.sums[own] ?? 0));
 }
 
 /** The number of leading entries of `run` before (`ms`, `id`) in (ms, id) order (`strictly` excludes ties). */
@@ -180,8 +199,9 @@ function countBefore(run: SpendRun, ms: number, id: string | null): number {
 /**
  * `priorSpendCents(claim, claims, policy, spendCurrency)` for any number of claims against one history (`claims`),
  * the history read once: per agent, counted currency and `spendCurrency`, its spend claims sorted with running sums,
- * so each claim's total is two binary searches and a subtraction. A run that is not regular (`buildRun`) is answered
- * by `priorSpendCents` over the agent's history, so every result and every error is exactly `priorSpendCents`'s.
+ * so each claim's total is two binary searches and a subtraction, less the claim's own entry when an earlier copy
+ * of its id lies in the window (`totalWithout`). A run that is not regular (`buildRun`) is answered by
+ * `priorSpendCents` over the agent's history, so every result and every error is exactly `priorSpendCents`'s.
  */
 export function spendIndex(
   claims: readonly SpendClaim[],
@@ -216,9 +236,7 @@ export function spendIndex(
     const claimMs = claimedMs(claim);
     const fromMs = claimMs - policy.windows.spendWindowDays * MS_PER_DAY;
     if (!Number.isSafeInteger(fromMs)) throw new ScopeError('unsafe_window');
-    const from = countBefore(run, fromMs, null);
-    const to = countBefore(run, claimMs, claim.id);
-    return to > from ? (run.sums[to] ?? 0) - (run.sums[from] ?? 0) : 0;
+    return totalWithout(run, countBefore(run, fromMs, null), countBefore(run, claimMs, claim.id), claim.id);
   };
 }
 

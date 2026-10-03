@@ -16,6 +16,8 @@ import { buildScenario, type LoadedScenario, receiptIdFor } from '../../golden/l
 import { Scenario } from '../../golden/scenario-schema';
 
 const EVALUATED_AT = '2026-10-06T15:00:00-04:00';
+/** When the hand-built pre-assignments below were fixed: by a batch before this one (batch-fixed.ts). */
+const FIXED_AFTER = IsoTs.parse('2026-10-06T12:00:00-04:00');
 const GMAIL = {
   source: 'gmail.sent',
   lastSyncAt: EVALUATED_AT,
@@ -133,6 +135,56 @@ describe('gradeBatch: fixed pre-assignments and taken observations (§4.3)', () 
   });
 });
 
+describe('gradeBatch: only the pre-assignments in force at evaluatedAt are fixed (batch-fixed.ts, §4.3, §9)', () => {
+  const at = (iso: string) => IsoTs.parse(iso);
+  const BEFORE = at('2026-10-06T14:59:59.999-04:00');
+  /** c9 → o9 with these instants, o3 taken throughout; c1 alone is graded. */
+  async function c1With(instants: Pick<BatchFixed, 'after' | 'until'>) {
+    const loaded = fixedScenario();
+    const fixed: BatchFixed[] = [
+      { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9'), ...instants },
+      { observationId: observationId(loaded, 'o3'), claimId: null, after: FIXED_AFTER },
+    ];
+    const c1 = (await run(loaded, { fixed })).find((r) => r.id === claimReceiptId(loaded, 'c1'));
+    const o9 = observationId(loaded, 'o9');
+    return c1?.observationIds[0] === o9 ? 'o9' : c1?.observationIds[0] === undefined ? 'none' : 'other';
+  }
+
+  it('fixes a pair strictly after its `after` and up to its `until` inclusive; otherwise c1 takes o9', async () => {
+    expect(await c1With({ after: FIXED_AFTER })).toBe('other');
+    expect(await c1With({ after: BEFORE })).toBe('other');
+    expect(await c1With({ after: at(EVALUATED_AT) })).toBe('o9');
+    expect(await c1With({ after: FIXED_AFTER, until: at(EVALUATED_AT) })).toBe('other');
+    expect(await c1With({ after: FIXED_AFTER, until: BEFORE })).toBe('o9');
+    // The same instants in another offset: compared as instants, never as text.
+    expect(await c1With({ after: at('2026-10-07T04:29:59.999+09:30') })).toBe('other');
+    expect(await c1With({ after: at('2026-10-07T04:30:00+09:30') })).toBe('o9');
+  });
+
+  it('takes an observation only strictly after the override’s instant', async () => {
+    const loaded = fixedScenario();
+    const taken = (after: IsoTs) => [
+      { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9'), after: FIXED_AFTER },
+      { observationId: observationId(loaded, 'o3'), claimId: null, after },
+    ];
+    const c1 = async (after: IsoTs) =>
+      (await run(loaded, { fixed: taken(after) })).find((r) => r.id === claimReceiptId(loaded, 'c1'));
+    expect((await c1(BEFORE))?.observationIds).toEqual([observationId(loaded, 'o2')]);
+    expect((await c1(at(EVALUATED_AT)))?.observationIds).toEqual([observationId(loaded, 'o3')]);
+  });
+
+  it('throws claim_fixed for a graded claim named by a pre-assignment not yet in force, and refuses a bad instant', async () => {
+    const loaded = fixedScenario();
+    const later = { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9') };
+    const all = [...loaded.claims.values()];
+    await expect(
+      run(loaded, { claims: all, fixed: [{ ...later, after: at(EVALUATED_AT) }] }),
+    ).rejects.toMatchObject(batchError('claim_fixed'));
+    const broken = [{ ...later, after: 'yesterday' as IsoTs }];
+    await expect(run(loaded, { fixed: broken })).rejects.toMatchObject({ code: 'invalid_iso' });
+  });
+});
+
 describe('gradeBatch: pre-assignments that cannot be graded exactly throw (Hard Rule 6)', () => {
   const scenario = fixedScenario;
 
@@ -152,8 +204,8 @@ describe('gradeBatch: pre-assignments that cannot be graded exactly throw (Hard 
   it('throws CandidatesError(fixed_conflict) for fixed pairs that are not one-to-one', async () => {
     const loaded = scenario();
     const fixed = [
-      { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9') },
-      { observationId: observationId(loaded, 'o2'), claimId: claimId(loaded, 'c9') },
+      { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9'), after: FIXED_AFTER },
+      { observationId: observationId(loaded, 'o2'), claimId: claimId(loaded, 'c9'), after: FIXED_AFTER },
     ];
     await expect(run(loaded, { fixed })).rejects.toMatchObject({
       name: 'CandidatesError',

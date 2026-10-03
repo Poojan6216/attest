@@ -3,7 +3,8 @@
  * SCHEMA_LIMITS.SUBJECT_HINT code points without splitting a surrogate pair; any other allowlisted own value that
  * fails the Observation schema refuses the whole row with `invalid_field` (SEC-3: never coerced, never cut, never
  * silently dropped, so no stored row lacks a fact its source carried); occurredAt is required; arguments are
- * checked; and only own data properties of the raw row are read.
+ * checked; and only own data properties of the raw row are read, while an allowlisted field held by an accessor or
+ * inherited refuses the row unread (OBS-3).
  */
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
@@ -248,27 +249,81 @@ describe('arguments are checked', () => {
   });
 });
 
-describe('only own data properties of the raw row are read', () => {
-  it('inherited properties never become content', () => {
-    const inherited = Object.create(BASE) as object;
-    expectRedactError(() => receipt(inherited), 'missing_occurred_at');
+/** A getter that counts its calls: project() must never invoke one. */
+function counted(value: unknown): { reads: number; descriptor: PropertyDescriptor } {
+  const probe = { reads: 0, descriptor: {} as PropertyDescriptor };
+  probe.descriptor = {
+    enumerable: true,
+    get: () => {
+      probe.reads += 1;
+      return value;
+    },
+  };
+  return probe;
+}
+
+describe('an allowlisted field held by a getter or a prototype refuses the row (OBS-3)', () => {
+  it('an inherited allowlisted field refuses the row: never read, never silently dropped', () => {
+    expectRedactError(() => receipt(Object.create(BASE) as object), 'invalid_field');
     const mixed = Object.create({ merchant: 'Inherited Ltd' }) as Record<string, unknown>;
     mixed.occurredAt = OCCURRED;
-    expect(receipt(mixed)).not.toHaveProperty('merchant');
+    expectRedactError(() => receipt(mixed), 'invalid_field');
+    const inheritedTime = Object.create({ occurredAt: OCCURRED }) as Record<string, unknown>;
+    inheritedTime.merchant = 'Acme Books';
+    expectRedactError(() => receipt(inheritedTime), 'invalid_field');
+    const deep = Object.create(Object.create({ merchant: 'Inherited Ltd' }) as object) as object;
+    expectRedactError(() => receipt(Object.assign(deep, { occurredAt: OCCURRED })), 'invalid_field');
   });
 
-  it('getters are never invoked', () => {
-    let reads = 0;
-    const raw = { ...BASE };
-    Object.defineProperty(raw, 'merchant', {
-      enumerable: true,
-      get: () => {
-        reads += 1;
-        return 'Getter Ltd';
-      },
+  it('a setter-only allowlisted field refuses the row too: any accessor, never a silent absence', () => {
+    const raw = Object.defineProperty({ ...BASE }, 'merchant', { enumerable: true, set: () => undefined });
+    expectRedactError(() => receipt(raw), 'invalid_field');
+  });
+
+  it('an allowlisted field held by a getter refuses the row, and the getter is never invoked', () => {
+    for (const field of ['merchant', 'amountCents', 'occurredAt'] as const) {
+      const getter = counted(BASE[field]);
+      const raw = Object.defineProperty({ ...BASE }, field, getter.descriptor);
+      expectRedactError(() => receipt(raw), 'invalid_field');
+      expect(getter.reads, field).toBe(0);
+    }
+  });
+
+  it('a row class with lazy getters (probe p1) is refused, not stored without its counterparty', () => {
+    const getter = counted('priya@company.com');
+    class Row {
+      constructor(readonly occurredAt: string) {}
+    }
+    Object.defineProperty(Row.prototype, 'counterparty', getter.descriptor);
+    const run = () =>
+      project('gmail.sent', new Row(OCCURRED), { ...CTX, type: 'email.sent' }, DEFAULT_POLICY);
+    expectRedactError(run, 'invalid_field');
+    expect(getter.reads).toBe(0);
+  });
+});
+
+describe('only own data properties of the raw row are read', () => {
+  it('a getter or an inherited value on a field the allowlist does not name is never looked at', () => {
+    const getter = counted('priya@company.com');
+    const raw = Object.defineProperty(
+      Object.create({ counterparty: 'p@x.com' }) as object,
+      'body',
+      getter.descriptor,
+    );
+    Object.defineProperty(raw, 'subjectHint', { value: 'Your order', enumerable: true });
+    Object.assign(raw, { occurredAt: OCCURRED });
+    expect(receipt(raw)).toStrictEqual(receipt({ subjectHint: 'Your order', occurredAt: OCCURRED }));
+    expect(getter.reads).toBe(0);
+  });
+
+  it('an own data property shadows an inherited one, and an own undefined is absent', () => {
+    const shadowed = Object.assign(Object.create({ merchant: 'Inherited Ltd' }) as object, BASE);
+    expect(receipt(shadowed)).toStrictEqual(receipt(BASE));
+    const absent = Object.assign(Object.create({ merchant: 'Inherited Ltd' }) as object, {
+      ...BASE,
+      merchant: undefined,
     });
-    expect(receipt(raw)).not.toHaveProperty('merchant');
-    expect(reads).toBe(0);
+    expect(receipt(absent)).not.toHaveProperty('merchant');
   });
 
   it('a frozen row with a null prototype is read without being written', () => {

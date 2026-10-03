@@ -5,7 +5,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  compareFractions,
   compareRatio,
+  compareScores,
   ratio,
   RATIO_ONE,
   RATIO_ZERO,
@@ -13,6 +15,7 @@ import {
   RatioError,
   type RatioErrorCode,
   ratioGteBasisPoints,
+  Score,
   toDisplay,
   weightedScore,
 } from '../../../src/core/ratio';
@@ -210,5 +213,42 @@ describe('toDisplay()', () => {
 
   it('rejects a hand-built value whose denominator is not positive', () => {
     expect(errorCode(() => toDisplay({ num: 1n, den: 0n }))).toBe('invalid_denominator');
+  });
+});
+
+const MAX = Number.MAX_SAFE_INTEGER;
+
+/**
+ * GG-2 (§5.3): `a/b` against `c/d` where the float cross products `a·d` and `c·b` round to one value although the
+ * exact ones differ, so only the fast path's bound (both products ≤ 2^53 − 1) keeps the comparison exact. A bound of
+ * 2^53 takes 2^53 + 1 (which rounds to 2^53) as equal to 2^53; no bound at all takes any two neighbours near 2^106
+ * as equal.
+ */
+const BOUNDARY: readonly (readonly [number, number, number, number, -1 | 0 | 1, string])[] = [
+  [MAX, MAX - 1, MAX - 1, MAX - 2, -1, 'MAX·(MAX − 2) against (MAX − 1)², 1 apart near 2^106'],
+  [3, 2 ** 27, 2 ** 26, 3_002_399_751_580_331, 1, '3·3002399751580331 = 2^53 + 1 against 2^26·2^27 = 2^53'],
+  [2 ** 26, 3_002_399_751_580_331, 3, 2 ** 27, -1, '2^53 against 2^53 + 1'],
+  [5, 4, 2_251_799_813_685_249, 1_801_439_850_948_199, -1, '2^53 + 3 (rounds to 2^53 + 4) against 2^53 + 4'],
+  [MAX, 2 ** 27, 2 ** 26, 1, -1, '2^53 − 1, the largest product the fast path takes, against 2^53'],
+  [2 ** 26, 2 ** 26, 2 ** 27, 2 ** 27, 0, '2^53 against 2^53: equal'],
+];
+
+describe('compareFractions() and compareScores() where the float cross products round together (§5.3)', () => {
+  const sign = (x: bigint): -1 | 0 | 1 => (x === 0n ? 0 : x < 0n ? -1 : 1);
+
+  it.each(BOUNDARY)('%d/%d against %d/%d is %d: %s', (a, b, c, d, expected) => {
+    expect(sign(BigInt(a) * BigInt(d) - BigInt(c) * BigInt(b))).toBe(expected);
+    expect(compareFractions(a, b, c, d)).toBe(expected);
+    expect(compareFractions(c, d, a, b)).toBe(-expected || 0);
+    expect(compareScores(Score.ofReduced(a, b), Score.ofReduced(c, d))).toBe(expected);
+    expect(compareScores(Score.ofReduced(c, d), Score.ofReduced(a, b))).toBe(-expected || 0);
+  });
+
+  it('each case is one the float products cannot tell apart, or one product is exactly 2^53 − 1 or 2^53', () => {
+    for (const [a, b, c, d] of BOUNDARY) {
+      const products = [a * d, c * b];
+      const atTheBound = products.includes(MAX) || products.includes(2 ** 53);
+      expect(a * d === c * b || atTheBound, `${a}/${b} against ${c}/${d}`).toBe(true);
+    }
   });
 });

@@ -48,7 +48,7 @@ function referenceNameTokens(raw: string): string[] {
 }
 function referenceSubjectTokens(raw: string, stopWords: readonly string[]): string[] {
   if (/[\u202A\u202B\u202D\u202E]/u.test(raw)) return [];
-  const tokens = lowerBaseline(asBaseline(stripInvisible(raw)).normalize('NFKC'))
+  const tokens = lowerBaseline(stripInvisible(asBaseline(raw)).normalize('NFKC'))
     .split(NOT_TOKEN)
     .filter((token) => token !== '');
   const first = tokens.findIndex((token) => !['re', 'fw', 'fwd'].includes(token));

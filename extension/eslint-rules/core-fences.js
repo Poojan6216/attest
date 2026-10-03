@@ -5,7 +5,13 @@
  * attest/core-determinism; tests/unit/lint/fences*.spec.ts prove them, and tests/unit/core/core-purity.spec.ts
  * checks the real files independently of lint.
  */
-import { DEXIE_RESTRICTION, MESSAGING_SYNTAX, NODE_GLOBALS, NODE_TYPE_SYNTAX } from './fences.js';
+import {
+  AMBIENT_SYNTAX,
+  DEXIE_RESTRICTION,
+  MESSAGING_SYNTAX,
+  NODE_GLOBALS,
+  NODE_TYPE_SYNTAX,
+} from './fences.js';
 
 /**
  * What src/core may import, as an allowlist (TECH-C2, Hard Rule 4): its own sibling modules (`./name`, no
@@ -93,15 +99,22 @@ export const CORE_RESTRICTED_GLOBAL_NAMES = [
   'self',
   'console',
   'Intl',
+  // A clock and the host's time-zone database, in the browsers Attest runs in (PI-2).
+  'Temporal',
   // Their results depend on when the garbage collector runs (TECH-C2).
   'WeakRef',
   'FinalizationRegistry',
   ...NODE_GLOBALS,
 ];
 
+/** Every way src/core could reach a constructor from a value: `new Date(0).constructor` is the clock (PI-3). */
+const CONSTRUCTOR_MESSAGE =
+  'src/core is pure: no `.constructor` (`new Date(0).constructor` is Date, with its clock). Name what you need (Hard Rule 4).';
+
 export const CORE_RESTRICTED_SYNTAX = [
   ...MESSAGING_SYNTAX,
   ...NODE_TYPE_SYNTAX,
+  ...AMBIENT_SYNTAX,
   {
     selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
     message: 'src/core is pure: no clock. Pass time in as an argument.',
@@ -109,6 +122,27 @@ export const CORE_RESTRICTED_SYNTAX = [
   {
     selector: "NewExpression[callee.name='Date'][arguments.length=0]",
     message: 'src/core is pure: `new Date()` reads the clock. Pass time in as an argument.',
+  },
+  {
+    // `new Date(...args)` is `new Date()` when args is empty (PI-1).
+    selector: "NewExpression[callee.name='Date'] > SpreadElement",
+    message: 'src/core is pure: `new Date(...args)` reads the clock when args is empty. Pass one value.',
+  },
+  {
+    // `new Date(y, m, d, …)` reads its fields in the host's time zone (PI-1).
+    selector: "NewExpression[callee.name='Date'][arguments.length>1]",
+    message:
+      "src/core is deterministic: `new Date(y, m, …)` reads the host's time zone. Use Date.UTC(y, m, …).",
+  },
+  { selector: "MemberExpression[property.name='constructor']", message: CONSTRUCTOR_MESSAGE },
+  { selector: "MemberExpression[computed=true][property.value='constructor']", message: CONSTRUCTOR_MESSAGE },
+  { selector: "Literal[value='constructor']", message: CONSTRUCTOR_MESSAGE },
+  { selector: "TemplateElement[value.cooked='constructor']", message: CONSTRUCTOR_MESSAGE },
+  {
+    // `date[Symbol.toPrimitive]('string')` renders a Date in the host's time zone (PI-4).
+    selector: "MemberExpression[object.name='Symbol'][property.name='toPrimitive']",
+    message:
+      "src/core is deterministic: no Symbol.toPrimitive (a Date's renders the host's time zone) (Hard Rule 4).",
   },
   {
     selector: "CallExpression[callee.name='Date']",

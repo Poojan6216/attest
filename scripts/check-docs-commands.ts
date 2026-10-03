@@ -4,7 +4,7 @@
  * commands (`install`, `exec`, …), which needs no script, or a package script (`pnpm test`, `pnpm run test`,
  * `pnpm --dir extension run test`), which must exist in the package the command runs in (QA-G10): the repo root
  * unless a `cd` before it, `-C`/`--dir`, `--filter`/`-F`, `-w` or a recursive run (`-r`, `pnpm recursive …`)
- * says otherwise.
+ * says otherwise. A `cd` inside a subshell `( … )` ends when the subshell closes (PI-9).
  */
 
 /** pnpm's own commands (and their aliases), and the npm commands pnpm passes through: none runs a script. */
@@ -32,8 +32,8 @@ const OPTIONS_WITH_VALUE = new Set(['--dir', '-C', '--filter', '-F', '--reporter
 
 /** `pnpm` as a command word (not `pnpm-lock.yaml`, not a path ending in pnpm), up to a shell separator. */
 const INVOCATION = /(?<![\w./-])pnpm[ \t]+([^\n;&|()]*)/g;
-/** Where one shell command ends and the next begins. */
-const SEPARATOR = /&&|\|\||[;&|()\n]/;
+/** Where one shell command ends and the next begins, kept: `(` opens a subshell and `)` closes it. */
+const SEPARATOR = /(&&|\|\||[;&|()\n])/;
 /** A shell comment: `#` at the start of a word, to the end of the line. */
 const SHELL_COMMENT = /(^|[ \t])#[^\n]*/g;
 
@@ -146,11 +146,34 @@ function targetOf(options: Options, cwd: string | null): PnpmTarget {
   return { kind: 'dir', dir };
 }
 
-/** Walks the shell commands in `code` from `cwd`: every `pnpm` invocation, and the working directory after. */
-function walkShell(code: string, cwd: string | null): { invocations: PnpmInvocation[]; cwd: string | null } {
+/**
+ * Where the shell stands: its working directory (null when a doc cannot know it), and, for each subshell `( … )`
+ * still open, innermost last, the directory to restore when it closes. A `cd` inside a subshell ends with it (PI-9):
+ * in `(cd extension && pnpm test) && pnpm test:tz` the second command runs at the repo root.
+ */
+export interface ShellState {
+  readonly dir: string | null;
+  readonly outer: readonly (string | null)[];
+}
+
+/** A code block starts at the repo root, with no subshell open. */
+export const AT_REPO_ROOT: ShellState = { dir: '.', outer: [] };
+
+const stateOf = (cwd: string | null | ShellState): ShellState =>
+  typeof cwd === 'string' || cwd === null ? { dir: cwd, outer: [] } : cwd;
+
+/** Walks the shell commands in `code` from `start`: every `pnpm` invocation, and where the shell stands after. */
+function walkShell(code: string, start: ShellState): { invocations: PnpmInvocation[]; state: ShellState } {
   const invocations: PnpmInvocation[] = [];
-  let dir = cwd;
+  let dir = start.dir;
+  const outer = [...start.outer];
   for (const command of code.replace(SHELL_COMMENT, '$1').split(SEPARATOR)) {
+    if (command === '(' || command === ')') {
+      // A `)` with no subshell open (a `case` pattern, say) changes nothing.
+      if (command === '(') outer.push(dir);
+      else if (outer.length > 0) dir = outer.pop() ?? null;
+      continue;
+    }
     const words = command.trim().split(/\s+/);
     if (words[0] === 'cd') {
       dir = changeDir(dir, words[1]);
@@ -161,15 +184,20 @@ function walkShell(code: string, cwd: string | null): { invocations: PnpmInvocat
       invocations.push({ text: match[0].trim(), script, target: targetOf(options, dir) });
     }
   }
-  return { invocations, cwd: dir };
+  return { invocations, state: { dir, outer } };
 }
 
 /** Every `pnpm` invocation in a piece of code run from `cwd` (the repo root, unless its code block moved). */
-export function pnpmInvocations(code: string, cwd: string | null = '.'): PnpmInvocation[] {
-  return walkShell(code, cwd).invocations;
+export function pnpmInvocations(code: string, cwd: string | null | ShellState = '.'): PnpmInvocation[] {
+  return walkShell(code, stateOf(cwd)).invocations;
 }
 
-/** The working directory after `code` runs from `cwd` (null when unknown), for the next line of a code block. */
-export function cwdAfter(code: string, cwd: string | null): string | null {
-  return walkShell(code, cwd).cwd;
+/** The working directory after `code` runs from `cwd` (null when unknown). */
+export function cwdAfter(code: string, cwd: string | null | ShellState): string | null {
+  return walkShell(code, stateOf(cwd)).state.dir;
+}
+
+/** Where the shell stands after `code` runs from `state`, for the next line of a code block (a subshell may span lines). */
+export function shellAfter(code: string, state: ShellState): ShellState {
+  return walkShell(code, state).state;
 }

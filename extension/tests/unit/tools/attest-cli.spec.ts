@@ -243,6 +243,23 @@ describe('an export never drives the terminal (Hard Rule 10)', () => {
     expect(text).toContain('invalid key');
   });
 
+  it('escapes a file name holding ESC, BEL and U+202E, on stdout and on stderr', async () => {
+    // The file name is the only free text the CLI itself writes (SEC-7): the summary's first line, and the
+    // `cannot read` and `is not JSON` errors. Each must reach the terminal escaped, whichever stream it is on.
+    const name = 'name-\u001b]0;pwned\u0007\u001b[2J‮x.json';
+    const shown = 'name-\\u{1b}]0;pwned\\u{7}\\u{1b}[2J\\u{202e}x.json';
+    const reproduced = await run(['replay', await write(name, scenarioJson)]);
+    expect(reproduced.code).toBe(EXIT.reproduced);
+    expect(reproduced.out[0]).toBe(`attest replay ${path.join(dir, shown)}`);
+    const missing = await run(['replay', path.join(dir, `missing-${name}`)]);
+    const notJson = await run(['replay', await write(`bad-${name}`, '{ not json')]);
+    expect(missing.err.join('\n')).toContain(`cannot read ${path.join(dir, `missing-${shown}`)}`);
+    expect(notJson.err.join('\n')).toContain(`${path.join(dir, `bad-${shown}`)} is not JSON`);
+    for (const { out, err } of [reproduced, missing, notJson]) {
+      expect(activeCodePoints([...out, ...err].join('\n'))).toEqual([]);
+    }
+  });
+
   it('escapes a key inside an invalid policy document too', async () => {
     const [document] = Object.values(ReplayExport.parse(scenarioJson).policies);
     const policy = z.record(z.string(), z.unknown()).parse(document);

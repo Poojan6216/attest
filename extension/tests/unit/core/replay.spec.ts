@@ -217,12 +217,20 @@ describe('overrides', () => {
     ]);
   });
 
-  it('an override of a PENDING receipt fixes its observation from its `at` on (c5 keeps o5 from c6)', async () => {
+  it('an override of a PENDING receipt fixes its evidence after the claim’s last grading, even before its `at`', async () => {
+    // c5 was last graded at T1. A batch after T1 that did not regrade c5 read the override already (batch-fixed.ts),
+    // so o5 stays fixed to c5 at T2 even with the override stamped after T2: c6 is still NOT_FOUND there.
     const late = tamper('c5', (receipt) => ({
       ...receipt,
       override: { grade: 'VERIFIED', reason: 'late', at: afterT2, previousState: 'PENDING' },
     }));
-    const report = await replay(late);
+    expect(await replay(late)).toMatchObject({ mismatched: 0, mismatches: [] });
+    // Overridden to NOT_FOUND instead, c5 fixes nothing: c6 takes o5 in replay, against its stored NOT_FOUND.
+    const dropped = tamper('c5', (receipt) => ({
+      ...receipt,
+      override: { grade: 'NOT_FOUND', reason: 'dropped', at: OVERRIDE_AT, previousState: 'PENDING' },
+    }));
+    const report = await replay(dropped);
     expect(mismatchedRefs(report)).toEqual(['c6']);
     expect(gradeMismatch(report, 'c6')).toMatchObject({ stored: 'NOT_FOUND', replayed: 'VERIFIED' });
   });
@@ -250,7 +258,8 @@ describe('overrides', () => {
 describe('overrides at a batch instant, and overrides of UNASKED receipts', () => {
   const afterT2 = iso(T2_MS + MS_PER_HOUR);
 
-  it('an override at the very instant of a later batch is in force in that batch, as the background applied it', async () => {
+  it('an override stamped at the very instant of a later batch is not in force in it, even when that batch read it', async () => {
+    // In force only in batches whose evaluatedAt is strictly after its `at` (batch-fixed.ts), on both sides.
     const world = scenarioWorld();
     const sim = new LedgerSim(world);
     const { policy } = world.policyAt(0);
@@ -261,8 +270,13 @@ describe('overrides at a batch instant, and overrides of UNASKED receipts', () =
     const ledger = sim.snapshot();
     const after = (ref: ReceiptRef) => ledger.receipts.find((receipt) => receipt.id === receiptIdOf(ref));
     expect(after('c7')?.override?.at).toBe(T2);
-    expect(after('c8')).toMatchObject({ grade: 'VERIFIED', computedAt: T2 });
-    expect(after('c10')).toMatchObject({ grade: 'NOT_FOUND', computedAt: T2 });
+    // At T2, c7 (FINAL since T1) still holds o7, and o9 is not yet taken, so c10 takes it.
+    expect(after('c8')).toMatchObject({ grade: 'NOT_FOUND', computedAt: T2, observationIds: [] });
+    expect(after('c10')).toMatchObject({
+      grade: 'VERIFIED',
+      computedAt: T2,
+      observationIds: [OBSERVATIONS.o9.id],
+    });
     expect(await replay(ledger)).toMatchObject({ mismatched: 0, reproduced: ledger.receipts.length });
   });
 

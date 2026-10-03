@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { IsoTs, SCHEMA_LIMITS, Sha256 } from '../core/schema';
+import { ComponentId, IsoTs, SCHEMA_LIMITS, Sha256 } from '../core/schema';
 
 export * from '../core/schema';
 /** The ledger's name for a HealthReport: the latest health per adapter/observer (Hard Rule 6). */
@@ -22,7 +22,7 @@ const Id = z.string().min(1).max(L.ID);
  * shape until Sprint 2.6 reworks coverage storage into core `ObserverCoverage` intervals.
  */
 export const CoveragePing = z.strictObject({
-  observerId: Id,
+  observerId: ComponentId,
   /** SHA-256 of the account identifier; never the identifier itself. */
   accountHash: Sha256.optional(),
   lastSyncAt: IsoTs,

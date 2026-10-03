@@ -1,37 +1,39 @@
 /**
  * SEC-1 (Hard Rule 4): src/core never reads a character property from the engine. Every `\p{…}` class, `\s`,
  * `trim()`, case mapping and normalisation follows the Unicode version of the engine running it; src/core reads
- * character classes from the Unicode 15.0 tables (unicode-baseline.ts) instead. This scans src/core (not the
- * generated tables) for the constructs that would bring the engine's Unicode back:
- *  - `\p{…}` / `\P{…}` other than `ASCII` and `Cc` (both fixed forever), and `\s` / `\S`;
- *  - a regular expression with the `i` flag and `u` or `v` (Unicode case folding);
- *  - `toUpperCase`, the locale case mappings, `localeCompare` and `Intl`;
- *  - `trim()` and `toLowerCase()` other than on text already known to be ASCII, or in unicode-baseline.ts
+ * character classes from the Unicode 15.0 tables (unicode-baseline.ts) instead. unicode-fence-scan.ts walks the
+ * TypeScript syntax tree of every src/core file but the generated tables, so a comment never hides or fakes a
+ * finding and a `//` inside a string is only a string. It refuses:
+ *  - `\p{…}` / `\P{…}` other than `ASCII` and `Cc` (both fixed forever), and `\s` / `\S` (whatever follows it), in a
+ *    regular expression literal, in string and template text as written and as read, in any text the file composes
+ *    statically (a template, a `+`, a `const`), and in every pattern a `RegExp` is built from;
+ *  - Unicode case folding: a regular expression with the `i` flag and `u` or `v`, or with `i` and a pattern that is
+ *    not plain ASCII (without `u`, `i` still folds by the engine's case tables);
+ *  - a regular expression built from text known only at run time. `RegExp(…)` and `new RegExp(…)` take a string
+ *    literal for the flags (then the case-folding rule applies to it) and, for the pattern, a string literal or a
+ *    template whose every substitution is a `BASELINE_CLASS` member imported from unicode-baseline.ts, a generated
+ *    15.0 table imported by name, or a `const` declared once in the file and built the same way; a `+` is refused.
+ *    Any other use of `RegExp`, `compile`, and `match`, `matchAll` or `search` called with anything but a regular
+ *    expression or read to call later (`.call`, `.apply`, `.bind`, destructured), are refused;
+ *  - `toUpperCase`, the locale case mappings, `localeCompare` and `Intl`, called or only referenced, and any string
+ *    the file spells that names one of these methods (`Reflect.get(s, 'normalize')`);
+ *  - `trim` and `toLowerCase` other than on text already known to be ASCII, or in unicode-baseline.ts
  *    (`trimBaseline`, and `lowerBaseline`, which decides final sigma from the 15.0 tables first);
- *  - `normalize()` outside the three reader files, whose every reader the later-engine property
+ *  - `normalize` outside the three reader files, whose every reader the later-engine property
  *    (tests/property/unicode-baseline.property.spec.ts) checks.
- * Two files outside the readers still validate policy and stored text with the engine's classes; they are listed
- * in PENDING until they move to `BASELINE_CLASS` (Decisions [SEC-1]); nothing may be added to that list.
+ * ESLint closes the rest: the core fences refuse `globalThis` and `.constructor`, and the type-aware unbound-method
+ * rule refuses any other read of a method's value (`const m = s.match`, `[s.normalize]`). No file is
+ * exempt: policy-schema.ts and schema-text.ts read `BASELINE_CLASS` (Decisions [SEC-1]), there is no pending list,
+ * and an exemption may not be added. unicode-fence-controls.spec.ts shows the scan finds what it looks for.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { BASELINE_FILE, type Finding, findings, TABLE_SOURCES } from './unicode-fence-scan';
+
 const CORE = path.resolve(import.meta.dirname, '../../../src/core');
-
-type Rule =
-  'property' | 'space-class' | 'unicode-ignore-case' | 'other-case' | 'trim' | 'normalize' | 'lowercase';
-
-const RULES: readonly (readonly [Rule, RegExp])[] = [
-  ['property', /\\{1,2}[pP]\{(?!ASCII\}|Cc\})[^}]*\}/g],
-  ['space-class', /\\{1,2}[sS](?![A-Za-z{])/g],
-  ['unicode-ignore-case', /\/[dgimsuyv]*(?:i[dgimsuyv]*[uv]|[uv][dgimsuyv]*i)[dgimsuyv]*(?![\w$])/g],
-  ['other-case', /\.(?:toUpperCase|toLocaleLowerCase|toLocaleUpperCase|localeCompare)\(|\bIntl\b/g],
-  ['trim', /\.trim(?:Start|End)?\(/g],
-  ['normalize', /\.normalize\(/g],
-  ['lowercase', /\.toLowerCase\(/g],
-];
 
 /** Files whose every reader the later-engine property runs: they may normalise text `asBaseline` prepared. */
 const READER_FILES: ReadonlySet<string> = new Set([
@@ -39,80 +41,32 @@ const READER_FILES: ReadonlySet<string> = new Set([
   'normalize-amount.ts',
   'normalize-relative.ts',
 ]);
-/** The baseline module: `trimBaseline` and `lowerBaseline` call the engine on text they made safe for it. */
-const BASELINE_FILE = 'unicode-baseline.ts';
 /** `trim()` or `toLowerCase()` on text an ASCII test (`^\p{ASCII}*$`) has just passed: no Unicode in it. */
 const ASCII_LINES: ReadonlySet<string> = new Set([
   "return raw.toLowerCase().replace(ASCII_WHITESPACE_RUN, ' ').trim();",
   '? raw.toLowerCase().split(ASCII_NON_TOKEN)',
 ]);
-/** Still on the engine's classes; may only shrink (Decisions [SEC-1]). */
-const PENDING: Readonly<Record<string, readonly Rule[]>> = {};
 
-interface Finding {
-  readonly file: string;
-  readonly line: number;
-  readonly rule: Rule;
-  readonly text: string;
-}
-
-/** `source` with comments blanked (line numbers kept). */
-function code(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:\\'"`])\/\/.*$/gm, '$1');
-}
-
-function findings(file: string, source: string): Finding[] {
-  return code(source)
-    .split('\n')
-    .flatMap((text, i) =>
-      RULES.flatMap(([rule, pattern]) =>
-        [...text.matchAll(pattern)].map(() => ({ file, line: i + 1, rule, text: text.trim() })),
-      ),
-    );
-}
-
+/** A normalisation in a reader file, or `trim` / `toLowerCase` on ASCII text or in the baseline module. */
 function allowed({ file, rule, text }: Finding): boolean {
   if (rule === 'normalize' && READER_FILES.has(file)) return true;
-  if ((rule === 'trim' || rule === 'lowercase') && (file === BASELINE_FILE || ASCII_LINES.has(text)))
-    return true;
-  return PENDING[file]?.includes(rule) ?? false;
+  return (rule === 'trim' || rule === 'lowercase') && (file === BASELINE_FILE || ASCII_LINES.has(text));
 }
 
 describe('src/core reads no character property from the engine', () => {
-  it('finds every construct it looks for, and none in comments (the scan is not vacuous)', () => {
-    const sample = [
-      'const A = /\\p{L}\\s/u; const B = new RegExp(`[\\\\p{Mn}\\\\S]`, "u");',
-      'const C = /x/iu; const D = /y/vi; const E = "a".toUpperCase() + "b".localeCompare("c");',
-      'const F = s.trim() + s.trimEnd() + s.normalize("NFKC") + s.toLowerCase(); Intl.Collator;',
-      '/* \\p{L} \\s s.trim() */ // s.normalize() /\\p{N}/u',
-      'const OK = /\\P{ASCII}|[\\p{Cc}]/u; const G = /xn--/i;',
-    ].join('\n');
-    const rules = findings('sample.ts', sample).map(({ line, rule }) => `${line}:${rule}`);
-    expect(rules).toEqual([
-      '1:property',
-      '1:property',
-      '1:space-class',
-      '1:space-class',
-      '2:unicode-ignore-case',
-      '2:unicode-ignore-case',
-      '2:other-case',
-      '2:other-case',
-      '3:other-case',
-      '3:trim',
-      '3:trim',
-      '3:normalize',
-      '3:lowercase',
-    ]);
-  });
-
-  it('every use in src/core is in a reader file, on ASCII text, in the baseline module, or pending', () => {
-    const sources = readdirSync(CORE).filter(
-      (file) => file.endsWith('.ts') && !file.startsWith('unicode-table-'),
-    );
+  it('every use in src/core is a reader normalisation, on ASCII text, or in the baseline module', () => {
+    const sources = readdirSync(CORE).filter((file) => file.endsWith('.ts') && !TABLE_SOURCES.has(file));
     expect(sources.length).toBeGreaterThan(50);
     const found = sources.flatMap((file) => findings(file, readFileSync(path.join(CORE, file), 'utf8')));
     expect(found.filter((finding) => !allowed(finding))).toEqual([]);
+    // Each allowance is in use (the scan reads the files it allows), and no other file needs one.
+    const allowedFiles = new Set(found.filter(allowed).map(({ file }) => file));
+    expect([...allowedFiles].sort()).toEqual([...READER_FILES, BASELINE_FILE].sort());
+  });
+
+  it('skips only the tables scripts/gen-unicode-baseline.ts generates (unicode-tables.spec.ts checks them)', () => {
+    const tables = readdirSync(CORE).filter((file) => file.startsWith('unicode-table-'));
+    expect(tables.sort()).toEqual([...TABLE_SOURCES].sort());
+    expect(TABLE_SOURCES.size).toBe(3);
   });
 });

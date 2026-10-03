@@ -8,18 +8,23 @@
  * override or ignores entry that names a core file, a rule scoped away) cannot let a clock, randomness, the network
  * or an impure import into src/core unnoticed by `pnpm test`.
  *
- * Each file is reduced to its code with the TypeScript scanner: comments, string literals, template text and
- * regular-expression literals become spaces, so prose such as "never calls Date.now()" is not a hit and a call
- * hidden after a string is still found. Banned patterns are matched on what remains. Imports are read with
- * ts.preProcessFile (static, type-only, re-exports, dynamic import(), require) and checked against the allowlist:
- * a sibling module that exists in src/core, `zod`, and policy/default.json. Negative controls prove every pattern
- * and the allowlist catch what they claim, and that comments and strings are not hits.
+ * The scanner (./core-scan.ts) reduces each file to its code with the TypeScript scanner, so comments and strings
+ * are not hits; it reads a member with a written key (`Date['now']`) as `Date.now`, and matches over the whole file,
+ * so a call split across lines is still found (PI-6). It needs no lint and no types: computed keys, `globalThis` and
+ * `Reflect` reads, a spread or multi-field `new Date`, ambient declarations, `.constructor` and
+ * `Symbol.toPrimitive` are all its own patterns (PI-1 to PI-4, PI-6). Imports are read with ts.preProcessFile
+ * (static, type-only, re-exports, dynamic import(), require) and checked against the allowlist: a sibling module
+ * that exists in src/core, `zod`, and policy/default.json. Negative controls prove every pattern and the allowlist
+ * catch what they claim, and that comments and strings are not hits. tests/unit/core/core-poison.spec.ts is the
+ * third check: it runs the core with every impure global poisoned, whatever the syntax that reaches it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+
+import { bannedUses, codeOnly } from './core-scan';
 
 const EXTENSION_ROOT = path.resolve(import.meta.dirname, '../../..');
 const CORE_DIR = path.join(EXTENSION_ROOT, 'src', 'core');
@@ -33,115 +38,6 @@ const MIN_CORE_FILES = 67;
 
 /** What may sit in src/core besides .ts sources (a .js or .mts file would otherwise escape this scan). */
 const NON_SOURCE_FILES: ReadonlySet<string> = new Set(['tsconfig.json']);
-
-/** Clock, randomness, timers, network, host and garbage-collector APIs, matched on code only. */
-const BANNED: readonly (readonly [string, RegExp])[] = [
-  ['Date.now', /\bDate\s*\.\s*now\b/],
-  ['new Date() with no argument', /\bnew\s+Date\s*\(\s*\)/],
-  ['new Date without parentheses', /\bnew\s+Date\b(?!\s*\()/],
-  ['Date() called as a function', /(?<![\w$.]|\bnew\s+)\bDate\s*\(/],
-  ['Math.random', /\bMath\s*\.\s*random\b/],
-  ['getRandomValues', /\bgetRandomValues\b/],
-  ['randomUUID', /\brandomUUID\b/],
-  ['fetch', /\bfetch\b/],
-  ['XMLHttpRequest', /\bXMLHttpRequest\b/],
-  ['WebSocket', /\bWebSocket\b/],
-  ['performance', /\bperformance\b/],
-  ['setTimeout / setInterval / setImmediate', /\bset(?:Timeout|Interval|Immediate)\b/],
-  ['process.', /(?<![\w$.])process\s*\./],
-  ['Intl', /\bIntl\b/],
-  ['WeakRef', /\bWeakRef\b/],
-  ['FinalizationRegistry', /\bFinalizationRegistry\b/],
-  ['crypto', /(?<![\w$.])crypto\s*\./],
-  ['chrome', /(?<![\w$.])chrome\s*\./],
-];
-
-const K = ts.SyntaxKind;
-
-/** Tokens that become spaces: they hold text, not code. */
-const TEXT_TOKENS: ReadonlySet<ts.SyntaxKind> = new Set([
-  K.SingleLineCommentTrivia,
-  K.MultiLineCommentTrivia,
-  K.ShebangTrivia,
-  K.StringLiteral,
-  K.NoSubstitutionTemplateLiteral,
-  K.TemplateHead,
-  K.TemplateMiddle,
-  K.TemplateTail,
-  K.RegularExpressionLiteral,
-]);
-
-const TRIVIA: ReadonlySet<ts.SyntaxKind> = new Set([
-  K.WhitespaceTrivia,
-  K.NewLineTrivia,
-  K.SingleLineCommentTrivia,
-  K.MultiLineCommentTrivia,
-  K.ShebangTrivia,
-  K.ConflictMarkerTrivia,
-]);
-
-/** After these a `/` divides; after anything else it starts a regular expression literal. */
-const ENDS_OPERAND: ReadonlySet<ts.SyntaxKind> = new Set([
-  K.Identifier,
-  K.PrivateIdentifier,
-  K.NumericLiteral,
-  K.BigIntLiteral,
-  K.StringLiteral,
-  K.NoSubstitutionTemplateLiteral,
-  K.TemplateTail,
-  K.RegularExpressionLiteral,
-  K.CloseParenToken,
-  K.CloseBracketToken,
-  K.CloseBraceToken,
-  K.PlusPlusToken,
-  K.MinusMinusToken,
-  K.ThisKeyword,
-  K.SuperKeyword,
-  K.TrueKeyword,
-  K.FalseKeyword,
-  K.NullKeyword,
-]);
-
-/** The next token, re-scanned where the scanner alone cannot tell (template continuations, regex literals). */
-function nextToken(scanner: ts.Scanner, braces: string[], previous: ts.SyntaxKind): ts.SyntaxKind {
-  let kind = scanner.scan();
-  if (kind === K.CloseBraceToken && braces.at(-1) === '${') {
-    braces.pop();
-    kind = scanner.reScanTemplateToken(false);
-    if (kind === K.TemplateMiddle) braces.push('${');
-  } else if (kind === K.OpenBraceToken) braces.push('{');
-  else if (kind === K.CloseBraceToken) braces.pop();
-  else if (kind === K.TemplateHead) braces.push('${');
-  else if ((kind === K.SlashToken || kind === K.SlashEqualsToken) && !ENDS_OPERAND.has(previous)) {
-    kind = scanner.reScanSlashToken();
-  }
-  return kind;
-}
-
-/** `source` with every comment, string, template text and regex literal replaced by spaces (lines kept). */
-function codeOnly(source: string): string {
-  const out = source.split('');
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, source);
-  const braces: string[] = [];
-  let previous: ts.SyntaxKind = K.Unknown;
-  for (let kind = nextToken(scanner, braces, previous); kind !== K.EndOfFileToken;) {
-    if (TEXT_TOKENS.has(kind)) {
-      for (let i = scanner.getTokenStart(); i < scanner.getTokenEnd(); i += 1)
-        if (out[i] !== '\n' && out[i] !== '\r') out[i] = ' ';
-    }
-    if (!TRIVIA.has(kind)) previous = kind;
-    kind = nextToken(scanner, braces, previous);
-  }
-  return out.join('');
-}
-
-/** Each banned pattern found in `source`'s code, as `line N: name`. */
-function bannedUses(source: string): string[] {
-  const lines = codeOnly(source).split('\n');
-  return lines.flatMap((line, index) =>
-    BANNED.filter(([, pattern]) => pattern.test(line)).map(([name]) => `line ${String(index + 1)}: ${name}`),
-  );
-}
 
 /** Whether a module specifier in a src/core file is on the allowlist. */
 function importAllowed(fileDir: string, specifier: string): boolean {
@@ -247,6 +143,73 @@ describe('core purity scan: negative controls (each pattern is caught)', GATE, (
       expect(bannedUses(code), code).toEqual(['line 1: Date.now']);
     }
     expect(bannedUses('export const t = `${String(Date.now())}`;')).toEqual(['line 1: Date.now']);
+  });
+});
+
+/**
+ * The bypasses found after the Sprint 1 close, each with every name the scan must report for it: written keys,
+ * `globalThis`/`self`/`Reflect`, calls split across lines (PI-6), a spread, multi-field or text `new Date` (PI-1),
+ * ambient declarations and Temporal (PI-2), `.constructor` in every spelling (PI-3) and `Symbol.toPrimitive` (PI-4).
+ */
+const BYPASSES: readonly (readonly [string, readonly string[]])[] = [
+  ["export const t = Date['now']();", ['Date.now']],
+  ['export const t = Date[`now`]();', ['Date.now']],
+  ["export const t = Date?.['now']();", ['Date.now']],
+  ["const k = 'random' as const; export const r = Math[k]();", ['computed member of Date, Math or crypto']],
+  ["export const p = globalThis['fetch']('https://x.example');", ['fetch', 'globalThis / self']],
+  ["export const p = Reflect.get(globalThis, 'performance');", ['globalThis / self', 'Reflect on a global']],
+  ["export const n = (Reflect.get(Date, 'now') as () => number)();", ['Reflect on a global']],
+  ['export const t = self.performance.now();', ['performance', 'globalThis / self']],
+  ['const g = globalThis;\nexport const i = g.Intl;', ['globalThis / self', 'Intl']],
+  ['export const t = Date\n  .now();', ['Date.now']],
+  ['export const r = Math\n  .random();', ['Math.random']],
+  ['export const t = new\n  Date();', ['new Date() with no argument']],
+  ['const none: [] = [];\nexport const t = new Date(...none);', ['new Date with a spread argument']],
+  ['export const t = (y: number, m: number) => new Date(y, m, 1);', ['new Date with fields']],
+  ['export const t = (y: number) => new Date(\n  y,\n  0,\n);', ['new Date with fields']],
+  ["export const t = new Date('2026-01-01T00:00:00');", ['new Date from written text']],
+  ['export const t = new Date(`2026-01-01`);', ['new Date from written text']],
+  ['declare const Date: DateConstructor;', ['ambient declaration']],
+  ['declare let Math: { random(): number };', ['ambient declaration']],
+  ['declare function now(): number;', ['ambient declaration']],
+  ['declare class Clock {}', ['ambient declaration']],
+  ['declare global {\n  const T: number;\n}', ['ambient declaration']],
+  ['declare namespace N {}', ['ambient declaration']],
+  ["declare module 'x' {}", ['ambient declaration']],
+  ['export const t = Temporal.Now.instant();', ['Temporal']],
+  ['export const t = (new Date(0).constructor as DateConstructor).now();', ['.constructor']],
+  ["export const t = Reflect.get(new Date(0), 'constructor');", ["'constructor' as a string"]],
+  ["export const t = (d: Date) => d['constructor'];", ['.constructor', "'constructor' as a string"]],
+  ["const KEY = 'constructor';", ["'constructor' as a string"]],
+  ["export const s = (d: Date) => d[Symbol.toPrimitive]('string');", ['Symbol.toPrimitive']],
+];
+
+describe('core purity scan: the bypasses lint alone used to stop (PI-1 to PI-4, PI-6)', GATE, () => {
+  it.each(BYPASSES)('%s', (code, names) => {
+    const found = bannedUses(code).map((hit) => hit.replace(/^line \d+: /, ''));
+    for (const name of names) expect(found, code).toContain(name);
+  });
+
+  it('a call split across lines is named by the line it starts on', () => {
+    expect(bannedUses('const a = 1;\nexport const t = Date\n  .now();\n')).toEqual(['line 2: Date.now']);
+    expect(
+      bannedUses("const a = 1;\n\nexport const p = Reflect.get(\n  globalThis,\n  'fetch',\n);"),
+    ).toEqual(['line 3: Reflect on a global', 'line 4: globalThis / self']);
+  });
+
+  it('control: one value in new Date, a class constructor, Date.UTC fields and look-alike names pass', () => {
+    const code = [
+      'export const a = (ms: number) => new Date(ms);',
+      'export const b = (f: (x: number, y: number) => number) => new Date(f(1, 2));',
+      'export const c = (ms: number) => new Date(\n  ms,\n);',
+      'export class E extends Error {\n  constructor(readonly code: string) {\n    super(code);\n  }\n}',
+      'export const d = Date.UTC(2026, 0, 1);',
+      'export const e = (x: { itself: number; selfTest: number }) => x.itself + x.selfTest;',
+      'export const f = (declare: number, global: number) => declare + global;',
+      'export const g = (dates: readonly Date[]) => dates.length;',
+      'export const h = Math.max(1, 2) + Reflect.ownKeys({}).length;',
+    ].join('\n');
+    expect(bannedUses(code)).toEqual([]);
   });
 });
 

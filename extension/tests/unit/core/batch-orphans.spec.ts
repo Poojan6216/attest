@@ -1,6 +1,7 @@
 /**
  * gradeBatch (docs/grading.md §3, §4.1, §4.3, §7): which observations a batch reads. An orphan is an observation
- * its own source's observer saw, in a pass synced by evaluatedAt, first seen by evaluatedAt, once per contentHash;
+ * from a source the policy lists for its type that its own source's observer saw, in a pass synced by evaluatedAt,
+ * first seen by evaluatedAt, once per contentHash;
  * the claims' candidates obey the same visibility rule, so an observation from after evaluatedAt can never take
  * a claim's place in assignment. Inputs are built with the golden loader.
  */
@@ -111,16 +112,17 @@ describe('gradeBatch: an orphan lies in a window its own source was seen in (§3
     expect(summary(loaded, await run(loaded))).toEqual({ o1: ['UNASKED', 'unasked', ['o1']] });
   });
 
-  it("reads its own source's window even when that source is not one of its type's sources (§3)", async () => {
-    // o2 is an email.sent row from the calendar observer. email.sent's relevant source is gmail.sent, but §3 asks
-    // only for "a coverage interval of their own source": gcal.event saw 12:00–15:00, so o2 is an orphan.
+  it('never makes an orphan of a row from a source its type does not list, even inside its own window (§3)', async () => {
+    // o2 is an email.sent row from the calendar observer. email.sent's relevant source is gmail.sent, so o2 can
+    // neither verify a claim (§4.1) nor accuse an agent, although gcal.event saw 12:00–15:00 and muse's signals
+    // score it 7/10 (Sprint 1 close).
     const calendar = { ...GMAIL, source: 'gcal.event', allCalendars: true };
     const loaded = load({
       observations: [{ ...ORPHAN, ref: 'o2', source: 'gcal.event' }],
-      coverage: [calendar],
+      coverage: [calendar, GMAIL],
       activity: MUSE_ACTIVE,
     });
-    expect(summary(loaded, await run(loaded))).toEqual({ o2: ['UNASKED', 'unasked', ['o2']] });
+    expect(await run(loaded)).toEqual([]);
     // With a policy giving email.sent both sources, each row needs its own source's window: o1 (gmail.sent) has
     // none, o2 (gcal.event) has one.
     const both = load(

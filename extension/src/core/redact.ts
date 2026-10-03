@@ -21,7 +21,11 @@
  * So the same row seen twice is one observation (observedAt is not hashed), a created and a deleted event
  * differ (type is hashed), and two identical sends with different row ids stay two (rowKeyHash is hashed).
  *
- * Only own data properties of `raw` are read: inherited properties and getters never become content.
+ * Only own data properties of `raw` are read. An allowlisted field held anywhere else (a getter, or a property
+ * inherited from a prototype) is never invoked and never read, and it is never silently left out either: the
+ * row is refused with `invalid_field` (OBS-3), because a row stored without a fact its source carried could fall
+ * to NOT_FOUND with no DEGRADED in sight (Hard Rules 5, 6). Fields the allowlist does not name are never looked
+ * at, however they are held.
  * `subjectHint` is cut to SCHEMA_LIMITS.SUBJECT_HINT code points (a surrogate pair is one code point and is
  * never split, matching how the schema counts); every other string must already fit its cap or the row is
  * refused, because a cut address or merchant would name someone else.
@@ -53,7 +57,8 @@ export type RedactErrorCode = 'invalid_argument' | 'invalid_field' | 'missing_oc
 
 /**
  * `invalid_argument`: bad source or context. `invalid_field`: an allowlisted content field other than
- * `occurredAt` holds a value the Observation schema refuses. `missing_occurred_at`: absent, invalid or not
+ * `occurredAt` holds a value the Observation schema refuses, or any allowlisted field (`occurredAt` included) is
+ * held by a getter or inherited rather than an own data property. `missing_occurred_at`: absent, invalid or not
  * allowlisted.
  */
 export class RedactError extends Error {
@@ -128,11 +133,19 @@ export function clampSubjectHint(text: string): string {
   return kept;
 }
 
-/** An own data property of `raw`, or undefined: never an inherited property, never a getter's result. */
+/**
+ * The own data property `key` of `raw`, or undefined when `raw` has no such property at all. A getter is never
+ * invoked and an inherited property never read: either refuses the row (`invalid_field`), so a fact held that
+ * way is never dropped in silence (OBS-3, Hard Rules 5, 6). Neither `in` nor a descriptor runs a getter.
+ */
 function ownValue(raw: unknown, key: string): unknown {
   if (typeof raw !== 'object' || raw === null) return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(raw, key);
-  if (descriptor === undefined || !('value' in descriptor)) return undefined;
+  if (descriptor === undefined) {
+    if (key in raw) throw new RedactError('invalid_field');
+    return undefined;
+  }
+  if (!('value' in descriptor)) throw new RedactError('invalid_field');
   const value: unknown = descriptor.value;
   return value;
 }
@@ -146,8 +159,9 @@ function keptValue(field: ContentField, value: unknown): unknown {
 
 /**
  * The allowlisted own content of `raw`. Only `undefined` means absent. Any other value that fails its field's
- * schema refuses the whole row (`invalid_field`): a row is never stored without a fact it carried (Hard Rule 5).
- * An invalid `occurredAt` is left out here and reported as `missing_occurred_at` by `project`.
+ * schema, and any allowlisted field held by a getter or inherited, refuses the whole row (`invalid_field`): a row
+ * is never stored without a fact it carried (Hard Rule 5). An invalid own `occurredAt` is left out here and
+ * reported as `missing_occurred_at` by `project`.
  */
 function allowlistedContent(
   raw: unknown,
@@ -207,7 +221,8 @@ function parseArguments(source: ObservationSource, ctx: ProjectContext): z.outpu
 /**
  * Projects one raw observer row onto an `Observation` holding only `policy.allowlistedFields[source]`
  * (Hard Rule 2). Throws `RedactError('invalid_field')` when an allowlisted own value other than `occurredAt`
- * fails its schema, `RedactError('missing_occurred_at')` when the row has no valid, allowlisted `occurredAt`,
+ * fails its schema or an allowlisted field is held by a getter or inherited (never invoked, never read),
+ * `RedactError('missing_occurred_at')` when the row has no valid, allowlisted `occurredAt`,
  * and `RedactError('invalid_argument')` for a bad source or context. The result always parses with the
  * Observation schema and has no `observationIntegrityProblems`.
  */

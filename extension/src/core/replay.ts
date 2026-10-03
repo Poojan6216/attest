@@ -7,14 +7,15 @@
  * Receipts are grouped by `computedAt` instant (one group per batch that last graded them) and the groups are
  * replayed oldest first. For each group, the batch is rebuilt as it was at that instant (replay-batch.ts): its
  * claims are the claims first seen by then whose stored receipt was graded at or after it, its observations those
- * first seen by then (`observedAt ≤ computedAt`), and FINAL and overridden assignments from earlier groups are
- * fixed (replay-timeline.ts). Coverage, grant and context cannot be rebuilt from current state, so they come from
+ * first seen by then (`observedAt ≤ computedAt`), and the pre-assignments of the stored FINAL and overridden
+ * receipts in force at that instant are fixed (batch-fixed.ts through replay-timeline.ts: the one rule `gradeBatch`
+ * applies to its own). Coverage, grant and context cannot be rebuilt from current state, so they come from
  * `receiptInputs` (keyed by the receipt's `inputsHash`), and the policy from `policies` (keyed by `policyHash`).
  * Then `grade` runs on the receipt's subject:
  *  - a claim receipt: its claim, with the candidates the batch left it (§4.3);
  *  - an UNASKED receipt: its orphan (`observationIds[0]`), which must still be an orphan in the rebuilt batch (§3:
- *    of a type with sources, in a window its own source's observer saw whatever sources the policy lists for its
- *    type, assigned to no claim, not taken);
+ *    from a source the policy lists for its type, in a window its own source's observer saw, assigned to no claim,
+ *    not taken);
  *  - a scope-diff receipt (`context.scope` set): no claim, no candidates;
  * every observation it grades with must hash to its own `contentHash` (§10; `inputsHash` names candidates by it),
  * and the result is compared with the stored receipt on `inputsHash`, `grade`, `ruleId` and `state` (an overridden
@@ -68,8 +69,8 @@ export interface LedgerSnapshot {
  *    its id, null when an UNASKED receipt names no observation; replayed: null);
  *  - `orphan`: the UNASKED receipt's observation was no orphan in the rebuilt batch (stored: the observation id;
  *    replayed: the claim the batch gave it to, `taken` when an override had taken it, or `uncovered` when it is no
- *    orphan candidate under the receipt's coverage: its type has no sources, or no window of its own source saw it,
- *    §3);
+ *    orphan candidate under the receipt's coverage: the policy does not list its source for its type, or no window
+ *    of its own source saw it, §3);
  *  - `contentHash`: an observation the receipt is graded with does not hash to its `contentHash`: its content was
  *    changed after it was projected (stored: its `contentHash`; replayed: the hash of its content); one per such
  *    observation, in candidate order;

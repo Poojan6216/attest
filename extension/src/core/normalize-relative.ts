@@ -131,9 +131,12 @@ const WEEKDAY_FIRST = /^(?<weekday>[a-z]+)\.?(?:,? +(?<rest>.+))?$/;
 const MONTH_FIRST = /^(?<month>[a-z]+)\.? +(?<day>\d{1,2})(?:,? +(?<year>\d{4}))?$/;
 const DAY_FIRST = /^(?<day>\d{1,2}) +(?<month>[a-z]+)\.?(?:,? +(?<year>\d{4}))?$/;
 
-/** Invisible marks removed, NFKC, lowercase, `a.m.` → `am`, whitespace collapsed and trimmed (Unicode 15.0). */
+/**
+ * Invisible marks removed, NFKC, lowercase, `a.m.` → `am`, whitespace collapsed and trimmed (Unicode 15.0). The
+ * text is put on the baseline first, so removing a mark never joins two lone surrogates into a digit.
+ */
 function cleanText(text: string): string {
-  const folded = lowerBaseline(stripInvisible(asBaseline(stripInvisible(text)).normalize('NFKC')));
+  const folded = lowerBaseline(stripInvisible(stripInvisible(asBaseline(text)).normalize('NFKC')));
   return trimBaseline(folded.replace(MERIDIEM_WITH_DOTS, '$1m').replace(WHITESPACE_RUN, ' '));
 }
 

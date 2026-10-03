@@ -64,4 +64,17 @@ describe('priorSpendCents under a spendCurrency (§6.3)', () => {
     expect(both(spend('9', '10:00'))).toEqual([3_000, 3_000]);
     expect(both(spend('9', '10:00', 'USD'))).toEqual([3_000, 3_000]);
   });
+
+  it('one spendIndex asked under two spendCurrency values answers each as priorSpendCents does', () => {
+    const history = [BARE, USD];
+    const claim = spend('9', '10:00', 'USD');
+    const index = spendIndex(history, DEFAULT_POLICY);
+    const asked = [index(claim, 'USD'), index(claim, undefined), index(claim, 'USD')];
+    expect(asked).toEqual([
+      priorSpendCents(claim, history, DEFAULT_POLICY, 'USD'),
+      priorSpendCents(claim, history, DEFAULT_POLICY),
+      priorSpendCents(claim, history, DEFAULT_POLICY, 'USD'),
+    ]);
+    expect(asked).toEqual([6_000, 3_000, 6_000]);
+  });
 });

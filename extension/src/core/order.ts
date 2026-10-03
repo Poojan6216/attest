@@ -10,12 +10,13 @@
  *  - `compareCandidates`: the candidate order (§4.1): `occurredAt` instant, then id, then `contentHash`. Unique per
  *    sighting after dedupe, so total even for two rows sharing an id with different content (a corrupt ledger).
  *  - `mergeIntervals`: closed intervals merged where they overlap or touch, ascending.
- *  - `hasFirstSeenRule`, `firstSeenFromMs`: whether a type has §4.1's first-seen rule (`calendar.created` only), and
- *    its bound for a claim (null for every other type).
+ *  - `hasFirstSeenRule`, `firstSeenFromMs`, `passesFirstSeen`: whether a type has §4.1's first-seen rule
+ *    (`calendar.created` only), its bound for a claim (null for every other type), and the one comparison of a first
+ *    sighting with that bound (candidates.ts, batch-retrieve.ts and grade-guard.ts all call it).
  *  - `fromRelevantSource`: whether the policy lists an observation's source for a type (§6.1 relevant sources). A
  *    claim's candidates come from its type's relevant sources only: evidence the claim's coverage never reads cannot
- *    verify it (grade-guard.ts refuses any other candidate). A row from another source can still be an orphan
- *    (§3, batch-orphans.ts `isOrphanCandidate`).
+ *    verify it (grade-guard.ts refuses any other candidate). Orphans obey the same rule (§3, batch-orphans.ts
+ *    `isOrphanCandidate`): a row from another source neither verifies a claim nor accuses an agent.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
@@ -107,4 +108,13 @@ export function hasFirstSeenRule(type: ActionType): boolean {
 export function firstSeenFromMs(claim: WindowClaim, policy: WindowPolicy): number | null {
   if (!hasFirstSeenRule(claim.type)) return null;
   return precisionStartMs(claim) - policy.windows.beforeClaimMin * MS_PER_MINUTE;
+}
+
+/**
+ * §4.1's first-seen rule: whether a candidate first seen at `firstSeenMs` (the earliest `observedAt` instant of its
+ * `contentHash`) passes the bound `firstSeenFromMs` gave: always when there is no bound, else when first seen at or
+ * after it.
+ */
+export function passesFirstSeen(firstSeenMs: number, bound: number | null): boolean {
+  return bound === null || firstSeenMs >= bound;
 }

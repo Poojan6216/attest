@@ -142,6 +142,13 @@ function deepFreeze<T>(value: T): T {
 const LOADED = new WeakSet<object>();
 
 /**
+ * The `rules` array of every policy `loadPolicy` returned (deep-frozen plain data the loader built, never the
+ * caller's array): conditions.ts `firstMatch` remembers its per-rule work only for these, so no other array, frozen
+ * or not, accessor-bearing or not, is ever read from a stale memo (Hard Rule 4).
+ */
+const LOADED_RULES = new WeakSet<object>();
+
+/**
  * Validates `raw` as a policy document and returns a deep-frozen `Policy` (the input is never frozen or
  * retained). Throws `PolicyError` listing every problem found, each naming its path.
  *
@@ -155,6 +162,7 @@ export function loadPolicy(raw: unknown): Policy {
   const policyHash = Sha256.parse(sha256Hex(canonicalJson(doc)));
   const policy = deepFreeze({ ...doc, bp: basisPointsOf(doc), policyHash });
   LOADED.add(policy);
+  LOADED_RULES.add(policy.rules);
   return policy;
 }
 
@@ -167,6 +175,11 @@ export function loadPolicy(raw: unknown): Policy {
  */
 export function assertLoadedPolicy(policy: object): void {
   if (!LOADED.has(policy)) throw new PolicyError([], 'policy_not_loaded');
+}
+
+/** Whether `rules` is the `rules` array of a policy `loadPolicy` returned (the only arrays a memo may key on). */
+export function isLoadedRules(rules: object): boolean {
+  return LOADED_RULES.has(rules);
 }
 
 /**

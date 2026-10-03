@@ -5,7 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { claimsByAgentAndDate, getClaim, upsertClaim } from '../../../src/ledger/repo';
-import { claimId, expectLedgerError, makeClaim, omit, sha, ulid, uniqueDbName } from './fixtures';
+import type { ClaimInput } from '../../../src/ledger/types';
+import {
+  captureLogs,
+  claimId,
+  expectLedgerError,
+  makeClaim,
+  omit,
+  sha,
+  ulid,
+  uniqueDbName,
+} from './fixtures';
 
 let db: LedgerDb;
 
@@ -57,6 +67,61 @@ describe('upsertClaim', () => {
       id: claimId(999),
       inserted: true,
     });
+  });
+});
+
+describe('upsertClaim: a rawHash read again keeps its earliest observedAt (§4.1, OBS-2)', () => {
+  it('a sighting that lands late, then an earlier one: the earlier observedAt is stored', async () => {
+    const late = makeClaim({ observedAt: '2026-10-01T11:00:00-04:00' });
+    const early = makeClaim({ observedAt: '2026-10-01T10:20:00-04:00' });
+    await upsertClaim(db, late);
+    expect(await upsertClaim(db, early)).toEqual({ id: late.id, inserted: false });
+    expect(await getClaim(db, late.id)).toEqual(early);
+    expect(await upsertClaim(db, late)).toEqual({ id: late.id, inserted: false });
+    expect(await getClaim(db, late.id)).toEqual(early);
+    expect(await claimsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([early]);
+  });
+});
+
+describe('upsertClaim: one rawHash, one claim (OBS-4)', () => {
+  const EDITS: readonly (readonly [string, Partial<ClaimInput>])[] = [
+    ['counterparty', { counterparty: 'mallory@evil.example' }],
+    ['type, amount and currency', { type: 'purchase.made', amountCents: 999_999, currency: 'USD' }],
+    ['extractor version', { extractor: { id: 'muse.activity', version: '2.0.0', confidence: 0.9 } }],
+    ['extractor confidence', { extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.5 } }],
+    ['requestId', { requestId: ulid(202) }],
+    ['subjectHint (dropped)', { subjectHint: undefined }],
+    ['claimedAt', { claimedAt: '2026-10-01T10:15:00-04:00' }],
+  ];
+
+  it.each(EDITS)(
+    'a claim with a different %s under a stored rawHash throws id_conflict',
+    async (_label, edit) => {
+      const first = makeClaim();
+      await upsertClaim(db, first);
+      const logs = captureLogs();
+      try {
+        const error = await expectLedgerError(upsertClaim(db, makeClaim(edit)), 'id_conflict');
+        expect(error.context).toEqual({ table: 'claims', id: first.id });
+        expect(`${error.message} ${JSON.stringify(error)}`).not.toContain('mallory');
+      } finally {
+        logs.restore();
+      }
+      expect(JSON.stringify(logs.records)).not.toContain('mallory');
+      expect(await getClaim(db, first.id)).toEqual(first);
+      expect(await db.claims.count()).toBe(1);
+    },
+  );
+
+  it('a different claim that claims an earlier sighting changes nothing, its observedAt included', async () => {
+    const first = makeClaim();
+    await upsertClaim(db, first);
+    const edited = makeClaim({
+      counterparty: 'mallory@evil.example',
+      observedAt: '2026-10-01T10:00:00-04:00',
+    });
+    await expectLedgerError(upsertClaim(db, edited), 'id_conflict');
+    expect(await getClaim(db, first.id)).toEqual(first);
   });
 });
 

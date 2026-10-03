@@ -2,9 +2,11 @@
  * CHANGELOG.md (QA-R13, QA-G14, TECH-C12, TECH-R9; tech_reviewer "CHANGELOG updated under Unreleased"; build_spec
  * "CHANGELOG kept by hand"): Keep a Changelog form, an [Unreleased] section first, and every command a person runs
  * from the repository root named there. A root script added without a changelog line fails here, which is how
- * Sprint 1's `pnpm attest`, `pnpm check-docs` and `pnpm test:coverage` went unrecorded.
+ * Sprint 1's `pnpm attest`, `pnpm check-docs` and `pnpm test:coverage` went unrecorded. A golden scenario count it
+ * states is the number of files in extension/tests/golden (docs_writer rule 1: no number without a source; the close
+ * once left it one behind).
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -47,5 +49,17 @@ describe('CHANGELOG.md', () => {
     expect(runnable).toEqual(expect.arrayContaining(['attest', 'check-docs', 'test:coverage']));
     const missing = runnable.filter((script) => !new RegExp(`\`pnpm ${script}[\` ]`).test(section));
     expect(missing).toEqual([]);
+  });
+
+  it('states the number of golden scenarios extension/tests/golden holds (docs_writer rule 1)', () => {
+    const files = readdirSync(path.join(REPO_ROOT, 'extension', 'tests', 'golden')).filter((name) =>
+      /^\d{2,}-[a-z0-9-]+\.json$/.test(name),
+    );
+    const stated = [...CHANGELOG.matchAll(/\b(\d[\d,]*) golden scenarios\b/g)].map((match) =>
+      Number((match[1] ?? '').replaceAll(',', '')),
+    );
+    expect(files.length).toBeGreaterThan(0);
+    expect(stated.length).toBeGreaterThan(0);
+    for (const count of stated) expect(count).toBe(files.length);
   });
 });

@@ -273,11 +273,16 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
   });
 });
 
-/** Any text, and `mark` inserted into `raw` at a position chosen by `at` (v1.2 \u00A711 properties below). */
+/**
+ * Any text, and `mark` inserted into `raw` between two code points chosen by `at` (v1.2 \u00A711 properties
+ * below). A mark inside a surrogate pair would split it into two lone halves, which read as U+FFFD (Decisions
+ * [SEC-1]).
+ */
 const anyText = fc.string({ unit: 'grapheme', maxLength: 40 });
 const insert = (raw: string, mark: string, at: number): string => {
-  const position = at % (raw.length + 1);
-  return `${raw.slice(0, position)}${mark}${raw.slice(position)}`;
+  const points = Array.from(raw);
+  const position = at % (points.length + 1);
+  return [...points.slice(0, position), mark, ...points.slice(position)].join('');
 };
 
 describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks (property)', () => {

@@ -71,7 +71,11 @@ export function asciiLower(text: string): string {
   return text.replace(ASCII_UPPER_LETTER, (upper) => ASCII_LOWER.charAt(ASCII_UPPER.indexOf(upper)));
 }
 
-/** Removes zero-width, bidi-control and other invisible code points. Never applied to addresses. */
+/**
+ * Removes zero-width, bidi-control and other invisible code points. Never applied to addresses. The readers apply it
+ * only to text `asBaseline` prepared: removing a mark between two lone surrogate halves would otherwise pair them
+ * into a character the text did not hold.
+ */
 export function stripInvisible(text: string): string {
   return text.replace(INVISIBLE, '');
 }
@@ -181,7 +185,8 @@ export function sameAddress(a: EmailAddress, b: EmailAddress): AddressComparison
 /**
  * A display name folded for matching: invisible marks removed, NFKC, lowercased, diacritics folded (NFD, then
  * nonspacing marks removed, then NFC), Unicode whitespace collapsed. Idempotent. Text that reads differently
- * from how it displays (`readsDifferently`) folds to '' and so has no tokens: "\u202Eayirp" shows "priya".
+ * from how it displays (`readsDifferently`) folds to '' and so has no tokens: "\u202Eayirp" shows "priya". A lone
+ * surrogate (half of a UTF-16 pair with no partner) reads as the U+FFFD it displays as (`asBaseline`).
  */
 export function name(raw: string): string {
   return ASCII_ONLY.test(raw) ? asciiName(raw) : onBaseline(raw, foldName);
@@ -191,7 +196,10 @@ function asciiName(raw: string): string {
   return raw.toLowerCase().replace(ASCII_WHITESPACE_RUN, ' ').trim();
 }
 
-/** `name()` of non-ASCII text that holds no code point outside Unicode 15.0 (`asBaseline`). */
+/**
+ * `name()` of non-ASCII text `asBaseline` prepared: no code point outside Unicode 15.0 and no lone surrogate, so
+ * the removals below can never join two surrogate halves into a character the text did not hold.
+ */
 function foldName(text: string): string {
   if (readsDifferently(text)) return '';
   const compatible = stripInvisible(stripInvisible(text).normalize('NFKC'));
@@ -235,14 +243,15 @@ export function counterparty(raw: string | undefined): Counterparty | null {
  * words → a set, returned sorted by code unit (deterministic). "Inv\u200Boice" is one token, "İstanbul" is
  * one token, and a subject holding a bidi embedding or override has none (its displayed words are not its
  * stored ones). All of it as Unicode 15.0 defines it: a newer character (an outlined digit, U+1CCF0–U+1CCF9)
- * is not a letter, digit or mark, so it separates tokens and is in none.
+ * is not a letter, digit or mark, so it separates tokens and is in none. The text is put on the baseline before
+ * any mark is removed, so a lone surrogate reads as the U+FFFD it displays as and never pairs with another.
  */
 export function subjectTokens(raw: string, stopWords: readonly string[]): string[] {
   const ascii = ASCII_ONLY.test(raw);
   if (!ascii && BIDI_REORDER.test(raw)) return [];
   const words = ascii
     ? raw.toLowerCase().split(ASCII_NON_TOKEN)
-    : lowerBaseline(asBaseline(stripInvisible(raw)).normalize('NFKC')).split(SUBJECT_TOKEN_SEPARATOR);
+    : lowerBaseline(stripInvisible(asBaseline(raw)).normalize('NFKC')).split(SUBJECT_TOKEN_SEPARATOR);
   const tokens = words.filter((token) => token !== '');
   const first = tokens.findIndex((token) => !REPLY_PREFIXES.has(token));
   const body = first < 0 ? [] : tokens.slice(first);

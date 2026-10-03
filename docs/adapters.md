@@ -128,7 +128,7 @@ Content scripts never touch the ledger. They post derived facts to the service w
 
 | Type | Sender | Receiver | Payload | Response |
 |---|---|---|---|---|
-| `adapter.health` | content script (adapter or observer) | service worker | `health`: `AdapterHealth` (id, version, OK or DEGRADED, reasons, checkedAt) | acknowledgement (`undefined`) |
+| `adapter.health` | content script (adapter or observer) | service worker | `health`: `AdapterHealth` (id and version as `ComponentId` tokens, OK or DEGRADED, reason codes such as `selector.missing` (never page text), checkedAt) | acknowledgement (`undefined`) |
 | `adapter.claims` | content script (agent adapter) | service worker | `adapterId`, `version`, `requests`: `Request[]`, `claims`: `Claim[]` (at most 500 each) | acknowledgement |
 | `observer.observations` | content script (Gmail or Calendar observer) | service worker | `observerId`, `version`, `observations`: `Observation[]` (at most 500) | acknowledgement |
 | `coverage.ping` | content script (observer) | service worker | `ping`: `CoveragePing` (observer id, account hash, sync time, window, user active) | acknowledgement |

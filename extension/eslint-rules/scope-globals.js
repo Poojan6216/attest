@@ -41,11 +41,30 @@ export function isDynamicMember(node) {
   return node.type === 'MemberExpression' && node.computed && propertyName(node) === null;
 }
 
+/** @typedef {{ type: string, declare?: boolean, kind?: string, global?: boolean, parent?: AmbientNode | null }} AmbientNode */
+
+/**
+ * Whether a definition is ambient (`declare const fetch: …`, `declare function f(): void`, anything inside
+ * `declare global { … }` or `declare module 'x' { … }`): it emits no code, so the name still reads the real global
+ * at run time.
+ * @param {import('eslint').Scope.Definition} definition
+ */
+function isAmbient(definition) {
+  /** @type {AmbientNode | null | undefined} */
+  let node = /** @type {AmbientNode} */ (definition.parent ?? definition.node);
+  for (; node !== null && node !== undefined; node = node.parent) {
+    if (node.declare === true) return true;
+    if (node.type === 'TSModuleDeclaration' && (node.kind === 'global' || node.global === true)) return true;
+  }
+  return false;
+}
+
 /**
  * Calls `report(identifier, name)` once for every value reference to a global named in `names`: undeclared
  * globals appear in the global scope's `through`; typescript-eslint also declares DOM lib globals (fetch,
- * WebSocket, …) as global-scope variables without definitions, so their references count too. Type-only
- * references (`let d: Date`) are skipped.
+ * WebSocket, …) as global-scope variables without definitions, so their references count too. A variable whose
+ * every definition is ambient (`declare const Date: DateConstructor`, in any scope) is the real global at run
+ * time, so its references count as well (PI-2). Type-only references (`let d: Date`) are skipped.
  * @param {import('eslint').Rule.RuleContext} context
  * @param {import('estree').Node} program
  * @param {ReadonlySet<string>} names
@@ -63,9 +82,14 @@ export function forEachGlobalReference(context, program, names, report) {
     report(/** @type {import('estree').Identifier} */ (identifier), identifier.name);
   };
   for (const reference of globalScope.through) visit(reference);
-  for (const variable of globalScope.variables) {
-    if (!names.has(variable.name) || variable.defs.length > 0) continue;
-    for (const reference of variable.references) visit(reference);
+  for (const scope of context.sourceCode.scopeManager?.scopes ?? [globalScope]) {
+    for (const variable of scope.variables) {
+      if (!names.has(variable.name)) continue;
+      const lib = scope === globalScope && variable.defs.length === 0;
+      if (lib || (variable.defs.length > 0 && variable.defs.every(isAmbient))) {
+        for (const reference of variable.references) visit(reference);
+      }
+    }
   }
 }
 

@@ -14,7 +14,8 @@
  * text: a total order) and the same first sighting. If the rows of a type ever break that (one content hash at
  * two instants, which only a corrupt ledger can hold), that type's claims are read claim by claim with
  * `candidates()` itself. A property test pins the two together. The representative, the candidate order, the
- * interval merge and the first-seen bound are order.ts's: the very functions `candidates()` uses.
+ * interval merge, the first-seen bound and its comparison (`passesFirstSeen`) are order.ts's: the very functions
+ * `candidates()` uses.
  *
  * Each type's rows become one `CandidateTable` (batch-table.ts) and each claim's candidates a list of row indexes
  * into it, so what grading reads of a row is read once per batch, not once per claim that sees it.
@@ -32,6 +33,7 @@ import {
   fromRelevantSource,
   hasFirstSeenRule,
   mergeIntervals,
+  passesFirstSeen,
   representative,
 } from './order';
 import type { ActionType, Claim, Observation } from './schema';
@@ -45,6 +47,7 @@ const instantMsLocal = instantMs;
 const representativeLocal = representative;
 const fromRelevantSourceLocal = fromRelevantSource;
 const hasFirstSeenRuleLocal = hasFirstSeenRule;
+const passesFirstSeenLocal = passesFirstSeen;
 
 /** One claim's window and, for `calendar.created`, its first-seen bound (order.ts `firstSeenFromMs`). */
 interface Wanted {
@@ -143,7 +146,7 @@ function slice(groups: readonly Group[], wanted: Wanted): number[] {
   for (let i = firstAtOrAfter(groups, wanted.fromMs); i < groups.length; i += 1) {
     const group = groups[i];
     if (group === undefined || group.atMs > wanted.toMs) break;
-    if (wanted.firstSeenFrom === null || group.firstSeenMs >= wanted.firstSeenFrom) rows.push(i);
+    if (passesFirstSeenLocal(group.firstSeenMs, wanted.firstSeenFrom)) rows.push(i);
   }
   return rows;
 }

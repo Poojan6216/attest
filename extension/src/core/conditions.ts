@@ -33,8 +33,8 @@ import {
   typeNotInGrant,
   unaskedLikely,
 } from './conditions-scope';
-import { isUnderspecified } from './features';
-import type { Policy, PolicyRule, ThresholdName } from './policy';
+import { isAssignable, isUnderspecified } from './features';
+import { isLoadedRules, type Policy, type PolicyRule, type ThresholdName } from './policy';
 import { type Ratio, ratioGteBasisPoints } from './ratio';
 import type { Claim, Coverage, GradeContext, Grant, Observation } from './schema';
 import { claimWindow } from './window';
@@ -178,6 +178,7 @@ class ClaimConditions implements Conditions {
   #underspecified: Lazy<boolean> = NOT_YET;
   #coverage: Lazy<CoverageResult> = NOT_YET;
   #grace: Lazy<readonly SourceGrace[]> = NOT_YET;
+  #scored: Lazy<boolean> = NOT_YET;
 
   constructor(
     readonly claim: Claim,
@@ -243,13 +244,26 @@ class ClaimConditions implements Conditions {
     return this.#grace;
   }
 
-  bestScoreGte(threshold: ThresholdName): boolean {
+  /**
+   * §4.3: whether the claim is scored against observations at all (features.ts `isAssignable`). An underspecified
+   * claim, a calendar claim without `targetAt` and a type with no sources never are, so no score condition applies
+   * to them: "nothing matched at the threshold" would be asserted of a claim nothing was matched against, and a
+   * rule order that tests `bestScoreLt` before `underspecified` could reach NOT_FOUND (Hard Rule 5).
+   */
+  #isScored(): boolean {
+    if (this.#scored === NOT_YET) this.#scored = isAssignable(this.claim, this.facts.policy);
+    return this.#scored;
+  }
+
+  bestScoreGte(threshold: ThresholdName): boolean | null {
     const { bestScore, policy } = this.facts;
+    if (!this.#isScored()) return null;
     return bestScore !== null && ratioGteBasisPoints(bestScore, policy.bp.thresholds[threshold]);
   }
 
-  bestScoreLt(threshold: ThresholdName): boolean {
-    return !this.bestScoreGte(threshold);
+  bestScoreLt(threshold: ThresholdName): boolean | null {
+    const gte = this.bestScoreGte(threshold);
+    return gte === null ? null : !gte;
   }
 }
 
@@ -311,8 +325,10 @@ function uniform(when: RuleWhen): UniformWhen {
 }
 
 /**
- * Each rule's `when` in one shape (`UniformWhen`), remembered per rules array when the array, every rule and every
- * `when` are frozen (a loaded policy is deeply frozen, so nothing the copies were made from can change).
+ * Each rule's `when` in one shape (`UniformWhen`), remembered only for the `rules` array of a policy `loadPolicy`
+ * returned (policy.ts `isLoadedRules`): deep-frozen plain data the loader built, so nothing the copies were made
+ * from can change. Any other array (a copy, a hand-built list, a frozen one whose `when` is an accessor) is read
+ * afresh on every call, so a memo never changes a result (Hard Rule 4).
  */
 const UNIFORM_WHENS = new WeakMap<readonly PolicyRule[], readonly UniformWhen[]>();
 
@@ -320,9 +336,7 @@ function uniformWhens(rules: readonly PolicyRule[]): readonly UniformWhen[] {
   const held = UNIFORM_WHENS.get(rules);
   if (held !== undefined) return held;
   const whens = rules.map((rule) => uniform(rule.when));
-  const frozen =
-    Object.isFrozen(rules) && rules.every((rule) => Object.isFrozen(rule) && Object.isFrozen(rule.when));
-  if (frozen) UNIFORM_WHENS.set(rules, whens);
+  if (isLoadedRules(rules)) UNIFORM_WHENS.set(rules, whens);
   return whens;
 }
 

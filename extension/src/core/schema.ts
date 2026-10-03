@@ -4,8 +4,9 @@
  * Every object is strict: an unknown key is an error, so nothing outside the allowlist reaches storage, the
  * bus or a hash (Hard Rule 2). Every free-text string and every array is capped (SCHEMA_LIMITS, SECURITY-4).
  * Ids, hashes and timestamps are branded, so a plain string cannot pass for a `Ulid` without a parse.
- * Counterparty, merchant and subject text is one line (./schema-text, SEC-3). Cross-field invariants live in
- * ./schema-checks. src/ledger/types.ts re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
+ * Counterparty, merchant and subject text is one line (SEC-3); component ids, versions and health reasons are
+ * tokens (OBS-1; both in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
+ * re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
  *
  * This file is exempt from the core no-literal rule for SCHEMA_LIMITS only: a length cap is schema, not policy.
  */
@@ -27,7 +28,7 @@ import {
   signalProblems,
 } from './schema-checks';
 import { receiptProblems } from './schema-receipt';
-import { oneLineText, VISIBLE } from './schema-text';
+import { componentId, healthReason, oneLineText, VISIBLE } from './schema-text';
 import { BASIS_POINTS } from './units';
 
 /** Length caps on every free-text string and every array (SECURITY-4, Hard Rule 2; Decisions [0.close]). */
@@ -36,9 +37,9 @@ export const SCHEMA_LIMITS = Object.freeze({
   COUNTERPARTY: 320,
   MERCHANT: 120,
   CONVERSATION_ID: 128,
-  /** Adapter, observer, extractor and rule ids; versions; signal names. */
+  /** Adapter, observer, extractor and rule ids; versions; signal names; health reason codes. */
   ID: 64,
-  /** One human-readable reason, scope, allowlist entry, or override reason. */
+  /** One scope, allowlist entry, or override reason. */
   ITEM: 120,
   /** Reasons on one receipt or health report (receipt signals are a closed set of names, §8). */
   REASONS: 32,
@@ -85,7 +86,8 @@ export const Currency = z.string().regex(/^[A-Z]{3}$/, 'expected an uppercase IS
 /** Rule ids end up in receipts and logs, so they are plain snake_case identifiers. */
 export const RuleId = z.string().max(L.ID).regex(RULE_ID, 'expected a snake_case rule id');
 
-const Id = z.string().min(1).max(L.ID);
+/** An adapter, observer or extractor id, or a version: one short token, never content (Hard Rule 2). */
+export const ComponentId = componentId(L.ID);
 /** A developer-chosen name (feature, signal, param): never content (Hard Rule 10). */
 const Key = z.string().max(L.ID).regex(IDENTIFIER, 'expected an identifier');
 const UnitInterval = z.number().min(0).max(1);
@@ -161,11 +163,7 @@ export const Claim = z
     /** When Attest read the claim. */
     observedAt: IsoTs,
     sourceKind: SourceKind,
-    extractor: z.strictObject({
-      id: z.string().max(L.ID),
-      version: z.string().max(L.ID),
-      confidence: UnitInterval,
-    }),
+    extractor: z.strictObject({ id: ComponentId, version: ComponentId, confidence: UnitInterval }),
     rawHash: Sha256,
   })
   .superRefine(refineWith(claimProblems));
@@ -194,7 +192,7 @@ export const Observation = z
 /** What one observer pass could see (§3). Exists only for a pass whose health() was OK (Hard Rules 5, 6). */
 export const ObserverCoverage = z
   .strictObject({
-    observerId: Id,
+    observerId: ComponentId,
     source: ObservationSource,
     lastSyncAt: IsoTs,
     windowStart: IsoTs,
@@ -213,10 +211,11 @@ export const Coverage = z.strictObject({
 
 /** The latest health of one adapter or observer (Hard Rule 6: DEGRADED is stored and shown). */
 export const HealthReport = z.strictObject({
-  adapterId: Id,
-  version: Id,
+  adapterId: ComponentId,
+  version: ComponentId,
   status: z.enum(['OK', 'DEGRADED']),
-  reasons: z.array(z.string().max(L.ITEM)).max(L.REASONS),
+  /** Reason codes (`not_sent_folder`), never text the page held: health runs beside the mail (Hard Rule 2). */
+  reasons: z.array(healthReason(L.ID)).max(L.REASONS),
   checkedAt: IsoTs,
 });
 
