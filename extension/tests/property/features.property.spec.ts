@@ -25,11 +25,6 @@ import { MS_PER_DAY, MS_PER_MINUTE } from '../../src/core/units';
 import defaultPolicyJson from '../../../policy/default.json';
 
 const RUNS = { numRuns: 1_000 };
-/**
- * A generous budget for properties that load a policy on every run (parse + SHA-256): a few seconds alone,
- * but the whole suite runs files in parallel, and a timeout under load is not a failure of features().
- */
-const PROPERTY_TIMEOUT_MS = 60_000;
 const BASE_MS = instantMs('2026-10-06T14:02:00-04:00');
 const OFFSETS = [-420, -240, 0, 330, 840];
 
@@ -125,7 +120,7 @@ describe('the score is an exact value in [0, 1]', () => {
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 type PolicyDoc = typeof defaultPolicyJson;
@@ -162,45 +157,37 @@ function expectSameScoring(claim: FeatureClaim, observation: FeatureObservation,
 }
 
 describe('the score is exact: no order of the policy can change it', () => {
-  it(
-    'is independent of the order of featuresByType and identityFeatures lists',
-    () => {
-      fc.assert(
-        fc.property(
-          scorableClaim,
-          observationArb,
-          permutedLists(defaultPolicyJson.featuresByType),
-          permutedLists(defaultPolicyJson.identityFeatures),
-          (claim, observation, featuresByType, identityFeatures) => {
-            const policy = loadPolicy({ ...defaultPolicyJson, featuresByType, identityFeatures });
-            expectSameScoring(claim, observation, policy);
-          },
-        ),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('is independent of the order of featuresByType and identityFeatures lists', () => {
+    fc.assert(
+      fc.property(
+        scorableClaim,
+        observationArb,
+        permutedLists(defaultPolicyJson.featuresByType),
+        permutedLists(defaultPolicyJson.identityFeatures),
+        (claim, observation, featuresByType, identityFeatures) => {
+          const policy = loadPolicy({ ...defaultPolicyJson, featuresByType, identityFeatures });
+          expectSameScoring(claim, observation, policy);
+        },
+      ),
+      RUNS,
+    );
+  });
 
-  it(
-    'is independent of the key order of the policy document',
-    () => {
-      fc.assert(
-        fc.property(
-          scorableClaim,
-          observationArb,
-          fc.array(fc.integer({ min: 0, max: 1_000 }), { minLength: 1, maxLength: 12 }),
-          (claim, observation, ranks) => {
-            const policy = loadPolicy(reorderKeys(defaultPolicyJson, ranks));
-            expect(policy.policyHash).toBe(DEFAULT_POLICY.policyHash);
-            expectSameScoring(claim, observation, policy);
-          },
-        ),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('is independent of the key order of the policy document', () => {
+    fc.assert(
+      fc.property(
+        scorableClaim,
+        observationArb,
+        fc.array(fc.integer({ min: 0, max: 1_000 }), { minLength: 1, maxLength: 12 }),
+        (claim, observation, ranks) => {
+          const policy = loadPolicy(reorderKeys(defaultPolicyJson, ranks));
+          expect(policy.policyHash).toBe(DEFAULT_POLICY.policyHash);
+          expectSameScoring(claim, observation, policy);
+        },
+      ),
+      RUNS,
+    );
+  });
 });
 
 const FIELDS = ['counterparty', 'merchant', 'subjectHint', 'amountCents', 'currency'] as const;
@@ -231,20 +218,16 @@ describe('a missing observation field never raises the score (§5.2)', () => {
   it.each([
     ['removed', false],
     ['emptied', true],
-  ] as const)(
-    'any set of fields %s',
-    (_label, empty) => {
-      fc.assert(
-        fc.property(scorableClaim, observationArb, fc.subarray([...FIELDS]), (claim, observation, drop) => {
-          const full = features(claim, observation, DEFAULT_POLICY).score;
-          const partial = features(claim, strip(observation, drop, empty), DEFAULT_POLICY).score;
-          expect(compareRatio(partial, full)).toBeLessThanOrEqual(0);
-        }),
-        RUNS,
-      );
-    },
-    60_000,
-  );
+  ] as const)('any set of fields %s', (_label, empty) => {
+    fc.assert(
+      fc.property(scorableClaim, observationArb, fc.subarray([...FIELDS]), (claim, observation, drop) => {
+        const full = features(claim, observation, DEFAULT_POLICY).score;
+        const partial = features(claim, strip(observation, drop, empty), DEFAULT_POLICY).score;
+        expect(compareRatio(partial, full)).toBeLessThanOrEqual(0);
+      }),
+      RUNS,
+    );
+  });
 });
 
 const LOCAL = fc
@@ -281,5 +264,5 @@ describe('address features: identity is code points after ASCII lowercasing, nev
       }),
       { numRuns: 2_000 },
     );
-  }, 60_000);
+  });
 });

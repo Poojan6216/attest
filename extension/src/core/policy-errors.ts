@@ -1,21 +1,34 @@
 /**
- * Policy load errors: one "path: problem" line per issue, e.g. `thresholds.verified: must be <= 1` or
- * `featuresByType["email.sent"][2]: must be a key of features`. Internal to the policy module; import
- * `PolicyError` from `./policy`.
+ * Policy errors. A load error has one "path: problem" line per issue, e.g. `thresholds.verified: must be <= 1` or
+ * `featuresByType["email.sent"][2]: must be a key of features`; `policy_not_loaded` has none. Internal to the
+ * policy module; import `PolicyError` from `./policy`.
  *
  * PURE: no I/O, no clock, no logging. The caller logs the error (Hard Rule 6: fail loud).
  */
 import type { z } from 'zod';
 
-/** Thrown by `loadPolicy` for any document that is not a valid policy. Never partially applied. */
+export type PolicyErrorCode =
+  /** `loadPolicy` was given a document that is not a valid policy; `issues` names every problem. */
+  | 'invalid_policy'
+  /**
+   * A grading entry was given a policy object `loadPolicy` did not return: a copy, a spread, a hand-built or an
+   * edited object. Its memos and its `policyHash` could belong to another document (Hard Rules 4 and 6).
+   */
+  | 'policy_not_loaded';
+
+/**
+ * Thrown by `loadPolicy` for any document that is not a valid policy (never partially applied), and by every
+ * grading entry for a policy object the loader did not return (`assertLoadedPolicy`).
+ */
 export class PolicyError extends Error {
-  readonly code = 'invalid_policy';
-  /** One "path: problem" line per issue, e.g. `thresholds.verified: must be <= 1`. */
+  readonly code: PolicyErrorCode;
+  /** One "path: problem" line per issue, e.g. `thresholds.verified: must be <= 1`; none for `policy_not_loaded`. */
   readonly issues: readonly string[];
 
-  constructor(issues: readonly string[]) {
-    super(`invalid policy: ${issues.join('; ')}`);
+  constructor(issues: readonly string[], code: PolicyErrorCode = 'invalid_policy') {
+    super(code === 'invalid_policy' ? `invalid policy: ${issues.join('; ')}` : `policy: ${code}`);
     this.name = 'PolicyError';
+    this.code = code;
     this.issues = Object.freeze([...issues]);
   }
 }

@@ -11,6 +11,12 @@
 import { instantMs } from './normalize';
 import type { Observation } from './schema';
 
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const instantMsLocal = instantMs;
+
 interface Parsed {
   readonly text: string;
   readonly ms: number;
@@ -22,7 +28,7 @@ const OBSERVED_MS = new WeakMap<Observation, Parsed>();
 function memoised(memo: WeakMap<Observation, Parsed>, observation: Observation, text: string): number {
   const cached = memo.get(observation);
   if (cached?.text === text) return cached.ms;
-  const ms = instantMs(text);
+  const ms = instantMsLocal(text);
   memo.set(observation, { text, ms });
   return ms;
 }

@@ -42,7 +42,7 @@ import {
 } from './attribution-index';
 import { type FeatureClaim, type FeaturePolicy, isAssignable } from './features';
 import { asciiLower, instantMs } from './normalize';
-import type { Policy } from './policy';
+import { assertLoadedPolicy, type Policy } from './policy';
 import {
   type ActionType,
   AgentId,
@@ -105,12 +105,18 @@ export type AttributionPolicy = FeaturePolicy & Pick<Policy, 'unasked'>;
 /**
  * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller
  * already has it, is `instantMs(orphan.occurredAt)` (a batch has every orphan's instant from its index); a
- * `calendar.*` orphan is anchored on its `observedAt` instead (§7), whatever `occurredMs` says.
+ * `calendar.*` orphan is anchored on its `observedAt` instead (§7), whatever `occurredMs` says. `wanted`, when
+ * given, is asked about the likely agent and its score first, and false gives null without building the attribution
+ * (a batch builds one only for an orphan that becomes an UNASKED receipt).
  */
-export type Attributor = (orphan: AttributionOrphan, occurredMs?: number) => Attribution | null;
+export type Attributor = (
+  orphan: AttributionOrphan,
+  occurredMs?: number,
+  wanted?: (agent: AgentId, scoreBp: number) => boolean,
+) => Attribution | null;
 
-/** Each fired signal's reason code (§15), in the table order reasons are emitted in. */
-export const SIGNAL_REASON: Readonly<Record<UnaskedSignal, ReasonCode>> = Object.freeze({
+/** Each fired signal's reason code (§15), in the table order reasons are emitted in (`attributionReasons`). */
+const SIGNAL_REASON: Readonly<Record<UnaskedSignal, ReasonCode>> = Object.freeze({
   agentSessionActive: 'unasked.session',
   userIdle: 'unasked.idle',
   agentSignature: 'unasked.signature',
@@ -335,18 +341,20 @@ function anchorOf(orphan: AttributionOrphan, occurredMs: number | undefined): nu
 
 /**
  * Indexes `activity` once and returns a function that attributes any orphan against it, so a batch pays for
- * sorting and planning claims once instead of per orphan. Same results as `attribute` for every orphan.
+ * sorting and planning claims once instead of per orphan. Same results as `attribute` for every orphan. Throws
+ * `PolicyError('policy_not_loaded')` for a policy `loadPolicy` did not return (Hard Rule 6).
  */
 export function attributor(
   activity: AttributionActivity,
   policy: AttributionPolicy,
   evaluatedAt?: string,
 ): Attributor {
+  assertLoadedPolicy(policy);
   const index = indexActivity(activity, policy, evaluatedAt);
   const windows = windowsMs(policy);
   const best: Best = { scoreBp: 0, count: 0, session: false, signature: false, adjacent: false };
   const w: Weighing = { windows, policy, best, type: 'other', anchorMs: 0, subject: '', idle: false };
-  return (orphan, occurredMs) => {
+  return (orphan, occurredMs, wanted) => {
     const anchorMs = anchorOf(orphan, occurredMs);
     w.subject = index.anySignature && orphan.subjectHint !== undefined ? asciiLower(orphan.subjectHint) : '';
     w.idle = index.idle.exists(checkedSafe(anchorMs - windows.idle), anchorMs);
@@ -354,7 +362,8 @@ export function attributor(
     w.anchorMs = anchorMs;
     let winner: AgentIndex | null = null;
     for (const agent of index.agents) winner = weigh(agent, w, winner);
-    return winner === null ? null : attributionOf(best, winner, w.idle);
+    if (winner === null || wanted?.(winner.agent, best.scoreBp) === false) return null;
+    return attributionOf(best, winner, w.idle);
   };
 }
 
@@ -375,7 +384,8 @@ export function attribute(
 
 /**
  * The reasons an UNASKED receipt lists for `attribution` (§7, §15): one `unasked.*` code per fired signal,
- * `userIdle` included, each naming the attributed agent, in table order.
+ * `userIdle` included, each naming the attributed agent, in table order. grade-reasons.ts writes an UNASKED
+ * receipt's rule reasons with this function: it is the only map from signal to reason code.
  */
 export function attributionReasons(attribution: Pick<Attribution, 'agent' | 'signals'>): Reason[] {
   return inSignalOrder(attribution.signals).map((signal) => ({

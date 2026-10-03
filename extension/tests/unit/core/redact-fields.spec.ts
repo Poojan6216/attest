@@ -1,8 +1,9 @@
 /**
- * Task 1.2, redact.ts field rules (docs/grading.md §10, §12; Hard Rule 2): subjectHint is cut at
- * SCHEMA_LIMITS.SUBJECT_HINT code points without splitting a surrogate pair; any other allowlisted value that
- * fails the Observation schema is dropped, never coerced; occurredAt is required; arguments are checked; and
- * only own data properties of the raw row are read.
+ * Task 1.2, redact.ts field rules (docs/grading.md §10, §12; Hard Rules 2, 5): subjectHint is cut at
+ * SCHEMA_LIMITS.SUBJECT_HINT code points without splitting a surrogate pair; any other allowlisted own value that
+ * fails the Observation schema refuses the whole row with `invalid_field` (SEC-3: never coerced, never cut, never
+ * silently dropped, so no stored row lacks a fact its source carried); occurredAt is required; arguments are
+ * checked; and only own data properties of the raw row are read.
  */
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
@@ -91,7 +92,7 @@ describe('subjectHint is cut at SUBJECT_HINT code points, never inside a surroga
   });
 });
 
-describe('an allowlisted value that fails the schema is dropped, never coerced', () => {
+describe('an allowlisted value that fails the schema refuses the row, never coerced or dropped', () => {
   const overCap = (cap: number): string => 'm'.repeat(cap + 1);
 
   it.each([
@@ -115,22 +116,69 @@ describe('an allowlisted value that fails the schema is dropped, never coerced',
     ['subjectHint', 42],
     ['subjectHint', { text: 'Your order' }],
     ['subjectHint', ['Your order']],
-  ])('%s = %s', (field, value) => {
-    const out = receipt({ ...BASE, [field]: value });
-    expect(out).not.toHaveProperty(field);
-    expect(out).toStrictEqual(receipt(without(field)));
+    ['merchant', 'Acme\nBooks'],
+    ['merchant', 'Acme\u2028Books'],
+    ['subjectHint', 'Your order\r\nShipped'],
+    ['subjectHint', 'Your\torder'],
+    ['subjectHint', '\u0000'],
+  ])('%s = %s → invalid_field', (field, value) => {
+    expectRedactError(() => receipt({ ...BASE, [field]: value }), 'invalid_field');
+    // The same row without the field is a valid row: refusing it was about the value, not the row.
+    expect(receipt(without(field))).not.toHaveProperty(field);
   });
 
   it.each([
     ['counterparty', 42],
+    ['counterparty', null],
     ['counterparty', ['priya@company.com']],
     ['counterparty', `${'p'.repeat(SCHEMA_LIMITS.COUNTERPARTY)}@company.com`],
-  ])('gmail.sent %s = %j', (field, value) => {
+    ['counterparty', 'Hi Priya,\nthe door code is 4417 and my SSN is 078-05-1120. Thanks'],
+    ['counterparty', 'priya@company.com\u2029'],
+    ['counterparty', '\u0085priya@company.com'],
+  ])('gmail.sent %s = %j → invalid_field', (field, value) => {
     const raw = { counterparty: 'priya@company.com', occurredAt: OCCURRED, [field]: value };
-    const out = project('gmail.sent', raw, { ...CTX, type: 'email.sent' }, DEFAULT_POLICY);
-    expect(out).not.toHaveProperty(field);
+    expectRedactError(
+      () => project('gmail.sent', raw, { ...CTX, type: 'email.sent' }, DEFAULT_POLICY),
+      'invalid_field',
+    );
+  });
+});
+
+describe('a refused row reports the code only, and only a present allowlisted value can refuse it', () => {
+  it('a refused value never reaches the error: the message and fields carry the code only', () => {
+    const body = 'Hi Priya,\nthe door code is 4417 and my SSN is 078-05-1120. Thanks';
+    let caught: unknown;
+    try {
+      project(
+        'gcal.event',
+        { counterparty: body, occurredAt: OCCURRED },
+        { ...CTX, type: 'calendar.created' },
+        DEFAULT_POLICY,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(RedactError);
+    const shown = `${String(caught)} ${JSON.stringify(caught)} ${JSON.stringify(Object.entries(caught ?? {}))}`;
+    for (const part of ['4417', '078-05-1120', 'Priya']) expect(shown).not.toContain(part);
   });
 
+  it('an allowlisted field set to undefined is absent, not refused', () => {
+    expect(receipt({ ...BASE, merchant: undefined })).toStrictEqual(receipt(without('merchant')));
+  });
+
+  it('an invalid value in a field the source does not allowlist is never read, so it refuses nothing', () => {
+    const raw = { ...BASE, counterparty: 'Hi\nthere', snippet: 'a\u2028b' };
+    expect(receipt(raw)).toStrictEqual(receipt(BASE));
+  });
+
+  it('an invalid allowlisted field is reported before a missing occurredAt', () => {
+    expectRedactError(() => receipt({ merchant: 'Acme\nBooks' }), 'invalid_field');
+    expectRedactError(() => receipt({ ...BASE, occurredAt: 'yesterday' }), 'missing_occurred_at');
+  });
+});
+
+describe('an allowlisted value at its cap is valid', () => {
   it('keeps values exactly at each cap', () => {
     const merchant = 'm'.repeat(SCHEMA_LIMITS.MERCHANT);
     expect(receipt({ ...BASE, merchant, amountCents: SCHEMA_LIMITS.AMOUNT_CENTS })).toMatchObject({

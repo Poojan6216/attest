@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import defaultPolicyJson from '../../../../policy/default.json';
 import { grade, GradeError } from '../../../src/core/grade';
 import { idFromHash, sha256Hex } from '../../../src/core/hash';
-import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy, type Policy, PolicyError } from '../../../src/core/policy';
 import { ratio, toDisplay } from '../../../src/core/ratio';
 import { inputsHash, receiptId } from '../../../src/core/receipt';
 import {
@@ -283,7 +283,7 @@ describe('finality through grade() (§8)', () => {
   });
 });
 
-describe('purity and refusals', () => {
+describe('purity', () => {
   it('never mutates its inputs (deep-frozen inputs grade the same)', () => {
     const freeze = <T>(value: T): T => {
       if (typeof value === 'object' && value !== null) {
@@ -300,7 +300,9 @@ describe('purity and refusals', () => {
     const first = grade(claim, candidates, grant, DEFAULT_POLICY, coverage, context);
     expect(grade(claim, candidates, grant, DEFAULT_POLICY, coverage, context)).toEqual(first);
   });
+});
 
+describe('refusals', () => {
   it("refuses a grant that is not the claim's or the attributed agent's", () => {
     expect(() => run({ grant: buildGrant({ agent: 'claude' }, EVAL) })).toThrow(
       new GradeError('agent_mismatch'),
@@ -326,14 +328,15 @@ describe('purity and refusals', () => {
   });
 
   it('refuses a policy rule that would make a claim receipt UNASKED, or an UNASKED without an orphan', () => {
+    // SEC-4: an UNASKED rule must name unaskedLikely: true, which no claim satisfies (§6.1), so the loader refuses
+    // a rule that could make a claim receipt UNASKED; receipt.ts and conditions-finality.ts keep their own checks.
     const rules = [{ id: 'odd', when: { coverage: 'full' }, then: 'UNASKED' }, ...defaultPolicyJson.rules];
-    const odd = loadPolicy(mergePatch(defaultPolicyJson, { rules }));
-    expect(() => run({ policy: odd })).toThrow(new GradeError('unasked_with_claim'));
+    expect(() => loadPolicy(mergePatch(defaultPolicyJson, { rules }))).toThrow(PolicyError);
     const scopeRules = [
-      { id: 'odd', when: { observedScopeExceedsDeclared: true }, then: 'UNASKED' },
+      { id: 'odd', when: { observedScopeExceedsDeclared: true, unaskedLikely: true }, then: 'UNASKED' },
       ...defaultPolicyJson.rules,
     ];
-    const scoped = { priorSpendCents: 0, scope: { observed: 'gmail.read' } };
+    const scoped = { priorSpendCents: 0, scope: { observed: 'gmail.read' }, attribution: attribution() };
     expect(() =>
       run({
         claim: null,

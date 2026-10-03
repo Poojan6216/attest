@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import defaultPolicyJson from '../../../../policy/default.json';
 import { grade } from '../../../src/core/grade';
 import { canonicalJson } from '../../../src/core/hash';
-import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy, type Policy, PolicyError } from '../../../src/core/policy';
 import {
   Attribution,
   type Claim,
@@ -105,7 +105,14 @@ describe('§8: a claim-less grade reaches only UNASKED, OVER_SCOPE or the termin
   const low = Attribution.parse({ agent: 'muse', scoreBp: 100, signals: ['agentSessionActive'] });
   const orphan = obsOf({ observedAt: EVAL });
 
-  it.each(['NOT_FOUND', 'VERIFIED', 'PARTIAL', 'UNVERIFIABLE'])(
+  it.each(['NOT_FOUND', 'VERIFIED', 'PARTIAL'])(
+    'a policy rule concluding %s with none of its evidence never loads (SEC-4)',
+    (then) => {
+      expect(() => quiet(then)).toThrow(PolicyError);
+    },
+  );
+
+  it.each(['UNVERIFIABLE'])(
     'a policy rule concluding %s for an orphan gives default_unverifiable, FINAL, no evidence',
     (then) => {
       const receipt = run(
@@ -130,7 +137,13 @@ describe('§8: a claim-less grade reaches only UNASKED, OVER_SCOPE or the termin
   it('the same rule still decides a claim (only claim-less grades are restricted)', () => {
     const policy = loadPolicy(
       mergePatch(defaultPolicyJson, {
-        rules: [{ id: 'quiet', when: { typeNotInGrant: false }, then: 'NOT_FOUND' }],
+        rules: [
+          {
+            id: 'quiet',
+            when: { typeNotInGrant: false, graceElapsed: true, coverage: 'full', bestScoreLt: 'partial' },
+            then: 'NOT_FOUND',
+          },
+        ],
       }),
     );
     expect(run(claimOf(), [], undefined, undefined, NO_CONTEXT, policy).ruleId).toBe('quiet');

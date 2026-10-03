@@ -16,10 +16,16 @@
  *  5. Receipt (§3, §6.4, §8, §15): id from the subject, reasons in §15 order, confidence, signals, `computedAt =
  *     coverage.evaluatedAt`, `attribution: 'likely'` on UNASKED.
  *
+ * A claim's candidates are checked first (grade-guard.ts): one that `candidates()` could never have returned for it
+ * (another type, a source the policy does not list for the type, outside the window, a `calendar.created` event
+ * seen before the claim) throws `GradeError('foreign_candidate')`.
+ *
  * Claim-less grades have exactly one subject: one orphan observation (UNASKED, `{k:'unasked'}`) or
  * `context.scope` (scope diff, `{k:'scope'}`); anything else throws `GradeError('claimless_subject')`. A
  * claim-less outcome other than UNASKED or OVER_SCOPE is the terminal `default_unverifiable`, FINAL (§8). The grant
  * must be the claim's agent's (or, claim-less, the attributed agent's), else `GradeError('agent_mismatch')`.
+ * `grade`, `gradeOrphan` and `gradeClaim` refuse a policy `loadPolicy` did not return with
+ * `PolicyError('policy_not_loaded')` before reading anything (Hard Rule 6).
  *
  * PURE: no I/O, no clock, no randomness, no logging (Hard Rule 4).
  */
@@ -33,8 +39,15 @@ import {
 } from './conditions';
 import { assignedOf, type BestCandidate, bestCandidate, visibleInputs } from './grade-best';
 import { GradeError } from './grade-error';
+import { checkCandidates } from './grade-guard';
 import { confidenceOf, gradeReasons } from './grade-reasons';
-import { type Policy, type PolicyRule, type RuleOutcome, TERMINAL_RULE_ID } from './policy';
+import {
+  assertLoadedPolicy,
+  type Policy,
+  type PolicyRule,
+  type RuleOutcome,
+  TERMINAL_RULE_ID,
+} from './policy';
 import {
   buildReceipt,
   candidatesHashById,
@@ -241,7 +254,10 @@ function judge(
   });
 }
 
-/** §6: grades one claim (or one orphan, or one observed scope) against its evidence. */
+/**
+ * §6: grades one claim (or one orphan, or one observed scope) against its evidence. A claim's candidates must be
+ * §4.1 candidates of it, else `GradeError('foreign_candidate')` (grade-guard.ts).
+ */
 export function grade(
   claim: Claim | null,
   candidates: readonly Observation[],
@@ -250,11 +266,13 @@ export function grade(
   coverage: Coverage,
   context: GradeContext,
 ): Receipt {
+  assertLoadedPolicy(policy);
   checkAgents(claim, grant, context);
   // A scope subject comes with no observation at all: one first seen after evaluatedAt is a second subject too.
   if (claim === null && context.scope !== undefined && candidates.length > 0) {
     throw new GradeError('claimless_subject');
   }
+  if (claim !== null) checkCandidates(claim, candidates, policy);
   const visible = visibleInputs(candidates, coverage);
   const subject = subjectOf(claim, visible.candidates, grant, context);
   const best = claim === null ? null : bestCandidate(claim, visible.candidates, policy);
@@ -277,6 +295,7 @@ export function gradeOrphan(
   policy: Policy,
   context: GradeContext,
 ): Receipt {
+  assertLoadedPolicy(policy);
   checkAgents(null, grant, context);
   const subject = subjectOf(null, [orphan], grant, context);
   const candidatesHash = (): string => candidatesHashById([orphan]);
@@ -294,6 +313,7 @@ export function gradeClaim(
   policy: Policy,
   context: GradeContext,
 ): Receipt {
+  assertLoadedPolicy(policy);
   checkAgents(claim, grant, context);
   const subject: Subject = { subject: { k: 'claim', claimId: claim.id }, orphan: null };
   return judge(claim, { ...evidence, subject }, grant, policy, context);

@@ -23,7 +23,6 @@ import { instantMs, shiftIso } from '../../golden/time';
 const MS_PER_SECOND = 1_000;
 const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
-const PROPERTY_TIMEOUT_MS = 30_000;
 
 const CLAIMED_AT = '2026-10-06T14:02:00-04:00';
 const COVERAGE_FROM = '2026-10-06T12:00:00-04:00';
@@ -81,42 +80,38 @@ describe('grace: a PENDING receipt with fresh coverage finalises to NOT_FOUND on
     expect(GRACE_AT).toBe('2026-10-06T14:48:00-04:00');
   });
 
-  it(
-    'PENDING at every fresh sync before grace, FINAL NOT_FOUND at grace, then never regraded',
-    () => {
-      let receipt = gradeAt(CLAIMED_AT);
-      expectPending(receipt, CLAIMED_AT);
-      const steps = (instantMs(GRACE_AT) - instantMs(CLAIMED_AT)) / MS_PER_MINUTE;
-      for (let minute = 1; minute < steps; minute += 1) {
-        const at = shiftIso(CLAIMED_AT, minute * MS_PER_MINUTE);
-        const next = gradeAt(at);
-        expectPending(next, at);
-        receipt = transition(receipt, { event: 'regrade', next });
-        expect(receipt).toStrictEqual(next);
-      }
-      const lastBefore = gradeAt(shiftIso(GRACE_AT, -MS_PER_SECOND));
-      expectPending(lastBefore, shiftIso(GRACE_AT, -MS_PER_SECOND));
-      receipt = transition(receipt, { event: 'regrade', next: lastBefore });
+  it('PENDING at every fresh sync before grace, FINAL NOT_FOUND at grace, then never regraded', () => {
+    let receipt = gradeAt(CLAIMED_AT);
+    expectPending(receipt, CLAIMED_AT);
+    const steps = (instantMs(GRACE_AT) - instantMs(CLAIMED_AT)) / MS_PER_MINUTE;
+    for (let minute = 1; minute < steps; minute += 1) {
+      const at = shiftIso(CLAIMED_AT, minute * MS_PER_MINUTE);
+      const next = gradeAt(at);
+      expectPending(next, at);
+      receipt = transition(receipt, { event: 'regrade', next });
+      expect(receipt).toStrictEqual(next);
+    }
+    const lastBefore = gradeAt(shiftIso(GRACE_AT, -MS_PER_SECOND));
+    expectPending(lastBefore, shiftIso(GRACE_AT, -MS_PER_SECOND));
+    receipt = transition(receipt, { event: 'regrade', next: lastBefore });
 
-      const final = gradeAt(GRACE_AT);
-      expect(final).toMatchObject({
-        state: 'FINAL',
-        grade: 'NOT_FOUND',
-        ruleId: 'not_found',
-        finalAt: GRACE_AT,
-      });
-      expect(final.id).toBe(receipt.id);
-      receipt = transition(receipt, { event: 'regrade', next: final });
-      expect(receipt).toStrictEqual(final);
+    const final = gradeAt(GRACE_AT);
+    expect(final).toMatchObject({
+      state: 'FINAL',
+      grade: 'NOT_FOUND',
+      ruleId: 'not_found',
+      finalAt: GRACE_AT,
+    });
+    expect(final.id).toBe(receipt.id);
+    receipt = transition(receipt, { event: 'regrade', next: final });
+    expect(receipt).toStrictEqual(final);
 
-      const later = gradeAt(shiftIso(GRACE_AT, MS_PER_HOUR));
-      expect(later.state).toBe('FINAL');
-      expectRefusedRegrade(receipt, later);
-      expectRefusedRegrade(receipt, gradeAt(shiftIso(GRACE_AT, -MS_PER_MINUTE)));
-      expect(receipt).toStrictEqual(final);
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+    const later = gradeAt(shiftIso(GRACE_AT, MS_PER_HOUR));
+    expect(later.state).toBe('FINAL');
+    expectRefusedRegrade(receipt, later);
+    expectRefusedRegrade(receipt, gradeAt(shiftIso(GRACE_AT, -MS_PER_MINUTE)));
+    expect(receipt).toStrictEqual(final);
+  });
 
   it('a late evaluation over a stale sync stays PENDING: grace is measured by the sync, not the clock', () => {
     const stale = shiftIso(GRACE_AT, -MS_PER_MINUTE);
@@ -143,23 +138,19 @@ describe('grace: a PENDING receipt with fresh coverage finalises to NOT_FOUND on
 describe('grace: never before, at any second', () => {
   const window = instantMs(GRACE_AT) - instantMs(CLAIMED_AT);
 
-  it(
-    'any fresh sync in [claimedAt, grace) is PENDING; any in [grace, grace + 7 days] is FINAL NOT_FOUND',
-    () => {
-      fc.assert(
-        fc.property(
-          fc.integer({ min: 0, max: window / MS_PER_SECOND - 1 }),
-          fc.integer({ min: 0, max: (7 * 24 * MS_PER_HOUR) / MS_PER_SECOND }),
-          (beforeS, afterS) => {
-            const before = shiftIso(CLAIMED_AT, beforeS * MS_PER_SECOND);
-            expectPending(gradeAt(before), before);
-            const after = shiftIso(GRACE_AT, afterS * MS_PER_SECOND);
-            expect(gradeAt(after)).toMatchObject({ state: 'FINAL', grade: 'NOT_FOUND', finalAt: after });
-          },
-        ),
-        { numRuns: 1_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('any fresh sync in [claimedAt, grace) is PENDING; any in [grace, grace + 7 days] is FINAL NOT_FOUND', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: window / MS_PER_SECOND - 1 }),
+        fc.integer({ min: 0, max: (7 * 24 * MS_PER_HOUR) / MS_PER_SECOND }),
+        (beforeS, afterS) => {
+          const before = shiftIso(CLAIMED_AT, beforeS * MS_PER_SECOND);
+          expectPending(gradeAt(before), before);
+          const after = shiftIso(GRACE_AT, afterS * MS_PER_SECOND);
+          expect(gradeAt(after)).toMatchObject({ state: 'FINAL', grade: 'NOT_FOUND', finalAt: after });
+        },
+      ),
+      { numRuns: 1_000 },
+    );
+  });
 });

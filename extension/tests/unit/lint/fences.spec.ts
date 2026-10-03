@@ -1,7 +1,8 @@
 /**
  * Proves the lint fences through the project's real eslint.config.js (sprint 0.2 Done-when):
- * a deliberate `.click()` in a content script fails, a deliberate `import Dexie` in src/core fails,
- * and the escape hatches (inline disables) do not work in the fenced scopes.
+ * a deliberate `.click()` in a content script fails, and the escape hatches (inline disables) do not work
+ * in the fenced scopes. The src/core fences (a deliberate `import Dexie` in src/core fails, …) are in
+ * fences-core.spec.ts.
  * Type-aware rules are switched off for these virtual files; every file-scoped fence stays on.
  */
 import path from 'node:path';
@@ -28,7 +29,7 @@ async function ruleIds(filePath: string, code: string): Promise<string[]> {
   return result.messages.map((m) => m.ruleId ?? `fatal:${m.message}`);
 }
 
-describe('lint fences (real config)', () => {
+describe('lint fences (real config): acting on a vendor page', () => {
   it('a .click() in a content script fails attest/no-act', async () => {
     const ids = await ruleIds(
       'entrypoints/content/probe.content.ts',
@@ -52,51 +53,9 @@ describe('lint fences (real config)', () => {
     expect(result?.messages.some((m) => m.ruleId === 'attest/no-act')).toBe(true);
     expect(result?.warningCount ?? 0).toBeGreaterThan(0); // the ignored directive is itself reported
   });
+});
 
-  it('import Dexie in src/core fails', async () => {
-    expect(
-      await ruleIds('src/core/probe.ts', "import Dexie from 'dexie';\nexport const d = Dexie;\n"),
-    ).toContain('no-restricted-imports');
-  });
-
-  it('src/core cannot import impure layers', async () => {
-    for (const spec of [
-      '../ledger/db',
-      '../bus/send',
-      '../adapters/base',
-      '../observers/base',
-      '../log',
-      'wxt/browser',
-      'node:fs',
-    ]) {
-      const ids = await ruleIds('src/core/probe.ts', `import * as x from '${spec}';\nexport const y = x;\n`);
-      expect(ids, spec).toContain('no-restricted-imports');
-    }
-  });
-
-  it('src/core cannot read the clock, randomness, or extension/DOM globals', async () => {
-    const cases: [string, string][] = [
-      ['export const t = Date.now();\n', 'no-restricted-syntax'],
-      ['export const t = new Date();\n', 'no-restricted-syntax'],
-      ['export const r = Math.random();\n', 'no-restricted-syntax'],
-      ['export const b = new Uint8Array(4); crypto.getRandomValues(b);\n', 'no-restricted-globals'],
-      ['export const id = chrome.runtime.id;\n', 'no-restricted-globals'],
-      ['export const t = document.title;\n', 'no-restricted-globals'],
-      ["export const p = fetch('x');\n", 'no-restricted-globals'],
-    ];
-    for (const [code, rule] of cases) {
-      expect(await ruleIds('src/core/probe.ts', code), code).toContain(rule);
-    }
-  });
-
-  it('src/core may build dates from inputs', async () => {
-    const ids = await ruleIds(
-      'src/core/probe.ts',
-      'export const t = (iso: string) => new Date(iso).getTime();\n',
-    );
-    expect(ids).toEqual([]);
-  });
-
+describe('lint fences (real config): storage, console, listeners, eval', () => {
   it('Dexie is allowed in src/ledger and forbidden elsewhere', async () => {
     const code = "import Dexie from 'dexie';\nexport const d = Dexie;\n";
     expect(await ruleIds('src/ledger/probe.ts', code)).toEqual([]);

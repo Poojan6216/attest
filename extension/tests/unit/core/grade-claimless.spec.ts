@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../../policy/default.json';
 import { grade, GradeError } from '../../../src/core/grade';
-import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy, type Policy, PolicyError } from '../../../src/core/policy';
 import { receiptId } from '../../../src/core/receipt';
 import { Attribution, type GradeContext, type Observation, Receipt } from '../../../src/core/schema';
 import { buildCoverage, buildGrant, buildObservation, mergePatch, PolicyView } from '../../golden/build';
@@ -88,11 +88,17 @@ describe('§8: a claim-less rule concluding anything but UNASKED or OVER_SCOPE i
   const unaskedId = receiptId({ k: 'unasked', observationId: orphan.id });
   const scopeId = receiptId({ k: 'scope', agent: 'muse', scope: 'gmail.read' });
 
-  it.each(['NOT_FOUND', 'VERIFIED', 'PARTIAL', 'UNVERIFIABLE'])(
-    'an orphan whose rule concludes %s: default_unverifiable, FINAL, subject {k:unasked}, no evidence',
+  it('an orphan whose rule concludes UNVERIFIABLE: default_unverifiable, FINAL, subject {k:unasked}, no evidence', () => {
+    const policy = policyWith({ id: 'quiet', when: { unaskedLikely: true }, then: 'UNVERIFIABLE' });
+    expectTerminal(run([orphan], { priorSpendCents: 0, attribution: LIKELY }, policy), unaskedId);
+  });
+
+  it.each(['NOT_FOUND', 'VERIFIED', 'PARTIAL'])(
+    'a claim-less rule concluding %s never loads: it names none of the evidence the grade asserts (SEC-4)',
     (then) => {
-      const policy = policyWith({ id: 'quiet', when: { unaskedLikely: true }, then });
-      expectTerminal(run([orphan], { priorSpendCents: 0, attribution: LIKELY }, policy), unaskedId);
+      for (const when of [{ unaskedLikely: true }, { observedScopeExceedsDeclared: true }]) {
+        expect(() => policyWith({ id: 'quiet', when, then })).toThrow(PolicyError);
+      }
     },
   );
 
@@ -106,13 +112,11 @@ describe('§8: a claim-less rule concluding anything but UNASKED or OVER_SCOPE i
     expectTerminal(run([orphan], { priorSpendCents: 0 }), unaskedId);
   });
 
-  it.each(['NOT_FOUND', 'VERIFIED', 'UNVERIFIABLE'])(
-    'an observed scope whose rule concludes %s: default_unverifiable, FINAL, subject {k:scope}',
-    (then) => {
-      const policy = policyWith({ id: 'quiet', when: { observedScopeExceedsDeclared: true }, then });
-      expectTerminal(run([], { priorSpendCents: 0, scope: { observed: 'gmail.read' } }, policy), scopeId);
-    },
-  );
+  it('an observed scope whose rule concludes UNVERIFIABLE: default_unverifiable, FINAL, subject {k:scope}', () => {
+    const when = { observedScopeExceedsDeclared: true };
+    const policy = policyWith({ id: 'quiet', when, then: 'UNVERIFIABLE' });
+    expectTerminal(run([], { priorSpendCents: 0, scope: { observed: 'gmail.read' } }, policy), scopeId);
+  });
 
   it('a declared scope matches no shipped rule: the terminal receipt on the scope subject', () => {
     const declared = receiptId({ k: 'scope', agent: 'muse', scope: 'gmail.send' });

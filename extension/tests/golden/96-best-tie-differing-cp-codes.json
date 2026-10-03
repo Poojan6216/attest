@@ -1,0 +1,68 @@
+{
+  "name": "tied best candidates with different cp.* codes: the lower observation id is best (and gives cp.*), though it is later",
+  "covers": ["contract:best_tie_by_observation_id", "edge:assignment_tie_break", "edge:plus_tag_partial"],
+  "mode": "batch",
+  "notes": [
+    "Sprint 1 close (TECH-VR1, QA-G12): written from docs/grading.md alone. §8: grade's best candidate is the highest exact score, ties broken by observation id; §15: cp.* come from the best candidate only. Here the two tied candidates differ in their cp.* codes, so a tie broken by occurrence order (the earlier first, as candidates are ordered, §4.1) names the other candidate and drops cp.plus_tag.",
+    "c1 (muse, priya@company.com, 'Q3 deck', 14:02, minute precision): unit [14:02, 14:03], window [14:00, 14:48] (§4.1). Address claim with a subject: applicable timeProximity 2500, counterpartyExact 3500, counterpartyDomain 1500, subjectOverlap 1500; Σw = 9000 (§5.2). The grant binds gmail.sent to acct-a.",
+    "o1 priya+news@company.com 'Q3 deck' at 14:03 (inside the closed unit → Δ 0, tp 1): ce 0 with reason cp.plus_tag (not code-point-identical, all ASCII, the addresses differ only by the +tag, §5.1); cd 1 (same domain, company.com is not common, and a +tag-only difference counts anyway); subject 1. S = (2500 + 0 + 1500 + 1500)/9000 = 5500/9000 = 11/18.",
+    "o2 raj@company.com 'Q3 deck' at 14:02 (tp 1): ce 0 with no cp.* code (another mailbox, not a +tag difference); cd 1 (same non-common domain); subject 1. S = 11/18. The two scores are equal exactly.",
+    "Ties (§8): assertIds pins id(o1) < id(o2), although o1 occurred a minute later. Best candidate = o1 → match.best {o1}, and cp.* from it: cp.plus_tag. Assignment (§4.3): both pairs ≥ partial (10000·5500 ≥ 5000·9000); equal scores, same claimedAt and claim → the lower observation id → c1 takes o1.",
+    "Rule (§6): coverage full (one eligible acct-a entry seeing [12:00, 15:00] ⊇ [14:00, 14:48]); not verified (10000·5500 < 8500·9000); partial → PARTIAL, observationIds [o1]. State (§8): PARTIAL is FINAL once graceElapsed: the 15:00 sync ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48 → FINAL. Reasons: the partial rule adds no code; no allowlist, so allowlist.unchecked is not emitted; match.best {o1}, then cp.plus_tag (§15 order).",
+    "o2 is an orphan (inside the covered interval, assigned to no claim); there is no activity, so no agent signal fires and no attribution exists → the claim-less grading is not UNASKED → no receipt (§3, §7)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya+news@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:03:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gmail.sent": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "assertIds": { "ascending": [["o1", "o2"]] },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "11/18",
+      "reasonCodes": ["match.best", "cp.plus_tag"],
+      "reasonParams": { "match.best": { "observationId": "o1" }, "cp.plus_tag": {} }
+    }
+  ]
+}

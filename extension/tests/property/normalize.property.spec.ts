@@ -4,7 +4,10 @@
  * address comparison is symmetric and consistent; name() is idempotent; IDN decoding agrees with WHATWG.
  * v1.2 §11: subjects drop zero-width and bidi marks before splitting and keep combining marks inside tokens;
  * text that displays differently from how it is stored (a bidi override, a \p{No} digit NFKC changes) gives no
- * name tokens and no counterparty, and a subject with a bidi override gives no tokens.
+ * name tokens and no counterparty, and a subject with a bidi override gives no tokens. Character classes in the
+ * assertions are Unicode 15.0's (`BASELINE_CLASS`, Decisions [SEC-1]), as the readers' are. The ASCII-path and
+ * dot-atom reference properties are in normalize-reference.property.spec.ts; the Unicode baseline's own
+ * properties in unicode-baseline.property.spec.ts.
  */
 import { domainToASCII, domainToUnicode } from 'node:url';
 
@@ -25,11 +28,15 @@ import {
   subjectTokens,
   toUnicodeDomain,
 } from '../../src/core/normalize';
-import { readsDifferently, stripInvisible } from '../../src/core/normalize-text';
-import { isAceLabel } from '../../src/core/punycode';
+import { BASELINE_CLASS, trimBaseline } from '../../src/core/unicode-baseline';
 import { CURRENCY_MINOR_UNITS } from '../../src/core/units';
 
 const RUNS = { numRuns: 2_000 };
+/** Unicode 15.0 classes (unicode-table-classes.ts), as the readers use them. */
+const FOLDED_AWAY = new RegExp(`[${BASELINE_CLASS.invisible}${BASELINE_CLASS.nonspacingMark}A-Z]`, 'u');
+const DOUBLE_SPACE = new RegExp(`[${BASELINE_CLASS.space}]{2}`, 'u');
+const TOKEN = new RegExp(`^[${BASELINE_CLASS.token}]+$`, 'u');
+const INVISIBLE = new RegExp(`[${BASELINE_CLASS.invisible}]`, 'u');
 const CURRENCIES = Object.keys(CURRENCY_MINOR_UNITS).filter(isCurrencyCode);
 const STOP_WORDS = ['a', 'an', 'the', 'and', 'or', 'of', 'to', 'for'];
 
@@ -81,7 +88,7 @@ describe('amount() (property)', () => {
       ),
       { numRuns: 5_000 },
     );
-  }, 60_000);
+  });
 
   it('round-trips exactly through every locale style (a lone separator with three decimals is rejected)', () => {
     const style = fc.constantFrom(
@@ -109,7 +116,7 @@ describe('amount() (property)', () => {
       ),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 describe('text that reads differently from how it displays (property)', () => {
@@ -141,7 +148,7 @@ describe('text that reads differently from how it displays (property)', () => {
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 describe('asciiLower (property)', () => {
@@ -159,7 +166,7 @@ describe('asciiLower (property)', () => {
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 const ADDRESS_PARTS = [
@@ -209,7 +216,7 @@ describe('email() and sameAddress() (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  }, 60_000);
+  });
 
   it('is symmetric and internally consistent', () => {
     // Small alphabets so that exact, plus-tag-only, same-domain and confusable pairs all occur often.
@@ -233,107 +240,6 @@ describe('email() and sameAddress() (property)', () => {
       }),
       RUNS,
     );
-  }, 60_000);
-});
-
-/**
- * name(), nameTokens() and subjectTokens() as §11 defines them for any text (the implementation before the ASCII
- * fast path): the reference both paths must equal.
- */
-function referenceName(raw: string): string {
-  if (readsDifferently(raw)) return '';
-  const compatible = stripInvisible(stripInvisible(raw).normalize('NFKC'));
-  const folded = compatible
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Mn}/gu, '')
-    .normalize('NFC');
-  return folded.replace(/[\s\p{White_Space}]+/gu, ' ').trim();
-}
-function referenceNameTokens(raw: string): string[] {
-  return [
-    ...new Set(
-      referenceName(raw)
-        .split(/[^\p{L}\p{N}\p{M}]+/u)
-        .filter((token) => token !== ''),
-    ),
-  ];
-}
-function referenceSubjectTokens(raw: string, stopWords: readonly string[]): string[] {
-  if (/[\u202A\u202B\u202D\u202E]/u.test(raw)) return [];
-  const tokens = stripInvisible(raw)
-    .normalize('NFKC')
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}\p{M}]+/u)
-    .filter((token) => token !== '');
-  const first = tokens.findIndex((token) => !['re', 'fw', 'fwd'].includes(token));
-  const body = first < 0 ? [] : tokens.slice(first);
-  const stop = new Set(stopWords.map((word) => word.normalize('NFKC').toLowerCase()));
-  return [...new Set(body.filter((token) => !stop.has(token)))].sort();
-}
-
-describe('name(), nameTokens(), subjectTokens(): the ASCII path equals the general folding (property)', () => {
-  const asciiText = fc.oneof(
-    fc.string({ unit: 'binary-ascii', maxLength: 60 }),
-    fc.string({
-      unit: fc.constantFrom(...Array.from('Re: FW fwd Priya.SHAH_x-1 \t\n\u000b\f\r\u0000\u001f\u007f')),
-      maxLength: 40,
-    }),
-  );
-  const anyText = fc.oneof(asciiText, fc.string({ unit: 'binary', maxLength: 40 }));
-  const stopWords = fc.array(fc.oneof(fc.constantFrom('the', 'RE', 'invoice'), fc.string({ maxLength: 6 })), {
-    maxLength: 4,
-  });
-
-  it('gives the reference result for ASCII and for any other text', () => {
-    fc.assert(
-      fc.property(anyText, stopWords, (raw, stop) => {
-        expect(name(raw)).toBe(referenceName(raw));
-        expect(nameTokens(raw)).toEqual(referenceNameTokens(raw));
-        expect(subjectTokens(raw, stop)).toEqual(referenceSubjectTokens(raw, stop));
-      }),
-      { numRuns: 5_000 },
-    );
-  });
-});
-
-/** email() as §11 defines it (dot-atom parts checked by splitting), the reference for the faster checks. */
-function referenceEmail(raw: string): EmailAddress | null {
-  const text = raw.trim();
-  let address: string | null = text;
-  if (text.endsWith('>')) {
-    const open = text.lastIndexOf('<');
-    const display = open < 0 ? '<' : text.slice(0, open).replace(/"(?:[^"\\]|\\.)*"/gu, '');
-    address = /[<>]/.test(display) ? null : text.slice(open + 1, -1).trim();
-  }
-  if (address === null || /[\s\p{Cc}()<>[\]\\,;:"]/u.test(address)) return null;
-  const at = address.indexOf('@');
-  if (at < 0 || at !== address.lastIndexOf('@')) return null;
-  const [local, domain] = [address.slice(0, at), address.slice(at + 1)];
-  const dotted = (part: string) => part.split('.').every((piece) => piece !== '');
-  if (!dotted(local) || !dotted(domain) || !domain.includes('.')) return null;
-  const confusable = /\P{ASCII}/u.test(address) || domain.split('.').some(isAceLabel);
-  const plus = local.indexOf('+', 1);
-  if (plus < 0) return { address, local, domain, baseLocal: local, confusable };
-  return {
-    address,
-    local,
-    domain,
-    baseLocal: local.slice(0, plus),
-    plusTag: local.slice(plus + 1),
-    confusable,
-  };
-}
-
-describe('email(): the dot-atom check equals splitting on dots (property)', () => {
-  it('gives the reference result for address-shaped text', () => {
-    const shaped = fc.string({ unit: fc.constantFrom(...Array.from('ab.@+x-<> "Z\u00e9')), maxLength: 24 });
-    fc.assert(
-      fc.property(fc.oneof(shaped, fc.string({ maxLength: 24 })), (raw) => {
-        expect(email(raw)).toEqual(referenceEmail(raw));
-      }),
-      { numRuns: 5_000 },
-    );
   });
 });
 
@@ -344,14 +250,14 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
       fc.property(text, (raw) => {
         const folded = name(raw);
         expect(name(folded)).toBe(folded);
-        expect(folded).not.toMatch(/[\p{Cf}\p{Default_Ignorable_Code_Point}\p{Mn}A-Z]/u);
-        expect(folded).toBe(folded.trim());
-        expect(folded).not.toMatch(/\s\s/u);
+        expect(folded).not.toMatch(FOLDED_AWAY);
+        expect(folded).toBe(trimBaseline(folded));
+        expect(folded).not.toMatch(DOUBLE_SPACE);
         expect(nameTokens(folded)).toEqual(nameTokens(raw));
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 
   it('subjectTokens() is a sorted set with no empty token or stop word, unchanged by a reply prefix', () => {
     fc.assert(
@@ -364,7 +270,7 @@ describe('name(), nameTokens(), subjectTokens() (property)', () => {
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 /** Any text, and `mark` inserted into `raw` at a position chosen by `at` (v1.2 \u00A711 properties below). */
@@ -376,7 +282,7 @@ const insert = (raw: string, mark: string, at: number): string => {
 
 describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks (property)', () => {
   /** Zero-width characters, bidi marks and isolates, the BOM, a soft hyphen, a variation selector. */
-  const INVISIBLE = [
+  const MARKS = [
     '\u200B',
     '\u200C',
     '\u200D',
@@ -391,24 +297,24 @@ describe('v1.2 \u00A711: subjects drop invisible marks and keep combining marks 
 
   it('an invisible mark anywhere in a subject changes none of its tokens', () => {
     fc.assert(
-      fc.property(anyText, fc.constantFrom(...INVISIBLE), fc.nat(), (raw, mark, at) => {
+      fc.property(anyText, fc.constantFrom(...MARKS), fc.nat(), (raw, mark, at) => {
         expect(subjectTokens(insert(raw, mark, at), STOP_WORDS)).toEqual(subjectTokens(raw, STOP_WORDS));
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 
   it('subject tokens are runs of letters, digits and marks only, with no invisible character', () => {
     fc.assert(
       fc.property(anyText, (raw) => {
         for (const token of subjectTokens(raw, STOP_WORDS)) {
-          expect(token).toMatch(/^[\p{L}\p{N}\p{M}]+$/u);
-          expect(token).not.toMatch(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u);
+          expect(token).toMatch(TOKEN);
+          expect(token).not.toMatch(INVISIBLE);
         }
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 describe('v1.2 \u00A711: text that reads differently from how it is stored gives no tokens (property)', () => {
@@ -426,7 +332,7 @@ describe('v1.2 \u00A711: text that reads differently from how it is stored gives
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 
   it('a \\p{No} digit NFKC would change leaves a name with no tokens and no name counterparty', () => {
     fc.assert(
@@ -437,7 +343,7 @@ describe('v1.2 \u00A711: text that reads differently from how it is stored gives
       }),
       RUNS,
     );
-  }, 60_000);
+  });
 });
 
 describe('toUnicodeDomain (property)', () => {
@@ -471,5 +377,5 @@ describe('toUnicodeDomain (property)', () => {
       }),
       { numRuns: 1_000 },
     );
-  }, 60_000);
+  });
 });

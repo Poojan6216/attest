@@ -7,6 +7,11 @@
  * coverage ping is the ledger's storage shape until Sprint 2.6 reworks coverage. `send()` validates before
  * sending and `listen()` validates on receive: parse at every boundary.
  *
+ * The schema cannot know which fields each observer source may store, or whether a contentHash is the hash of
+ * its row: that needs the policy. The ledger writer checks both (`upsertObservation` runs
+ * `observationIntegrityProblems`) before anything reaches disk, so a received observation is stored only
+ * through it (SEC-V1, Hard Rule 2).
+ *
  * Chrome serialises runtime messages as JSON. Every value here must survive that: no `undefined`
  * inside arrays, no Dates, no Maps.
  */

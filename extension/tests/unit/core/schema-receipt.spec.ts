@@ -366,5 +366,5 @@ describe('lifecycle reasons: accepted exactly in the §15 order (property)', () 
       }),
       { numRuns: 1_000 },
     );
-  }, 30_000);
+  });
 });

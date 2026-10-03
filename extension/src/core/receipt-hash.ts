@@ -24,7 +24,7 @@
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
-import { canonicalJson, type HashMemo, memoHash, sha256Hex } from './hash';
+import { canonicalJson, type HashMemo, hashCanonical, memoHash, plainJson } from './hash';
 import {
   type Claim,
   type Coverage,
@@ -35,6 +35,7 @@ import {
   Sha256,
 } from './schema';
 import { DIGEST_WORDS, sha256OfDigests, Sha256Writer } from './sha256';
+import { compareText as compareTextShared } from './order';
 
 /** What `grade()` hashes, after it dropped the coverage entries and candidates it ignores (§3). */
 export interface GradeInputs {
@@ -46,10 +47,8 @@ export interface GradeInputs {
   readonly context: GradeContext;
 }
 
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+/** The one code-unit order (order.ts), bound once: the test transform turns an imported call into a getter. */
+const compareText = compareTextShared;
 
 /** The distinct values, sorted by UTF-16 code unit. */
 function sortedSet<T extends string>(values: readonly T[]): T[] {
@@ -178,6 +177,17 @@ function writeRef(candidate: Observation): Sha256Writer {
     writer.write(canonicalJson(candidateRef(candidate)));
     return writer;
   }
+  if (plainJson(contentHash) && plainJson(id) && plainJson(observedAt)) {
+    // Each value is its JSON text between quotes (hash.ts `plainJson`), so the quotes join the fixed pieces.
+    writer.write('{"contentHash":"');
+    writer.write(contentHash);
+    writer.write('","id":"');
+    writer.write(id);
+    writer.write('","observedAt":"');
+    writer.write(observedAt);
+    writer.write('"}');
+    return writer;
+  }
   writer.write('{"contentHash":');
   writer.write(JSON.stringify(contentHash));
   writer.write(',"id":');
@@ -261,7 +271,7 @@ export interface HashedInputs {
 export function inputsHashOf(parts: HashedInputs): Sha256 {
   const { claim, candidatesHash: candidates, grantHash: grant, policyHash, coverageHash: coverage } = parts;
   const hashed = { claim, candidatesHash: candidates, grantHash: grant, policyHash, coverageHash: coverage };
-  return Sha256.parse(sha256Hex(canonicalJson({ ...hashed, context: canonicalContext(parts.context) })));
+  return Sha256.parse(hashCanonical({ ...hashed, context: canonicalContext(parts.context) }));
 }
 
 /**

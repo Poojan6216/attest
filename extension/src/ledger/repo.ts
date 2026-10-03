@@ -4,8 +4,12 @@
  *
  * Contract:
  *  - Writes take the schemas' input types and Zod-parse them first (src/core/schema.ts). Invalid input throws
- *    `LedgerError('invalid_input')` and writes nothing. Strict schemas reject unknown keys, so nothing outside
- *    the allowlist reaches disk (Hard Rule 2). Reads return the parsed, branded domain types.
+ *    `LedgerError('invalid_input')` and writes nothing. Strict schemas reject keys no schema names; they do not
+ *    know which fields a source may store. So an observation must also be one `redact.project()` could have
+ *    returned under the caller's loaded policy (`observationIntegrityProblems`): only the content fields its
+ *    source's allowlist names, and a contentHash that is the §10 hash of its content, so a row can neither
+ *    carry a field its source never stores nor choose its own id (Hard Rule 2). Reads return the parsed
+ *    domain types.
  *  - Observations and claims are idempotent: keyed on contentHash / rawHash inside one rw transaction.
  *    A repeat is a no-op that returns the stored id; it never overwrites a readable row and never leaks a
  *    ConstraintError. A stored row no read can return (it fails its schema) is replaced, not kept as a ghost.
@@ -15,6 +19,8 @@
 import type { Table } from 'dexie';
 import { z } from 'zod';
 
+import { assertLoadedPolicy, type Policy } from '../core/policy';
+import { observationIntegrityProblems } from '../core/redact';
 import { log } from '../log';
 import { loggableId, logTableId, readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
@@ -142,9 +148,31 @@ function isOlder(incomingTs: string, storedTs: string): boolean {
 
 // ── Observations ────────────────────────────────────────────────────────────────────────────────
 
-/** Inserts an observation, or returns the existing id when its contentHash is already stored. */
-export async function upsertObservation(db: LedgerDb, input: ObservationInput): Promise<UpsertResult> {
+/** Throws `invalid_input` (field names only) unless `project()` could have returned `observation` (SEC-V1). */
+function assertProjected(observation: Observation, policy: Policy): void {
+  const problems = observationIntegrityProblems(observation, policy);
+  if (problems.length === 0) return;
+  const paths = problems.map(([field]) => (typeof field === 'string' ? field : field.join('.')));
+  throw new LedgerError('invalid_input', 'Invalid observations input', {
+    table: 'observations',
+    paths: paths.join('|'),
+  });
+}
+
+/**
+ * Inserts an observation, or returns the existing id when its contentHash is already stored. `policy` is the
+ * loaded policy whose allowlist the observation was projected under; a row it could not have produced is
+ * refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a widened
+ * allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
+ */
+export async function upsertObservation(
+  db: LedgerDb,
+  input: ObservationInput,
+  policy: Policy,
+): Promise<UpsertResult> {
+  assertLoadedPolicy(policy);
   const observation = parseInput('observations', Observation, input);
+  assertProjected(observation, policy);
   const row = toObservationRow(observation);
   return insertUnlessHashExists(db, observationsByHash(db), observation.contentHash, row);
 }

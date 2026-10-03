@@ -128,9 +128,7 @@ describe('coverage: the union of eligible uncapped intervals (§6.1)', () => {
   });
 });
 
-describe('coverage: caps and several sources (§6.1)', () => {
-  const claim = claimOf();
-
+describe('coverage: caps (§6.1)', () => {
   it('caps a calendar view that does not show every calendar (coverage.calendars_hidden)', () => {
     const calendar = claimOf({ type: 'calendar.created', targetAt: at('14:00', '08') });
     const view = {
@@ -169,6 +167,10 @@ describe('coverage: caps and several sources (§6.1)', () => {
     const noTarget = claimOf({ type: 'calendar.created' });
     expect(level(noTarget, [entry({ source: 'gcal.event', allCalendars: true })]).level).toBe('none');
   });
+});
+
+describe('coverage: several sources (§6.1)', () => {
+  const claim = claimOf();
 
   it('several sources: full only if every one is full, none only if every one is none', () => {
     const policy = policyWith({ sourcesByType: { 'email.sent': ['gmail.sent', 'gcal.event'] } });

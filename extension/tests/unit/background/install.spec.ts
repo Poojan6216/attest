@@ -73,7 +73,9 @@ describe('handleInstalled', () => {
       fields: { reason: 'corrupt' },
     });
   });
+});
 
+describe('handleInstalled: other reasons, malformed details and failures', () => {
   it.each(['chrome_update', 'shared_module_update'])('reason=%s touches nothing', async (reason) => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
 

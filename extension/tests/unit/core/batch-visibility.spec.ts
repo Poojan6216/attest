@@ -110,6 +110,19 @@ describe('gradeBatch: a claim first seen after evaluatedAt does not exist yet (�
     expect(summary(loaded, await run(loaded))).toEqual({ c1: ['VERIFIED', 'verified'] });
   });
 
+  it('is still checked for duplicates: a corrupt batch fails loud whatever it holds (Hard Rule 6)', async () => {
+    const loaded = load({
+      claims: [{ ...email('c1', 'priya@company.com', 'Q3 deck', at('14:02:00')), observedAt: JUST_AFTER }],
+    });
+    const [late] = loaded.batchClaims;
+    if (late === undefined) throw new Error('no claim');
+    await expect(run(loaded, [late, Claim.parse({ ...late })])).rejects.toThrow(
+      new BatchError('duplicate_claim'),
+    );
+  });
+});
+
+describe('gradeBatch: a claim first seen after evaluatedAt changes no other receipt (§3, §6.3, §7)', () => {
   it('is not counted in priorSpendCents (§6.3 reads only claims seen by evaluatedAt)', async () => {
     const purchase = (ref: string, claimedAt: string, observedAt: string) => ({
       ref,
@@ -149,17 +162,6 @@ describe('gradeBatch: a claim first seen after evaluatedAt does not exist yet (�
     expect(summary(explained, await run(explained))).toEqual({ c1: ['UNVERIFIABLE', 'pending'] });
     const unexplained = load(input(JUST_AFTER));
     expect(summary(unexplained, await run(unexplained))).toEqual({ o1: ['UNASKED', 'unasked'] });
-  });
-
-  it('is still checked for duplicates: a corrupt batch fails loud whatever it holds (Hard Rule 6)', async () => {
-    const loaded = load({
-      claims: [{ ...email('c1', 'priya@company.com', 'Q3 deck', at('14:02:00')), observedAt: JUST_AFTER }],
-    });
-    const [late] = loaded.batchClaims;
-    if (late === undefined) throw new Error('no claim');
-    await expect(run(loaded, [late, Claim.parse({ ...late })])).rejects.toThrow(
-      new BatchError('duplicate_claim'),
-    );
   });
 });
 

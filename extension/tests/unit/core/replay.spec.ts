@@ -6,6 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { type Policy, PolicyError } from '../../../src/core/policy';
 import { type LedgerSnapshot, replay, type ReplayReport } from '../../../src/core/replay';
 import { IsoTs, type Receipt, type Ulid } from '../../../src/core/schema';
 import { LedgerSim } from '../../tools/attest-ledger';
@@ -265,6 +266,20 @@ describe('overrides at a batch instant, and overrides of UNASKED receipts', () =
     expect(await replay(ledger)).toMatchObject({ mismatched: 0, reproduced: ledger.receipts.length });
   });
 
+  it('an UNASKED receipt overridden at its own computedAt is still graded in its own batch', async () => {
+    // QA Sprint 1 review: taking the orphan in the batch that graded it (not only after it) survived the suite.
+    const world = scenarioWorld();
+    const sim = new LedgerSim(world);
+    const { policy } = world.policyAt(0);
+    await sim.grade(T1, policy);
+    sim.override(receiptIdOf('u9'), 'VERIFIED', T1);
+    await sim.grade(T2, policy);
+    const ledger = sim.snapshot();
+    const u9 = ledger.receipts.find((receipt) => receipt.id === receiptIdOf('u9'));
+    expect(u9).toMatchObject({ computedAt: T1, override: { at: T1 } });
+    expect(await replay(ledger)).toMatchObject({ mismatched: 0, reproduced: ledger.receipts.length });
+  });
+
   it('an overridden UNASKED receipt takes its observation from its `at` on (c10 never gets o9)', async () => {
     const final: Receipt = { ...stored('u9'), state: 'FINAL' };
     delete final.override;
@@ -277,5 +292,21 @@ describe('overrides at a batch instant, and overrides of UNASKED receipts', () =
       expect(mismatchedRefs(report)).toEqual(['c10']);
       expect(gradeMismatch(report, 'c10')).toMatchObject({ stored: 'NOT_FOUND', replayed: 'VERIFIED' });
     }
+  });
+});
+
+describe('a snapshot policy loadPolicy did not return (Hard Rule 6)', () => {
+  it('throws PolicyError(policy_not_loaded) once, before replaying, instead of an error on every receipt', async () => {
+    const [entry] = snapshot.policies;
+    if (entry === undefined) throw new Error('the scenario ledger holds a policy');
+    const [hash, policy] = entry;
+    // A copy with the original's values and policyHash: valid, but not what loadPolicy returned (SEC-2).
+    const copy: Policy = { ...policy };
+    const notLoaded = new PolicyError([], 'policy_not_loaded');
+    await expect(replay({ ...snapshot, policies: new Map([[hash, copy]]) })).rejects.toThrow(notLoaded);
+    // Even when no receipt names it: the snapshot itself is the caller's bug.
+    const unused = new Map([...snapshot.policies, ['0'.repeat(64), copy]]);
+    await expect(replay({ ...snapshot, policies: unused })).rejects.toThrow(notLoaded);
+    expect(await replay(snapshot)).toMatchObject({ mismatched: 0, reproduced: snapshot.receipts.length });
   });
 });

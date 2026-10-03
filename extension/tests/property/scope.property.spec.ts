@@ -1,7 +1,8 @@
 /**
  * Cumulative spend (docs/grading.md §6.3): `spendIndex(history, policy)` is the batch's fast path for
  * `priorSpendCents(claim, history, policy)` (sorted runs with running sums, a fallback for irregular runs). These
- * properties pin the two together over histories that mix agents, currencies (and none), spend and non-spend
+ * properties pin the two together, under any grant `spendCurrency` (or none), over histories that mix agents,
+ * currencies (and none), spend and non-spend
  * types, offsets, ties at one instant, window edges, and claim ids listed more than once, with the copies of an
  * id anywhere in (claimedAt, id) order, as when a batch passes its claims together with the ledger's (§3).
  */
@@ -49,13 +50,16 @@ const spendClaim: fc.Arbitrary<SpendClaim> = fc
 /** A history whose ids repeat (8 ids for up to 40 claims), copies anywhere in it; full-length lists are generated. */
 const history = fc.array(spendClaim, { minLength: 0, maxLength: 40, size: 'max' });
 
+/** The grant's `spendCurrency`, which a missing claim currency reads as (§6.3), or none. */
+const spendCurrency = fc.option(fc.constantFrom('USD', 'EUR'), { nil: undefined });
+
 describe('spendIndex is priorSpendCents (§6.3)', () => {
-  it('for every claim of the history, against the whole history', () => {
+  it('for every claim of the history, against the whole history, under any spendCurrency', () => {
     fc.assert(
-      fc.property(history, (claims) => {
+      fc.property(history, spendCurrency, (claims, spend) => {
         const prior = spendIndex(claims, DEFAULT_POLICY);
         for (const claim of claims) {
-          expect(prior(claim)).toBe(priorSpendCents(claim, claims, DEFAULT_POLICY));
+          expect(prior(claim, spend)).toBe(priorSpendCents(claim, claims, DEFAULT_POLICY, spend));
         }
       }),
       RUNS,
@@ -64,12 +68,17 @@ describe('spendIndex is priorSpendCents (§6.3)', () => {
 
   it('for claims outside the history (a batch claim the ledger does not hold yet)', () => {
     fc.assert(
-      fc.property(history, fc.array(spendClaim, { minLength: 1, maxLength: 8 }), (claims, graded) => {
-        const prior = spendIndex(claims, DEFAULT_POLICY);
-        for (const claim of graded) {
-          expect(prior(claim)).toBe(priorSpendCents(claim, claims, DEFAULT_POLICY));
-        }
-      }),
+      fc.property(
+        history,
+        fc.array(spendClaim, { minLength: 1, maxLength: 8 }),
+        spendCurrency,
+        (claims, graded, spend) => {
+          const prior = spendIndex(claims, DEFAULT_POLICY);
+          for (const claim of graded) {
+            expect(prior(claim, spend)).toBe(priorSpendCents(claim, claims, DEFAULT_POLICY, spend));
+          }
+        },
+      ),
       RUNS,
     );
   });

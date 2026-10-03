@@ -43,6 +43,7 @@ import {
   wallToInstant,
   weekdayOf,
 } from './normalize-time';
+import { asBaseline, BASELINE_CLASS, lowerBaseline, trimBaseline } from './unicode-baseline';
 import { DAYS_PER_WEEK, HOURS_PER_HALF_DAY, MINUTES_PER_HOUR, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
 /** Same values as schema `ClaimPrecision`. */
@@ -120,20 +121,20 @@ const AGO_UNITS: ReadonlyMap<string, TimePrecision> = new Map([
 const ONE: ReadonlySet<string> = new Set(['a', 'an', 'one']);
 
 const MERIDIEM_WITH_DOTS = /(?<![a-z])([ap])\.m\.?(?![a-z])/g;
-const WHITESPACE_RUN = /\s+/gu;
-const AGO = /^(?<count>\d+|an?|one)\s*(?<unit>[a-z]+)\.?\s+ago$/;
+/** Whitespace as Unicode 15.0 defines it (JS `\s`); `cleanText` turns each run into one ASCII space. */
+const WHITESPACE_RUN = new RegExp(`[${BASELINE_CLASS.space}]+`, 'gu');
+/* The patterns below read cleaned text, whose only whitespace is a single ' ' between words. */
+const AGO = /^(?<count>\d+|an?|one) *(?<unit>[a-z]+)\.? +ago$/;
 const CLOCK_AT_END =
-  /^(?:(?<date>.*?)[\s,]+(?:at\s+)?)?(?<hour>\d{1,2}):(?<minute>\d{2})\s*(?<meridiem>am|pm)?$/;
-const WEEKDAY_FIRST = /^(?<weekday>[a-z]+)\.?(?:,?\s+(?<rest>.+))?$/;
-const MONTH_FIRST = /^(?<month>[a-z]+)\.?\s+(?<day>\d{1,2})(?:,?\s+(?<year>\d{4}))?$/;
-const DAY_FIRST = /^(?<day>\d{1,2})\s+(?<month>[a-z]+)\.?(?:,?\s+(?<year>\d{4}))?$/;
+  /^(?:(?<date>.*?)[ ,]+(?:at +)?)?(?<hour>\d{1,2}):(?<minute>\d{2}) *(?<meridiem>am|pm)?$/;
+const WEEKDAY_FIRST = /^(?<weekday>[a-z]+)\.?(?:,? +(?<rest>.+))?$/;
+const MONTH_FIRST = /^(?<month>[a-z]+)\.? +(?<day>\d{1,2})(?:,? +(?<year>\d{4}))?$/;
+const DAY_FIRST = /^(?<day>\d{1,2}) +(?<month>[a-z]+)\.?(?:,? +(?<year>\d{4}))?$/;
 
+/** Invisible marks removed, NFKC, lowercase, `a.m.` → `am`, whitespace collapsed and trimmed (Unicode 15.0). */
 function cleanText(text: string): string {
-  return stripInvisible(stripInvisible(text).normalize('NFKC'))
-    .toLowerCase()
-    .replace(MERIDIEM_WITH_DOTS, '$1m')
-    .replace(WHITESPACE_RUN, ' ')
-    .trim();
+  const folded = lowerBaseline(stripInvisible(asBaseline(stripInvisible(text)).normalize('NFKC')));
+  return trimBaseline(folded.replace(MERIDIEM_WITH_DOTS, '$1m').replace(WHITESPACE_RUN, ' '));
 }
 
 /** `ms` in the offset in force at that instant. */

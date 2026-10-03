@@ -74,9 +74,17 @@ function grantOf(loaded: LoadedScenario, agent: string, at: IsoTs): Grant {
 
 /**
  * §6.3, recomputed independently: same agent, spend type, same currency, in window, strictly before, and (§3)
- * seen by `seenBy`.
+ * seen by `seenBy`. v1.6: a missing currency, on the claim or on a prior, reads as the grant's `spendCurrency`;
+ * with none, a currency-less claim counts only earlier claims without one.
  */
-function priorSpend(loaded: LoadedScenario, claim: Claim, policy: Policy, seenBy: IsoTs): number {
+function priorSpend(
+  loaded: LoadedScenario,
+  claim: Claim,
+  policy: Policy,
+  seenBy: IsoTs,
+  spendCurrency: string | undefined,
+): number {
+  const currency = claim.currency ?? spendCurrency;
   const at = instantMs(claim.claimedAt);
   const from = at - policy.windows.spendWindowDays * MS_PER_DAY;
   return loaded.activity.claims
@@ -87,8 +95,7 @@ function priorSpend(loaded: LoadedScenario, claim: Claim, policy: Policy, seenBy
         instantMs(other.observedAt) <= instantMs(seenBy) &&
         other.agent === claim.agent &&
         policy.spendTypes.includes(other.type) &&
-        other.currency !== undefined &&
-        other.currency === claim.currency &&
+        (other.currency ?? spendCurrency) === currency &&
         otherAt >= from &&
         before
       );
@@ -175,7 +182,7 @@ async function gradeExpectation(
   if (claim === undefined) throw new Error(`${loaded.file}: no claim ${ref}`);
   const own = await ownCandidates(loaded, ref, claim, policy);
   const grant = grantOf(loaded, claim.agent, at);
-  const prior = { priorSpendCents: priorSpend(loaded, claim, policy, at) };
+  const prior = { priorSpendCents: priorSpend(loaded, claim, policy, at, grant.spendCurrency) };
   return graded(grant, prior, grade(claim, own, grant, policy, coverage, prior));
 }
 

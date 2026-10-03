@@ -22,6 +22,15 @@ import { timeProximityInto } from './features-time';
 import type { FeatureName, Policy } from './policy';
 import type { ClaimWindow } from './window';
 
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const timeProximityIntoLocal = timeProximityInto;
+const addressVerdictLocal = addressVerdict;
+const nameMatchesLocal = nameMatches;
+const sameMoneyLocal = sameMoney;
+
 /** What the claim alone says (§5.2: applicability reads only these). */
 export interface ClaimFacts {
   readonly window: ClaimWindow | null;
@@ -82,18 +91,18 @@ function valueInto(
   nums[i] = 0;
   if (feature === 'timeProximity') {
     if (facts.window !== null) {
-      timeProximityInto(facts.window, observed.occurredMs, policy.windows.toleranceMin, nums, dens, i);
+      timeProximityIntoLocal(facts.window, observed.occurredMs, policy.windows.toleranceMin, nums, dens, i);
     }
   } else if (feature === 'counterpartyExact') {
     nums[i] = verdict?.exact === true ? 1 : 0;
   } else if (feature === 'counterpartyDomain') {
     nums[i] = verdict?.domain === true ? 1 : 0;
   } else if (feature === 'counterpartyName') {
-    nums[i] = nameMatches(facts.nameTokens, observed.address) ? 1 : 0;
+    nums[i] = nameMatchesLocal(facts.nameTokens, observed.address) ? 1 : 0;
   } else if (feature === 'subjectOverlap') {
     if (facts.subject.size > 0) jaccardInto(plan.subjectTokens, observed.subject, nums, dens, i);
   } else if (feature === 'amountExact') {
-    nums[i] = sameMoney(facts.money, observed) ? 1 : 0;
+    nums[i] = sameMoneyLocal(facts.money, observed) ? 1 : 0;
   } else if (feature === 'merchantMatch') {
     const merchant = observed.merchantName;
     if (facts.merchant !== null && merchant !== null) {
@@ -116,7 +125,7 @@ export function fillParts(
   const { facts, applicable } = plan;
   const verdict =
     plan.usesAddress && facts.address !== null
-      ? addressVerdict(facts.address, observed.address, policy.commonDomains)
+      ? addressVerdictLocal(facts.address, observed.address, policy.commonDomains)
       : null;
   for (let i = 0; i < applicable.length; i += 1) {
     valueInto(applicable[i], plan, observed, verdict, policy, nums, dens, i);

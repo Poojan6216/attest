@@ -57,7 +57,9 @@ describe('sanitizeCss', () => {
     expect(result.atRulesRemoved).toBe(0);
     expect(result.urlsNeutralised).toBe(0);
   });
+});
 
+describe('sanitizeCss: resource functions and unterminated input', () => {
   it('neutraliseCssUrls (SVG presentation attributes) touches only resource functions', () => {
     expect(neutraliseCssUrls(`url(https://${HOST}/p.svg#a)`)).toEqual({ css: 'none', count: 1 });
     expect(neutraliseCssUrls(`url(https://${HOST}/c.png), auto`)).toEqual({ css: 'none, auto', count: 1 });

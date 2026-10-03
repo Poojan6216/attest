@@ -270,6 +270,20 @@ describe('claimWindow: calendar edges follow instants and policy', () => {
     };
     expect(() => claimWindow(far, huge)).toThrow(expect.objectContaining({ code: 'unsafe_window' }));
   });
+
+  it('throws unsafe_window for a window start past −2^53 ms too (year 0001: the end is safe, the start is not)', () => {
+    // QA Sprint 1 review: the test above overflows only the end, so dropping the start check survived the suite.
+    const huge = withWindows({ calendarDays: Math.floor(Number.MAX_SAFE_INTEGER / MS_PER_DAY) });
+    const early = {
+      ...claim('0001-01-01T00:00:00Z'),
+      type: 'calendar.created' as const,
+      targetAt: '0001-01-01T00:00:00Z',
+    };
+    expect(Number.isSafeInteger(at('0001-01-01T00:00:00Z') + huge.windows.calendarDays * MS_PER_DAY)).toBe(
+      true,
+    );
+    expect(() => claimWindow(early, huge)).toThrow(expect.objectContaining({ code: 'unsafe_window' }));
+  });
 });
 
 describe('isCalendarType', () => {

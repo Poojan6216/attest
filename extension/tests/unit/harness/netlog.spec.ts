@@ -134,6 +134,10 @@ describe('analyse', () => {
     expect(report.attributed).toEqual([]);
     expect(report.violations).toEqual([]);
   });
+});
+
+describe('analyse: browser background traffic and the allowlist', () => {
+  const options = { fixtureOrigin: FIXTURES, allowlist: [] as string[] };
 
   it('separates known Chromium background hosts from unknown browser-initiated hosts', () => {
     const report = analyse(

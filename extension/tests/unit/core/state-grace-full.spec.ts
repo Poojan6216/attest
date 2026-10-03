@@ -28,7 +28,6 @@ import { instantMs, shiftIso } from '../../golden/time';
 const MS_PER_SECOND = 1_000;
 const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
-const PROPERTY_TIMEOUT_MS = 30_000;
 
 const CLAIMED_AT = '2026-10-06T14:02:00-04:00';
 const GRANT = buildGrant({ agent: 'muse' }, CLAIMED_AT);
@@ -139,61 +138,51 @@ describe('grace, not coverage, holds a fully covered receipt at PENDING', () => 
   });
 
   const walk = '$label: PENDING at every sync before grace, FINAL NOT_FOUND at grace';
-  it.each(CASES)(
-    walk,
-    (c) => {
-      let receipt = gradeAt(c, CLAIMED_AT);
-      expectPendingDespiteCoverage(c, receipt, CLAIMED_AT);
-      const steps = (instantMs(c.graceAt) - instantMs(CLAIMED_AT)) / MS_PER_MINUTE;
-      const syncs = Array.from({ length: steps - 1 }, (_, i) =>
-        shiftIso(CLAIMED_AT, (i + 1) * MS_PER_MINUTE),
-      );
-      for (const at of [...syncs, shiftIso(c.graceAt, -MS_PER_SECOND)]) {
-        const next = gradeAt(c, at);
-        expectPendingDespiteCoverage(c, next, at);
-        receipt = transition(receipt, { event: 'regrade', next });
-        expect(receipt).toStrictEqual(next);
-      }
+  it.each(CASES)(walk, (c) => {
+    let receipt = gradeAt(c, CLAIMED_AT);
+    expectPendingDespiteCoverage(c, receipt, CLAIMED_AT);
+    const steps = (instantMs(c.graceAt) - instantMs(CLAIMED_AT)) / MS_PER_MINUTE;
+    const syncs = Array.from({ length: steps - 1 }, (_, i) => shiftIso(CLAIMED_AT, (i + 1) * MS_PER_MINUTE));
+    for (const at of [...syncs, shiftIso(c.graceAt, -MS_PER_SECOND)]) {
+      const next = gradeAt(c, at);
+      expectPendingDespiteCoverage(c, next, at);
+      receipt = transition(receipt, { event: 'regrade', next });
+      expect(receipt).toStrictEqual(next);
+    }
 
-      const final = gradeAt(c, c.graceAt);
-      expect(final).toMatchObject({
-        id: receipt.id,
-        state: 'FINAL',
-        grade: 'NOT_FOUND',
-        ruleId: 'not_found',
-        finalAt: c.graceAt,
-      });
-      receipt = transition(receipt, { event: 'regrade', next: final });
-      expect(receipt).toStrictEqual(final);
-      expectRefusedRegrade(receipt, gradeAt(c, shiftIso(c.graceAt, MS_PER_HOUR)));
-      expect(receipt).toStrictEqual(final);
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+    const final = gradeAt(c, c.graceAt);
+    expect(final).toMatchObject({
+      id: receipt.id,
+      state: 'FINAL',
+      grade: 'NOT_FOUND',
+      ruleId: 'not_found',
+      finalAt: c.graceAt,
+    });
+    receipt = transition(receipt, { event: 'regrade', next: final });
+    expect(receipt).toStrictEqual(final);
+    expectRefusedRegrade(receipt, gradeAt(c, shiftIso(c.graceAt, MS_PER_HOUR)));
+    expect(receipt).toStrictEqual(final);
+  });
 
-  it(
-    'property: any sync in [claimedAt, grace) is PENDING; any in [grace, grace + 7 days] is FINAL NOT_FOUND',
-    () => {
-      const arb = fc.constantFrom(...CASES).chain((c) =>
-        fc.record({
-          c: fc.constant(c),
-          beforeS: fc.integer({
-            min: 0,
-            max: (instantMs(c.graceAt) - instantMs(CLAIMED_AT)) / MS_PER_SECOND - 1,
-          }),
-          afterS: fc.integer({ min: 0, max: (7 * 24 * MS_PER_HOUR) / MS_PER_SECOND }),
+  it('property: any sync in [claimedAt, grace) is PENDING; any in [grace, grace + 7 days] is FINAL NOT_FOUND', () => {
+    const arb = fc.constantFrom(...CASES).chain((c) =>
+      fc.record({
+        c: fc.constant(c),
+        beforeS: fc.integer({
+          min: 0,
+          max: (instantMs(c.graceAt) - instantMs(CLAIMED_AT)) / MS_PER_SECOND - 1,
         }),
-      );
-      fc.assert(
-        fc.property(arb, ({ c, beforeS, afterS }) => {
-          const before = shiftIso(CLAIMED_AT, beforeS * MS_PER_SECOND);
-          expectPendingDespiteCoverage(c, gradeAt(c, before), before);
-          const after = shiftIso(c.graceAt, afterS * MS_PER_SECOND);
-          expect(gradeAt(c, after)).toMatchObject({ state: 'FINAL', grade: 'NOT_FOUND', finalAt: after });
-        }),
-        { numRuns: 1_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+        afterS: fc.integer({ min: 0, max: (7 * 24 * MS_PER_HOUR) / MS_PER_SECOND }),
+      }),
+    );
+    fc.assert(
+      fc.property(arb, ({ c, beforeS, afterS }) => {
+        const before = shiftIso(CLAIMED_AT, beforeS * MS_PER_SECOND);
+        expectPendingDespiteCoverage(c, gradeAt(c, before), before);
+        const after = shiftIso(c.graceAt, afterS * MS_PER_SECOND);
+        expect(gradeAt(c, after)).toMatchObject({ state: 'FINAL', grade: 'NOT_FOUND', finalAt: after });
+      }),
+      { numRuns: 1_000 },
+    );
+  });
 });

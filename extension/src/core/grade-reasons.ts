@@ -3,7 +3,8 @@
  *
  * Emission (§15):
  *  - the RULE's own codes come from the conditions its `when` names that held: `unaskedLikely` → the attributed
- *    agent's fired `unasked.*` signals (UNASKED only); `observedScopeExceedsDeclared` → `scope.observed_not_
+ *    agent's fired `unasked.*` signals (UNASKED only; attribution.ts `attributionReasons`, the one map from
+ *    signal to code); `observedScopeExceedsDeclared` → `scope.observed_not_
  *    declared`; `typeNotInGrant` → `scope.type_not_allowed`; `counterpartyNotAllowed` →
  *    `scope.counterparty_not_allowed`; `amountAboveCeiling` → `ceiling.exceeded` and/or
  *    `ceiling.currency_mismatch`; `cumulativeAboveCeiling` → `ceiling.cumulative_exceeded`; `targetMissing` →
@@ -21,13 +22,14 @@
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
+import { attributionReasons } from './attribution';
 import type { CeilingCheck, Conditions, CoverageResult, SourceGrace } from './conditions';
 import type { BestCandidate } from './grade-best';
 import { sha256Hex } from './hash';
 import type { Policy, PolicyRule, RuleOutcome } from './policy';
 import { toDisplay, toDisplayOf } from './ratio';
 import { reasonCode, type ReasonGroups } from './receipt';
-import type { Claim, Grade, GradeContext, Grant, Reason, ReasonCode, UnaskedSignal } from './schema';
+import type { Claim, Grade, GradeContext, Grant, Reason, ReasonCode } from './schema';
 import { BASIS_POINTS } from './units';
 
 export interface ReasonInput {
@@ -44,13 +46,6 @@ export interface ReasonInput {
   readonly context: GradeContext;
   readonly policy: Policy;
 }
-
-const SIGNAL_CODES: Readonly<Record<UnaskedSignal, ReasonCode>> = Object.freeze({
-  agentSessionActive: 'unasked.session',
-  userIdle: 'unasked.idle',
-  agentSignature: 'unasked.signature',
-  activityLogAdjacent: 'unasked.adjacent',
-});
 
 /**
  * A numeric param of `-0` (a parsed amount or `priorSpendCents` may be one: `min(0)` accepts it) is written as
@@ -94,9 +89,7 @@ function permissionReasons(input: ReasonInput, when: PolicyRule['when']): Reason
   const out: Reason[] = [];
   const attribution = context.attribution;
   if (when.unaskedLikely === true && input.outcome === 'UNASKED' && attribution !== undefined) {
-    out.push(
-      ...attribution.signals.map((signal) => reason(SIGNAL_CODES[signal], { agent: attribution.agent })),
-    );
+    out.push(...attributionReasons(attribution));
   }
   if (when.observedScopeExceedsDeclared === true && context.scope !== undefined) {
     out.push(reason('scope.observed_not_declared', { scopeHash: sha256Hex(context.scope.observed) }));

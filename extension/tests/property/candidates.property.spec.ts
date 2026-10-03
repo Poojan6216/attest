@@ -3,7 +3,8 @@
  * the contract alone with Date.parse on hand-built ISO strings (never window.ts or candidates.ts helpers):
  *  - precisionBounds is the unit containing claimedAt in claimedAt's own offset, for any offset and year;
  *  - candidates() equals the oracle for random honest observation sets (re-sightings, twin ids, edge-snapped
- *    times, calendar.created first-seen), for any bucket width and any index return order.
+ *    times, calendar.created first-seen, rows from a source the policy does not list for their type), for any
+ *    bucket width and any index return order.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -65,7 +66,7 @@ describe('precisionBounds (property)', () => {
       }),
       { numRuns: RUNS },
     );
-  }, 60_000);
+  });
 });
 
 // ── candidates() against the oracle ─────────────────────────────────────────────────────────────
@@ -87,7 +88,13 @@ const placeArb = fc.oneof(
   fc.record({ kind: fc.constant('free'), delta: fc.integer({ min: -4 * UNIT.day, max: 4 * UNIT.day }) }),
 );
 
-const contentArb = fc.record({ type: fc.constantFrom(...TYPES), at: placeArb, offset: offsetArb });
+/** `stray`: the row comes from a source the policy does not list for its type (§6.1: never a candidate). */
+const contentArb = fc.record({
+  type: fc.constantFrom(...TYPES),
+  at: placeArb,
+  offset: offsetArb,
+  stray: fc.oneof({ arbitrary: fc.constant(false), weight: 5 }, { arbitrary: fc.constant(true), weight: 1 }),
+});
 const sightingArb = fc.record({
   content: fc.nat({ max: 7 }),
   twin: fc.nat({ max: 2 }),
@@ -178,7 +185,7 @@ function buildObservations(
     const contentHash = k.toString(16).padStart(32, '0').repeat(2);
     const honest = Observation.parse({
       id: idFromHash(contentHash),
-      source: sourceOf(content.type),
+      source: content.stray ? 'gmail.receipt' : sourceOf(content.type),
       type: content.type,
       subjectHint: `content ${String(k)}`,
       occurredAt: isoAt(placed(content.at, window), content.offset),
@@ -193,7 +200,7 @@ function buildObservations(
 const compareText = (a: string, b: string) => (a === b ? 0 : a < b ? -1 : 1);
 
 /** How often the runs exercised each rule: asserted after the property so it can never pass vacuously. */
-const tally = { nonEmpty: 0, firstSeenExcluded: 0, merged: 0, noWindow: 0 };
+const tally = { nonEmpty: 0, firstSeenExcluded: 0, merged: 0, noWindow: 0, stray: 0 };
 
 /** §4.1 written out directly: type, inclusive window, first-seen over every sighting, lowest id, order. */
 function oracle(claim: WindowClaim, window: OracleWindow | null, observations: readonly Observation[]) {
@@ -205,6 +212,10 @@ function oracle(claim: WindowClaim, window: OracleWindow | null, observations: r
   for (const o of observations) {
     const t = Date.parse(o.occurredAt);
     if (o.type !== claim.type || t < window.fromMs || t > window.toMs) continue;
+    if (!DEFAULT_POLICY.sourcesByType[claim.type].includes(o.source)) {
+      tally.stray += 1;
+      continue;
+    }
     groups.set(o.contentHash, [...(groups.get(o.contentHash) ?? []), o]);
   }
   const kept: Observation[] = [];
@@ -280,6 +291,7 @@ describe('candidates (property)', () => {
     expect(tally.firstSeenExcluded).toBeGreaterThan(RUNS / 50);
     expect(tally.merged).toBeGreaterThan(RUNS / 10);
     expect(tally.noWindow).toBeGreaterThan(RUNS / 50);
+    expect(tally.stray).toBeGreaterThan(RUNS / 20);
     console.log(`candidates property tally: ${JSON.stringify(tally)}`);
-  }, 60_000);
+  });
 });

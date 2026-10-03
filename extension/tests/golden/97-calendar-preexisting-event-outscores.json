@@ -1,0 +1,75 @@
+{
+  "name": "calendar.created: an event already on the calendar is no candidate even when it outscores the new one",
+  "covers": ["edge:calendar_preexisting_event", "edge:preexisting_event_outscores"],
+  "mode": "batch",
+  "notes": [
+    "Sprint 1 close (TECH-R4): written from docs/grading.md alone, so that a cross-check reading every observation in the window, without the §4.1 calendar.created first-seen rule, disagrees with the contract. 52 and 83 exclude a pre-existing event only where no other candidate exists (score null); here the excluded event is the better match.",
+    "c1 (muse, calendar.created, 'Q3 review', claimed 14:02, minute precision, targetAt Thu 10-08 14:00): window targetAt ± calendarDays 3 = [10-05 14:00, 10-11 14:00] (§4.1). A subject-only calendar claim: applicable timeProximity 2500, subjectOverlap 1500; Σw = 4000 (§5.2; the counterparty features need a claim counterparty). The grant binds gcal.event to acct-a; two passes (acct-a, all calendars) saw [10-01, 11-01], synced 09:00 and 14:40.",
+    "First-seen (§4.1 v1.3): a calendar.created candidate needs the earliest observedAt of its contentHash group ≥ start(p,t) − beforeClaimMin = 14:02 − 2 min = 14:00. o1 'Q3 review' at 10-08 14:00 was first seen at 09:00 (stated) < 14:00: it was already on the calendar → not a candidate. o2 'Q3 review prep' at 10-08 14:00 (another contentHash) was first seen at 14:40 (stated; the loader default would be the 09:00 pass, before the event existed) ≥ 14:00 → a candidate.",
+    "c1 × o2: Δ = 0 from targetAt → tp 1; subject {q3, review} vs {q3, review, prep} → 2/3. S = (2500 + 1500·2/3)/4000 = 3500/4000 = 7/8. Verified: 10000·3500 = 35 000 000 ≥ 8500·4000 = 34 000 000 → VERIFIED, o2 assigned.",
+    "Coverage full (both entries eligible, bound, allCalendars, and [10-01, 11-01] ⊇ the window), so no_coverage does not fire first. State (§8): VERIFIED is FINAL once an eligible entry has lastSyncAt ≥ end(14:03) + graceMin 30 = 14:33; the 14:40 pass → FINAL. Reasons: the verified rule adds no code; no allowlist in the grant, so allowlist.unchecked is not emitted; match.best {o2}; no cp.* (only address claims carry them).",
+    "Trap: without the first-seen rule o1 is a candidate with tp 1 and subject 1 → 1/1, and would be the best (VERIFIED 1/1 on o1). o1 is an orphan (inside the covered interval, assigned to no claim) with no activity → no attribution → no receipt (§7)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "observedAt": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review prep",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:00:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "7/8",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o2" } }
+    }
+  ]
+}

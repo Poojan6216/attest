@@ -92,6 +92,19 @@ export function latestResults(dir: string): BenchResult[] {
   });
 }
 
+/** A gate metric: `gatePassed`, or a name ending in `GatePassed` (`gradingGatePassed`). */
+const GATE_METRIC = /^(?:gatePassed|[a-z][A-Za-z0-9]*GatePassed)$/;
+
+/**
+ * The gates a result failed: its gate metrics that are not `true`. A gate written as anything but a boolean is a
+ * failed gate too, so a malformed result can never pass (QA-R8: `pnpm bench` exits non-zero on any of these).
+ */
+export function failedGates(result: BenchResult): string[] {
+  return Object.entries(result.metrics)
+    .filter(([name, value]) => GATE_METRIC.test(name) && value !== true)
+    .map(([name]) => name);
+}
+
 export function render(results: readonly BenchResult[]): string {
   const lines = [
     '# RESULTS',

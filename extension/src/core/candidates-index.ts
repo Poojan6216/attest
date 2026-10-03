@@ -11,8 +11,8 @@
  * PURE: no I/O, no clock (Hard Rule 4). Async only because the Dexie index is.
  */
 import { CandidatesError } from './candidates-error';
-import { occurredMs } from './candidates-time';
-import { asciiLower, email, nameTokens } from './normalize';
+import { asciiLower, email, instantMs, nameTokens } from './normalize';
+import { compareNumbers, compareText } from './order';
 import type { ActionType, Observation } from './schema';
 import { MS_PER_MINUTE } from './units';
 
@@ -55,10 +55,9 @@ export function counterpartyTokens(observation: Pick<Observation, 'counterparty'
   return [...tokens].sort();
 }
 
+/** Storage order: `occurredAt` instant, then id (order.ts comparators; `candidates()` filters and orders exactly). */
 function compareEntries(a: Entry, b: Entry): number {
-  if (a.ms !== b.ms) return a.ms < b.ms ? -1 : 1;
-  if (a.observation.id === b.observation.id) return 0;
-  return a.observation.id < b.observation.id ? -1 : 1;
+  return compareNumbers(a.ms, b.ms) || compareText(a.observation.id, b.observation.id);
 }
 
 /** The first index whose entry is at `ms` or later (`entries` sorted by `ms`). */
@@ -118,7 +117,8 @@ export function createMemoryIndex(
   const byType = new Map<ActionType, Entry[]>();
   const byToken = new Map<string, Entry[]>();
   for (const observation of observations) {
-    const entry = { ms: occurredMs(observation), observation };
+    // Read from the text: the entry keeps the instant, and a memo entry (candidates-time.ts) would outlive the index.
+    const entry = { ms: instantMs(observation.occurredAt), observation };
     push(byType, observation.type, entry);
     for (const token of counterpartyTokens(observation)) push(byToken, token, entry);
   }

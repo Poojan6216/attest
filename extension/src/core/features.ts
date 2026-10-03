@@ -17,8 +17,11 @@
  * features-memo.ts), what an observation says once per object (features-observed.ts), and each pair's values and
  * exact score once (`pairScorer`, shared with `features`): a batch asks for every pair's score in assignment and
  * again in `grade`'s best candidate, and for the best one's display signals. Feature values are held as integer
- * pairs and summed in Number only while provably exact (ratio.ts `weightedScoreOf`). Every memo is used only
- * while every input it was computed from is unchanged, so a memo saves work and never changes a result.
+ * pairs and summed in Number only while provably exact (ratio.ts `weightedScoreOf`). A memo is used only while
+ * every claim and observation field it read is unchanged; it compares policy parts by identity, which is sound
+ * only because every plan first refuses a policy `loadPolicy` did not return (`assertLoadedPolicy`: a loaded
+ * policy is deep-frozen, so a part that is the same object holds the same values), so a memo saves work and
+ * never changes a result.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
@@ -33,7 +36,7 @@ import {
 } from './features-observed';
 import { type ClaimFacts, type ClaimPlan, fillParts } from './features-parts';
 import { counterparty } from './normalize';
-import type { FeatureName, Policy } from './policy';
+import { assertLoadedPolicy, type FeatureName, type Policy } from './policy';
 import {
   NUMBER_RATIO_ONE,
   NUMBER_RATIO_ZERO,
@@ -47,6 +50,13 @@ import {
 } from './ratio';
 import type { ActionType, ReasonCode } from './schema';
 import { claimWindow, type WindowClaim } from './window';
+
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const fillPartsLocal = fillParts;
+const weightedFractionOfLocal = weightedFractionOf;
 
 export type { CounterpartyReason } from './features-counterparty';
 export { type FeatureObservation, freshFacts, type ObservedFacts, TextFacts } from './features-observed';
@@ -164,6 +174,7 @@ const CLAIM_PLANS: Memo<FeatureClaim, ClaimPlan> = new WeakMap();
  * (features-memo.ts): `gradeBatch` scores each claim against every candidate.
  */
 function claimPlan(claim: FeatureClaim, policy: FeaturePolicy, texts: TextFacts | null = null): ClaimPlan {
+  assertLoadedPolicy(policy);
   const inputs = [
     policy.windows,
     policy.normalize.stopWords,
@@ -214,6 +225,7 @@ export function isUnderspecified(claim: FeatureClaim, policy: FeaturePolicy): bo
  * needs `targetAt`; window.ts returns null without it), and it is not underspecified.
  */
 export function isAssignable(claim: FeatureClaim, policy: FeaturePolicy): boolean {
+  assertLoadedPolicy(policy);
   if (policy.sourcesByType[claim.type].length === 0) return false;
   const plan = claimPlan(claim, policy);
   return plan.facts.window !== null && !underspecifiedFrom(plan, claim.type, policy);
@@ -237,7 +249,7 @@ function asNumberRatio(num: number, den: number): NumberRatio {
 function pairValues(plan: ClaimPlan, observed: ObservedFacts, policy: FeaturePolicy): PairValues {
   const nums = new Float64Array(plan.applicable.length);
   const dens = new Float64Array(plan.applicable.length);
-  const verdict = fillParts(plan, observed, policy, nums, dens);
+  const verdict = fillPartsLocal(plan, observed, policy, nums, dens);
   const values = plan.applicable.map((_, i) => asNumberRatio(nums[i] ?? 0, dens[i] ?? 1));
   return { observed, values, score: weightedScoreExact(plan.weights, values), reason: verdict?.reason };
 }
@@ -280,8 +292,8 @@ export class RowScorer {
    * for exact comparisons; false when the score needs BigInt (then `score` gives it).
    */
   fraction(observed: ObservedFacts, out: Float64Array): boolean {
-    fillParts(this.#plan, observed, this.policy, this.#nums, this.#dens);
-    return weightedFractionOf(this.#plan.weights, this.#nums, this.#dens, out);
+    fillPartsLocal(this.#plan, observed, this.policy, this.#nums, this.#dens);
+    return weightedFractionOfLocal(this.#plan.weights, this.#nums, this.#dens, out);
   }
 
   /** The pair's exact score: the `Score` `pairScorer` gives for the observation the facts were read from. */

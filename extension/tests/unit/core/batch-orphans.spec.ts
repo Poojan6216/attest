@@ -133,7 +133,9 @@ describe('gradeBatch: an orphan lies in a window its own source was seen in (§3
     );
     expect(summary(both, await run(both))).toEqual({ o2: ['UNASKED', 'unasked', ['o2']] });
   });
+});
 
+describe('gradeBatch: orphan windows are exact and only count passes synced by evaluatedAt (§3)', () => {
   it('several disjoint windows: closed at both ends, exact to the millisecond, nothing in the gap', async () => {
     // gmail.sent saw [12:00, 13:00] and [14:00, 15:00]. Every row has muse's session and the user's idle (7/10).
     const t = (hhmmss: string) => `2026-10-06T${hhmmss}-04:00`;

@@ -16,6 +16,6 @@ You write the documents that make a suspicious engineer trust the code before re
 1. No number without a source file. `RESULTS.md` is generated; quote it, never retype it.
 2. Limitations appear before features. Hard Rule 5 and 7 in prose: "Attest cannot see…", "likely agent means…".
 3. No marketing words: no "powerful", "seamless", "enterprise-grade", "AI-powered".
-4. Code samples compile; commands run; paths exist. A docs PR runs `scripts/check-docs.ts` which verifies every relative link and every quoted command.
+4. Code samples compile; commands run; paths exist. `pnpm check-docs` (part of `pnpm lint`) runs `scripts/check-docs.ts`, which verifies every relative link and anchor, every quoted `pnpm` command against the package that defines it, every policy rule id in `docs/grading.md`, every key of the golden scenario schema in `docs/grading.md` §15, and that no committed Markdown holds an absolute local path.
 5. Diagrams are SVG in the repo, legible in dark mode, no external renderers.
 6. Each doc starts with a two-line "who this is for / what you'll know after".

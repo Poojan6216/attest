@@ -7,6 +7,7 @@ import 'fake-indexeddb/auto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { timeBucketOf, toClaimRow, toCoverageRow, toObservationRow } from '../../../src/ledger/index-fields';
@@ -63,14 +64,14 @@ async function writeRaw(table: string, rows: readonly Record<string, unknown>[])
 
 async function seedObservations(): Promise<void> {
   const valid = makeObservation();
-  await upsertObservation(db, valid);
+  await upsertObservation(db, valid, DEFAULT_POLICY);
   await writeRaw('observations', [
     {
-      ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(2) }))),
+      ...toObservationRow(Observation.parse(makeObservation({ rowKeyHash: sha(2) }))),
       body: SECRET,
     },
     {
-      ...toObservationRow(Observation.parse(makeObservation({ contentHash: sha(3) }))),
+      ...toObservationRow(Observation.parse(makeObservation({ rowKeyHash: sha(3) }))),
       contentHash: 'zz',
     },
   ]);
@@ -178,18 +179,20 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
     ]);
     // §10 v1.3: the same contentHash always has the same id, so the fresh row takes the stale row's id.
     const fresh = makeObservation({ observedAt: '2026-10-01T11:00:00-04:00' });
-    expect(await upsertObservation(db, fresh)).toEqual({ id: observationId(1), inserted: true });
+    expect(await upsertObservation(db, fresh, DEFAULT_POLICY)).toEqual({
+      id: observationId(1),
+      inserted: true,
+    });
     expect(await getObservation(db, observationId(1))).toEqual(fresh);
     expect(await observationsByCounterpartyToken(db, 'alice@example.com')).toEqual([fresh]);
     expect(await db.observations.count()).toBe(1);
     expect(events('ledger.row_replaced')).toEqual([['observations', observationId(1)]]);
     // Once replaced, the hash is idempotent again.
-    expect(await upsertObservation(db, makeObservation({ observedAt: '2026-10-01T12:00:00-04:00' }))).toEqual(
-      {
-        id: observationId(1),
-        inserted: false,
-      },
-    );
+    const later = makeObservation({ observedAt: '2026-10-01T12:00:00-04:00' });
+    expect(await upsertObservation(db, later, DEFAULT_POLICY)).toEqual({
+      id: observationId(1),
+      inserted: false,
+    });
     expect(await getObservation(db, observationId(1))).toEqual(fresh);
   });
 
@@ -211,7 +214,10 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
       source: 'outlook',
     };
     await writeRaw('observations', [stale]);
-    expect(await upsertObservation(db, makeObservation())).toEqual({ id: observationId(1), inserted: true });
+    expect(await upsertObservation(db, makeObservation(), DEFAULT_POLICY)).toEqual({
+      id: observationId(1),
+      inserted: true,
+    });
     expect(await getObservation(db, observationId(1))).toEqual(makeObservation());
     expect(await db.observations.count()).toBe(1);
   });

@@ -14,7 +14,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test, type Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { startFixtureServer } from '../tools/serve-fixtures';
@@ -168,6 +168,56 @@ async function plantInPage(page: Page): Promise<void> {
   }, values);
 }
 
+/** The negative control's plants into console output, from the service worker: one plain, one base64-encoded. */
+async function plantInConsole(worker: Worker): Promise<void> {
+  await worker.evaluate(
+    ([body, phrase]) => {
+      console.info(body);
+      console.info(btoa(phrase));
+    },
+    [seed('email_body_2').value, seed('passphrase').value] as const,
+  );
+}
+
+/**
+ * The negative control's plants into the network, from an extension page: a token in a URL, a name
+ * percent-encoded character by character, an SSN in a body.
+ */
+async function plantInNetwork(page: Page): Promise<void> {
+  await page.evaluate(
+    ([token, name, ssn]) => {
+      const encoded = Array.from(name, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join('');
+      return Promise.all([
+        fetch(`https://canary.example.com/?q=${token}`).catch(() => undefined),
+        fetch(`https://canary.example.com/?n=${encoded}`).catch(() => undefined),
+        fetch('https://canary.example.com/', { method: 'POST', body: ssn }).catch(() => undefined),
+      ]);
+    },
+    [seed('url_with_token').value, seed('person_name_2').value, seed('ssn_shape').value] as const,
+  );
+}
+
+/** Every plant the negative control makes, as `channel:seedId`: the collectors must catch each one. */
+const PLANTED = [
+  'chrome-storage:api_key_openai_shape',
+  'chrome-storage:passphrase',
+  'indexeddb:person_name_1',
+  'ledger-export:person_name_1',
+  'web-storage:token_lowercase',
+  'web-storage:passphrase_hyphenated',
+  'cache-storage:email_body_1',
+  'page-storage:phone_number',
+  'page-storage:street_address',
+  'page-storage:card_shape',
+  'page-storage:email_local_part',
+  'cookies:email_local_part',
+  'console:email_body_2',
+  'console:passphrase',
+  'network:url_with_token',
+  'network:person_name_2',
+  'network:ssn_shape',
+] as const;
+
 test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
   test('seeded pages leave no trace in export, IndexedDB, storage, console, or network', async () => {
     test.setTimeout(3 * 60_000);
@@ -207,51 +257,11 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       const fixture = await extension.context.newPage();
       await fixture.goto(seededUrl('_harness/blank.html'));
       await plantInPage(fixture);
-      // console, from the service worker: one plain, one base64-encoded
-      const worker = await extension.serviceWorker();
-      await worker.evaluate(
-        ([body, phrase]) => {
-          console.info(body);
-          console.info(btoa(phrase));
-        },
-        [seed('email_body_2').value, seed('passphrase').value] as const,
-      );
-      // network: a token in a URL, a name percent-encoded character by character, an SSN in a body
-      const page = await extension.openExtensionPage('options.html');
-      await page.evaluate(
-        ([token, name, ssn]) => {
-          const encoded = Array.from(name, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join(
-            '',
-          );
-          return Promise.all([
-            fetch(`https://canary.example.com/?q=${token}`).catch(() => undefined),
-            fetch(`https://canary.example.com/?n=${encoded}`).catch(() => undefined),
-            fetch('https://canary.example.com/', { method: 'POST', body: ssn }).catch(() => undefined),
-          ]);
-        },
-        [seed('url_with_token').value, seed('person_name_2').value, seed('ssn_shape').value] as const,
-      );
+      await plantInConsole(await extension.serviceWorker());
+      await plantInNetwork(await extension.openExtensionPage('options.html'));
     });
     const caught = new Set(allLeaks(collected, SEEDS).map((leak) => `${leak.channel}:${leak.seedId}`));
-    for (const expected of [
-      'chrome-storage:api_key_openai_shape',
-      'chrome-storage:passphrase',
-      'indexeddb:person_name_1',
-      'ledger-export:person_name_1',
-      'web-storage:token_lowercase',
-      'web-storage:passphrase_hyphenated',
-      'cache-storage:email_body_1',
-      'page-storage:phone_number',
-      'page-storage:street_address',
-      'page-storage:card_shape',
-      'page-storage:email_local_part',
-      'cookies:email_local_part',
-      'console:email_body_2',
-      'console:passphrase',
-      'network:url_with_token',
-      'network:person_name_2',
-      'network:ssn_shape',
-    ]) {
+    for (const expected of PLANTED) {
       expect(caught, expected).toContain(expected);
     }
   });

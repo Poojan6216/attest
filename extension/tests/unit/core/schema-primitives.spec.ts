@@ -237,7 +237,7 @@ describe('ids derived from hashes (docs/grading.md §10)', () => {
       }),
       { numRuns: 1_000 },
     );
-  }, 60_000);
+  });
 });
 
 describe('brands', () => {

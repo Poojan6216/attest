@@ -21,8 +21,6 @@ import { ActionType, ReceiptSignal } from '../../src/core/schema';
 import { BASIS_POINTS, MS_PER_MINUTE } from '../../src/core/units';
 
 const RUNS = { numRuns: 1_000 };
-/** Each run loads a policy (parse + SHA-256): a few seconds alone, more while the suite runs in parallel. */
-const PROPERTY_TIMEOUT_MS = 60_000;
 const BASE_MS = instantMs('2026-10-06T14:02:00-04:00');
 
 type FeatureKey = keyof typeof defaultPolicyJson.features;
@@ -120,43 +118,39 @@ const SIGNALS: ReadonlySet<string> = new Set(ReceiptSignal.options);
 const tally = { loaded: 0, rejected: 0, assignable: 0, thrown: 0 };
 
 describe('loader and features() together (§5.3 v1.3, property)', () => {
-  it(
-    'the loader accepts exactly the oracle policies, and under them no assignable claim meets Σw = 0',
-    () => {
-      fc.assert(
-        fc.property(weightsArb, identityArb, claimArb, observationArb, (bp, identity, claim, observation) => {
-          const policy = load(bp, identity);
-          expect(policy !== null).toBe(oracleAccepts(bp, identity));
-          if (policy === null) {
-            tally.rejected += 1;
-            return;
-          }
-          tally.loaded += 1;
-          if (isAssignable(claim, policy)) {
-            tally.assignable += 1;
-            const { score, signals, reasonCodes } = features(claim, observation, policy);
-            expect(compareRatio(score, RATIO_ZERO)).toBeGreaterThanOrEqual(0);
-            expect(compareRatio(score, RATIO_ONE)).toBeLessThanOrEqual(0);
-            expect(Object.keys(signals).every((key) => SIGNALS.has(key))).toBe(true);
-            if (reasonCodes.length > 0) expect(counterparty(claim.counterparty)?.kind).toBe('address');
-            return;
-          }
-          try {
-            features(claim, observation, policy);
-          } catch (error) {
-            tally.thrown += 1;
-            expect(error).toBeInstanceOf(RatioError);
-            expect(error).toMatchObject({ code: 'zero_weight_sum' });
-          }
-        }),
-        RUNS,
-      );
-      // Not vacuous: both loader outcomes, assignable claims and the fail-loud path all occurred.
-      expect(tally.loaded).toBeGreaterThan(200);
-      expect(tally.rejected).toBeGreaterThan(200);
-      expect(tally.assignable).toBeGreaterThan(100);
-      expect(tally.thrown).toBeGreaterThan(30);
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('the loader accepts exactly the oracle policies, and under them no assignable claim meets Σw = 0', () => {
+    fc.assert(
+      fc.property(weightsArb, identityArb, claimArb, observationArb, (bp, identity, claim, observation) => {
+        const policy = load(bp, identity);
+        expect(policy !== null).toBe(oracleAccepts(bp, identity));
+        if (policy === null) {
+          tally.rejected += 1;
+          return;
+        }
+        tally.loaded += 1;
+        if (isAssignable(claim, policy)) {
+          tally.assignable += 1;
+          const { score, signals, reasonCodes } = features(claim, observation, policy);
+          expect(compareRatio(score, RATIO_ZERO)).toBeGreaterThanOrEqual(0);
+          expect(compareRatio(score, RATIO_ONE)).toBeLessThanOrEqual(0);
+          expect(Object.keys(signals).every((key) => SIGNALS.has(key))).toBe(true);
+          if (reasonCodes.length > 0) expect(counterparty(claim.counterparty)?.kind).toBe('address');
+          return;
+        }
+        try {
+          features(claim, observation, policy);
+        } catch (error) {
+          tally.thrown += 1;
+          expect(error).toBeInstanceOf(RatioError);
+          expect(error).toMatchObject({ code: 'zero_weight_sum' });
+        }
+      }),
+      RUNS,
+    );
+    // Not vacuous: both loader outcomes, assignable claims and the fail-loud path all occurred.
+    expect(tally.loaded).toBeGreaterThan(200);
+    expect(tally.rejected).toBeGreaterThan(200);
+    expect(tally.assignable).toBeGreaterThan(100);
+    expect(tally.thrown).toBeGreaterThan(30);
+  });
 });

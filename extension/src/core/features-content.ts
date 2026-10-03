@@ -11,7 +11,7 @@
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
-import { counterparty, name, nameTokens, subjectTokens } from './normalize';
+import { counterparty, name, nameTokens, stopWordKey, subjectTokens } from './normalize';
 import { NUMBER_RATIO_ZERO, type NumberRatio, RATIO_ONE, RATIO_ZERO, type Ratio, ratioOf } from './ratio';
 
 /** A merchant or purchase counterparty in §11 normalised form, with at least one name token. */
@@ -55,13 +55,13 @@ interface StopWords {
 const STOP_WORDS = new WeakMap<readonly string[], StopWords>();
 const NO_STOP_WORDS: readonly string[] = Object.freeze([]);
 
-/** The stop words NFKC-normalised and lowercased, exactly as `subjectTokens` compares them, as a set. */
+/** The stop words as `subjectTokens` compares them (`stopWordKey`: NFKC, lowercase, Unicode 15.0), as a set. */
 export function stopWordSet(stopWords: readonly string[]): ReadonlySet<string> {
   const held = STOP_WORDS.get(stopWords);
   const same =
     held?.words.length === stopWords.length && held.words.every((word, i) => word === stopWords[i]);
   if (held !== undefined && same) return held.set;
-  const set = new Set(stopWords.map((word) => word.normalize('NFKC').toLowerCase()));
+  const set = new Set(stopWords.map(stopWordKey));
   STOP_WORDS.set(stopWords, { words: [...stopWords], set });
   return set;
 }
@@ -140,7 +140,10 @@ export interface PreparedMerchant {
 
 /**
  * `merchantName(raw)?.tokens` as a set, or null when `merchantName` is null, reading the text once: the name
- * tokens `counterparty()` already split are the ones `nameTokens(raw)` gives.
+ * tokens `counterparty()` already split are the ones `nameTokens(raw)` gives. features-parts.ts scores
+ * `merchantMatch` as the Jaccard of two such sets: equal normalised names have equal (non-empty) token sets, whose
+ * Jaccard is 1, so §5.1's name comparison never gives another value (features-content-merchant.spec.ts, a
+ * property test, pins the two together).
  */
 export function prepareMerchant(raw: string | undefined): PreparedMerchant | null {
   if (raw === undefined) return null;
@@ -148,17 +151,4 @@ export function prepareMerchant(raw: string | undefined): PreparedMerchant | nul
   if (party === null) return null;
   const tokens = party.kind === 'name' ? party.tokens : nameTokens(raw);
   return tokens.length === 0 ? null : { tokens: new Set(tokens) };
-}
-
-/**
- * `merchantMatchName` over prepared merchants, as two integers: the Jaccard of the token sets. Equal normalised
- * names have equal (non-empty) token sets, whose Jaccard is 1, so the name comparison of §5.1 never gives
- * another value and is not repeated here (a property test pins this to `merchantMatchName`).
- */
-export function merchantMatchOf(
-  claimed: PreparedMerchant | null,
-  observed: PreparedMerchant | null,
-): NumberRatio {
-  if (claimed === null || observed === null) return NUMBER_RATIO_ZERO;
-  return jaccardOf(claimed.tokens, observed.tokens);
 }

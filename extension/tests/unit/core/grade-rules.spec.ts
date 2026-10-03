@@ -225,12 +225,8 @@ const CASES: readonly (readonly [string, () => Receipt, Expected])[] = [
     },
   ],
   [
-    'no_target: a calendar claim without targetAt is never scored',
-    () =>
-      run({
-        claim: claimOf({ type: 'calendar.created' }),
-        candidates: [obsOf({ type: 'calendar.created', source: 'gcal.event' })],
-      }),
+    'no_target: a calendar claim without targetAt has no window, so no candidate, and is never scored',
+    () => run({ claim: claimOf({ type: 'calendar.created' }), candidates: [] }),
     {
       grade: 'UNVERIFIABLE',
       ruleId: 'no_target',

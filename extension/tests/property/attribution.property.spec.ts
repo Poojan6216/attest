@@ -35,7 +35,6 @@ import { BASIS_POINTS, MS_PER_MINUTE } from '../../src/core/units';
 import defaultPolicyJson from '../../../policy/default.json';
 
 const RUNS = 1_000;
-const TIMEOUT_MS = 30_000;
 const T = Date.parse('2026-10-06T14:03:00-04:00');
 const OFFSETS = [-240, 0, 330] as const;
 const TYPES: readonly ActionType[] = ['email.sent', 'calendar.created'];
@@ -192,75 +191,59 @@ function shuffled(activity: AttributionActivity): AttributionActivity {
 }
 
 describe('attribute() properties (§7)', () => {
-  it(
-    'equals the literal oracle',
-    () => {
-      fc.assert(
-        fc.property(orphanArb, activityArb, evaluatedAtArb, (orphan, activity, evaluatedAt) => {
-          expect(attribute(orphan, activity, POLICY, evaluatedAt)).toEqual(
-            oracle(orphan, activity, evaluatedAt),
-          );
-        }),
-        { numRuns: RUNS },
-      );
-    },
-    TIMEOUT_MS,
-  );
+  it('equals the literal oracle', () => {
+    fc.assert(
+      fc.property(orphanArb, activityArb, evaluatedAtArb, (orphan, activity, evaluatedAt) => {
+        expect(attribute(orphan, activity, POLICY, evaluatedAt)).toEqual(
+          oracle(orphan, activity, evaluatedAt),
+        );
+      }),
+      { numRuns: RUNS },
+    );
+  });
 
-  it(
-    'does not depend on the order of any activity list',
-    () => {
-      fc.assert(
-        fc.property(orphanArb, activityArb, evaluatedAtArb, (orphan, activity, evaluatedAt) => {
-          expect(attribute(orphan, shuffled(activity), POLICY, evaluatedAt)).toEqual(
-            attribute(orphan, activity, POLICY, evaluatedAt),
-          );
-        }),
-        { numRuns: RUNS },
-      );
-    },
-    TIMEOUT_MS,
-  );
+  it('does not depend on the order of any activity list', () => {
+    fc.assert(
+      fc.property(orphanArb, activityArb, evaluatedAtArb, (orphan, activity, evaluatedAt) => {
+        expect(attribute(orphan, shuffled(activity), POLICY, evaluatedAt)).toEqual(
+          attribute(orphan, activity, POLICY, evaluatedAt),
+        );
+      }),
+      { numRuns: RUNS },
+    );
+  });
 });
 
 describe('attribute() properties (§7): shape and batching', () => {
-  it(
-    'always yields a schema-valid attribution with an agent signal and an exact capped score',
-    () => {
-      fc.assert(
-        fc.property(orphanArb, activityArb, (orphan, activity) => {
-          const result = attribute(orphan, activity, POLICY);
-          if (result === null) return;
-          expect(Attribution.parse(result)).toEqual(result);
-          expect(result.signals.some((signal) => signal !== 'userIdle')).toBe(true);
-          const total = result.signals.reduce((sum, signal) => sum + POLICY.bp.unasked.signals[signal], 0);
-          expect(result.scoreBp).toBe(Math.min(total, BASIS_POINTS));
-          expect(Number.isSafeInteger(result.scoreBp)).toBe(true);
-        }),
-        { numRuns: RUNS },
-      );
-    },
-    TIMEOUT_MS,
-  );
+  it('always yields a schema-valid attribution with an agent signal and an exact capped score', () => {
+    fc.assert(
+      fc.property(orphanArb, activityArb, (orphan, activity) => {
+        const result = attribute(orphan, activity, POLICY);
+        if (result === null) return;
+        expect(Attribution.parse(result)).toEqual(result);
+        expect(result.signals.some((signal) => signal !== 'userIdle')).toBe(true);
+        const total = result.signals.reduce((sum, signal) => sum + POLICY.bp.unasked.signals[signal], 0);
+        expect(result.scoreBp).toBe(Math.min(total, BASIS_POINTS));
+        expect(Number.isSafeInteger(result.scoreBp)).toBe(true);
+      }),
+      { numRuns: RUNS },
+    );
+  });
 
-  it(
-    'attributor(activity) agrees with attribute() on several orphans against one activity',
-    () => {
-      fc.assert(
-        fc.property(
-          fc.array(orphanArb, { minLength: 1, maxLength: 4 }),
-          activityArb,
-          evaluatedAtArb,
-          (orphans, activity, evaluatedAt) => {
-            const attributeAll = attributor(activity, POLICY, evaluatedAt);
-            for (const orphan of orphans) {
-              expect(attributeAll(orphan)).toEqual(attribute(orphan, activity, POLICY, evaluatedAt));
-            }
-          },
-        ),
-        { numRuns: RUNS },
-      );
-    },
-    TIMEOUT_MS,
-  );
+  it('attributor(activity) agrees with attribute() on several orphans against one activity', () => {
+    fc.assert(
+      fc.property(
+        fc.array(orphanArb, { minLength: 1, maxLength: 4 }),
+        activityArb,
+        evaluatedAtArb,
+        (orphans, activity, evaluatedAt) => {
+          const attributeAll = attributor(activity, POLICY, evaluatedAt);
+          for (const orphan of orphans) {
+            expect(attributeAll(orphan)).toEqual(attribute(orphan, activity, POLICY, evaluatedAt));
+          }
+        },
+      ),
+      { numRuns: RUNS },
+    );
+  });
 });

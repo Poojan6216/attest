@@ -5,18 +5,28 @@
  * 1. every relative link resolves to a file or directory inside the repo, spelled with its exact letter case (as
  *    GitHub resolves it, even on a case-insensitive file system), and every `#anchor` (in the same document or
  *    in another Markdown file) names a heading or an HTML id there (GitHub's anchor rules);
- * 2. every `pnpm <script>` quoted in code (inline code span or fenced block) names a script in package.json
- *    or extension/package.json (pnpm's own commands such as `install` and `exec` need no script);
+ * 2. every `pnpm <script>` quoted in code (inline code span, fenced or indented block) names a script in the
+ *    package.json of the package it runs in: the repo root's, unless a `cd` earlier in the same code block,
+ *    `-C`/`--dir`, `--filter`, `-w` or a recursive run says otherwise (pnpm's own commands such as `install` and
+ *    `exec` need no script);
  * 3. every rule id in policy/default.json appears in docs/grading.md as an inline code span (`verified`), so
- *    a prose word such as "partial" or a JSON listing alone does not count as documenting a rule.
+ *    a prose word such as "partial" or a JSON listing alone does not count as documenting a rule;
+ * 4. every key of the golden scenario schema (extension/tests/golden/scenario-schema.ts) appears in a code block of
+ *    docs/grading.md §15, the file format (check-docs-scenario.ts);
+ * 5. no Markdown file in the repository holds an absolute local path such as `/Users/<name>` or a `/private/tmp`
+ *    scratch directory (check-docs-paths.ts).
  * It prints one line per problem (`file:line: message`) and exits 1 when there is any, 0 otherwise.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { pnpmInvocations } from './check-docs-commands';
-import { scanMarkdown, segments, splitFences, type MarkdownScan } from './check-docs-markdown';
+import { splitBlocks } from './check-docs-blocks';
+import { cwdAfter, pnpmInvocations } from './check-docs-commands';
+import { scanMarkdown, segments, type MarkdownScan } from './check-docs-markdown';
+import { scriptsFor, workspacePackages, type Workspace } from './check-docs-packages';
+import { checkLocalPaths } from './check-docs-paths';
+import { SCENARIO_SCHEMA, scenarioKeyProblems } from './check-docs-scenario';
 
 export interface DocProblem {
   /** Path relative to the root, with forward slashes. */
@@ -32,12 +42,15 @@ export interface DocCheckResult {
   readonly links: number;
   readonly commands: number;
   readonly ruleIds: number;
+  /** Scenario schema keys and literal values checked against docs/grading.md §15 (0 without a golden suite). */
+  readonly scenarioKeys: number;
+  /** Markdown files read for absolute local paths. */
+  readonly markdownFiles: number;
 }
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GRADING_DOC = 'docs/grading.md';
 const POLICY_FILE = 'policy/default.json';
-const PACKAGE_FILES = ['package.json', 'extension/package.json'];
 const ROOT_DOCS = ['README.md', 'PRIVACY.md'];
 const EXTERNAL = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|\/\/)/;
 
@@ -77,21 +90,6 @@ function readJson(root: string, file: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Script names from package.json and extension/package.json. */
-function scriptNames(root: string, report: Report): Set<string> {
-  const names = new Set<string>();
-  for (const file of PACKAGE_FILES) {
-    const json = readJson(root, file);
-    const scripts = isRecord(json) ? json.scripts : undefined;
-    if (!isRecord(scripts)) {
-      report(file, 0, 'cannot read "scripts" from this package.json');
-      continue;
-    }
-    for (const name of Object.keys(scripts)) names.add(name);
-  }
-  return names;
 }
 
 /** Rule ids from policy/default.json, in policy order. */
@@ -194,24 +192,30 @@ function checkLinks(root: string, file: string, scan: MarkdownScan, anchorsOf: A
   return count;
 }
 
-function checkCommands(file: string, scan: MarkdownScan, scripts: ReadonlySet<string>, report: Report) {
+/** Checks every quoted pnpm command; a `cd` carries from one line of a code block to the next. */
+function checkCommands(file: string, scan: MarkdownScan, workspace: Workspace, report: Report) {
   let count = 0;
+  const cwds = new Map<number, string | null>();
   for (const code of scan.code) {
-    for (const invocation of pnpmInvocations(code.text)) {
+    const cwd = cwds.has(code.block) ? (cwds.get(code.block) ?? null) : '.';
+    cwds.set(code.block, cwdAfter(code.text, cwd));
+    for (const invocation of pnpmInvocations(code.text, cwd)) {
       count += 1;
-      if (invocation.script !== null && !scripts.has(invocation.script)) {
-        const where = PACKAGE_FILES.join(' or ');
-        report(file, code.line, `'${invocation.text}': no script '${invocation.script}' in ${where}`);
+      if (invocation.script === null) continue;
+      const found = scriptsFor(workspace, invocation.target);
+      if ('problem' in found) report(file, code.line, `'${invocation.text}': ${found.problem}`);
+      else if (!found.scripts.has(invocation.script)) {
+        report(file, code.line, `'${invocation.text}': no script '${invocation.script}' in ${found.where}`);
       }
     }
   }
   return count;
 }
 
-/** Inline code span contents outside fenced blocks. */
+/** Inline code span contents outside code blocks and HTML comments. */
 function inlineCodeSpans(source: string): Set<string> {
   const spans = new Set<string>();
-  for (const line of splitFences(source).prose) {
+  for (const line of splitBlocks(source).prose) {
     for (const part of segments(line.text)) if (part.code) spans.add(part.text);
   }
   return spans;
@@ -247,7 +251,7 @@ export function checkDocs(root: string): DocCheckResult {
     return scan;
   };
   const anchorsOf: AnchorLookup = (file) => scanOf(file)?.anchors ?? new Set<string>();
-  const scripts = scriptNames(root, report);
+  const workspace = workspacePackages(root, report);
   const files = docFiles(root);
   let links = 0;
   let commands = 0;
@@ -258,11 +262,22 @@ export function checkDocs(root: string): DocCheckResult {
       continue;
     }
     links += checkLinks(root, file, scan, anchorsOf, report);
-    commands += checkCommands(file, scan, scripts, report);
+    commands += checkCommands(file, scan, workspace, report);
   }
   const ruleIds = checkRuleIds(root, report);
+  const scenario = scenarioKeyProblems(readText(root, SCENARIO_SCHEMA), readText(root, GRADING_DOC));
+  problems.push(...scenario.problems);
+  const markdownFiles = checkLocalPaths(root, report);
   problems.sort((a, b) => byCodeUnit(a.file, b.file) || a.line - b.line || byCodeUnit(a.message, b.message));
-  return { problems, files: files.length, links, commands, ruleIds };
+  return {
+    problems,
+    files: files.length,
+    links,
+    commands,
+    ruleIds,
+    scenarioKeys: scenario.checked,
+    markdownFiles,
+  };
 }
 
 export interface CliOutput {
@@ -283,7 +298,14 @@ export function runCli(argv: readonly string[], output: CliOutput, defaultRoot: 
   const result = checkDocs(root);
   for (const problem of result.problems)
     output.error(`${problem.file}:${String(problem.line)}: ${problem.message}`);
-  const counts = `${String(result.files)} files, ${String(result.links)} relative links, ${String(result.commands)} pnpm commands, ${String(result.ruleIds)} rule ids`;
+  const counts = [
+    `${String(result.files)} files`,
+    `${String(result.links)} relative links`,
+    `${String(result.commands)} pnpm commands`,
+    `${String(result.ruleIds)} rule ids`,
+    `${String(result.scenarioKeys)} scenario keys`,
+    `${String(result.markdownFiles)} Markdown files read for local paths`,
+  ].join(', ');
   if (result.problems.length > 0) {
     output.error(`check-docs: ${String(result.problems.length)} problem(s) (${counts})`);
     return 1;

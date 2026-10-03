@@ -2,12 +2,13 @@
  * Task 1.2 parity with the golden suite (docs/grading.md §10, §15): for every observation of every golden
  * scenario, project() of the hand-written observation (its ref, source, type, rowKey and observedAt keys
  * included, all of which project must ignore as content) reproduces the loader's Observation exactly: the
- * same kept fields, contentHash and id. The loader computes these from §10 independently of redact.ts.
+ * same kept fields, contentHash and id. The loader computes these from §10 independently of redact.ts. So every
+ * golden row is one the ledger accepts (`observationIntegrityProblems` finds nothing; SEC-V1).
  */
 import { describe, expect, it } from 'vitest';
 
 import { loadPolicy } from '../../../src/core/policy';
-import { project } from '../../../src/core/redact';
+import { observationIntegrityProblems, project } from '../../../src/core/redact';
 import { loadScenario, scenarioFiles } from '../../golden/load';
 
 const FILES = scenarioFiles();
@@ -33,6 +34,7 @@ describe('project() reproduces every golden observation', () => {
       expect(projected.contentHash, `${written.ref} contentHash`).toBe(built.contentHash);
       expect(projected.id, `${written.ref} id`).toBe(built.id);
       expect(projected, written.ref).toStrictEqual(built);
+      expect(observationIntegrityProblems(built, policy), `${written.ref} integrity`).toStrictEqual([]);
       const allowlist: readonly string[] = policy.allowlistedFields[written.source];
       const allowlisted = Object.fromEntries(
         Object.entries(written).filter(([key]) => allowlist.includes(key)),

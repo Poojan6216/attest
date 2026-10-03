@@ -9,11 +9,12 @@
  * (`candidates`), every pair scored (`features`), the pairs at or above `thresholds.partial` assigned one-to-one
  * around the fixed pairs and taken observations (`assign`). A claim's candidates for `grade` are then its own minus
  * those assigned to other claims or taken (`exclusiveCandidates`). This is the definition the batch's fast path is
- * held to, so a disagreement between the two shows up as a replay mismatch.
+ * held to, so a disagreement between the two shows up as a replay mismatch. Whether an UNASKED receipt's
+ * observation could be an orphan at all is batch-orphans.ts `isOrphanCandidate`, the predicate the batch decides
+ * with (replay.ts calls it).
  *
  * PURE: no I/O but the injected index, no clock, no logging (Hard Rule 4). Async only because the index is.
  */
-import { seenWindows } from './batch-orphans';
 import {
   assign,
   candidates,
@@ -26,7 +27,7 @@ import { instantMs } from './normalize';
 import type { Policy } from './policy';
 import { ratioGteBasisPoints } from './ratio';
 import type { FixedAt } from './replay-timeline';
-import type { Claim, Coverage, Observation, Ulid } from './schema';
+import type { Claim, Observation, Ulid } from './schema';
 
 /** A batch as it was at one instant, for one policy. */
 export class ReplayBatch {
@@ -78,16 +79,4 @@ export async function rebuildBatch(
   }
   const assignment = assign(pairs, policy, fixed, taken);
   return new ReplayBatch(assignment, taken, candidatesOf);
-}
-
-/**
- * Whether `observation` can be an orphan of a batch graded with `coverage` (§3, batch-orphans.ts
- * `coveredObservations`): a type with sources, one of them its own, and an `occurredAt` inside a window an observer
- * of that source saw in a pass synced by `evaluatedAt`. Assignment (above) decides the rest.
- */
-export function coveredOrphan(observation: Observation, coverage: Coverage, policy: Policy): boolean {
-  if (!policy.sourcesByType[observation.type].includes(observation.source)) return false;
-  const atMs = instantMs(observation.occurredAt);
-  const windows = seenWindows(coverage).get(observation.source) ?? [];
-  return windows.some((window) => atMs >= window.startMs && atMs <= window.endMs);
 }

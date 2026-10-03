@@ -9,7 +9,9 @@
  *     (id, inputsHash, everything).
  *
  * Inputs are built by the golden loader's builders (schema-parsed, every id and hash computed), so each tuple is
- * a valid grading input; claim-less tuples have exactly one subject (an orphan or a scope), as gradeBatch passes.
+ * a valid grading input; claim-less tuples have exactly one subject (an orphan or a scope), as gradeBatch passes,
+ * and a claim's candidates are §4.1 candidates of it (`asCandidateOf`), the only ones grade() accepts
+ * (grade-guard.ts; grade-guard.property.spec.ts pins the refusal of every other).
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -26,10 +28,13 @@ import {
   type Coverage,
   type GradeContext,
   type Grant,
+  IsoTs,
   type Observation,
   Receipt,
 } from '../../src/core/schema';
+import { firstSeenFromMs } from '../../src/core/order';
 import { MS_PER_MINUTE } from '../../src/core/units';
+import { claimWindow, writtenOffsetMinutes } from '../../src/core/window';
 import {
   buildClaim,
   buildCoverage,
@@ -180,6 +185,28 @@ const attributionArb = fc
   })
   .map((raw) => Attribution.parse(defined({ agent: 'muse', ...raw })));
 
+/**
+ * `candidate` as a §4.1 candidate of `claim`: the claim's type, its own source when the policy lists it for that type
+ * (else the type's first one), and an `occurredAt` outside the claim window moved to its nearest edge (in the offset
+ * it was written in); null when the claim has no window (a calendar claim without `targetAt`), its type no source,
+ * or a `calendar.created` event was seen before the claim's first-seen bound.
+ */
+function asCandidateOf(claim: Claim, candidate: Observation, policy: Policy): Observation | null {
+  const window = claimWindow(claim, policy);
+  const from = firstSeenFromMs(claim, policy);
+  const sources = policy.sourcesByType[claim.type];
+  const source = sources.includes(candidate.source) ? candidate.source : sources[0];
+  if (window === null || source === undefined) return null;
+  if (from !== null && instantMs(candidate.observedAt) < from) return null;
+  const atMs = instantMs(candidate.occurredAt);
+  const edgeMs = Math.min(Math.max(atMs, window.fromMs), window.toMs);
+  const occurredAt =
+    edgeMs === atMs
+      ? candidate.occurredAt
+      : IsoTs.parse(isoWithOffset(edgeMs, writtenOffsetMinutes(candidate.occurredAt)));
+  return { ...candidate, type: claim.type, source, occurredAt };
+}
+
 interface Tuple {
   readonly claim: Claim | null;
   readonly candidates: readonly Observation[];
@@ -197,7 +224,7 @@ const shared = fc.record({
   priorSpendCents: fc.integer({ min: 0, max: 9_000 }),
 });
 
-/** A claim with up to five candidates (often its own type), or a claim-less tuple with exactly one subject. */
+/** A claim with up to five of its §4.1 candidates, or a claim-less tuple with exactly one subject. */
 const tupleArb: fc.Arbitrary<Tuple> = fc
   .record({
     shared,
@@ -210,9 +237,7 @@ const tupleArb: fc.Arbitrary<Tuple> = fc
     const coverage = buildCoverage(s.entries, s.evaluatedAt);
     const grant = buildGrant(s.grant, s.evaluatedAt);
     if (claim !== null) {
-      const own = candidates.map((candidate, i) =>
-        i % 2 === 0 ? { ...candidate, type: claim.type } : candidate,
-      );
+      const own = candidates.flatMap((candidate) => asCandidateOf(claim, candidate, s.policy) ?? []);
       const context: GradeContext = {
         priorSpendCents: s.priorSpendCents,
         ...(attribution === undefined ? {} : { attribution }),

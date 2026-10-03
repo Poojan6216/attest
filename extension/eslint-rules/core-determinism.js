@@ -9,8 +9,11 @@
  *    `Math[k]`, `const { random } = Math`, `const M = Math` and `f(Math)` are reported.
  *  - Methods whose answer depends on the host's time zone or locale are reported on any object: local-time
  *    getters and setters, `getTimezoneOffset`, `toLocale*`, `localeCompare`, `toDateString`, `toTimeString`.
- *    (`Date#toString` and `String(date)` are local too, but cannot be told apart from other `toString`
- *    calls without types; the core suites also run under two time zones in CI to catch them.)
+ *  - With type information (the real `pnpm lint` run, projectService), conversions that render a Date in the
+ *    host's time zone are reported too: `date.toString()` (also read as a value), `String(date)`, and `join` or
+ *    `toString` on an array of dates (TECH-C2). Templates and `+` on a Date are already reported by
+ *    restrict-template-expressions and restrict-plus-operands. Without type information (a virtual file in a lint
+ *    test) these checks are skipped; the core suites also run under two time zones in CI (`test:tz`).
  */
 import { forEachGlobalReference, propertyName } from './scope-globals.js';
 
@@ -36,6 +39,9 @@ const LOCAL_TIME_METHODS = new Set([
   'toDateString',
   'toTimeString',
 ]);
+
+/** Methods that turn a Date (or an array of dates) into local-time text; reported only with type information. */
+const DATE_STRING_METHODS = new Set(['toString', 'join']);
 
 const LOCALE_METHODS = new Set([
   'toLocaleString',
@@ -66,6 +72,42 @@ function mathUseAllowed(identifier) {
   return propertyName(parent) !== 'random';
 }
 
+/**
+ * Whether a value of `type` renders as local time when made a string: a Date, a union or intersection holding one,
+ * or an array or tuple of them.
+ * @param {import('typescript').TypeChecker} checker
+ * @param {import('typescript').Type} type
+ * @returns {boolean}
+ */
+function holdsDate(checker, type) {
+  if (type.isUnionOrIntersection()) return type.types.some((part) => holdsDate(checker, part));
+  if (type.getSymbol()?.getName() === 'Date') return true;
+  if (checker.isArrayType(type) || checker.isTupleType(type)) {
+    return checker
+      .getTypeArguments(/** @type {import('typescript').TypeReference} */ (type))
+      .some((element) => holdsDate(checker, element));
+  }
+  return false;
+}
+
+/**
+ * A test for "this expression holds a Date", from the parser's type information; null when there is none.
+ * @param {import('eslint').Rule.RuleContext} context
+ * @returns {((node: import('estree').Node) => boolean) | null}
+ */
+function dateTypeTest(context) {
+  const services = /** @type {any} */ (context.sourceCode.parserServices);
+  const program = /** @type {import('typescript').Program | null | undefined} */ (services?.program);
+  if (program === null || program === undefined) return null;
+  const checker = program.getTypeChecker();
+  /** @type {Map<import('estree').Node, import('typescript').Node>} */
+  const toTs = services.esTreeNodeToTSNodeMap;
+  return (node) => {
+    const tsNode = toTs.get(node);
+    return tsNode !== undefined && holdsDate(checker, checker.getTypeAtLocation(tsNode));
+  };
+}
+
 /** @type {import('eslint').Rule.RuleModule} */
 const rule = {
   meta: {
@@ -84,12 +126,25 @@ const rule = {
     },
   },
   create(context) {
+    const isDate = dateTypeTest(context);
     return {
       MemberExpression(node) {
         const name = propertyName(node);
         if (name === null) return;
         if (LOCAL_TIME_METHODS.has(name)) context.report({ node, messageId: 'localTime', data: { name } });
         else if (LOCALE_METHODS.has(name)) context.report({ node, messageId: 'locale', data: { name } });
+        else if (isDate !== null && DATE_STRING_METHODS.has(name) && isDate(node.object)) {
+          const what = name === 'join' ? 'join over Date values' : 'toString of a Date';
+          context.report({ node, messageId: 'localTime', data: { name: what } });
+        }
+      },
+      CallExpression(node) {
+        const [argument] = node.arguments;
+        const callee = node.callee;
+        if (isDate === null || argument === undefined || argument.type === 'SpreadElement') return;
+        if (callee.type === 'Identifier' && callee.name === 'String' && isDate(argument)) {
+          context.report({ node, messageId: 'localTime', data: { name: 'String(date)' } });
+        }
       },
       'Program:exit'(program) {
         forEachGlobalReference(context, program, new Set(['Date', 'Math']), (identifier, name) => {

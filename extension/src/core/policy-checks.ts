@@ -1,11 +1,11 @@
 /**
- * Cross-field checks on a policy document (docs/grading.md §5.1, §5.2, §5.3): the rules a single field's
+ * Cross-field checks on a policy document (docs/grading.md §2, §5.1, §5.2, §5.3, §6.1): the rules a single field's
  * schema cannot see. Internal to the policy module; `./policy` runs them after the field-by-field parse.
  *
- * Every comparison here is on integers (basis points, milliseconds), never on decimal weights (§5.3).
+ * Every numeric comparison here is on integers (basis points, milliseconds), never on decimal weights (§5.3).
  * PURE: no I/O, no clock, no logging.
  */
-import type { PolicyDocument } from './policy-schema';
+import type { ConditionName, PolicyDocument, RuleOutcome } from './policy-schema';
 import { ActionType } from './schema';
 import { BASIS_POINTS, MS_PER_DAY, MS_PER_MINUTE } from './units';
 
@@ -78,7 +78,67 @@ function featureIssues(doc: PolicyDocument): PolicyIssue[] {
   });
 }
 
+/** One piece of evidence a rule must test: at least one of `conditions` set to one of `values`. */
+interface Evidence {
+  readonly conditions: readonly ConditionName[];
+  readonly values: readonly (string | boolean)[];
+}
+
+/**
+ * §2, §6.1: the evidence a rule must name before it may conclude a grade that asserts something, whatever the
+ * rule order (Hard Rule 5: UNVERIFIABLE beats a guess; Hard Rule 7: UNASKED only above the attribution
+ * threshold). VERIFIED needs a match at the verified threshold and PARTIAL one at either threshold; NOT_FOUND
+ * needs the whole window seen after grace with nothing at the partial threshold; OVER_SCOPE needs a fact outside
+ * the grant. UNVERIFIABLE asserts nothing and PENDING is its placeholder (§2), so they need none. The shipped
+ * rules name exactly these.
+ */
+const EVIDENCE: Readonly<Partial<Record<RuleOutcome, readonly Evidence[]>>> = {
+  VERIFIED: [{ conditions: ['bestScoreGte'], values: ['verified'] }],
+  PARTIAL: [{ conditions: ['bestScoreGte'], values: ['partial', 'verified'] }],
+  NOT_FOUND: [
+    { conditions: ['graceElapsed'], values: [true] },
+    { conditions: ['coverage'], values: ['full'] },
+    { conditions: ['bestScoreLt'], values: ['partial'] },
+  ],
+  UNASKED: [{ conditions: ['unaskedLikely'], values: [true] }],
+  OVER_SCOPE: [
+    {
+      conditions: [
+        'observedScopeExceedsDeclared',
+        'typeNotInGrant',
+        'counterpartyNotAllowed',
+        'amountAboveCeiling',
+        'cumulativeAboveCeiling',
+      ],
+      values: [true],
+    },
+  ],
+};
+
+function evidenceIssue(index: number, then: RuleOutcome, { conditions, values }: Evidence): PolicyIssue {
+  const wanted = values.map((value) => JSON.stringify(value)).join(' or ');
+  const [only] = conditions;
+  if (conditions.length === 1 && only !== undefined) {
+    return { path: ['rules', index, 'when', only], message: `must be ${wanted} when then is "${then}"` };
+  }
+  return {
+    path: ['rules', index, 'when'],
+    message: `must set one of ${conditions.join(', ')} to ${wanted} when then is "${then}"`,
+  };
+}
+
+/** Each rule that concludes a grade without naming the evidence `EVIDENCE` lists for it, one issue per gap. */
+function ruleIssues({ rules }: PolicyDocument): PolicyIssue[] {
+  return rules.flatMap((rule, index) =>
+    (EVIDENCE[rule.then] ?? [])
+      .filter(({ conditions, values }) =>
+        conditions.every((condition) => !values.some((value) => rule.when[condition] === value)),
+      )
+      .map((evidence) => evidenceIssue(index, rule.then, evidence)),
+  );
+}
+
 /** Every cross-field problem in `doc`, in document order. Empty for a valid policy. */
 export function policyIssues(doc: PolicyDocument): PolicyIssue[] {
-  return [...windowIssues(doc), ...thresholdIssues(doc), ...featureIssues(doc)];
+  return [...windowIssues(doc), ...thresholdIssues(doc), ...featureIssues(doc), ...ruleIssues(doc)];
 }

@@ -2,25 +2,35 @@
  * Redaction (docs/grading.md §10, §12, §13; build_spec Hard Rule 2): the only way an observer's raw row becomes
  * an `Observation`. Derived facts, never raw content.
  *
- * `project` keeps exactly the content fields that `policy.allowlistedFields[source]` names, each only if its
- * value already satisfies the Observation schema (an invalid value is dropped, never coerced), and computes
- * every other field itself. It never copies `id`, `source`, `type`, `observedAt`, `rowKeyHash` or
- * `contentHash` from the raw row, so a row cannot choose its own identity:
+ * `project` keeps exactly the content fields that `policy.allowlistedFields[source]` names, and computes every
+ * other field itself. An allowlisted value must already satisfy the Observation schema: a value that does not
+ * (a multi-line counterparty, a number as text, an over-long merchant) is never coerced, cut or dropped. The
+ * row is refused with `RedactError('invalid_field')`, so the observer reports DEGRADED (Hard Rule 6) instead of
+ * storing a row that silently lacks a fact, which could lower a match toward NOT_FOUND (Hard Rule 5).
+ *
+ * `project` never copies `id`, `source`, `type`, `observedAt`, `rowKeyHash` or `contentHash` from the raw row,
+ * so a row cannot choose its own identity:
  *  - `source`, `type`, `observedAt` come from the arguments;
  *  - `rowKeyHash` = `sha256Hex(canonicalJson(ctx.rowKey))` when the observer has the vendor's own row id;
  *    canonical JSON escapes a lone surrogate, which plain UTF-8 turns into U+FFFD, so two distinct row ids
  *    never share a hash (§10 v1.3);
- *  - `contentHash` = SHA-256 of the canonical JSON of `{source, type, ...kept content fields, rowKeyHash?}`,
- *    where the content fields are only `counterparty`, `merchant`, `amountCents`, `currency`, `subjectHint` and
- *    `occurredAt` (§10 v1.3): no derived field ever enters it;
+ *  - `contentHash` = `contentHashOf({source, type, ...kept content fields, rowKeyHash?})`, the SHA-256 of its
+ *    canonical JSON, where the content fields are only `counterparty`, `merchant`, `amountCents`, `currency`,
+ *    `subjectHint` and `occurredAt` (§10 v1.3): no derived field ever enters it;
  *  - `id` = `idFromHash(contentHash)`.
  * So the same row seen twice is one observation (observedAt is not hashed), a created and a deleted event
  * differ (type is hashed), and two identical sends with different row ids stay two (rowKeyHash is hashed).
  *
  * Only own data properties of `raw` are read: inherited properties and getters never become content.
  * `subjectHint` is cut to SCHEMA_LIMITS.SUBJECT_HINT code points (a surrogate pair is one code point and is
- * never split, matching how the schema counts); every other string must already fit its cap or is dropped,
- * because a cut address or merchant would name someone else.
+ * never split, matching how the schema counts); every other string must already fit its cap or the row is
+ * refused, because a cut address or merchant would name someone else.
+ *
+ * `observationIntegrityProblems(observation, policy)` is the same rule seen from the other side: whether an
+ * observation that arrives already built (over the bus, into the ledger) is one `project` could have returned.
+ * Only its source's allowlisted content fields, and a `contentHash` that is `contentHashOf` its content. The
+ * ledger refuses any other before it writes (Hard Rule 2; SEC-V1). `contentHashOf` is the one definition of the
+ * §10 content hash: `project`, this check and replay all call it.
  *
  * PURE: no clock, no I/O, no logging (Hard Rule 4). Errors carry a code only, never a value (Hard Rule 10).
  */
@@ -28,6 +38,7 @@ import { z } from 'zod';
 
 import { canonicalJson, idFromHash, sha256Hex } from './hash';
 import type { Policy } from './policy';
+import type { Problem } from './schema-checks';
 import {
   ActionType,
   IsoTs,
@@ -38,9 +49,13 @@ import {
   Sha256,
 } from './schema';
 
-export type RedactErrorCode = 'invalid_argument' | 'missing_occurred_at';
+export type RedactErrorCode = 'invalid_argument' | 'invalid_field' | 'missing_occurred_at';
 
-/** `invalid_argument`: bad source or context. `missing_occurred_at`: absent, invalid or not allowlisted. */
+/**
+ * `invalid_argument`: bad source or context. `invalid_field`: an allowlisted content field other than
+ * `occurredAt` holds a value the Observation schema refuses. `missing_occurred_at`: absent, invalid or not
+ * allowlisted.
+ */
 export class RedactError extends Error {
   constructor(readonly code: RedactErrorCode) {
     super(`redact: ${code}`);
@@ -122,13 +137,18 @@ function ownValue(raw: unknown, key: string): unknown {
   return value;
 }
 
-/** The value to keep for `field`, or undefined when it is absent or fails the Observation schema. */
+/** The value to keep for `field`, or undefined when it fails the Observation schema. */
 function keptValue(field: ContentField, value: unknown): unknown {
   const prepared = field === 'subjectHint' && typeof value === 'string' ? clampSubjectHint(value) : value;
   const schema: z.ZodType = Observation.shape[field];
   return schema.safeParse(prepared).success ? prepared : undefined;
 }
 
+/**
+ * The allowlisted own content of `raw`. Only `undefined` means absent. Any other value that fails its field's
+ * schema refuses the whole row (`invalid_field`): a row is never stored without a fact it carried (Hard Rule 5).
+ * An invalid `occurredAt` is left out here and reported as `missing_occurred_at` by `project`.
+ */
 function allowlistedContent(
   raw: unknown,
   allowlist: readonly string[],
@@ -136,10 +156,44 @@ function allowlistedContent(
   const content: Partial<Record<ContentField, unknown>> = {};
   for (const field of CONTENT_FIELDS) {
     if (!allowlist.includes(field)) continue;
-    const value = keptValue(field, ownValue(raw, field));
+    const own = ownValue(raw, field);
+    if (own === undefined) continue;
+    const value = keptValue(field, own);
     if (value !== undefined) content[field] = value;
+    else if (field !== 'occurredAt') throw new RedactError('invalid_field');
   }
   return content;
+}
+
+/**
+ * The §10 content hash: SHA-256 of the canonical JSON of every field of `observation` but `id`, `observedAt`
+ * and `contentHash`. For what `project` hashes, `{source, type, ...content, rowKeyHash?}`, that is all of it.
+ * The one definition: `project`, `observationIntegrityProblems` and replay (replay-compare.ts) all call it.
+ */
+export function contentHashOf(observation: Readonly<Record<string, unknown>>): Sha256 {
+  const hashed = { ...observation, id: undefined, observedAt: undefined, contentHash: undefined };
+  return Sha256.parse(sha256Hex(canonicalJson(hashed)));
+}
+
+/**
+ * Why `observation` is not one `project` could have returned under `policy` (SEC-V1, Hard Rule 2): each content
+ * field its source's allowlist does not name, and a `contentHash` that is not `contentHashOf` its content (so a
+ * row cannot choose its own identity, §10). Empty when it is. `rowKeyHash` is not checked against the allowlist,
+ * because `project` keeps it whenever the observer has a row id. Problems name fields only, never values (Hard
+ * Rule 10). The schema has already checked every field's shape (`Observation`).
+ */
+export function observationIntegrityProblems(
+  observation: Observation,
+  policy: Pick<Policy, 'allowlistedFields'>,
+): Problem[] {
+  const allowlist: readonly string[] = policy.allowlistedFields[observation.source];
+  const problems: Problem[] = CONTENT_FIELDS.filter(
+    (field) => observation[field] !== undefined && !allowlist.includes(field),
+  ).map((field): Problem => [field, `not allowlisted for ${observation.source}`]);
+  if (contentHashOf(observation) !== observation.contentHash) {
+    problems.push(['contentHash', 'is not the §10 hash of the content']);
+  }
+  return problems;
 }
 
 function parseArguments(source: ObservationSource, ctx: ProjectContext): z.output<typeof Context> {
@@ -152,9 +206,10 @@ function parseArguments(source: ObservationSource, ctx: ProjectContext): z.outpu
 
 /**
  * Projects one raw observer row onto an `Observation` holding only `policy.allowlistedFields[source]`
- * (Hard Rule 2). Throws `RedactError('missing_occurred_at')` when the row has no valid, allowlisted
- * `occurredAt`, and `RedactError('invalid_argument')` for a bad source or context. The result always
- * parses with the Observation schema.
+ * (Hard Rule 2). Throws `RedactError('invalid_field')` when an allowlisted own value other than `occurredAt`
+ * fails its schema, `RedactError('missing_occurred_at')` when the row has no valid, allowlisted `occurredAt`,
+ * and `RedactError('invalid_argument')` for a bad source or context. The result always parses with the
+ * Observation schema and has no `observationIntegrityProblems`.
  */
 export function project(
   source: ObservationSource,
@@ -171,7 +226,7 @@ export function project(
     ...content,
     ...(rowKey === undefined ? {} : { rowKeyHash: hashRowKey(rowKey) }),
   };
-  const contentHash = sha256Hex(canonicalJson(hashed));
+  const contentHash = contentHashOf(hashed);
   return Observation.parse(
     { ...hashed, id: idFromHash(contentHash), observedAt, contentHash },
     { jitless: true },

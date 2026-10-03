@@ -89,7 +89,9 @@ describe('writeFixture', () => {
       'activity.html': { ...ENTRY, seededSecrets: ['x', 'y', 'z'] },
     });
   });
+});
 
+describe('writeFixture: what it refuses', () => {
   it('refuses a corrupt labels.json instead of clobbering it', async () => {
     const target = fixtureTarget(root, 'muse', '2026-10-01', 'activity');
     await mkdir(target.dir, { recursive: true });

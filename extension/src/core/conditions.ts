@@ -60,14 +60,17 @@ export {
   type AllowlistCheck,
   amountAboveCeiling,
   type CeilingCheck,
+  countedInSpendCurrency,
   counterpartyNotAllowed,
   cumulativeAboveCeiling,
   type CumulativeCheck,
   observedScopeExceedsDeclared,
   type ScopePolicy,
+  spendCurrencyOf,
   targetMissing,
   typeNotInGrant,
   unaskedLikely,
+  unaskedLikelyAt,
 } from './conditions-scope';
 
 export type RuleWhen = PolicyRule['when'];

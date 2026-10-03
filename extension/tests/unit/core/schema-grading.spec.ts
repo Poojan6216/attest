@@ -312,7 +312,7 @@ describe('cross-field refinements', () => {
       }),
       { numRuns: 1_000 },
     );
-  }, 60_000);
+  });
 });
 
 describe('cross-field refinements on timestamps', () => {
@@ -353,5 +353,5 @@ describe('cross-field refinements on timestamps', () => {
       { numRuns: 1_000 },
     );
     expect(compared).toBeGreaterThan(100);
-  }, 60_000);
+  });
 });

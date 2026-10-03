@@ -184,7 +184,9 @@ describe('buildRecord: values that never print', () => {
       '[redacted len=11]',
     ]);
   });
+});
 
+describe('buildRecord: values that never print under a content-word key, and long digit runs', () => {
   it.each([
     'senderEmail',
     'subject_line',
@@ -227,7 +229,9 @@ describe('buildRecord: values that never print', () => {
       negativeCount: '[number]',
     });
   });
+});
 
+describe('buildRecord: errors that never print their message', () => {
   it('error names outside the allowlist print as Error', () => {
     const named = (name: string): Error => Object.assign(new Error('x'), { name });
     const { fields } = buildRecord('error', 'e', {
@@ -241,23 +245,6 @@ describe('buildRecord: values that never print', () => {
       b: 'LedgerError messageLength=1',
       c: 'QuotaExceededError messageLength=1',
       d: 'Error messageLength=1',
-    });
-  });
-
-  it('objects and arrays print only their shape, never their contents', () => {
-    const { fields } = buildRecord('info', 'e', {
-      row: { subject: 'Q3 deck', to: 'alex@example.com' },
-      list: ['a', 'b', 'c'],
-      fn: () => 'secret',
-      sym: Symbol('secret'),
-      big: 10n,
-    });
-    expect(fields).toEqual({
-      row: '[object keys=2]',
-      list: '[array len=3]',
-      fn: '[function]',
-      sym: '[symbol]',
-      big: '[bigint]',
     });
   });
 
@@ -276,6 +263,25 @@ describe('buildRecord: values that never print', () => {
       b: 'Error code=read_failed messageLength=31',
       c: 'Error messageLength=1',
       d: 'Error messageLength=1',
+    });
+  });
+});
+
+describe('buildRecord: objects, arrays and keys that never print their contents', () => {
+  it('objects and arrays print only their shape, never their contents', () => {
+    const { fields } = buildRecord('info', 'e', {
+      row: { subject: 'Q3 deck', to: 'alex@example.com' },
+      list: ['a', 'b', 'c'],
+      fn: () => 'secret',
+      sym: Symbol('secret'),
+      big: 10n,
+    });
+    expect(fields).toEqual({
+      row: '[object keys=2]',
+      list: '[array len=3]',
+      fn: '[function]',
+      sym: '[symbol]',
+      big: '[bigint]',
     });
   });
 

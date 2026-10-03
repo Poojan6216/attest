@@ -354,7 +354,7 @@ describe('loadPolicy: properties', () => {
       }),
       PROPERTY_RUNS,
     );
-  }, 60_000);
+  });
 
   const WEIGHT_PATHS: readonly (readonly Segment[])[] = [
     ...Object.keys(policyJson.features).map((key) => ['features', key]),
@@ -374,7 +374,7 @@ describe('loadPolicy: properties', () => {
       ),
       PROPERTY_RUNS,
     );
-  }, 60_000);
+  });
 
   it('any weight or threshold above 1 is rejected naming its path', () => {
     fc.assert(
@@ -387,5 +387,5 @@ describe('loadPolicy: properties', () => {
       ),
       PROPERTY_RUNS,
     );
-  }, 60_000);
+  });
 });

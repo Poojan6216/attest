@@ -33,8 +33,10 @@ pnpm install
 pnpm build        # → extension/.output/chrome-mv3/
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test           # unit, property, golden, then the serial perf gates
+pnpm test:coverage  # src/core coverage; fails below 95% lines
 pnpm e2e
+pnpm bench          # perf gates → RESULTS.md; exits 1 when a gate fails
 ```
 
 Load `extension/.output/chrome-mv3/` in `chrome://extensions` with Developer mode on and "Load unpacked".

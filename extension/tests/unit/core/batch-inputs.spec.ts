@@ -131,6 +131,23 @@ describe('gradeBatch returns each receipt with the inputs it was graded with (§
     );
   });
 
+  it('names the grant in force at evaluatedAt: the latest not after it, never a later one', async () => {
+    const loaded = load({
+      claims: [email('c1', 'priya@company.com', 'Q3 deck', '2026-10-06T14:02:00-04:00')],
+      coverage: [GMAIL],
+    });
+    const [base] = loaded.grants;
+    if (base === undefined) throw new Error('no grant');
+    const older = Grant.parse({ ...base, updatedAt: '2026-10-01T00:00:00-04:00' });
+    const inForce = Grant.parse({ ...base, allowedTypes: ['email.sent'], updatedAt: EVALUATED_AT });
+    const later = Grant.parse({ ...base, allowedTypes: [], updatedAt: '2026-10-06T15:00:00.001-04:00' });
+    const [entry] = await run(loaded, [later, older, inForce]);
+    expect(entry?.inputs.grant).toBe(inForce);
+    expect(entry?.receipt.ruleId).toBe('not_found');
+  });
+});
+
+describe('gradeBatch returns the inputs of a receipt without a claim (§3)', () => {
   it('an UNASKED receipt: the attributed agent’s grant and {priorSpendCents: 0, attribution}', async () => {
     const loaded = load({
       observations: [sent('o1', 'vendor@supplier.example', 'Re: invoice', '2026-10-06T14:03:00-04:00')],
@@ -179,22 +196,9 @@ describe('gradeBatch returns each receipt with the inputs it was graded with (§
     const again = grade(null, [], entry.inputs.grant, policy, loaded.coverage, entry.inputs.context);
     expect(canonicalJson(again)).toBe(canonicalJson(entry.receipt));
   });
+});
 
-  it('names the grant in force at evaluatedAt: the latest not after it, never a later one', async () => {
-    const loaded = load({
-      claims: [email('c1', 'priya@company.com', 'Q3 deck', '2026-10-06T14:02:00-04:00')],
-      coverage: [GMAIL],
-    });
-    const [base] = loaded.grants;
-    if (base === undefined) throw new Error('no grant');
-    const older = Grant.parse({ ...base, updatedAt: '2026-10-01T00:00:00-04:00' });
-    const inForce = Grant.parse({ ...base, allowedTypes: ['email.sent'], updatedAt: EVALUATED_AT });
-    const later = Grant.parse({ ...base, allowedTypes: [], updatedAt: '2026-10-06T15:00:00.001-04:00' });
-    const [entry] = await run(loaded, [later, older, inForce]);
-    expect(entry?.inputs.grant).toBe(inForce);
-    expect(entry?.receipt.ruleId).toBe('not_found');
-  });
-
+describe('gradeBatch pairs every receipt with its own inputs (§3)', () => {
   it('pairs each receipt with its own inputs, ordered by receipt id', async () => {
     const loaded = load({
       claims: [

@@ -164,8 +164,18 @@ describe('pnpm attest replay <export.json>, wherever it is typed and on bigger e
     const receipts = String(snapshot.receipts.length);
     expect(out[2]).toBe(`  reproduced  ${receipts}`);
     expect(snapshot.policies.size).toBe(2);
-  }, 60_000);
+  });
 });
+
+/** The code points in `text` a terminal acts on (C0 but newline, DEL, C1, the RTL override): none may be written raw. */
+function activeCodePoints(text: string): number[] {
+  const found: number[] = [];
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if ((code < 0x20 && code !== 0x0a) || (code >= 0x7f && code <= 0x9f) || code === 0x202e) found.push(code);
+  }
+  return found;
+}
 
 describe('an export replay cannot use exits 2 and says why, without values', () => {
   it.each([
@@ -191,7 +201,7 @@ describe('an export replay cannot use exits 2 and says why, without values', () 
     });
     const { code, err } = await run(['replay', await write('leaky.json', leaky)]);
     expect(code).toBe(EXIT.unusable);
-    expect(err.join('\n')).toContain('tables.receipts.0');
+    expect(err.join('\n')).toContain('tables.receipts[0].body: unknown key');
     expect(err.join('\n')).not.toContain('secret');
   });
 
@@ -208,6 +218,45 @@ describe('an export replay cannot use exits 2 and says why, without values', () 
   });
 });
 
+describe('an export never drives the terminal (Hard Rule 10)', () => {
+  it('never writes a raw key or control character from the export (SEC-7: ESC, CSI, bidi, newline in keys)', async () => {
+    const fake = 'FAKE: all receipts reproduced';
+    const title = `\u001b]0;pwned\u0007\u001b[2J\u001b[31m${fake}\u001b[0m`;
+    const receiptInputs = z.record(z.string(), z.unknown()).parse(scenarioJson.receiptInputs);
+    const crafted = {
+      ...scenarioJson,
+      [title]: 1,
+      [`\n${fake}`]: 2,
+      [`\u009b2J\u202e${fake}`]: 3,
+      receiptInputs: { ...receiptInputs, '\u001b[32mkey-in-path\u001b[0m': {} },
+    };
+    const { code, err } = await run(['replay', await write('escape.json', crafted)]);
+    expect(code).toBe(EXIT.unusable);
+    const text = err.join('\n');
+    expect(activeCodePoints(text)).toEqual([]);
+    expect(text.split('\n').filter((line) => line.startsWith(fake))).toEqual([]);
+    // JSON-quoted in the path (formatPath), then anything JSON leaves raw escaped (printable.ts).
+    expect(text).toContain('["\\u001b]0;pwned');
+    expect(text).toContain('["\\u{9b}2J\\u{202e}');
+    expect(text).toContain('unknown key');
+    expect(text).toContain('receiptInputs[');
+    expect(text).toContain('invalid key');
+  });
+
+  it('escapes a key inside an invalid policy document too', async () => {
+    const [document] = Object.values(ReplayExport.parse(scenarioJson).policies);
+    const policy = z.record(z.string(), z.unknown()).parse(document);
+    const crafted = {
+      ...scenarioJson,
+      policies: { ['0'.repeat(64)]: { ...policy, '\u009b2J\u001b[2Jx': 1 } },
+    };
+    const { code, err } = await run(['replay', await write('escape-policy.json', crafted)]);
+    expect(code).toBe(EXIT.unusable);
+    expect(activeCodePoints(err.join('\n'))).toEqual([]);
+    expect(err.join('\n')).toContain('unknown key');
+  });
+});
+
 describe('arguments', () => {
   it.each([[[]], [['replay']], [['replay', 'a.json', 'b.json']], [['verify', 'a.json']]])(
     '%j prints the usage and exits 2',
@@ -218,8 +267,9 @@ describe('arguments', () => {
     },
   );
 
-  it('--help prints the usage and exits 0', async () => {
-    expect(await run(['--help'])).toEqual({ code: EXIT.reproduced, out: [HELP], err: [] });
+  // QA Sprint 1 review: only --help was run, so dropping -h and help from main() survived the suite.
+  it.each([['--help'], ['-h'], ['help']])('%s prints the usage and exits 0', async (flag) => {
+    expect(await run([flag])).toEqual({ code: EXIT.reproduced, out: [HELP], err: [] });
   });
 });
 
@@ -279,5 +329,5 @@ describe('the real entry point under tsx', () => {
     expect(ok.stdout).toContain('reproduced  13');
     expect(mismatch.code).toBe(1);
     expect(mismatch.stdout).toContain('by field    ruleId 1');
-  }, 60_000);
+  });
 });

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { IdError } from '../../../src/core/base32';
 import { canonicalJson, HashError, hashCanonical, idFromHash, sha256Hex } from '../../../src/core/hash';
+import { InvariantError } from '../../../src/core/invariant-error';
 import { DIGEST_WORDS, sha256OfDigests, Sha256Writer, utf8 } from '../../../src/core/sha256';
 
 describe('sha256Hex: FIPS 180-4 / NIST test vectors', () => {
@@ -50,14 +51,15 @@ function wordsOf(bytes: Uint8Array): Int32Array {
   return Int32Array.from({ length: bytes.byteLength / 4 }, (_, i) => view.getInt32(i * 4));
 }
 
-describe('Sha256Writer raw bytes (§3 v1.5 candidatesHash hashes 32-byte digests)', () => {
-  const node = (...parts: (string | Uint8Array)[]) => {
-    const hash = createHash('sha256');
-    for (const part of parts) hash.update(typeof part === 'string' ? Buffer.from(part, 'utf8') : part);
-    return hash.digest('hex');
-  };
-  const digests = ['a', 'b', 'c', 'd', 'e'].map((text) => createHash('sha256').update(text).digest());
+/** Node's SHA-256 of the parts, text as UTF-8 and bytes as given, in order. */
+const node = (...parts: (string | Uint8Array)[]) => {
+  const hash = createHash('sha256');
+  for (const part of parts) hash.update(typeof part === 'string' ? Buffer.from(part, 'utf8') : part);
+  return hash.digest('hex');
+};
+const digests = ['a', 'b', 'c', 'd', 'e'].map((text) => createHash('sha256').update(text).digest());
 
+describe('Sha256Writer raw bytes (§3 v1.5 candidatesHash hashes 32-byte digests)', () => {
   it('words() is the digest as 8 big-endian words; writeWords hashes their 32 bytes', () => {
     const writer = new Sha256Writer();
     writer.write('abc');
@@ -87,7 +89,9 @@ describe('Sha256Writer raw bytes (§3 v1.5 candidatesHash hashes 32-byte digests
     }
     expect(new Sha256Writer().hex()).toBe(node(''));
   });
+});
 
+describe('Sha256Writer reuse, digest tables and lone surrogates', () => {
   it('reset() starts a new message: a reused writer hashes like a fresh one, at every padding boundary', () => {
     const writer = new Sha256Writer();
     for (let length = 0; length <= 130; length += 1) {
@@ -111,12 +115,19 @@ describe('Sha256Writer raw bytes (§3 v1.5 candidatesHash hashes 32-byte digests
     writer.write('a\ud800');
     writer.writeWords(wordsOf(digests[0] ?? Buffer.alloc(32)), 0, DIGEST_WORDS);
     expect(writer.hex()).toBe(node('a\ufffd', digests[0] ?? Buffer.alloc(0)));
-    expect(() => {
-      writer.writeWords(new Int32Array(DIGEST_WORDS), 0, DIGEST_WORDS);
-    }).toThrow(RangeError);
-    expect(() => {
-      writer.write('x');
-    }).toThrow(RangeError);
+    // TECH-C7: the typed InvariantError with its closed code (toThrow(instance) compares the message only).
+    const afterDigest = new InvariantError('write_after_digest');
+    for (const write of [
+      () => {
+        writer.writeWords(new Int32Array(DIGEST_WORDS), 0, DIGEST_WORDS);
+      },
+      () => {
+        writer.write('x');
+      },
+    ]) {
+      expect(write).toThrow(afterDigest);
+      expect(write).toThrow(InvariantError);
+    }
     const bytes = new Sha256Writer();
     bytes.write('\ud800');
     bytes.writeWords(wordsOf(Buffer.from('ABCD')), 0, 1);

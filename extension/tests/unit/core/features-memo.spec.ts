@@ -3,8 +3,8 @@
  * save work, never change a result (Hard Rule 4):
  *  - `memoised` returns the stored value while every input is the same value (`Object.is`), recomputes as soon
  *    as one differs, keeps keys apart, and stores nothing when the computation throws;
- *  - features() on a claim, an observation or a policy changed in place scores exactly like features() on fresh
- *    copies, so no object is ever scored from its old fields.
+ *  - features() on a claim or an observation changed in place, and under each of several loaded policies in turn,
+ *    scores exactly like features() on fresh copies, so no object is ever scored from its old fields.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -167,12 +167,12 @@ describe('features() under another policy never reuses facts read under the last
       ...defaultPolicyJson,
       windows: { ...defaultPolicyJson.windows, afterClaimMin: 90 },
     });
-    // Built by hand: other windows, but the very same stop-word array as the shipped policy.
-    const widerSameWords: Policy = {
-      ...DEFAULT_POLICY,
-      windows: { ...DEFAULT_POLICY.windows, afterClaimMin: 90 },
-    };
-    const policies = [DEFAULT_POLICY, stopReview, wider, DEFAULT_POLICY, widerSameWords, DEFAULT_POLICY];
+    // The same document loaded again: equal values in new objects (a hand-built copy is refused, SEC-2).
+    const widerAgain = loadPolicy({
+      ...defaultPolicyJson,
+      windows: { ...defaultPolicyJson.windows, afterClaimMin: 90 },
+    });
+    const policies = [DEFAULT_POLICY, stopReview, wider, DEFAULT_POLICY, widerAgain, DEFAULT_POLICY];
     const scores = policies.map((policy) => {
       const { memo, fresh } = bothWays(claim, observation, policy);
       expect(memo).toStrictEqual(fresh);

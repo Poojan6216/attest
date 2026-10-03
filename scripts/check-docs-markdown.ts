@@ -1,22 +1,19 @@
 /**
- * Markdown scanning for scripts/check-docs.ts: fenced code, inline code spans, link targets, and the anchors
- * GitHub generates for headings.
+ * Markdown scanning for scripts/check-docs.ts: code (spans and blocks), link targets, and the anchors GitHub
+ * generates for headings.
  *
  * A small, deliberate subset of CommonMark, enough for the repo's own docs:
- * - fences are ``` or ~~~ runs at any indentation (so fences nested in list items count);
+ * - blocks (fenced and indented code, HTML comments, list items) are split by check-docs-blocks.ts;
  * - code spans are matched within one line (a run of n backticks closes at the next run of exactly n);
  * - links are inline `[text](target)` and `![alt](target)`, reference definitions `[id]: target`, and
- *   `href`/`src` attributes of HTML tags; text inside code is never a link;
+ *   `href`/`src` attributes of HTML tags; text inside code is never a link, and a backslash-escaped bracket
+ *   (`\[x](y)`) is no link either;
  * - headings are ATX (`## Title`) and setext (`Title` over `===` or `---`); explicit `id`/`name` attributes
  *   on HTML tags are anchors too.
- * Indented (four-space) code blocks are not recognised; the docs use fences.
  */
+import { closingRun, splitBlocks, type DocLine } from './check-docs-blocks';
 
-/** One line of a document, 1-based. */
-export interface DocLine {
-  readonly n: number;
-  readonly text: string;
-}
+export type { DocLine } from './check-docs-blocks';
 
 /** A link target as written, with the line it is on. */
 export interface LinkRef {
@@ -24,11 +21,13 @@ export interface LinkRef {
   readonly target: string;
 }
 
-/** A piece of code: an inline code span, or one line of a fenced block. */
+/** A piece of code: an inline code span, or one line of a fenced or indented code block. */
 export interface CodeText {
   readonly line: number;
   readonly text: string;
-  readonly fenced: boolean;
+  readonly kind: 'span' | 'fenced' | 'indented';
+  /** Lines of one code block share this number; every code span has its own. */
+  readonly block: number;
 }
 
 export interface MarkdownScan {
@@ -43,8 +42,6 @@ interface Segment {
   readonly text: string;
 }
 
-const FENCE_OPEN = /^\s*(`{3,}|~{3,})/;
-const FENCE_CLOSE = /^\s*(`{3,}|~{3,})\s*$/;
 const ATX = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 const NOT_PARAGRAPH = /^\s*(?:[-*+][ \t]|\d+[.)][ \t]|>|#|\||<)/;
@@ -53,43 +50,6 @@ const HTML_LINK = /<[a-zA-Z][^>]*?\s(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
 const HTML_ANCHOR = /<[a-zA-Z][^>]*?\s(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 /** github-slugger keeps letters, marks, decimal and letter numbers, connector punctuation, space and '-'. */
 const SLUG_DROP = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc} -]/gu;
-
-/** Splits a document into prose lines and fenced code lines (fence delimiters belong to neither). */
-export function splitFences(source: string): { prose: DocLine[]; fenced: DocLine[] } {
-  const prose: DocLine[] = [];
-  const fenced: DocLine[] = [];
-  let open: string | null = null;
-  source.split(/\r?\n/).forEach((text, index) => {
-    const line = { n: index + 1, text };
-    if (open === null) {
-      const fence = FENCE_OPEN.exec(text)?.[1];
-      if (fence === undefined) prose.push(line);
-      else open = fence;
-      return;
-    }
-    const close = FENCE_CLOSE.exec(text)?.[1];
-    const fenceChar = open.charAt(0);
-    if (close?.startsWith(fenceChar) === true && close.length >= open.length) open = null;
-    else fenced.push(line);
-  });
-  return { prose, fenced };
-}
-
-/** The index of the next run of exactly `size` backticks at or after `from`, or -1. */
-function closingRun(text: string, from: number, size: number): number {
-  let i = from;
-  while (i < text.length) {
-    if (text[i] !== '`') {
-      i += 1;
-      continue;
-    }
-    let end = i;
-    while (text[end] === '`') end += 1;
-    if (end - i === size) return i;
-    i = end;
-  }
-  return -1;
-}
 
 /** CommonMark: strip one space from each end when both ends have one and the span is not all spaces. */
 function spanContent(raw: string): string {
@@ -132,18 +92,40 @@ export function segments(text: string): Segment[] {
   return out.filter((segment) => segment.code || segment.text !== '');
 }
 
+/** Whether the character at `i` is backslash-escaped: an odd number of backslashes stands before it. */
+function escapedAt(text: string, i: number): boolean {
+  let backslashes = 0;
+  for (let j = i - 1; j >= 0 && text[j] === '\\'; j -= 1) backslashes += 1;
+  return backslashes % 2 === 1;
+}
+
+/** The index of the last `ch` before index `before` that is not backslash-escaped, or -1. */
+function lastUnescaped(text: string, ch: string, before: number = text.length): number {
+  for (let i = before - 1; i >= 0; i -= 1) if (text[i] === ch && !escapedAt(text, i)) return i;
+  return -1;
+}
+
+/** CommonMark backslash escapes (a backslash before ASCII punctuation) resolved, as in a link destination. */
+function unescape(text: string): string {
+  return text.replace(/\\([!-/:-@[-`{-~])/g, '$1');
+}
+
 /** The destination of an inline link whose `](` ends just before `start`, or null when malformed. */
 function inlineDestination(text: string, start: number): string | null {
   let i = start;
   while (text[i] === ' ' || text[i] === '\t') i += 1;
   if (text[i] === '<') {
     const end = text.indexOf('>', i + 1);
-    return end === -1 ? null : text.slice(i + 1, end);
+    return end === -1 ? null : unescape(text.slice(i + 1, end));
   }
   let depth = 0;
   let end = i;
   for (; end < text.length; end += 1) {
     const ch = text[end];
+    if (ch === '\\') {
+      end += 1; // an escaped character never ends the destination
+      continue;
+    }
     if (ch === ' ' || ch === '\t') break;
     if (ch === '(') depth += 1;
     if (ch === ')') {
@@ -151,25 +133,25 @@ function inlineDestination(text: string, start: number): string | null {
       depth -= 1;
     }
   }
-  return end < text.length ? text.slice(i, end) : null;
+  return end < text.length ? unescape(text.slice(i, end)) : null;
 }
 
 /**
  * Link targets in one line of text that holds no code. `bracketOpen` says a `[` on an earlier line of the same
- * paragraph is still open, so a link whose text wraps onto this line is found here.
+ * paragraph is still open, so a link whose text wraps onto this line is found here. A backslash-escaped `[` or
+ * `]` opens or closes nothing (`\\[x](y)` is text).
  */
 export function linkTargets(plain: string, bracketOpen = false): string[] {
   const targets: string[] = [];
   let at = plain.indexOf('](');
   while (at !== -1) {
-    const escaped = plain[at - 1] === '\\';
-    const opened = bracketOpen || plain.lastIndexOf('[', at) !== -1;
-    const target = escaped || !opened ? null : inlineDestination(plain, at + 2);
+    const opened = bracketOpen || lastUnescaped(plain, '[', at) !== -1;
+    const target = escapedAt(plain, at) || !opened ? null : inlineDestination(plain, at + 2);
     if (target !== null) targets.push(target);
     at = plain.indexOf('](', at + 2);
   }
   const definition = REFERENCE_DEFINITION.exec(plain)?.[1];
-  if (definition !== undefined) targets.push(definition.replace(/^<|>$/g, ''));
+  if (definition !== undefined) targets.push(unescape(definition.replace(/^<|>$/g, '')));
   for (const match of plain.matchAll(HTML_LINK)) targets.push(match[1] ?? match[2] ?? '');
   return targets;
 }
@@ -243,17 +225,23 @@ function anchorsOf(prose: readonly DocLine[]): Set<string> {
 
 /** Whether a `[` is still open at the end of a line: its last `[` comes after its last `]`, or it has neither. */
 function bracketOpenAfter(plain: string, openBefore: boolean): boolean {
-  const lastOpen = plain.lastIndexOf('[');
-  const lastClose = plain.lastIndexOf(']');
+  const lastOpen = lastUnescaped(plain, '[');
+  const lastClose = lastUnescaped(plain, ']');
   if (lastOpen === -1 && lastClose === -1) return openBefore;
   return lastOpen > lastClose;
 }
 
 /** Links, code and anchors of one Markdown document. */
 export function scanMarkdown(source: string): MarkdownScan {
-  const { prose, fenced } = splitFences(source);
+  const { prose, code: blockLines } = splitBlocks(source);
   const links: LinkRef[] = [];
-  const code: CodeText[] = fenced.map((line) => ({ line: line.n, text: line.text, fenced: true }));
+  const code: CodeText[] = blockLines.map((line) => ({
+    line: line.n,
+    text: line.text,
+    kind: line.kind,
+    block: line.block,
+  }));
+  let spanBlock = Math.max(0, ...blockLines.map((line) => line.block));
   let open = false;
   prose.forEach((line, index) => {
     const parts = segments(line.text);
@@ -266,7 +254,9 @@ export function scanMarkdown(source: string): MarkdownScan {
     const continues =
       open && prose[index - 1]?.n === line.n - 1 && line.text.trim() !== '' && !NOT_PARAGRAPH.test(line.text);
     for (const target of linkTargets(plain, continues)) links.push({ line: line.n, target });
-    for (const part of parts) if (part.code) code.push({ line: line.n, text: part.text, fenced: false });
+    for (const part of parts) {
+      if (part.code) code.push({ line: line.n, text: part.text, kind: 'span', block: (spanBlock += 1) });
+    }
     open = bracketOpenAfter(plain, continues);
   });
   code.sort((a, b) => a.line - b.line);

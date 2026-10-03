@@ -93,7 +93,9 @@ describe('the @mandatory tests cannot be skipped or quietly weakened', () => {
     }
     expect(source).toContain('expect(leaks).toEqual([]);');
   });
+});
 
+describe('the @mandatory tests: the Playwright config filters nothing and lists them all', () => {
   it('the Playwright config never retries and filters nothing', () => {
     expect(config.retries).toBe(0);
     expect(config.testDir).toBe('tests/e2e');
@@ -124,8 +126,10 @@ describe('the @mandatory tests cannot be skipped or quietly weakened', () => {
       },
     );
     expect(checkMandatoryReport(JSON.parse(out), 'list')).toEqual([]);
-  }, 60_000);
+  });
+});
 
+describe('the @mandatory tests: the run-mode report check and the CI step', () => {
   it('the run-mode check fails a report with a skipped, failed, retried or missing mandatory test', () => {
     const passed = { status: 'expected', results: [{ status: 'passed', retry: 0 }] };
     const report = (tests: Record<string, unknown>) => ({

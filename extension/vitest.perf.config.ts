@@ -13,5 +13,8 @@ export default defineConfig({
     fileParallelism: false,
     pool: 'forks',
     maxWorkers: 1,
+    // Print each gate's medians (tests/perf/measure.ts describeRuns) in `pnpm test` and CI output, also when the
+    // gate passes: Vitest hides a passing test's console output by default (QA-R8, Hard Rule 12).
+    silent: false,
   },
 });

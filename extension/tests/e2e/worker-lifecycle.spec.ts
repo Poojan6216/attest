@@ -111,7 +111,9 @@ test.describe('service worker lifecycle', () => {
     }
     expect(problems).toEqual([]);
   });
+});
 
+test.describe('service worker lifecycle: Chrome stops the worker', () => {
   test('after Chrome stops the worker, a bus query restarts it cleanly with its state intact', async ({
     attest,
   }) => {
@@ -162,7 +164,9 @@ test.describe('service worker lifecycle', () => {
     expect(await purgeAlarm(first)).toEqual(alarmBefore);
     expect(problems).toEqual([]);
   });
+});
 
+test.describe('service worker lifecycle: the browser restarts', () => {
   test('after a browser restart the purge alarm exists again, even if it was dropped, and the id is kept', async () => {
     test.setTimeout(2 * 60_000); // two browser launches, one after the other
     const profile = mkdtempSync(path.join(os.tmpdir(), 'attest-restart-'));

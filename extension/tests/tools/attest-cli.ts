@@ -5,7 +5,8 @@
  * (attest-snapshot.ts documents it: the Sprint 0 LedgerExport plus `receiptInputs` and `policies`), replays every
  * stored receipt with src/core/replay.ts (docs/grading.md §9), and prints a summary: receipts, batches, how many were
  * reproduced, mismatches by field, and the first mismatches. Output holds ids, hashes, grades, rule ids, states,
- * numbers and timestamps only, never content (Hard Rules 2, 10).
+ * numbers and timestamps only, never content (Hard Rules 2, 10), and every line is written through printable.ts, so
+ * nothing in an export (a crafted key in an error path) can drive the terminal.
  *
  * Exit codes: 0 every receipt reproduced; 1 at least one mismatch; 2 bad arguments or an unreadable export.
  *
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { REPLAY_FIELDS, replay, type ReplayMismatch, type ReplayReport } from '../../src/core/replay';
 
 import { readSnapshot, SnapshotError } from './attest-snapshot';
+import { printableLines } from './printable';
 
 export const EXIT = { reproduced: 0, mismatch: 1, unusable: 2 } as const;
 
@@ -90,6 +92,21 @@ async function readJson(file: string): Promise<unknown> {
   }
 }
 
+/**
+ * `io` with every line it writes made printable (printable.ts): nothing read from an export, or typed as an
+ * argument, reaches the terminal as a control sequence (Hard Rule 10).
+ */
+function printableIo(io: CliIo): CliIo {
+  return {
+    out: (line) => {
+      io.out(printableLines(line));
+    },
+    err: (line) => {
+      io.err(printableLines(line));
+    },
+  };
+}
+
 /** `attest replay <file>`: the exit code. A relative `file` is read from `cwd`. */
 async function replayCommand(file: string, io: CliIo, cwd: string): Promise<number> {
   try {
@@ -110,9 +127,10 @@ async function replayCommand(file: string, io: CliIo, cwd: string): Promise<numb
  */
 export async function main(
   argv: readonly string[],
-  io: CliIo = CONSOLE_IO,
+  rawIo: CliIo = CONSOLE_IO,
   cwd: string = process.env.INIT_CWD ?? process.cwd(),
 ): Promise<number> {
+  const io = printableIo(rawIo);
   const [command, ...rest] = argv;
   if (command === undefined || command === '--help' || command === '-h' || command === 'help') {
     (command === undefined ? io.err : io.out)(HELP);

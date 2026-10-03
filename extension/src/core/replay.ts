@@ -13,7 +13,8 @@
  * Then `grade` runs on the receipt's subject:
  *  - a claim receipt: its claim, with the candidates the batch left it (§4.3);
  *  - an UNASKED receipt: its orphan (`observationIds[0]`), which must still be an orphan in the rebuilt batch (§3:
- *    in a window its own source's observer saw, assigned to no claim, not taken);
+ *    of a type with sources, in a window its own source's observer saw whatever sources the policy lists for its
+ *    type, assigned to no claim, not taken);
  *  - a scope-diff receipt (`context.scope` set): no claim, no candidates;
  * every observation it grades with must hash to its own `contentHash` (§10; `inputsHash` names candidates by it),
  * and the result is compared with the stored receipt on `inputsHash`, `grade`, `ruleId` and `state` (an overridden
@@ -29,12 +30,13 @@
  *
  * PURE: no I/O but reading the snapshot, no clock, no logging (Hard Rule 4). Async only because the index is.
  */
-import { visibleAt } from './batch-orphans';
+import { isOrphanCandidate, seenWindows, visibleAt } from './batch-orphans';
 import { createMemoryIndex, type ObservationIndex } from './candidates';
 import { grade } from './grade';
 import { instantMs } from './normalize';
-import type { Policy } from './policy';
-import { coveredOrphan, rebuildBatch, type ReplayBatch } from './replay-batch';
+import { compareText } from './order';
+import { assertLoadedPolicy, type Policy } from './policy';
+import { rebuildBatch, type ReplayBatch } from './replay-batch';
 import { COMPARED_FIELDS, compareReceipts, contentHashOf } from './replay-compare';
 import { Timeline } from './replay-timeline';
 import type { Claim, Coverage, GradeContext, Grant, Observation, Receipt, Sha256, Ulid } from './schema';
@@ -65,8 +67,9 @@ export interface LedgerSnapshot {
  *  - `subject`: the receipt's claim (or UNASKED orphan) is missing or was first seen after `computedAt` (stored:
  *    its id, null when an UNASKED receipt names no observation; replayed: null);
  *  - `orphan`: the UNASKED receipt's observation was no orphan in the rebuilt batch (stored: the observation id;
- *    replayed: the claim the batch gave it to, `taken` when an override had taken it, or `uncovered` when no
- *    coverage window of its own source saw it, §3);
+ *    replayed: the claim the batch gave it to, `taken` when an override had taken it, or `uncovered` when it is no
+ *    orphan candidate under the receipt's coverage: its type has no sources, or no window of its own source saw it,
+ *    §3);
  *  - `contentHash`: an observation the receipt is graded with does not hash to its `contentHash`: its content was
  *    changed after it was projected (stored: its `contentHash`; replayed: the hash of its content); one per such
  *    observation, in candidate order;
@@ -129,11 +132,6 @@ interface Group {
 
 /** The memory index's bucket width in minutes: an index tuning parameter (Decisions [1.3]), not policy. */
 const BUCKET_MINUTES = 1;
-
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
 
 /** By id, the first of each id kept (the ledger keys rows by id: two rows with one id are a corrupt snapshot). */
 function byId<T extends { readonly id: Ulid; readonly observedAt: string }>(rows: readonly T[]) {
@@ -248,8 +246,9 @@ async function claimCall(
 }
 
 /**
- * An UNASKED receipt's call: its orphan, first seen by `computedAt`, in a window its source's observer saw,
- * assigned to no claim and not taken (§3).
+ * An UNASKED receipt's call: its orphan, first seen by `computedAt`, an orphan candidate under the receipt's own
+ * coverage (§3, batch-orphans.ts `isOrphanCandidate`: the predicate gradeBatch decides with), assigned to no claim
+ * and not taken.
  */
 async function orphanCall(
   receipt: Receipt,
@@ -267,7 +266,7 @@ async function orphanCall(
   const owner = batch.assignment.get(orphanId);
   if (owner !== undefined) return mismatch(receipt, 'orphan', orphanId, owner);
   if (batch.taken.has(orphanId)) return mismatch(receipt, 'orphan', orphanId, 'taken');
-  if (!coveredOrphan(held.observation, inputs.coverage, policy)) {
+  if (!isOrphanCandidate(held.observation, seenWindows(inputs.coverage), policy)) {
     return mismatch(receipt, 'orphan', orphanId, 'uncovered');
   }
   return { claim: null, candidates: [held.observation] };
@@ -358,8 +357,13 @@ function emptyCounts(): Record<ReplayField, number> {
   };
 }
 
-/** Replays every stored receipt of `snapshot` (§9) and reports each mismatch. Deterministic. */
+/**
+ * Replays every stored receipt of `snapshot` (§9) and reports each mismatch. Deterministic. Throws
+ * `PolicyError('policy_not_loaded')`, once and before replaying anything, when `snapshot.policies` holds an object
+ * `loadPolicy` did not return: a caller's bug, not a ledger mismatch (Hard Rule 6).
+ */
 export async function replay(snapshot: LedgerSnapshot): Promise<ReplayReport> {
+  for (const policy of snapshot.policies.values()) assertLoadedPolicy(policy);
   const ledger = readLedger(snapshot);
   const groups = groupsOf(snapshot.receipts);
   const mismatches: ReplayMismatch[] = [];

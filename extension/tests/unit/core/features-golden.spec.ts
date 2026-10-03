@@ -3,14 +3,23 @@
  * the contract alone, with every expected score computed by hand in basis points; features() must reproduce
  * each one exactly as a reduced fraction "p/q".
  *
+ * Both checks read the observations the receipt's grading could see (§3, §4.1): same type, inside claimWindow,
+ * observed by the instant the receipt was graded at (the first pass, or its last applied `regrade`, §8: a regrade
+ * sees what was observed by its own `evaluatedAt`, and nothing observed later), and for `calendar.created` first
+ * seen no earlier than start(p,t) − beforeClaimMin (the earliest observedAt per contentHash, v1.3). Among equal
+ * scores the best is the lower observation id (§8), whatever the occurrence order.
+ *
  *  1. (The task's check.) Every scenario with exactly one claim and an expected non-null score: the maximum
- *     features().score over that claim's same-type observations inside claimWindow equals the expectation.
+ *     features().score over those observations equals the expectation.
  *  2. (Stronger.) Every claim receipt with a non-null score in every batch scenario: the best score over the
- *     claim's own candidates (same type, inside claimWindow, seen by evaluatedAt, the v1.3 calendar.created
- *     first-seen rule: the earliest observedAt per contentHash ≥ start(p,t) − beforeClaimMin, minus
- *     observations the expectations assign to other claims or the scenario fixes),
- *     and, when the receipt names its assigned observation, that pair's score. The best candidate's cp.*
- *     reasons (§15: "cp.* from the best candidate only") must be exactly the receipt's cp.* reason codes.
+ *     claim's own candidates (those observations minus the ones the expectations assign to other claims or the
+ *     scenario fixes), and, when the receipt names its assigned observation, that pair's score. The best
+ *     candidate's cp.* reasons (§15: "cp.* from the best candidate only") must be exactly the receipt's cp.*
+ *     reason codes.
+ *
+ * Scenario 95 pins the grading instant (its regrade sees a row first observed after the first pass, and ignores
+ * a better row observed after the regrade); 96 pins the tie rule (tied candidates whose cp.* codes differ, the
+ * lower id occurring later); 97 pins the first-seen rule (a pre-existing event that outscores the new one).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -33,6 +42,8 @@ interface ScoredClaim {
   readonly expected: string;
   readonly expectedCp: readonly string[];
   readonly assigned: readonly Observation[];
+  /** The instant the receipt's current version was graded at (`gradedAt`). */
+  readonly evaluatedAt: string;
 }
 
 const LOADED = scenarioFiles().map(loadScenario);
@@ -51,10 +62,23 @@ function observationsOf(loaded: LoadedScenario, refs: readonly string[]): Observ
   });
 }
 
+/**
+ * The instant a receipt's current version was graded at (§8): its last applied `regrade` event, else the first
+ * pass. A regrade sees what was observed by its own `evaluatedAt`, so its candidates are read at that instant.
+ */
+function gradedAt(loaded: LoadedScenario, receiptId: string): string {
+  let at: string = loaded.evaluatedAt;
+  for (const event of loaded.events) {
+    if (event.event !== 'regrade' || event.rejected || event.deleted) continue;
+    if (event.receiptId === receiptId) at = event.evaluatedAt;
+  }
+  return at;
+}
+
 /** Every claim receipt with an expected non-null score, with its policy and assigned observations. */
 function scoredClaims(loaded: LoadedScenario): ScoredClaim[] {
   const policy = loadPolicy(loaded.policyJson);
-  return loaded.expected.flatMap(({ expected }) => {
+  return loaded.expected.flatMap(({ expected, receiptId }) => {
     const ref = expected.ref;
     if (ref === undefined || !ref.startsWith('c') || expected.score === null) return [];
     return [
@@ -66,6 +90,7 @@ function scoredClaims(loaded: LoadedScenario): ScoredClaim[] {
         expected: expected.score,
         expectedCp: expected.reasonCodes.filter((code) => code.startsWith('cp.')),
         assigned: observationsOf(loaded, expected.observationRefs),
+        evaluatedAt: gradedAt(loaded, receiptId),
       },
     ];
   });
@@ -91,11 +116,12 @@ interface Best {
   readonly reasonCodes: readonly string[];
 }
 
-/** The highest score; among equal scores the first by (occurredAt instant, id), as grade() orders them (§3). */
+/**
+ * The highest score; among equal scores the lower observation id, as grade() breaks ties (§8: "ties broken by
+ * observation id", grade-best.ts `beats`), whatever the occurrence order.
+ */
 function best(item: ScoredClaim, observations: readonly Observation[]): Best | null {
-  const ordered = [...observations].sort(
-    (a, b) => instantMs(a.occurredAt) - instantMs(b.occurredAt) || (a.id < b.id ? -1 : 1),
-  );
+  const ordered = [...observations].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return ordered
     .map((observation) => features(item.claim, observation, item.policy))
     .reduce<Best | null>(
@@ -106,16 +132,13 @@ function best(item: ScoredClaim, observations: readonly Observation[]): Best | n
 
 const scoreText = (found: Best | null): string | null => (found === null ? null : text(found.score));
 
-/** §4.1/§4.3 candidates as far as the expectations determine them (see the file comment, check 2). */
-function ownCandidates(item: ScoredClaim): Observation[] {
+/**
+ * §3/§4.1: the observations the receipt's grading could see (see the file comment): observed by `item.evaluatedAt`,
+ * of the claim's type inside its window, and for calendar.created first seen at or after start(p,t) − beforeClaimMin.
+ */
+function seenCandidates(item: ScoredClaim): Observation[] {
   const { loaded, claim, policy } = item;
-  const takenElsewhere = new Set(
-    loaded.expected
-      .filter(({ expected }) => expected.ref?.startsWith('c') === true && expected.ref !== refOf(item))
-      .flatMap(({ observationIds }) => observationIds),
-  );
-  for (const pair of loaded.fixed) takenElsewhere.add(pair.observationId);
-  const evaluatedMs = instantMs(loaded.evaluatedAt);
+  const evaluatedMs = instantMs(item.evaluatedAt);
   const seen = [...loaded.observations.values()].filter((o) => instantMs(o.observedAt) <= evaluatedMs);
   // §4.1 v1.3: measured from the unit start, against the earliest sighting of each contentHash.
   const firstSeenFromMs = precisionStartMs(claim) - policy.windows.beforeClaimMin * MS_PER_MINUTE;
@@ -127,10 +150,21 @@ function ownCandidates(item: ScoredClaim): Observation[] {
   return seen.filter(
     (observation) =>
       inWindow(claim, policy, observation) &&
-      !takenElsewhere.has(observation.id) &&
       (claim.type !== 'calendar.created' ||
         (earliest.get(observation.contentHash) ?? Number.NEGATIVE_INFINITY) >= firstSeenFromMs),
   );
+}
+
+/** §4.1/§4.3 candidates as far as the expectations determine them (see the file comment, check 2). */
+function ownCandidates(item: ScoredClaim): Observation[] {
+  const { loaded } = item;
+  const takenElsewhere = new Set(
+    loaded.expected
+      .filter(({ expected }) => expected.ref?.startsWith('c') === true && expected.ref !== refOf(item))
+      .flatMap(({ observationIds }) => observationIds),
+  );
+  for (const pair of loaded.fixed) takenElsewhere.add(pair.observationId);
+  return seenCandidates(item).filter((observation) => !takenElsewhere.has(observation.id));
 }
 
 function refOf(item: ScoredClaim): string {
@@ -145,14 +179,9 @@ describe('golden cross-check 1: single-claim scenarios (task 1.4 Done-when)', ()
   });
 
   it.each(SINGLE.map((item) => [item.label, item] as const))(
-    '%s: the best score in the claim window is the expected one',
+    '%s: the best score in the claim window, among the rows seen by its grading, is the expected one',
     (_label, item) => {
-      const observations = [...item.loaded.observations.values()];
-      const found = best(
-        item,
-        observations.filter((observation) => inWindow(item.claim, item.policy, observation)),
-      );
-      expect(scoreText(found)).toBe(item.expected);
+      expect(scoreText(best(item, seenCandidates(item)))).toBe(item.expected);
     },
   );
 });

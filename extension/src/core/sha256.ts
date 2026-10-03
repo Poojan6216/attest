@@ -14,6 +14,7 @@
  * and consumed within one synchronous call that calls nothing that could re-enter it, so no hash ever sees
  * another's words. All arithmetic is 32-bit (`| 0`), exactly the modular arithmetic FIPS 180-4 specifies.
  */
+import { InvariantError } from './invariant-error';
 
 /** FIPS 180-4 §4.2.2: the first 32 bits of the fractional parts of the cube roots of the first 64 primes. */
 const K = Int32Array.from([
@@ -46,8 +47,9 @@ const TWO_POW_32 = 0x100000000;
 const W = new Int32Array(WORDS);
 const BLOCK_WORDS = 16;
 
-/** The two lowercase hex digits of each byte value. */
-const HEX: readonly string[] = Array.from({ length: 256 }, (_, byte) => byte.toString(16).padStart(2, '0'));
+/** The code units of the 16 lowercase hex digits; and the 64 of one digest's hex, refilled by each `hexOf` call. */
+const HEX_UNITS = Int32Array.from('0123456789abcdef', (digit) => digit.charCodeAt(0));
+const HEX_OUT: number[] = new Array<number>(64).fill(0);
 
 /**
  * One compression into `h` of the block held as 16 big-endian words in `block` (FIPS 180-4 §6.2.2): the block
@@ -159,7 +161,7 @@ export class Sha256Writer {
 
   /** Writes `text` from code unit `start` on. */
   write(text: string, start = 0): void {
-    if (this.#done) throw new RangeError('sha256: write after hex()');
+    if (this.#done) throw new InvariantError('write_after_digest');
     let i = this.#resume(text, start);
     while (i < text.length) {
       i = this.#ascii(text, i);
@@ -173,7 +175,7 @@ export class Sha256Writer {
    * word boundary, byte by byte otherwise. A high surrogate left by the last `write` is lone: U+FFFD first.
    */
   writeWords(words: Int32Array, from: number, count: number): void {
-    if (this.#done) throw new RangeError('sha256: write after hex()');
+    if (this.#done) throw new InvariantError('write_after_digest');
     if (this.#high >= 0) this.#putCodePoint(REPLACEMENT_CHARACTER);
     this.#high = -1;
     const end = from + count;
@@ -332,14 +334,11 @@ export class Sha256Writer {
   }
 }
 
-/** The lowercase hex of a digest's 8 words. */
+/** The lowercase hex of a digest's 8 words, its 64 digits made as one string (no concatenation). */
 function hexOf(words: Int32Array): string {
-  let hex = '';
-  for (const word of words) {
-    hex += `${HEX[(word >>> 24) & 0xff] ?? ''}${HEX[(word >>> 16) & 0xff] ?? ''}`;
-    hex += `${HEX[(word >>> 8) & 0xff] ?? ''}${HEX[word & 0xff] ?? ''}`;
-  }
-  return hex;
+  for (let i = 0; i < 64; i += 1)
+    HEX_OUT[i] = HEX_UNITS[((words[i >> 3] ?? 0) >>> (28 - 4 * (i & 7))) & 15] ?? 0;
+  return String.fromCharCode(...HEX_OUT);
 }
 
 /** The block `sha256OfDigests` fills; `rounds` reads it before returning. */

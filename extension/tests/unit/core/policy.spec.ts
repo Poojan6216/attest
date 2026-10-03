@@ -264,7 +264,7 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
       }),
       PROPERTY_RUNS,
     );
-  }, 60_000);
+  });
 
   it('property: ordered thresholds and the unasked threshold convert exactly', () => {
     fc.assert(
@@ -285,7 +285,7 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
       ),
       PROPERTY_RUNS,
     );
-  }, 60_000);
+  });
 });
 
 describe('policy vocabularies come from the core schema', () => {

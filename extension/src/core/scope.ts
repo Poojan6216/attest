@@ -1,16 +1,18 @@
 /**
  * Scope and spend (docs/grading.md §6.1, §6.3; module contract §13; sprint task 1.8).
  *
- *  - `priorSpendCents(claim, claims, policy)`: what the same agent already claimed to spend in the claim's
- *    currency over the rolling `windows.spendWindowDays` before the claim (§6.3). `grade()` adds the claim's
- *    own amount and compares with the grant's ceiling (condition `cumulativeAboveCeiling`), so two $30
- *    purchases against a $50 ceiling make the second OVER_SCOPE.
+ *  - `priorSpendCents(claim, claims, policy, spendCurrency)`: what the same agent already claimed to spend in the
+ *    currency the claim is counted in (a missing currency reads as the grant's `spendCurrency`, conditions.ts
+ *    `spendCurrencyOf`) over the rolling `windows.spendWindowDays` before the claim (§6.3). `grade()` adds the
+ *    claim's own amount and compares with the grant's ceiling (condition `cumulativeAboveCeiling`), so two $30
+ *    purchases against a $50 ceiling make the second OVER_SCOPE, with or without a currency on either.
  *  - `scopeSubjects(grant)`: the permissions the vendor's settings page shows the agent holds that the user
  *    did not declare. `gradeBatch` grades each one as a claim-less `over_scope_observed` receipt (§6.1).
  *
  * Integer arithmetic only (amounts are integer minor units, instants integer ms). PURE: no I/O, no clock, no
  * logging (Hard Rule 4).
  */
+import { spendCurrencyOf } from './conditions';
 import { instantMs } from './normalize';
 import type { Policy } from './policy';
 import type { ActionType, AgentId } from './schema';
@@ -85,9 +87,11 @@ function amountOf(prior: SpendClaim): number {
 }
 
 /**
- * §6.3: the sum of `amountCents` over the same agent's claims whose type is in `policy.spendTypes`, in the
- * claim's currency (a claim without a currency counts only priors without one), with `claimedAt` in
- * `[t − spendWindowDays, t]` and strictly before the claim in `(claimedAt ms, id)` order. The claim itself
+ * §6.3: the sum of `amountCents` over the same agent's claims whose type is in `policy.spendTypes`, counted in the
+ * claim's currency, with `claimedAt` in `[t − spendWindowDays, t]` and strictly before the claim in
+ * `(claimedAt ms, id)` order. A missing currency, on the claim or on a prior, reads as `spendCurrency` (the grant's,
+ * `spendCurrencyOf`): with one set, a currency-less claim and a claim in `spendCurrency` count each other, as the
+ * §6.1 Amount counts them; with none, a currency-less claim counts only priors without one. The claim itself
  * never counts. A claim id listed more than once counts once (at its largest qualifying amount), so passing
  * the batch claims together with the ledger's claims cannot double-count. Amounts are never negative, so
  * the result is ≥ 0 and a refund cannot lower it. A total beyond `Number.MAX_SAFE_INTEGER` is reported as
@@ -100,17 +104,18 @@ export function priorSpendCents(
   claim: SpendClaim,
   claims: readonly SpendClaim[],
   policy: SpendPolicy,
+  spendCurrency?: string,
 ): number {
   const spendTypes: ReadonlySet<ActionType> = new Set(policy.spendTypes);
   if (!spendTypes.has(claim.type)) return 0;
   const claimMs = claimedMs(claim);
   const fromMs = claimMs - policy.windows.spendWindowDays * MS_PER_DAY;
   if (!Number.isSafeInteger(fromMs)) throw new ScopeError('unsafe_window');
+  const currency = spendCurrencyOf(claim.currency, spendCurrency);
   const amounts = new Map<string, number>();
   for (const prior of claims) {
-    if (prior.agent !== claim.agent || prior.currency !== claim.currency || !spendTypes.has(prior.type)) {
-      continue;
-    }
+    const counted = spendCurrencyOf(prior.currency, spendCurrency) === currency;
+    if (prior.agent !== claim.agent || !counted || !spendTypes.has(prior.type)) continue;
     const ms = claimedMs(prior);
     if (ms < fromMs || !strictlyBefore(ms, prior.id, claimMs, claim.id)) continue;
     amounts.set(prior.id, Math.max(amounts.get(prior.id) ?? 0, amountOf(prior)));
@@ -121,10 +126,10 @@ export function priorSpendCents(
 }
 
 /**
- * One agent's claims in one currency (or none) whose type is a spend type, in (`claimedAt` ms, id) order, with the
- * running sum of their amounts (`sums[i]` is the total of the first i). Regular when every `claimedAt` parses,
- * every amount is a non-negative safe integer, no id repeats and the whole total is a safe integer: then the
- * total over any run of entries is one exact subtraction. Anything else is answered by `priorSpendCents` itself.
+ * One agent's claims counted in one currency (or none) whose type is a spend type, in (`claimedAt` ms, id) order,
+ * with the running sum of their amounts (`sums[i]` is the total of the first i). Regular when every `claimedAt`
+ * parses, every amount is a non-negative safe integer, no id repeats and the whole total is a safe integer: then
+ * the total over any run of entries is one exact subtraction. Anything else is answered by `priorSpendCents`.
  */
 interface SpendRun {
   readonly ms: readonly number[];
@@ -173,15 +178,15 @@ function countBefore(run: SpendRun, ms: number, id: string | null): number {
 }
 
 /**
- * `priorSpendCents(claim, claims, policy)` for any number of claims against one history (`claims`), the history
- * read once: per agent and currency, its spend claims sorted with running sums, so each claim's total is two binary
- * searches and a subtraction. A run that is not regular (`buildRun`) is answered by `priorSpendCents` over the
- * agent's history, so every result and every error is exactly `priorSpendCents`'s.
+ * `priorSpendCents(claim, claims, policy, spendCurrency)` for any number of claims against one history (`claims`),
+ * the history read once: per agent, counted currency and `spendCurrency`, its spend claims sorted with running sums,
+ * so each claim's total is two binary searches and a subtraction. A run that is not regular (`buildRun`) is answered
+ * by `priorSpendCents` over the agent's history, so every result and every error is exactly `priorSpendCents`'s.
  */
 export function spendIndex(
   claims: readonly SpendClaim[],
   policy: SpendPolicy,
-): (claim: SpendClaim) => number {
+): (claim: SpendClaim, spendCurrency?: string) => number {
   const spendTypes: ReadonlySet<ActionType> = new Set(policy.spendTypes);
   const byAgent = new Map<AgentId, SpendClaim[]>();
   for (const claim of claims) {
@@ -190,20 +195,24 @@ export function spendIndex(
     else held.push(claim);
   }
   const runs = new Map<string, SpendRun | null>();
-  const runOf = (agent: AgentId, currency: string | undefined): SpendRun | null => {
-    const key = `${agent} ${currency ?? ''} ${String(currency === undefined)}`;
+  const runOf = (
+    agent: AgentId,
+    currency: string | undefined,
+    spend: string | undefined,
+  ): SpendRun | null => {
+    const key = [agent, currency ?? '', currency === undefined, spend ?? '', spend === undefined].join(' ');
     if (!runs.has(key)) {
       const priors = (byAgent.get(agent) ?? []).filter(
-        (prior) => prior.currency === currency && spendTypes.has(prior.type),
+        (prior) => spendCurrencyOf(prior.currency, spend) === currency && spendTypes.has(prior.type),
       );
       runs.set(key, buildRun(priors));
     }
     return runs.get(key) ?? null;
   };
-  return (claim) => {
+  return (claim, spendCurrency) => {
     if (!spendTypes.has(claim.type)) return 0;
-    const run = runOf(claim.agent, claim.currency);
-    if (run === null) return priorSpendCents(claim, byAgent.get(claim.agent) ?? [], policy);
+    const run = runOf(claim.agent, spendCurrencyOf(claim.currency, spendCurrency), spendCurrency);
+    if (run === null) return priorSpendCents(claim, byAgent.get(claim.agent) ?? [], policy, spendCurrency);
     const claimMs = claimedMs(claim);
     const fromMs = claimMs - policy.windows.spendWindowDays * MS_PER_DAY;
     if (!Number.isSafeInteger(fromMs)) throw new ScopeError('unsafe_window');

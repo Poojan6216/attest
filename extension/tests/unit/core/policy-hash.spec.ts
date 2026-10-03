@@ -110,6 +110,7 @@ describe('loadPolicy: policyHash', () => {
     expect(loadPolicy(structuredClone(policyJson)).policyHash).toBe(DEFAULT_POLICY.policyHash);
   });
 
+  // One loadPolicy per leaf: over 5 s under machine load, so it relies on the suite-wide 60 s (vitest.config.ts).
   it('changes when any single value changes (every leaf that can change validly)', () => {
     const changed = changedLeaves();
     for (const { where, hash } of changed) expect(hash, where).not.toBe(DEFAULT_POLICY.policyHash);

@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
 import {
@@ -35,7 +36,7 @@ async function open(name: string, migrations: readonly Migration[] = MIGRATIONS)
 
 async function seedV1(name: string): Promise<void> {
   const db = await open(name);
-  await upsertObservation(db, makeObservation());
+  await upsertObservation(db, makeObservation(), DEFAULT_POLICY);
   await upsertClaim(db, makeClaim());
   await setMeta(db, 'lastPurgeAt', '2026-09-30T00:00:00Z');
   db.close();
@@ -93,7 +94,7 @@ describe('v1 → v2 migrations', () => {
     const rows = await db.observations.where('source').equals('gmail.sent').toArray();
     expect(rows.map((row) => row.id)).toEqual([makeObservation().id]);
     // Pre-existing unique index still enforced after the upgrade (a re-sighting is not inserted).
-    expect((await upsertObservation(db, resighting())).inserted).toBe(false);
+    expect((await upsertObservation(db, resighting(), DEFAULT_POLICY)).inserted).toBe(false);
   });
 });
 

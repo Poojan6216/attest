@@ -19,6 +19,7 @@
  */
 import type { FixedPair } from './candidates';
 import { instantMs } from './normalize';
+import { compareText } from './order';
 import type { Receipt, Ulid } from './schema';
 
 /** A claim receipt's place in time. */
@@ -123,9 +124,4 @@ export class Timeline {
     }
     return { fixed, taken };
   }
-}
-
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
 }

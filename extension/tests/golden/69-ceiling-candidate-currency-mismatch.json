@@ -10,10 +10,11 @@
     "receiptMerchants": ["acme"]
   },
   "notes": [
-    "Grant ceiling 5000 USD. Both claims say 'bought it at Acme for 30' with no currency; both receipts say 3000 CAD. receiptMerchants is patched to ['acme'] so the receipt observer covers these purchases (§6.1).",
+    "Grant ceiling 5000 USD. c1 says 'bought it at Acme for 30' and c2 'for 20', both with no currency; both receipts say 3000 CAD. receiptMerchants is patched to ['acme'] so the receipt observer covers these purchases (§6.1).",
     "Applicable features (amount and counterparty, no subject): timeProximity 2500, amountExact 2500, merchantMatch 2000; Σw = 7000.",
-    "c1 × o1: tp 1; amountExact is applicable (the claim has amountCents, §5.1 v1.3) and scores 0 (the claim has no currency: a currency missing on either side scores 0); merchantMatch 1 ('acme' = normalised 'Acme'). S = 4500/7000 = 9/14 ≥ 1/2 → assigned. (Dropping amountExact as not applicable would give 4500/4500 = 1/1.)",
-    "amountAboveCeiling (§6.1 v1.3): spend type, ceiling set, amount known. Amount = the claim's 3000 (its currency is absent, so it counts); the candidate's 3000 is ignored (CAD ≠ spendCurrency) → 3000 ≤ 5000, not exceeded. But the assigned candidate's currency CAD is present and ≠ USD (whatever the claim's currency) → true, reason ceiling.currency_mismatch alone {currency: CAD (the claim has none, so the candidate's), spendCurrency: USD} → rule over_ceiling, ahead of no_coverage and partial.",
+    "c1 × o1: tp 1; amountExact is applicable (the claim has amountCents, §5.1 v1.3) and scores 0 (the claim has no currency: a currency missing on either side scores 0); merchantMatch 1 ('acme' = normalised 'Acme'). S = 4500/7000 = 9/14 ≥ 1/2 → assigned. (Dropping amountExact as not applicable would give 4500/4500 = 1/1.) c2 × o2 scores the same 9/14: amountExact is 0 whatever the amounts, because the claim has no currency.",
+    "amountAboveCeiling (§6.1 v1.3): spend type, ceiling set, amount known. Amount = the claim's amount (its currency is absent, so it counts); the candidate's 3000 is ignored (CAD ≠ spendCurrency) → 3000 and 2000 ≤ 5000, not exceeded. But the assigned candidate's currency CAD is present and ≠ USD (whatever the claim's currency) → true, reason ceiling.currency_mismatch alone {currency: CAD (the claim has none, so the candidate's), spendCurrency: USD} → rule over_ceiling, ahead of no_coverage and partial.",
+    "cumulativeAboveCeiling (§6.1, §6.3 v1.6): a claim with no currency counts in spendCurrency, so c1's 3000 is prior spend for c2: 3000 + 2000 = 5000, not > 5000 → false. So c2's OVER_SCOPE depends on its candidate alone (without o2 no rule concludes OVER_SCOPE), and it waits like PARTIAL. Scenario 98 is the same story with c2 at 3000, where the cumulative ceiling alone makes c2 OVER_SCOPE and FINAL at once.",
     "The candidate case finalises like PARTIAL (§6.1, §8): graceElapsed needs a gmail.receipt sync ≥ end + 30 and ≥ end + 45. c1 (10:02, end 10:03): 14:30 ≥ 10:48 → FINAL. c2 (14:02, end 14:03): 14:30 < 14:48 → PENDING, so a better match in USD may still correct it.",
     "o1 is outside c2's window [14:00, 14:48] and o2 outside c1's [10:00, 10:48]."
   ],
@@ -33,7 +34,7 @@
         "agent": "muse",
         "type": "purchase.made",
         "counterparty": "acme",
-        "amountCents": 3000,
+        "amountCents": 2000,
         "claimedAt": "2026-10-06T14:02:00-04:00"
       }
     ],

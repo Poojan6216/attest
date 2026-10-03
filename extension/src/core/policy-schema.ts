@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 
-import { name } from './normalize';
+import { name, stopWordKey } from './normalize';
 import {
   ActionType,
   AgentId,
@@ -20,6 +20,7 @@ import {
   RuleId,
   UnaskedSignal,
 } from './schema';
+import { BASELINE_CLASS } from './unicode-baseline';
 import { BASIS_POINTS, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
 /**
@@ -76,14 +77,15 @@ export const PENDING_RULE_ID = 'pending';
 const DOMAIN_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /** One subject token (§11: subjects split on every run of characters that are not letters, digits or marks). */
-const TOKEN_PATTERN = /^[\p{L}\p{N}\p{M}]+$/u;
+const TOKEN_PATTERN = new RegExp(`^[${BASELINE_CLASS.token}]+$`, 'u');
 /** Removed from a subject before it is split (§11), so a stop word holding one could never match. */
-const INVISIBLE = /\p{Default_Ignorable_Code_Point}/u;
+const INVISIBLE = new RegExp(`[${BASELINE_CLASS.invisible}]`, 'u');
 
 /** Tokens separated by single spaces, no other whitespace and no invisible format characters (§11 names). */
-const NAME_PATTERN = /^[^\s\p{Cf}]+(?: [^\s\p{Cf}]+)*$/u;
+const NAME_CHARACTER = `[^${BASELINE_CLASS.space}${BASELINE_CLASS.format}]`;
+const NAME_PATTERN = new RegExp(`^${NAME_CHARACTER}+(?: ${NAME_CHARACTER}+)*$`, 'u');
 
-const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const LETTER_OR_DIGIT = new RegExp(`[${BASELINE_CLASS.letterOrDigit}]`, 'u');
 
 /**
  * True iff `value` is exactly a multiple of 1/BASIS_POINTS (§5.3), i.e. the double nearest to a decimal
@@ -193,8 +195,7 @@ const MerchantName = z
 const StopWord = z
   .string()
   .refine(
-    (value) =>
-      TOKEN_PATTERN.test(value) && !INVISIBLE.test(value) && value.normalize('NFKC').toLowerCase() === value,
+    (value) => TOKEN_PATTERN.test(value) && !INVISIBLE.test(value) && stopWordKey(value) === value,
     'must be one lowercase token of letters, digits and marks (NFKC)',
   );
 

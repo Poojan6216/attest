@@ -1,26 +1,84 @@
 /**
  * `pnpm bench` — the one command that produces RESULTS.md (Hard Rule 12).
  *
- * Every bench writes a JSON file to bench/results/<name>-<yyyy-mm-dd>.json. This script runs the
- * registered benches, then regenerates RESULTS.md from the newest result file of each bench, each one
- * validated first (bench/results.ts). RESULTS.md is generated, never hand-edited.
+ * Runs the registered benches. Each bench returns its metrics; this script adds where they were measured (the git
+ * commit, whether the tree was dirty, the Node version: bench/provenance.ts), validates the result and writes it to
+ * bench/results/<name>-<yyyy-mm-dd>.json, then regenerates RESULTS.md from the newest result file of each bench
+ * (bench/results.ts). RESULTS.md is generated, never hand-edited. The exit code is 1 when any gate of a result
+ * measured in this run failed (QA-R8): the numbers are still written, and the command still fails.
  */
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { runCoreBench } from './core';
-import { latestResults, render } from './results';
+import { gitIn, provenance } from './provenance';
+import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
 
 const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
-const RESULTS_DIR = path.join(BENCH_DIR, 'results');
-const RESULTS_MD = path.join(BENCH_DIR, '..', 'RESULTS.md');
+const REPO_ROOT = path.join(BENCH_DIR, '..');
+
+export interface Bench {
+  readonly name: string;
+  run(): Promise<Readonly<Record<string, MetricValue>>>;
+}
+
+export interface BenchRunOptions {
+  /** Where result files are written and read from. */
+  readonly resultsDir: string;
+  /** The RESULTS.md to regenerate. */
+  readonly resultsMd: string;
+  /** The date in the result file names (yyyy-mm-dd). */
+  readonly date: string;
+  /** Metrics every result carries about where it was measured (commit, commitDirty, node). */
+  readonly provenance: Readonly<Record<string, MetricValue>>;
+  readonly log: (line: string) => void;
+}
 
 /** Benches register here as later sprints add them (core perf, observers, adapters, intel, red team). */
-const BENCHES: readonly { readonly name: string; run(): Promise<void> }[] = [
-  { name: 'core', run: runCoreBench },
-];
+export const BENCHES: readonly Bench[] = [{ name: 'core', run: runCoreBench }];
 
-for (const bench of BENCHES) await bench.run();
-writeFileSync(RESULTS_MD, render(latestResults(RESULTS_DIR)));
-console.log(`RESULTS.md regenerated (${String(BENCHES.length)} benches registered).`);
+/** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
+export function localDate(now: Date): string {
+  const two = (value: number) => String(value).padStart(2, '0');
+  return `${String(now.getFullYear())}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
+}
+
+/** Runs `benches`, writes their results and RESULTS.md, and returns the exit code: 0, or 1 when a gate failed. */
+export async function runBenches(benches: readonly Bench[], options: BenchRunOptions): Promise<number> {
+  const failed: string[] = [];
+  for (const bench of benches) {
+    const fileName = `${bench.name}-${options.date}.json`;
+    const metrics = { ...(await bench.run()), ...options.provenance };
+    const result = parseBenchResult(fileName, {
+      bench: bench.name,
+      date: options.date,
+      command: 'pnpm bench',
+      metrics,
+    });
+    writeFileSync(path.join(options.resultsDir, fileName), `${JSON.stringify(result, null, 2)}\n`);
+    const gates = failedGates(result);
+    failed.push(...gates.map((gate) => `${bench.name}.${gate}`));
+    options.log(
+      `${bench.name}: ${gates.length === 0 ? 'every gate passed' : `FAILED ${gates.join(', ')}`} → ${fileName}`,
+    );
+  }
+  writeFileSync(options.resultsMd, render(latestResults(options.resultsDir)));
+  options.log(`RESULTS.md regenerated (${String(benches.length)} benches registered).`);
+  if (failed.length === 0) return 0;
+  options.log(`pnpm bench: gate failed: ${failed.join(', ')}`);
+  return 1;
+}
+
+const invokedAs = process.argv[1];
+if (invokedAs !== undefined && import.meta.url === pathToFileURL(path.resolve(invokedAs)).href) {
+  process.exitCode = await runBenches(BENCHES, {
+    resultsDir: path.join(BENCH_DIR, 'results'),
+    resultsMd: path.join(REPO_ROOT, 'RESULTS.md'),
+    date: localDate(new Date()),
+    provenance: { ...provenance(gitIn(REPO_ROOT)) },
+    log: (line) => {
+      console.log(line);
+    },
+  });
+}

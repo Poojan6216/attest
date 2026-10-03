@@ -1,8 +1,9 @@
 /**
  * Task 1.2 Done-when (Hard Rule 2; docs/grading.md §10, §12): random raw rows with arbitrary extra keys and
  * nesting, carrying every value and canary of tests/fixtures/secrets/seeded.json in keys that are not
- * allowlisted (as keys, as values, nested, in forged id/hash/rowKey fields, as the row key, in invalid,
- * boxed, coercible or overlong values of allowlisted fields, and past the subjectHint cap), under the default
+ * allowlisted (as keys, as values, nested, in forged id/hash/rowKey fields, as the row key, and past the
+ * subjectHint cap), and INSIDE allowlisted fields (invalid, boxed, coercible or overlong values, and a seed on
+ * the second line of a counterparty, merchant or subject, SEC-3), under the default
  * policy or a random allowlist. A random allowlist the loader accepts (v1.3 §12: only content fields and the
  * derived markers, `occurredAt` required) is loaded; any other one must be rejected by the loader and is then
  * handed to project() as an unvalidated object, so redact.ts's own defences are tested without the loader's.
@@ -15,11 +16,13 @@
  * rowKeyHash, contentHash}; no seed value or canary appears anywhere in JSON.stringify(output); every
  * allowlisted valid own value is kept exactly (subjectHint cut at SUBJECT_HINT code points) and nothing else
  * is; the derived fields are computed from the arguments only; no getter is ever invoked; the output parses;
- * and a row without a valid, allowlisted, own occurredAt throws RedactError('missing_occurred_at'). Valid
- * generated strings come from an alphabet that cannot spell any seed, so a seed in the output means a leak.
+ * a row holding an allowlisted own value that is not a valid fact is refused whole with
+ * RedactError('invalid_field'), whose message and fields name no seed (Hard Rules 5, 10: never stored without
+ * a fact it carried); and any other row without a valid, allowlisted, own occurredAt throws
+ * RedactError('missing_occurred_at'). Valid generated strings come from an alphabet that cannot spell any
+ * seed, so a seed in the output means a leak.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 
 import fc from 'fast-check';
 import { z } from 'zod';
@@ -38,122 +41,69 @@ import {
   CONTENT_FIELDS,
   type ContentField,
   DERIVED_FIELDS,
+  observationIntegrityProblems,
   project,
   RedactError,
 } from '../../src/core/redact';
 import { ActionType, Observation, ObservationSource, SCHEMA_LIMITS } from '../../src/core/schema';
-import { BaseSeed, SEEDS_PATH } from '../tools/seeds';
-
-const SEEDS = z
-  .object({ seeds: z.array(BaseSeed).min(1) })
-  .parse(JSON.parse(readFileSync(SEEDS_PATH, 'utf8'))).seeds;
-const SECRETS = [...new Set(SEEDS.flatMap((seed) => [seed.value, ...seed.canaries]))];
-/** Seeds short enough to be a valid value of a field capped at `cap` code points. */
-const fits = (cap: number) => SECRETS.filter((seed) => Array.from(seed).length <= cap);
-/** Digit-only canaries (an SSN, a phone number) that are also a valid amountCents. */
-const SECRET_AMOUNTS = SECRETS.filter((seed) => /^[0-9]+$/.test(seed))
-  .map(Number)
-  .filter((amount) => amount <= SCHEMA_LIMITS.AMOUNT_CENTS);
-
-/** A generous budget: about 2 s alone, but the whole suite runs files in parallel. */
-const PROPERTY_TIMEOUT_MS = 60_000;
-
-const SMILE = '\u{1F600}';
-/** Valid generated strings use only these: letters and marks no seed is made of, plus surrogate edge cases. */
-const SAFE_CHARS = [
-  'a',
-  'b',
-  'z',
-  'Z',
-  '.',
-  '@',
-  '-',
-  ' ',
-  '\u00E9',
-  '\u0301',
-  SMILE,
-  '\uD800',
-  '\uDC00',
-  '\u200B',
-];
-const PAD_CHARS = ['x', '\u00E9', SMILE];
+import { ONE_LINE } from '../../src/core/schema-text';
+import {
+  dropped,
+  type Field,
+  firstCodePoints,
+  fits,
+  hidden,
+  isoTs,
+  kept,
+  multiLine,
+  overCap,
+  PAD_CHARS,
+  refusedOr,
+  safeText,
+  SAFE_CHARS,
+  secret,
+  SECRET_AMOUNTS,
+  SECRETS,
+  SEEDS,
+} from './redact-arbitraries';
 
 const nodeSha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
-const firstCodePoints = (text: string, count: number): string => Array.from(text).slice(0, count).join('');
-
-/** One generated field: the raw value and what the output must store (undefined: dropped). */
-interface Field {
-  readonly value: unknown;
-  readonly keep: unknown;
-}
-const kept = (arb: fc.Arbitrary<unknown>): fc.Arbitrary<Field> =>
-  arb.map((value) => ({ value, keep: value }));
-const dropped = (arb: fc.Arbitrary<unknown>): fc.Arbitrary<Field> =>
-  arb.map((value) => ({ value, keep: undefined }));
-
-const secret = fc.constantFrom(...SECRETS);
-const safeText = (maxLength: number) => fc.string({ unit: fc.constantFrom(...SAFE_CHARS), maxLength });
-const padding = (minLength: number) =>
-  fc.string({ unit: fc.constantFrom(...PAD_CHARS), minLength, maxLength: minLength + 8 });
-/** A secret that only fits past `cap` code points of padding. */
-const overCap = (cap: number) => fc.tuple(padding(cap + 1), secret).map(([pad, text]) => pad + text);
-/** Non-scalar, wrongly typed or merely coercible values hiding a secret. */
-const hidden = fc.oneof(
-  secret.map((text) => [text]),
-  secret.map((text) => ({ value: text })),
-  secret.map((text) => ({ nested: [{ deep: text }] })),
-  secret.map((text) => new Map([[text, text]])),
-  secret.map((text) => new Set([text])),
-  secret.map((text) => BigInt(text.length)),
-  secret.map((text): unknown => Object(text)),
-  secret.map((text) => ({ toString: () => text, toJSON: () => text, valueOf: () => text })),
-  fc.constantFrom(...SECRET_AMOUNTS).map((amount): unknown => Object(amount)),
-);
-
-/** Valid ISO 8601 with an offset (Z or ±hh:mm), 1970–2100. */
-const isoTs = fc
-  .tuple(fc.integer({ min: 0, max: 4_102_444_800_000 }), fc.integer({ min: -12 * 60, max: 14 * 60 }))
-  .map(([ms, offset]) => {
-    if (offset === 0) return new Date(ms).toISOString();
-    const local = new Date(ms + offset * 60_000).toISOString().slice(0, 19);
-    const abs = Math.abs(offset);
-    const hh = String(Math.floor(abs / 60)).padStart(2, '0');
-    return `${local}${offset < 0 ? '-' : '+'}${hh}:${String(abs % 60).padStart(2, '0')}`;
-  });
 
 const FIELDS: Readonly<Record<ContentField, fc.Arbitrary<Field>>> = {
-  counterparty: fc.oneof(
+  counterparty: refusedOr(
     kept(safeText(40)),
-    dropped(fc.oneof(overCap(SCHEMA_LIMITS.COUNTERPARTY), hidden, fc.integer(), fc.constant(null))),
+    fc.oneof(overCap(SCHEMA_LIMITS.COUNTERPARTY), hidden, fc.integer(), fc.constant(null), multiLine),
   ),
-  merchant: fc.oneof(
+  merchant: refusedOr(
     kept(safeText(40)),
-    dropped(fc.oneof(overCap(SCHEMA_LIMITS.MERCHANT), hidden, fc.boolean())),
+    fc.oneof(overCap(SCHEMA_LIMITS.MERCHANT), hidden, fc.boolean(), multiLine),
   ),
-  amountCents: fc.oneof(
+  amountCents: refusedOr(
     kept(fc.oneof(fc.nat(), fc.constantFrom(0, SCHEMA_LIMITS.AMOUNT_CENTS))),
-    dropped(
-      fc.oneof(
-        secret,
-        hidden,
-        fc.double({ noInteger: true }),
-        fc.integer({ max: -1 }),
-        fc.constant(SCHEMA_LIMITS.AMOUNT_CENTS + 1),
-        fc.constantFrom(...SECRET_AMOUNTS).map(String),
-      ),
+    fc.oneof(
+      secret,
+      hidden,
+      fc.double({ noInteger: true }),
+      fc.integer({ max: -1 }),
+      fc.constant(SCHEMA_LIMITS.AMOUNT_CENTS + 1),
+      fc.constantFrom(...SECRET_AMOUNTS).map(String),
     ),
   ),
-  currency: fc.oneof(
+  currency: refusedOr(
     kept(fc.stringMatching(/^[A-Z]{3}$/)),
-    dropped(fc.oneof(secret, hidden, fc.stringMatching(/^[a-z]{3}$/))),
+    fc.oneof(secret, hidden, fc.stringMatching(/^[a-z]{3}$/)),
   ),
-  subjectHint: fc.oneof(
-    kept(safeText(SCHEMA_LIMITS.SUBJECT_HINT)),
-    fc.oneof(safeText(SCHEMA_LIMITS.SUBJECT_HINT * 2), overCap(SCHEMA_LIMITS.SUBJECT_HINT)).map((value) => ({
-      value,
-      keep: firstCodePoints(value, SCHEMA_LIMITS.SUBJECT_HINT),
-    })),
-    dropped(fc.oneof(hidden, fc.integer())),
+  subjectHint: refusedOr(
+    fc.oneof(
+      kept(safeText(SCHEMA_LIMITS.SUBJECT_HINT)),
+      fc
+        .oneof(safeText(SCHEMA_LIMITS.SUBJECT_HINT * 2), overCap(SCHEMA_LIMITS.SUBJECT_HINT))
+        .map((value) => ({
+          value,
+          keep: firstCodePoints(value, SCHEMA_LIMITS.SUBJECT_HINT),
+        })),
+    ),
+    fc.oneof(hidden, fc.integer(), multiLine),
   ),
   occurredAt: fc.oneof(
     { weight: 4, arbitrary: kept(isoTs) },
@@ -242,6 +192,9 @@ type Example = typeof example extends fc.Arbitrary<infer T> ? T : never;
 const counts = {
   projected: 0,
   rejected: 0,
+  refused: 0,
+  /** Rows refused for a seed on the second line of an allowlisted text fact (SEC-3). */
+  multiLine: 0,
   loaded: 0,
   handBuilt: 0,
   channels: Object.fromEntries(CHANNELS.map((channel) => [channel, 0])),
@@ -325,6 +278,30 @@ function expectedContent({ fields }: Example, allowlist: readonly string[]): Rec
   return out;
 }
 
+/** The allowlisted own fields (occurredAt aside, which is only ever missing) whose value refuses the row. */
+function refusedFields({ fields }: Example, allowlist: readonly string[]): unknown[] {
+  return CONTENT_FIELDS.filter((field) => field !== 'occurredAt' && allowlist.includes(field))
+    .map((field) => fields[field])
+    .filter((field) => field?.refuse === true)
+    .map((field) => field?.value);
+}
+
+/** `run` refuses the row with `invalid_field`, and nothing it throws names a seed (Hard Rule 10). */
+function expectRefused(run: () => unknown, values: readonly unknown[]): void {
+  counts.refused += 1;
+  if (values.some((value) => typeof value === 'string' && !ONE_LINE.test(value))) counts.multiLine += 1;
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(RedactError);
+  expect(caught).toMatchObject({ code: 'invalid_field', message: 'redact: invalid_field' });
+  const shown = `${String(caught)} ${JSON.stringify(caught)}`;
+  expect(SECRETS.filter((seed) => shown.includes(seed))).toStrictEqual([]);
+}
+
 function check(input: Example): void {
   const policy = policyFor(input);
   const allowlist: readonly string[] = policy.allowlistedFields[input.source];
@@ -333,6 +310,11 @@ function check(input: Example): void {
   const ctx = { type: input.type, observedAt: input.observedAt, rowKey: input.rowKey };
   const content = expectedContent(input, allowlist);
   const run = () => project(input.source, raw, ctx, policy);
+  const refused = refusedFields(input, allowlist);
+  if (refused.length > 0) {
+    expectRefused(run, refused);
+    return;
+  }
   if (content.occurredAt === undefined) {
     counts.rejected += 1;
     expect(run).toThrow(RedactError);
@@ -352,6 +334,7 @@ function check(input: Example): void {
   const contentHash = nodeSha(canonicalJson(hashed));
   const expected = { ...hashed, id: idFromHash(contentHash), observedAt: input.observedAt, contentHash };
   expect(out).toStrictEqual(Observation.parse(expected));
+  expect(observationIntegrityProblems(out, policy)).toStrictEqual([]);
   expect(project(input.source, Object.fromEntries(Object.entries(own).reverse()), ctx, policy)).toStrictEqual(
     out,
   );
@@ -370,17 +353,15 @@ describe('redact (property)', () => {
     }
   });
 
-  it(
-    'only allowlisted own fields survive and no seeded secret ever reaches the output (1,000 examples)',
-    () => {
-      fc.assert(fc.property(example, check), { numRuns: 1000 });
-      expect(counts.projected).toBeGreaterThan(300);
-      expect(counts.rejected).toBeGreaterThan(50);
-      expect(counts.loaded).toBeGreaterThan(20);
-      expect(counts.handBuilt).toBeGreaterThan(20);
-      for (const channel of CHANNELS) expect(counts.channels[channel], channel).toBeGreaterThan(20);
-      expect(reads.getters).toBe(0);
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('only allowlisted own fields survive and no seeded secret ever reaches the output (1,000 examples)', () => {
+    fc.assert(fc.property(example, check), { numRuns: 1000 });
+    expect(counts.projected).toBeGreaterThan(300);
+    expect(counts.rejected).toBeGreaterThan(50);
+    expect(counts.refused).toBeGreaterThan(100);
+    expect(counts.multiLine).toBeGreaterThan(20);
+    expect(counts.loaded).toBeGreaterThan(20);
+    expect(counts.handBuilt).toBeGreaterThan(20);
+    for (const channel of CHANNELS) expect(counts.channels[channel], channel).toBeGreaterThan(20);
+    expect(reads.getters).toBe(0);
+  });
 });

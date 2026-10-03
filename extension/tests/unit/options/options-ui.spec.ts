@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 /**
  * Options page shell (sprint 0.10) rendered with Preact in happy-dom. Added by the Sprint 0 QA review.
- * The E2E suite (tests/e2e/options.spec.ts) covers the happy paths on the real build; these tests cover the
- * UI states it cannot reach, the failure paths (Hard Rule 6: fail loud): a storage read that fails, a
- * reset that fails or rejects, and a double confirm. They also mount the popup and side panel shells.
+ * The E2E suite (tests/e2e/options.spec.ts, options-reset.spec.ts) covers the happy paths on the real build;
+ * these tests cover the UI states it cannot reach, the failure paths (Hard Rule 6: fail loud): a storage read
+ * that fails, a reset that fails or rejects, and a double confirm. They also mount the popup and side panel
+ * shells.
  */
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -141,7 +142,9 @@ describe('InstallIdPanel states (Hard Rule 6: fail loud)', () => {
     expect(root.querySelector('#install-id-value')).toBeNull();
     expect(root.textContent).toContain('No valid install id is stored.');
   });
+});
 
+describe('InstallIdPanel reset (Hard Rule 6: fail loud)', () => {
   it('a successful reset shows the new id and announces it', async () => {
     await browser.storage.local.set({ [KEY]: ID_A });
     await act(() => {

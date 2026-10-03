@@ -23,7 +23,8 @@
     "attest": "tsx tests/tools/attest-cli.ts",
     "postinstall": "wxt prepare",
     "test:tz": "TZ=Pacific/Kiritimati vitest run tests/unit/core tests/property tests/golden && TZ=America/St_Johns vitest run tests/unit/core tests/property tests/golden",
-    "test:perf": "vitest run --config vitest.perf.config.ts"
+    "test:perf": "vitest run --config vitest.perf.config.ts",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "dexie": "4.4.6",

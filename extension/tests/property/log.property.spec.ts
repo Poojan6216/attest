@@ -75,7 +75,9 @@ describe('log.buildRecord (property)', () => {
       RUNS,
     );
   });
+});
 
+describe('log.buildRecord: plumbing values, errors and event names (property)', () => {
   it('a string value prints only when it is plumbing, and then verbatim', () => {
     fc.assert(
       fc.property(fc.string(), (value) => {

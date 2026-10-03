@@ -12,14 +12,37 @@
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
 import { freshFacts, type ObservedFacts, type TextFacts } from './features';
+import { InvariantError } from './invariant-error';
 import { candidatesHashOfRows, refHashInto } from './receipt';
 import type { Observation, Ulid } from './schema';
 import { DIGEST_WORDS } from './sha256';
 
-/** UTF-16 code unit order, as `<` compares strings. */
-function compareIds(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const refHashIntoLocal = refHashInto;
+const candidatesHashOfRowsLocal = candidatesHashOfRows;
+const freshFactsLocal = freshFacts;
+
+/**
+ * Each row's position among `rows` in id order (UTF-16 code unit order, as `<` compares strings), or null when two
+ * rows share an id. The built-in sort with no comparator orders strings by UTF-16 code units, in native code; a
+ * map from id to row then places each rank.
+ */
+function idRanks(rows: readonly Observation[]): Int32Array | null {
+  const rowOf = new Map<string, number>();
+  const ids: string[] = [];
+  for (let row = 0; row < rows.length; row += 1) {
+    const id = rows[row]?.id ?? '';
+    if (rowOf.has(id)) return null;
+    rowOf.set(id, row);
+    ids.push(id);
+  }
+  ids.sort();
+  const ranks = new Int32Array(ids.length);
+  for (let rank = 0; rank < ids.length; rank += 1) ranks[rowOf.get(ids[rank] ?? '') ?? 0] = rank;
+  return ranks;
 }
 
 /** Who may see a row in `grade` (§4.3): its owner's claim id under the assignment, and whether it is taken. */
@@ -66,7 +89,7 @@ export class CandidateTable {
     const held = this.#facts[row];
     if (held !== undefined) return held;
     const observation = this.#row(row);
-    const made = freshFacts(observation, this.occurredMs[row], this.texts.stopWords, this.texts);
+    const made = freshFactsLocal(observation, this.occurredMs[row], this.texts.stopWords, this.texts);
     this.#facts[row] = made;
     return made;
   }
@@ -80,17 +103,7 @@ export class CandidateTable {
    * such rows (ids derive from content hashes, §10), and `grade` itself then decides which row of an id it names.
    */
   ranks(): Int32Array | null {
-    if (this.#ranks !== undefined) return this.#ranks;
-    const ids = this.rows.map((observation) => observation.id);
-    const order = Array.from(ids, (_, row) => row).sort((a, b) => compareIds(ids[a] ?? '', ids[b] ?? ''));
-    const ranks = new Int32Array(ids.length);
-    let repeats = false;
-    for (let rank = 0; rank < order.length; rank += 1) {
-      const row = order[rank] ?? 0;
-      ranks[row] = rank;
-      if (rank > 0 && ids[order[rank - 1] ?? 0] === ids[row]) repeats = true;
-    }
-    this.#ranks = repeats ? null : ranks;
+    if (this.#ranks === undefined) this.#ranks = idRanks(this.rows);
     return this.#ranks;
   }
 
@@ -107,13 +120,13 @@ export class CandidateTable {
       const row = claimRows[kept[i] ?? 0] ?? 0;
       const rank = ranks[row] ?? 0;
       if (hashed[rank] !== 1) {
-        refHashInto(this.#row(row), refs, rank * DIGEST_WORDS);
+        refHashIntoLocal(this.#row(row), refs, rank * DIGEST_WORDS);
         hashed[rank] = 1;
       }
       order[i] = rank;
     }
     order.subarray(0, count).sort();
-    return candidatesHashOfRows(refs, order, count);
+    return candidatesHashOfRowsLocal(refs, order, count);
   }
 
   /**
@@ -134,7 +147,7 @@ export class CandidateTable {
 
   #row(row: number): Observation {
     const observation = this.rows[row];
-    if (observation === undefined) throw new RangeError('candidate table: no such row');
+    if (observation === undefined) throw new InvariantError('no_such_row');
     return observation;
   }
 }

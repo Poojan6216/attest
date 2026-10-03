@@ -7,11 +7,13 @@
  * faithfully (NaN, ±Infinity, `undefined` in an array, bigint, functions, symbols, non-plain objects)
  * throw, so two different inputs can never canonicalise to the same text.
  *
+ * `hashCanonical` writes those same bytes straight into the hash (a receipt's `inputsHash` and id, every receipt of a
+ * batch), never building the text; a property test pins it to `sha256Hex(canonicalJson(v))`, throws included.
  * `memoHash` remembers the canonical hash of an object (a batch's grant or coverage, §3: "sub-hashes are computed
  * once per batch") while everything canonical JSON reads of it is unchanged, so a memo never changes a result.
  */
 import { idFromHash } from './base32';
-import { sha256Utf8Hex } from './sha256';
+import { Sha256Writer, sha256Utf8Hex } from './sha256';
 
 export { idFromHash };
 
@@ -101,9 +103,128 @@ export function canonicalJson(value: unknown): string {
   }
 }
 
-/** SHA-256 of the canonical JSON of `value`. */
+// ── Canonical JSON written straight into a hash ─────────────────────────────────────────────────
+
+const QUOTE = '"'.charCodeAt(0);
+const BACKSLASH = '\\'.charCodeAt(0);
+const FIRST_PRINTABLE = ' '.charCodeAt(0);
+const LAST_PRINTABLE = '~'.charCodeAt(0);
+
+/**
+ * Whether `JSON.stringify(text)` is `text` between quotes: every code unit is printable ASCII and none is a quote
+ * or a backslash (among ASCII, JSON escapes exactly those two and the control characters).
+ */
+export function plainJson(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    if (unit < FIRST_PRINTABLE || unit > LAST_PRINTABLE || unit === QUOTE || unit === BACKSLASH) return false;
+  }
+  return true;
+}
+
+/** Writes `JSON.stringify(text)`; a plain text (`plainJson`) between quotes, without building the quoted copy. */
+function writeString(writer: Sha256Writer, text: string): void {
+  if (!plainJson(text)) {
+    writer.write(JSON.stringify(text));
+    return;
+  }
+  writer.write('"');
+  writer.write(text);
+  writer.write('"');
+}
+
+/** `canonicalArray`, written: the same bytes, the same throws. */
+function writeArray(writer: Sha256Writer, values: readonly unknown[]): void {
+  writer.write('[');
+  for (let i = 0; i < values.length; i += 1) {
+    if (i > 0) writer.write(',');
+    const item = values[i];
+    if (item !== undefined) writeCanonical(writer, item);
+    else if (i in values) throw new HashError('unsupported_value');
+  }
+  writer.write(']');
+}
+
+/**
+ * `canonicalObject`, written: the same bytes, the same throws. A plain key (`plainJson`) is written between the
+ * punctuation around it (`,"` before it, `":` after it, or `":"` when its value is a plain string too), so a member
+ * takes a few writes, not one per punctuation mark.
+ */
+function writeObject(writer: Sha256Writer, value: Record<string, unknown>): void {
+  const keys = sortKeys(Object.keys(value));
+  let first = true;
+  writer.write('{');
+  for (const key of keys) {
+    const item = value[key];
+    if (item === undefined) continue;
+    if (!plainJson(key)) {
+      if (!first) writer.write(',');
+      writer.write(JSON.stringify(key));
+      writer.write(':');
+      writeCanonical(writer, item);
+    } else if (typeof item === 'string' && plainJson(item)) {
+      writer.write(first ? '"' : ',"');
+      writer.write(key);
+      writer.write('":"');
+      writer.write(item);
+      writer.write('"');
+    } else {
+      writer.write(first ? '"' : ',"');
+      writer.write(key);
+      writer.write('":');
+      writeCanonical(writer, item);
+    }
+    first = false;
+  }
+  writer.write('}');
+}
+
+/** Writes exactly the UTF-8 bytes of `canonicalJson(value)` into `writer`; throws where canonicalJson throws. */
+function writeCanonical(writer: Sha256Writer, value: unknown): void {
+  if (value === null) {
+    writer.write('null');
+    return;
+  }
+  switch (typeof value) {
+    case 'string':
+      writeString(writer, value);
+      return;
+    case 'number':
+      writer.write(canonicalNumber(value));
+      return;
+    case 'boolean':
+      writer.write(value ? 'true' : 'false');
+      return;
+    case 'object':
+      if (Array.isArray(value)) writeArray(writer, value);
+      else if (isPlainObject(value)) writeObject(writer, value);
+      else throw new HashError('unsupported_value');
+      return;
+    default:
+      throw new HashError('unsupported_value');
+  }
+}
+
+/** The writer `hashCanonical` streams into, reset before each hash; `canonicalBusy` while one is being written. */
+const CANONICAL_WRITER = new Sha256Writer();
+let canonicalBusy = false;
+
+/**
+ * SHA-256 of the canonical JSON of `value`: `sha256Hex(canonicalJson(value))`, the same bytes written straight into
+ * the hash instead of first built as one string (the task 1.5 grading perf gate hashes every receipt's inputs this
+ * way). Throws like canonicalJson. A hash requested while another is being written (only a getter could ask)
+ * takes the string path, so no hash ever sees another's bytes.
+ */
 export function hashCanonical(value: unknown): string {
-  return sha256Hex(canonicalJson(value));
+  if (canonicalBusy) return sha256Hex(canonicalJson(value));
+  canonicalBusy = true;
+  try {
+    const writer = CANONICAL_WRITER.reset();
+    writeCanonical(writer, value);
+    return writer.hex();
+  } finally {
+    canonicalBusy = false;
+  }
 }
 
 // ── Per-object hash memo ────────────────────────────────────────────────────────────────────────
@@ -195,7 +316,7 @@ interface HashEntry<Value> {
 export type HashMemo<Key extends object, Value = string> = WeakMap<Key, HashEntry<Value>>;
 
 /**
- * `brand(sha256Hex(canonicalJson(canonical(key))))`, remembered for `key` while everything canonical JSON reads
+ * `brand(hashCanonical(canonical(key)))`, remembered for `key` while everything canonical JSON reads
  * of `key` is unchanged: `canonical` must read `key` only through its own enumerable properties (as canonical
  * JSON does), so an object edited in place is hashed again, never from its old fields. `brand` (a schema parse
  * of the hex, say) runs once per computed hash. Throws like canonicalJson or `brand`, and then remembers nothing.
@@ -210,7 +331,7 @@ export function memoHash<Key extends object, Value>(
   if (held !== undefined) {
     if (matchAt(key, held.shape, 0) === held.shape.length) return held.hash;
   }
-  const hash = brand(sha256Hex(canonicalJson(canonical(key))));
+  const hash = brand(hashCanonical(canonical(key)));
   const shape: unknown[] = [];
   recordShape(key, shape);
   memo.set(key, { shape, hash });

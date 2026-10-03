@@ -11,6 +11,7 @@ import 'fake-indexeddb/auto';
 import { expect } from 'vitest';
 
 import { idFromHash } from '../../../src/core/hash';
+import { contentHashOf } from '../../../src/core/redact';
 import { LedgerError, type LedgerErrorCode } from '../../../src/ledger/errors';
 import type {
   AdapterHealthInput,
@@ -36,9 +37,12 @@ export function sha(n: number): string {
   return n.toString(16).padStart(32, '0').repeat(2);
 }
 
-/** The id of the observation whose contentHash is `sha(n)`: §10 (v1.3) `id = idFromHash(contentHash)`. */
+/**
+ * The id of `makeObservation({ rowKeyHash: sha(n) })`: the n-th of n otherwise identical sent rows (§10 v1.3,
+ * `id = idFromHash(contentHash)`). `observationId(1)` is the id of `makeObservation()`.
+ */
 export function observationId(n: number): string {
-  return idFromHash(sha(n));
+  return makeObservation({ rowKeyHash: sha(n) }).id;
 }
 
 /** The id of the claim whose rawHash is `sha(n)`: §8, §10 (v1.4) `id = idFromHash(rawHash)`. */
@@ -56,24 +60,56 @@ export function uniqueDbName(prefix: string): string {
   return `attest-test-${prefix}-${String(dbCounter)}`;
 }
 
+type ObservationContent = Omit<ObservationInput, 'id' | 'contentHash'>;
+
+/** A gmail.sent row: only fields the default policy allowlists for gmail.sent (§12). */
+const SENT_CONTENT: ObservationContent = {
+  source: 'gmail.sent',
+  type: 'email.sent',
+  counterparty: 'alice@example.com',
+  subjectHint: 'Quarterly numbers',
+  occurredAt: '2026-10-01T10:15:00-04:00',
+  observedAt: '2026-10-01T10:20:00-04:00',
+  rowKeyHash: sha(1),
+};
+
+/** A gmail.receipt row: only fields the default policy allowlists for gmail.receipt (§12). */
+const RECEIPT_CONTENT: ObservationContent = {
+  source: 'gmail.receipt',
+  type: 'purchase.made',
+  merchant: 'Blue Bottle',
+  amountCents: 1250,
+  currency: 'USD',
+  subjectHint: 'Your order',
+  occurredAt: '2026-10-01T10:15:00-04:00',
+  observedAt: '2026-10-01T10:20:00-04:00',
+  rowKeyHash: sha(1),
+};
+
 /**
- * A valid observation: contentHash `sha(1)` unless overridden, and an id derived from whatever contentHash it
- * ends up with (the schema checks `id = idFromHash(contentHash)`, §10 v1.3). Overriding `id` builds an
- * observation whose id does not match, which the schema rejects.
+ * `base` with `overrides`, sealed as redact.project() seals a row (§10 v1.3): `contentHash = contentHashOf(the
+ * content)` and `id = idFromHash(contentHash)`, so the ledger's integrity check (SEC-V1) accepts it. Overriding
+ * `contentHash` builds a row whose hash is not the hash of its content, and overriding `id` one whose id does
+ * not derive from its hash: the ledger refuses both.
+ */
+function sealObservation(base: ObservationContent, overrides: Partial<ObservationInput>): ObservationInput {
+  const { id, contentHash, ...content } = { ...base, ...overrides };
+  const hash = contentHash ?? contentHashOf(content);
+  const derivedId = idFromHash(HEX_SHA256.test(hash) ? hash : contentHashOf(content));
+  return { ...content, id: id ?? derivedId, contentHash: hash };
+}
+
+/**
+ * A valid gmail.sent observation (rowKeyHash `sha(1)` unless overridden). `rowKeyHash: sha(n)` builds the
+ * n-th of n otherwise identical sends, whose id is `observationId(n)`.
  */
 export function makeObservation(overrides: Partial<ObservationInput> = {}): ObservationInput {
-  const contentHash = overrides.contentHash ?? sha(1);
-  return {
-    id: HEX_SHA256.test(contentHash) ? idFromHash(contentHash) : observationId(1),
-    source: 'gmail.sent',
-    type: 'email.sent',
-    counterparty: 'alice@example.com',
-    subjectHint: 'Quarterly numbers',
-    occurredAt: '2026-10-01T10:15:00-04:00',
-    observedAt: '2026-10-01T10:20:00-04:00',
-    contentHash,
-    ...overrides,
-  };
+  return sealObservation(SENT_CONTENT, overrides);
+}
+
+/** A valid gmail.receipt observation (merchant, amount, currency; no counterparty). */
+export function makeReceiptObservation(overrides: Partial<ObservationInput> = {}): ObservationInput {
+  return sealObservation(RECEIPT_CONTENT, overrides);
 }
 
 /**

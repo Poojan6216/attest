@@ -24,11 +24,6 @@ import { BASIS_POINTS, MS_PER_DAY, MS_PER_MINUTE } from '../../src/core/units';
 import defaultPolicyJson from '../../../policy/default.json';
 
 const RUNS = { numRuns: 1_000 };
-/**
- * A generous budget for properties that load a policy on every run (parse + SHA-256): a few seconds alone,
- * but the whole suite runs files in parallel, and a timeout under load is not a failure of features().
- */
-const PROPERTY_TIMEOUT_MS = 60_000;
 const BASE_MS = instantMs('2026-10-06T14:02:00-04:00');
 
 const near = (rangeMs: number) =>
@@ -129,69 +124,57 @@ function plus(a: Ratio, b: Ratio): Ratio {
 }
 
 describe('features() under random basis-point weights', () => {
-  it(
-    'the score is in [0, 1] and unchanged by shuffling featuresByType',
-    () => {
-      fc.assert(
-        fc.property(claimArb, observationArb, weightsArb, shuffledLists, (claim, observation, w, lists) => {
-          const policy = policyOf(w);
-          if (applicableWeight(claim, policy) === 0n) return;
-          const score = features(claim, observation, policy).score;
-          expect(compareRatio(score, RATIO_ZERO)).toBeGreaterThanOrEqual(0);
-          expect(compareRatio(score, RATIO_ONE)).toBeLessThanOrEqual(0);
-          expect(features(claim, observation, policyOf(w, lists)).score).toEqual(score);
-        }),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('the score is in [0, 1] and unchanged by shuffling featuresByType', () => {
+    fc.assert(
+      fc.property(claimArb, observationArb, weightsArb, shuffledLists, (claim, observation, w, lists) => {
+        const policy = policyOf(w);
+        if (applicableWeight(claim, policy) === 0n) return;
+        const score = features(claim, observation, policy).score;
+        expect(compareRatio(score, RATIO_ZERO)).toBeGreaterThanOrEqual(0);
+        expect(compareRatio(score, RATIO_ONE)).toBeLessThanOrEqual(0);
+        expect(features(claim, observation, policyOf(w, lists)).score).toEqual(score);
+      }),
+      RUNS,
+    );
+  });
 });
 
 describe('features() is exactly linear in the policy weights', () => {
-  it(
-    'is exactly linear in the weights: S(w+v)·Σ(w+v) = S(w)·Σw + S(v)·Σv',
-    () => {
-      fc.assert(
-        fc.property(
-          claimArb,
-          observationArb,
-          weightsArb,
-          weightsArb,
-          shuffledLists,
-          (claim, obs, w, v, lists) => {
-            const [pw, pv, pSum] = [policyOf(w), policyOf(v, lists), policyOf(add(w, v))];
-            const [tw, tv, tSum] = [pw, pv, pSum].map((policy) => applicableWeight(claim, policy));
-            if (tw === undefined || tv === undefined || tSum === undefined) throw new Error('three totals');
-            if (tw === 0n || tv === 0n) return;
-            const lhs = weighted(features(claim, obs, pSum).score, tSum);
-            const rhs = plus(
-              weighted(features(claim, obs, pw).score, tw),
-              weighted(features(claim, obs, pv).score, tv),
-            );
-            expect(compareRatio(lhs, rhs)).toBe(0);
-          },
-        ),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
-
-  it(
-    'is unchanged when every weight is doubled',
-    () => {
-      fc.assert(
-        fc.property(claimArb, observationArb, weightsArb, (claim, observation, w) => {
-          const policy = policyOf(w);
-          if (applicableWeight(claim, policy) === 0n) return;
-          expect(features(claim, observation, policyOf(add(w, w))).score).toEqual(
-            features(claim, observation, policy).score,
+  it('is exactly linear in the weights: S(w+v)·Σ(w+v) = S(w)·Σw + S(v)·Σv', () => {
+    fc.assert(
+      fc.property(
+        claimArb,
+        observationArb,
+        weightsArb,
+        weightsArb,
+        shuffledLists,
+        (claim, obs, w, v, lists) => {
+          const [pw, pv, pSum] = [policyOf(w), policyOf(v, lists), policyOf(add(w, v))];
+          const [tw, tv, tSum] = [pw, pv, pSum].map((policy) => applicableWeight(claim, policy));
+          if (tw === undefined || tv === undefined || tSum === undefined) throw new Error('three totals');
+          if (tw === 0n || tv === 0n) return;
+          const lhs = weighted(features(claim, obs, pSum).score, tSum);
+          const rhs = plus(
+            weighted(features(claim, obs, pw).score, tw),
+            weighted(features(claim, obs, pv).score, tv),
           );
-        }),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+          expect(compareRatio(lhs, rhs)).toBe(0);
+        },
+      ),
+      RUNS,
+    );
+  });
+
+  it('is unchanged when every weight is doubled', () => {
+    fc.assert(
+      fc.property(claimArb, observationArb, weightsArb, (claim, observation, w) => {
+        const policy = policyOf(w);
+        if (applicableWeight(claim, policy) === 0n) return;
+        expect(features(claim, observation, policyOf(add(w, w))).score).toEqual(
+          features(claim, observation, policy).score,
+        );
+      }),
+      RUNS,
+    );
+  });
 });

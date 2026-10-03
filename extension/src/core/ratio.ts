@@ -303,23 +303,22 @@ export function compareScores(a: Score, b: Score): -1 | 0 | 1 {
   return compareRatio(a.ratio, b.ratio);
 }
 
-/** `ratioGteBasisPoints` of a score: in Number when both products are at most 2^53 − 1, else in BigInt. */
-export function scoreGteBasisPoints(score: Score, bp: number): boolean {
-  const left = score.num * BASIS_POINTS;
-  const right = bp * score.den;
-  if (isCount(bp) && left <= Number.MAX_SAFE_INTEGER && right <= Number.MAX_SAFE_INTEGER)
-    return left >= right;
-  return ratioGteBasisPoints(score.ratio, bp);
-}
-
 /**
  * −1, 0 or 1 as `a/b` is less than, equal to or greater than `c/d`, exactly, for non-negative safe integers `a`,
- * `c` and positive safe integers `b`, `d` (callers check; a `Score`'s Number parts are such): the continued-
- * fraction comparison, which compares the integer parts and then the reciprocals of the fractional parts. Every
- * operand stays a safe integer no larger than the inputs, `x % y` of safe integers is exact, and `(x − x % y) / y`
- * divides an exact multiple, so no step rounds (no product is ever formed); it ends within Euclid's step count.
+ * `c` and positive safe integers `b`, `d` (callers check; a `Score`'s Number parts are such). When both cross
+ * products `a·d` and `c·b` come out at most `MAX_SAFE_INTEGER`, they are exact (an exact product of 2^53 or more
+ * rounds to 2^53 or more, so it never passes the check) and are compared, as `compareScores` does. Otherwise the
+ * continued-fraction comparison, which compares the integer parts and then the reciprocals of the fractional parts:
+ * every operand stays a safe integer no larger than the inputs, `x % y` of safe integers is exact, and
+ * `(x − x % y) / y` divides an exact multiple, so no step rounds; it ends within Euclid's step count.
  */
 export function compareFractions(a: number, b: number, c: number, d: number): -1 | 0 | 1 {
+  const ad = a * d;
+  const cb = c * b;
+  if (ad <= Number.MAX_SAFE_INTEGER && cb <= Number.MAX_SAFE_INTEGER) {
+    if (ad === cb) return 0;
+    return ad < cb ? -1 : 1;
+  }
   let p = a;
   let q = b;
   let r = c;

@@ -87,7 +87,9 @@ describe('findLeaks', () => {
     const seed = byId('api_key_openai_shape');
     expect(findLeaks('console', [seed.value, seed.value, `x ${seed.value}`], seeds)).toHaveLength(1);
   });
+});
 
+describe('findLeaks: normalisation and the probes the security review found MISSED', () => {
   it('normalises for search: NFKC, lower case, no whitespace, punctuation or symbols', () => {
     expect(normalizeForSearch('  A\tB\n\nC ')).toBe('abc');
     expect(normalizeForSearch('Ottoline Vasquez-Brannigan')).toBe('ottolinevasquezbrannigan');

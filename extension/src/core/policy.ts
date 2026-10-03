@@ -8,7 +8,9 @@
  *  - `bp`: every weight, threshold and unasked weight as integer basis points (exact; a value that is not
  *    a multiple of 0.0001 is rejected at load), and
  *  - `policyHash`: SHA-256 of the document's canonical JSON, stored on every receipt.
- * Nothing downstream can retune a threshold at runtime (Hard Rule 4).
+ * Nothing downstream can retune a threshold at runtime (Hard Rule 4). The loader is the only source of a
+ * `Policy`: every grading entry refuses an object `loadPolicy` did not return (`assertLoadedPolicy`), so no copy,
+ * spread, hand-built or edited object is ever graded from stale memos or stamped with another document's hash.
  *
  * PURE: no I/O, no clock, no logging. The JSON import is resolved at build time, not read at runtime.
  * A failure throws `PolicyError` with one specific "path: problem" line per issue; the caller logs it.
@@ -29,7 +31,7 @@ import {
 import { Sha256 } from './schema';
 import { BASIS_POINTS } from './units';
 
-export { PolicyError } from './policy-errors';
+export { PolicyError, type PolicyErrorCode } from './policy-errors';
 export {
   ALLOWLISTABLE_FIELDS,
   ConditionName,
@@ -133,6 +135,13 @@ function deepFreeze<T>(value: T): T {
 }
 
 /**
+ * Every policy `loadPolicy` returned, and nothing else (docs/grading.md §3: "the loaded, frozen policy"). A memo
+ * keyed on a policy's parts (features.ts) and the `policyHash` a receipt carries are right only for an object the
+ * loader validated, hashed and froze. Weakly held: it never keeps a policy alive and stores no data of its own.
+ */
+const LOADED = new WeakSet<object>();
+
+/**
  * Validates `raw` as a policy document and returns a deep-frozen `Policy` (the input is never frozen or
  * retained). Throws `PolicyError` listing every problem found, each naming its path.
  *
@@ -144,7 +153,20 @@ export function loadPolicy(raw: unknown): Policy {
   if (!result.success) throw new PolicyError(formatIssues(result.error.issues));
   const doc = result.data;
   const policyHash = Sha256.parse(sha256Hex(canonicalJson(doc)));
-  return deepFreeze({ ...doc, bp: basisPointsOf(doc), policyHash });
+  const policy = deepFreeze({ ...doc, bp: basisPointsOf(doc), policyHash });
+  LOADED.add(policy);
+  return policy;
+}
+
+/**
+ * Throws `PolicyError('policy_not_loaded')` unless `policy` is an object `loadPolicy` returned (Hard Rules 4 and
+ * 6). Every entry that grades or scores with a policy calls it first: `grade`, `gradeOrphan`, `gradeClaim`,
+ * `gradeBatch`, and the features.ts claim plan behind `features`, `pairScorer`, `RowScorer` and `isAssignable`.
+ * A copy (`{ ...policy, windows }`) is refused even when every value is valid: it keeps the original's
+ * `policyHash`, so its receipts would name a document they were not graded with.
+ */
+export function assertLoadedPolicy(policy: object): void {
+  if (!LOADED.has(policy)) throw new PolicyError([], 'policy_not_loaded');
 }
 
 /**

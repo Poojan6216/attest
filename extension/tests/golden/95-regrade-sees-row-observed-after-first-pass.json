@@ -1,0 +1,80 @@
+{
+  "name": "a regrade reads the rows observed by its own instant: one seen after the first pass, none seen after the regrade",
+  "covers": ["edge:regrade_reads_its_own_instant", "edge:future_inputs_ignored"],
+  "mode": "batch",
+  "notes": [
+    "Sprint 1 close (QA-VR1, TECH-R4): written from docs/grading.md alone, so that a cross-check reading candidates at the first pass's evaluatedAt, or ignoring observedAt, disagrees with the contract.",
+    "c1 (muse, priya@company.com, 'Q3 deck', 14:02, minute precision; observedAt 14:02): unit [14:02, 14:03], window [14:00, 14:48] (§4.1). Address claim with a subject: applicable timeProximity 2500, counterpartyExact 3500, counterpartyDomain 1500, subjectOverlap 1500; Σw = 9000 (§5.2). The grant binds gmail.sent to acct-a.",
+    "Gmail Sent passes (acct-a): e1 synced 14:40 saw [12:00, 14:40] and first saw o1 (observedAt 14:40, stated: the loader default only reads entries synced by the first pass); e2 synced 15:10 saw [12:00, 15:10] and first saw o2 (observedAt 15:10, stated).",
+    "o1 raj@company.com 'Q3 deck' at 14:02: inside the unit → Δ 0, tp 1; ce 0 (another mailbox, all ASCII, not a +tag difference → no cp.* code); cd 1 (same non-common domain company.com); subject {q3, deck} vs {q3, deck} → 1. S = (2500 + 0 + 1500 + 1500)/9000 = 5500/9000 = 11/18.",
+    "o2 priya@company.com 'Q3 deck' at 14:44: Δ = 14:44 − 14:03 = 2 460 000 ms after the unit, above toleranceMin → tp = (2 700 000 − 2 460 000)/(2 700 000 − 60 000) = 1/11; ce 1, cd 1, subject 1. S = (2500/11 + 6500)/9000 = 74 000/99 000 = 74/99 > 11/18 (74·18 = 1332 > 11·99 = 1089), below verified (10000·74 < 8500·99).",
+    "First grading at 14:30 (§3): e1, e2, o1 and o2 all come later, so they are ignored. No eligible interval overlaps the window → no_coverage → UNVERIFIABLE, PENDING (no_coverage finalises only at end + 24 h), reasons coverage.none {gmail.sent}, match.none.",
+    "Event 1, regrade at 14:45 (§8: the stored receipt is PENDING and 14:45 ≥ 14:30, so it is installed). §3 at 14:45: e1 (14:40) is visible, e2 (15:10) is not; o1 (observed 14:40) is a candidate, o2 (observed 15:10) is not. Coverage: e1 covers [12:00, 14:40] of [14:00, 14:48] → partial. Best = o1, 11/18: not verified (10000·5500 < 8500·9000), partial (10000·5500 ≥ 5000·9000) → rule partial → PARTIAL; o1 assigned (≥ partial) → observationIds [o1].",
+    "State (§8): PARTIAL is FINAL only once graceElapsed: a sync ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48. The only visible sync is 14:40 → PENDING; computedAt 14:45, no finalAt. Reasons: the partial rule adds no code; the grant has no allowlist, so allowlist.unchecked is not emitted; match.best {o1}; no cp.* (o1's address is another mailbox, not a +tag).",
+    "Traps: candidates read at the first pass's 14:30 give no candidate (best null, not 11/18); candidates read without the observedAt filter give o2 (74/99, PARTIAL on o2). No orphan: o1 is assigned and o2 is seen by neither grading."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T14:30:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:44:00-04:00",
+        "observedAt": "2026-10-06T15:10:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gmail.sent": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T14:40:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:10:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:10:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "events": [{ "event": "regrade", "ref": "c1", "evaluatedAt": "2026-10-06T14:45:00-04:00" }],
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "PENDING",
+      "observationRefs": ["o1"],
+      "score": "11/18",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } },
+      "inputs": { "priorSpendCents": 0 }
+    }
+  ]
+}

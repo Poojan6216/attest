@@ -27,9 +27,12 @@
 import { z } from 'zod';
 
 import { loadPolicy, type Policy, PolicyError } from '../../src/core/policy';
+import { formatPath } from '../../src/core/policy-errors';
 import type { LedgerSnapshot, ReceiptInputs } from '../../src/core/replay';
 import { Coverage, GradeContext, Grant, Sha256 } from '../../src/core/schema';
 import { LEDGER_EXPORT_FORMAT, LedgerExport } from '../../src/ledger/export';
+
+import { printable } from './printable';
 
 /** One `receiptInputs` row (§9). */
 export const ReceiptInputsRow = z.strictObject({
@@ -49,7 +52,11 @@ export type ReplayExport = z.infer<typeof ReplayExport>;
 
 export type SnapshotErrorCode = 'invalid_snapshot' | 'policy_hash';
 
-/** An export replay cannot read. The message names paths and problems, never values (Hard Rule 10). */
+/**
+ * An export replay cannot read. The message names paths and problems, never values (Hard Rule 10): a key from the
+ * file appears only inside a path, JSON-quoted, and nothing non-printable from the file is ever written raw
+ * (printable.ts), so a crafted export cannot drive the operator's terminal.
+ */
 export class SnapshotError extends Error {
   constructor(
     readonly code: SnapshotErrorCode,
@@ -63,12 +70,24 @@ export class SnapshotError extends Error {
 /** The most issues an error message lists; the rest are counted. */
 const MAX_ISSUES = 10;
 
+/**
+ * One "path: problem" line per issue, the path as policy-errors.ts writes it (a key that is not a plain identifier
+ * JSON-quoted). Zod's own message is used only for issues whose message holds no input: an unknown key is named by
+ * its path with "unknown key", an invalid record key with "invalid key".
+ */
+function issueLines(issue: z.core.$ZodIssue): string[] {
+  if (issue.code === 'unrecognized_keys') {
+    return issue.keys.map((key) => `${formatPath([...issue.path, key])}: unknown key`);
+  }
+  const problem = issue.code === 'invalid_key' ? 'invalid key' : issue.message;
+  return [`${formatPath(issue.path)}: ${problem}`];
+}
+
 function describeIssues(error: z.ZodError): string {
-  const lines = error.issues
-    .slice(0, MAX_ISSUES)
-    .map((issue) => `  ${issue.path.map(String).join('.') || '(root)'}: ${issue.message}`);
-  const more = error.issues.length - MAX_ISSUES;
-  return [...lines, ...(more > 0 ? [`  … and ${String(more)} more`] : [])].join('\n');
+  const lines = error.issues.flatMap(issueLines);
+  const listed = lines.slice(0, MAX_ISSUES).map((line) => `  ${printable(line)}`);
+  const more = lines.length - MAX_ISSUES;
+  return [...listed, ...(more > 0 ? [`  … and ${String(more)} more`] : [])].join('\n');
 }
 
 /** Each policy document loaded, keyed by its key after checking it hashes to it. */
@@ -80,7 +99,8 @@ function loadPolicies(documents: Readonly<Record<string, unknown>>): Map<string,
       policy = loadPolicy(document);
     } catch (error) {
       if (!(error instanceof PolicyError)) throw error;
-      throw new SnapshotError('invalid_snapshot', `policies.${key} is not a valid policy:\n${error.message}`);
+      const issues = error.issues.map((issue) => `  ${printable(issue)}`).join('\n');
+      throw new SnapshotError('invalid_snapshot', `policies.${key} is not a valid policy:\n${issues}`);
     }
     if (policy.policyHash !== key) {
       throw new SnapshotError('policy_hash', `policies.${key}: the document hashes to ${policy.policyHash}`);

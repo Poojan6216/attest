@@ -39,9 +39,6 @@ function offsetOf(iso: string): number {
   return match[1] === '-' ? -minutes : minutes;
 }
 
-/** 3,000 runs each: fast alone, but the whole suite runs files in parallel. */
-const PROPERTY_TIMEOUT_MS = 30_000;
-
 /** Year 0001-01-02 … 9999-12-30, so any offset keeps the local year four digits. */
 const instant = fc.integer({ min: -62_135_510_400_000, max: 253_402_128_000_000 });
 const offset = fc.integer({ min: -1_439, max: 1_439 });
@@ -135,35 +132,27 @@ function referenceTrailingOffset(iso: string): number {
 }
 
 describe('trailingOffsetMinutes: the fast read equals the pattern wherever it answers (property)', () => {
-  it(
-    'is null or the pattern reading, and answers for every timestamp instantMs accepts',
-    () => {
-      fc.assert(
-        fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
-          const fast = trailingOffsetMinutes(iso);
-          if (fast !== null) expect(fast).toBe(referenceTrailingOffset(iso));
-          if (outcome(instantMs, iso) !== 'NormalizeError:invalid_iso') expect(fast).not.toBeNull();
-        }),
-        { numRuns: 20_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('is null or the pattern reading, and answers for every timestamp instantMs accepts', () => {
+    fc.assert(
+      fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
+        const fast = trailingOffsetMinutes(iso);
+        if (fast !== null) expect(fast).toBe(referenceTrailingOffset(iso));
+        if (outcome(instantMs, iso) !== 'NormalizeError:invalid_iso') expect(fast).not.toBeNull();
+      }),
+      { numRuns: 20_000 },
+    );
+  });
 });
 
 describe('instantMs: the fast path equals the schema-pattern definition (property)', () => {
-  it(
-    'gives the same instant or the same NormalizeError on ISO-shaped and mutated text',
-    () => {
-      fc.assert(
-        fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
-          expect(outcome(instantMs, iso)).toBe(outcome(referenceInstantMs, iso));
-        }),
-        { numRuns: 20_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('gives the same instant or the same NormalizeError on ISO-shaped and mutated text', () => {
+    fc.assert(
+      fc.property(fc.oneof(isoShaped, mutated, fc.string({ maxLength: 40 })), (iso) => {
+        expect(outcome(instantMs, iso)).toBe(outcome(referenceInstantMs, iso));
+      }),
+      { numRuns: 20_000 },
+    );
+  });
 });
 
 describe('instantMs / isoWithOffset (property)', () => {
@@ -177,7 +166,7 @@ describe('instantMs / isoWithOffset (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  }, 60_000);
+  });
 
   it('instantMs accepts exactly what the IsoTs schema accepts, with the instant Date reads', () => {
     const two = (max: number) => fc.integer({ min: 0, max }).map((n) => String(n).padStart(2, '0'));
@@ -210,7 +199,7 @@ describe('instantMs / isoWithOffset (property)', () => {
       }),
       { numRuns: 5_000 },
     );
-  }, 60_000);
+  });
 });
 
 /** Local wall-clock fields of an ISO string in its own written offset. */
@@ -242,121 +231,109 @@ function expectWholeDay(start: string, end: string): void {
 }
 
 describe('resolveRelative clock times (property, US Eastern)', () => {
-  it(
-    'a clock time resolves to that wall time today or yesterday, at the zone offset in force then',
-    () => {
-      const clock = fc.record({
-        hour: fc.integer({ min: 0, max: 23 }),
-        minute: fc.integer({ min: 0, max: 59 }),
-        twelve: fc.boolean(),
-      });
-      fc.assert(
-        fc.property(reference, clock, (referenceMs, { hour, minute, twelve }) => {
-          const mm = String(minute).padStart(2, '0');
-          const text = twelve
-            ? `${hour % 12 === 0 ? 12 : hour % 12}:${mm} ${hour < 12 ? 'AM' : 'PM'}`
-            : `${hour}:${mm}`;
-          const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
-          const result = resolveRelative(text, { referenceIso, offsetAt: usEastern });
-          expect(result).not.toBeNull();
-          if (result === null) return;
-          const at = instantMs(result.start);
-          expect(offsetOf(result.start)).toBe(usEastern(at));
-          const local = wall(result.start);
-          if (result.precision === 'minute') {
-            expect([local.getUTCHours(), local.getUTCMinutes()]).toEqual([hour, minute]);
-            expect(instantMs(result.end)).toBe(at + MINUTE);
-            expect(offsetOf(result.end)).toBe(usEastern(at + MINUTE));
-            expect(at).toBeLessThanOrEqual(referenceMs + MINUTE);
-            expect(at).toBeGreaterThan(referenceMs - 2 * DAY);
-          } else {
-            // Day precision only when that wall time occurs twice or never on that date (a DST change).
-            expect(result.precision).toBe('day');
-            expectWholeDay(result.start, result.end);
-            const clockWall = Date.UTC(
-              local.getUTCFullYear(),
-              local.getUTCMonth(),
-              local.getUTCDate(),
-              hour,
-              minute,
-            );
-            expect(wallToInstant(clockWall, usEastern).exact).toBe(false);
-          }
-        }),
-        { numRuns: 3_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('a clock time resolves to that wall time today or yesterday, at the zone offset in force then', () => {
+    const clock = fc.record({
+      hour: fc.integer({ min: 0, max: 23 }),
+      minute: fc.integer({ min: 0, max: 59 }),
+      twelve: fc.boolean(),
+    });
+    fc.assert(
+      fc.property(reference, clock, (referenceMs, { hour, minute, twelve }) => {
+        const mm = String(minute).padStart(2, '0');
+        const text = twelve
+          ? `${hour % 12 === 0 ? 12 : hour % 12}:${mm} ${hour < 12 ? 'AM' : 'PM'}`
+          : `${hour}:${mm}`;
+        const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
+        const result = resolveRelative(text, { referenceIso, offsetAt: usEastern });
+        expect(result).not.toBeNull();
+        if (result === null) return;
+        const at = instantMs(result.start);
+        expect(offsetOf(result.start)).toBe(usEastern(at));
+        const local = wall(result.start);
+        if (result.precision === 'minute') {
+          expect([local.getUTCHours(), local.getUTCMinutes()]).toEqual([hour, minute]);
+          expect(instantMs(result.end)).toBe(at + MINUTE);
+          expect(offsetOf(result.end)).toBe(usEastern(at + MINUTE));
+          expect(at).toBeLessThanOrEqual(referenceMs + MINUTE);
+          expect(at).toBeGreaterThan(referenceMs - 2 * DAY);
+        } else {
+          // Day precision only when that wall time occurs twice or never on that date (a DST change).
+          expect(result.precision).toBe('day');
+          expectWholeDay(result.start, result.end);
+          const clockWall = Date.UTC(
+            local.getUTCFullYear(),
+            local.getUTCMonth(),
+            local.getUTCDate(),
+            hour,
+            minute,
+          );
+          expect(wallToInstant(clockWall, usEastern).exact).toBe(false);
+        }
+      }),
+      { numRuns: 3_000 },
+    );
+  });
 });
 
 describe('resolveRelative day units (property, US Eastern)', () => {
-  it(
-    '"N days ago", weekdays and dates are whole local days, 23 to 25 hours long',
-    () => {
-      const text = fc.oneof(
-        fc.nat({ max: 400 }).map((count) => `${count} days ago`),
-        fc.constantFrom('Today', 'Yesterday', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'),
-        fc
-          .constantFrom('Mar', 'Nov', 'Oct')
-          .chain((month) => fc.integer({ min: 1, max: 28 }).map((day) => `${month} ${day}`)),
-      );
-      fc.assert(
-        fc.property(reference, text, (referenceMs, words) => {
-          const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
-          const result = resolveRelative(words, { referenceIso, offsetAt: usEastern });
-          expect(result).not.toBeNull();
-          if (result === null) return;
-          expect(result.precision).toBe('day');
-          expectWholeDay(result.start, result.end);
-          expect(instantMs(result.start)).toBeLessThanOrEqual(referenceMs);
-        }),
-        { numRuns: 3_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('"N days ago", weekdays and dates are whole local days, 23 to 25 hours long', () => {
+    const text = fc.oneof(
+      fc.nat({ max: 400 }).map((count) => `${count} days ago`),
+      fc.constantFrom('Today', 'Yesterday', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'),
+      fc
+        .constantFrom('Mar', 'Nov', 'Oct')
+        .chain((month) => fc.integer({ min: 1, max: 28 }).map((day) => `${month} ${day}`)),
+    );
+    fc.assert(
+      fc.property(reference, text, (referenceMs, words) => {
+        const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
+        const result = resolveRelative(words, { referenceIso, offsetAt: usEastern });
+        expect(result).not.toBeNull();
+        if (result === null) return;
+        expect(result.precision).toBe('day');
+        expectWholeDay(result.start, result.end);
+        expect(instantMs(result.start)).toBeLessThanOrEqual(referenceMs);
+      }),
+      { numRuns: 3_000 },
+    );
+  });
 });
 
 describe('resolveRelative "ago" (property, US Eastern)', () => {
-  it(
-    '"N min/hours ago" claims a unit that contains the whole range [ref \u2212 (N+1)\u00B7unit, ref \u2212 N\u00B7unit]',
-    () => {
-      const unit = fc.constantFrom(['min', MINUTE] as const, ['hours', HOUR] as const);
-      fc.assert(
-        fc.property(reference, fc.integer({ min: 0, max: 500 }), unit, (referenceMs, count, [word, size]) => {
-          const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
-          const result = resolveRelative(`${count} ${word} ago`, { referenceIso, offsetAt: usEastern });
-          const earliest = referenceMs - (count + 1) * size;
-          const latest = referenceMs - count * size;
-          if (result === null) {
-            // Only when not even the local day of the range start contains the range.
-            expect(nextLocalMidnight(earliest, usEastern)).toBeLessThan(latest);
-            return;
-          }
-          const start = instantMs(result.start);
-          const end = instantMs(result.end);
-          expect(start).toBeLessThanOrEqual(earliest);
-          expect(end).toBeGreaterThanOrEqual(latest);
-          if (result.precision === 'day') {
-            expectWholeDay(result.start, result.end);
-            return;
-          }
-          // A minute or an hour, aligned in its own written offset: §4.1 truncation of `start` is `start`.
-          const unitMs = result.precision === 'minute' ? MINUTE : HOUR;
-          expect(end - start).toBe(unitMs);
-          const offsetMs = offsetOf(result.start) * MINUTE;
-          expect(Math.floor((start + offsetMs) / unitMs) * unitMs - offsetMs).toBe(start);
-          if (result.precision === 'hour' && size === MINUTE) {
-            // The finest unit: the range did not fit the minute it starts in.
-            expect(Math.floor((earliest + offsetMs) / MINUTE) * MINUTE - offsetMs + MINUTE).toBeLessThan(
-              latest,
-            );
-          }
-        }),
-        { numRuns: 3_000 },
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('"N min/hours ago" claims a unit that contains the whole range [ref \u2212 (N+1)\u00B7unit, ref \u2212 N\u00B7unit]', () => {
+    const unit = fc.constantFrom(['min', MINUTE] as const, ['hours', HOUR] as const);
+    fc.assert(
+      fc.property(reference, fc.integer({ min: 0, max: 500 }), unit, (referenceMs, count, [word, size]) => {
+        const referenceIso = isoWithOffset(referenceMs, usEastern(referenceMs));
+        const result = resolveRelative(`${count} ${word} ago`, { referenceIso, offsetAt: usEastern });
+        const earliest = referenceMs - (count + 1) * size;
+        const latest = referenceMs - count * size;
+        if (result === null) {
+          // Only when not even the local day of the range start contains the range.
+          expect(nextLocalMidnight(earliest, usEastern)).toBeLessThan(latest);
+          return;
+        }
+        const start = instantMs(result.start);
+        const end = instantMs(result.end);
+        expect(start).toBeLessThanOrEqual(earliest);
+        expect(end).toBeGreaterThanOrEqual(latest);
+        if (result.precision === 'day') {
+          expectWholeDay(result.start, result.end);
+          return;
+        }
+        // A minute or an hour, aligned in its own written offset: §4.1 truncation of `start` is `start`.
+        const unitMs = result.precision === 'minute' ? MINUTE : HOUR;
+        expect(end - start).toBe(unitMs);
+        const offsetMs = offsetOf(result.start) * MINUTE;
+        expect(Math.floor((start + offsetMs) / unitMs) * unitMs - offsetMs).toBe(start);
+        if (result.precision === 'hour' && size === MINUTE) {
+          // The finest unit: the range did not fit the minute it starts in.
+          expect(Math.floor((earliest + offsetMs) / MINUTE) * MINUTE - offsetMs + MINUTE).toBeLessThan(
+            latest,
+          );
+        }
+      }),
+      { numRuns: 3_000 },
+    );
+  });
 });

@@ -55,7 +55,7 @@ describe('the §2 demo: the policy numbers this worked example uses', () => {
   });
 });
 
-describe('§2.1–§2.3 the ledger the story leaves behind', () => {
+describe('§2.1–§2.2 the ledger the story leaves behind: the ask and the claims', () => {
   const ledger = buildDemo();
 
   it('happens on Tuesday 6 October; the review is claimed for Thursday 8 October at 14:00', () => {
@@ -93,6 +93,10 @@ describe('§2.1–§2.3 the ledger the story leaves behind', () => {
     for (const claim of [emailClaim, calendarClaim]) expect(claim.id).toBe(idFromHash(claim.rawHash));
     expect(emailClaim.id).not.toBe(calendarClaim.id);
   });
+});
+
+describe('§2.3 the ledger the story leaves behind: the Gmail rows', () => {
+  const ledger = buildDemo();
 
   it('§2.3 holds two Gmail rows reduced to allowlisted facts by project() (Hard Rule 2)', () => {
     for (const row of [ledger.priyaRow, ledger.vendorRow]) {

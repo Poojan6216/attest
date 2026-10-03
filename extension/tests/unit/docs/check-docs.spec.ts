@@ -1,6 +1,7 @@
 /**
  * scripts/check-docs.ts (task 1.11, agents/docs_writer.md rule 4): every relative link and #anchor in the docs
- * resolves, every quoted `pnpm <script>` exists, and every policy rule id is documented in docs/grading.md.
+ * resolves, every quoted `pnpm <script>` exists, and every policy rule id is documented in docs/grading.md. The
+ * golden-format and local-path checks have their own files (check-docs-scenario-keys, check-docs-local-paths).
  * Each check is proven on a fixture repo in a temp dir: clean, then broken one way at a time.
  */
 import { spawnSync } from 'node:child_process';
@@ -33,7 +34,10 @@ const GRADING = [
 ].join('\n');
 
 const BASE: Readonly<Record<string, string>> = {
-  'package.json': JSON.stringify({ scripts: { build: 'x', attest: 'y' } }),
+  // As in the repo: the root delegates `test` to the extension, so `pnpm test` at the root runs.
+  'package.json': JSON.stringify({
+    scripts: { build: 'x', attest: 'y', test: 'pnpm --dir extension run test' },
+  }),
   'extension/package.json': JSON.stringify({ scripts: { test: 'vitest run' } }),
   'policy/default.json': JSON.stringify({ rules: [{ id: 'verified' }, { id: 'not_found' }] }),
   'docs/grading.md': GRADING,
@@ -68,7 +72,14 @@ describe('check-docs: relative links and anchors', () => {
   it('finds nothing wrong with a clean repo, and counts what it checked', () => {
     const result = checkDocs(fixture());
     expect(result.problems).toEqual([]);
-    expect(result).toMatchObject({ files: 4, links: 6, commands: 4, ruleIds: 2 });
+    expect(result).toMatchObject({
+      files: 4,
+      links: 6,
+      commands: 4,
+      ruleIds: 2,
+      scenarioKeys: 0,
+      markdownFiles: 4,
+    });
   });
 
   it('reports a broken relative link with its file, line and resolved path', () => {
@@ -171,16 +182,8 @@ describe('check-docs: quoted pnpm scripts and policy rule ids', () => {
         '# Attest\n\nRun `pnpm deploy-docs`.\n\n```sh\npnpm --dir extension run nope\npnpm build\n```\n',
     });
     expect(problems(root).map((p) => [p.file, p.line, p.message])).toEqual([
-      [
-        'README.md',
-        3,
-        "'pnpm deploy-docs': no script 'deploy-docs' in package.json or extension/package.json",
-      ],
-      [
-        'README.md',
-        6,
-        "'pnpm --dir extension run nope': no script 'nope' in package.json or extension/package.json",
-      ],
+      ['README.md', 3, "'pnpm deploy-docs': no script 'deploy-docs' in package.json"],
+      ['README.md', 6, "'pnpm --dir extension run nope': no script 'nope' in extension/package.json"],
     ]);
   });
 
@@ -238,7 +241,7 @@ describe('check-docs command line', () => {
     expect(runCli(['--root', root], { log: sink, error: sink })).toBe(1);
     expect(lines).toEqual([
       "README.md:1: broken link 'nope.md': nope.md does not exist",
-      'check-docs: 1 problem(s) (4 files, 6 relative links, 2 pnpm commands, 2 rule ids)',
+      'check-docs: 1 problem(s) (4 files, 6 relative links, 2 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths)',
     ]);
   });
 
@@ -247,7 +250,9 @@ describe('check-docs command line', () => {
     const err: string[] = [];
     const io = { log: (l: string) => out.push(l), error: (l: string) => err.push(l) };
     expect(runCli(['--root', fixture()], io)).toBe(0);
-    expect(out).toEqual(['check-docs: OK (4 files, 6 relative links, 4 pnpm commands, 2 rule ids)']);
+    expect(out).toEqual([
+      'check-docs: OK (4 files, 6 relative links, 4 pnpm commands, 2 rule ids, 0 scenario keys, 4 Markdown files read for local paths)',
+    ]);
     expect(runCli(['--rooot'], io)).toBe(2);
     expect(err).toEqual(['usage: tsx scripts/check-docs.ts [--root <dir>]']);
   });
@@ -264,11 +269,11 @@ describe('check-docs command line', () => {
     const clean = run(fixture());
     expect(clean.status).toBe(0);
     expect(clean.stdout).toContain('check-docs: OK');
-  }, 60_000);
+  });
 });
 
 describe('the repository docs', () => {
-  it('pass check-docs: every link, anchor, quoted pnpm script and policy rule id', () => {
+  it('pass check-docs: every link, anchor, quoted pnpm script, policy rule id, scenario key and local path', () => {
     expect(checkDocs(REPO_ROOT).problems).toEqual([]);
   });
 });
@@ -315,9 +320,10 @@ describe('quoted pnpm commands', () => {
 
   it('finds every invocation in a shell line and ignores pnpm-lock.yaml and paths', () => {
     const code = 'cd extension && pnpm exec tsx a.ts; pnpm lint | cat # pnpm-lock.yaml ./bin/pnpm';
+    const extension = { kind: 'dir', dir: 'extension' };
     expect(pnpmInvocations(code)).toEqual([
-      { text: 'pnpm exec tsx a.ts', script: null },
-      { text: 'pnpm lint', script: 'lint' },
+      { text: 'pnpm exec tsx a.ts', script: null, target: extension },
+      { text: 'pnpm lint', script: 'lint', target: extension },
     ]);
     expect(scriptOf('')).toBeNull();
   });

@@ -158,5 +158,5 @@ describe('row builders', () => {
       }),
       { numRuns: 1_000 },
     );
-  }, 60_000);
+  });
 });

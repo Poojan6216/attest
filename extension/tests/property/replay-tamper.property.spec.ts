@@ -17,12 +17,16 @@ import { type LedgerSnapshot, replay, type ReplayField } from '../../src/core/re
 import { AgentId, IsoTs, type Receipt, Sha256, Ulid } from '../../src/core/schema';
 import { simulate } from '../tools/attest-ledger';
 
+/** qa_tester rule 4: every core property runs at least 1,000 examples. */
+const RUNS = 1_000;
+
+/** Small ledgers (1–20 claims, 1–100 observations, 2–4 batches), so 1,000 of them stay cheap. */
 const ledgerArb = fc.record({
   seed: fc.integer({ min: 0, max: 0x7fff_ffff }),
-  claims: fc.integer({ min: 1, max: 60 }),
-  observations: fc.integer({ min: 1, max: 400 }),
-  batches: fc.integer({ min: 2, max: 6 }),
-  overridesPerGap: fc.integer({ min: 0, max: 4 }),
+  claims: fc.integer({ min: 1, max: 20 }),
+  observations: fc.integer({ min: 1, max: 100 }),
+  batches: fc.integer({ min: 2, max: 4 }),
+  overridesPerGap: fc.integer({ min: 0, max: 3 }),
   pick: fc.nat(),
 });
 
@@ -104,7 +108,7 @@ describe('one tampered receipt field', () => {
         expect(report.mismatches.map((m) => [m.receiptId, m.field])).toEqual([[target.id, field]]);
         expect(report).toMatchObject({ mismatched: 1, reproduced: snapshot.receipts.length - 1 });
       }),
-      { numRuns: 60 },
+      { numRuns: RUNS },
     );
   }, 600_000);
 
@@ -124,7 +128,7 @@ describe('one tampered receipt field', () => {
           expect(computedMs.get(other.receiptId)).toBeGreaterThan(targetMs);
         }
       }),
-      { numRuns: 45 },
+      { numRuns: RUNS },
     );
   }, 600_000);
 });
@@ -144,7 +148,7 @@ describe('tampered inputs and evidence', () => {
         const report = await replay({ ...snapshot, receiptInputs });
         expect(report.mismatches.map((m) => [m.receiptId, m.field])).toEqual([[target.id, 'inputsHash']]);
       }),
-      { numRuns: 40 },
+      { numRuns: RUNS },
     );
   }, 600_000);
 
@@ -174,7 +178,7 @@ describe('tampered inputs and evidence', () => {
         }
         expect(JSON.stringify(report)).not.toContain(edited.subjectHint);
       }),
-      { numRuns: 40 },
+      { numRuns: RUNS },
     );
   }, 600_000);
 });

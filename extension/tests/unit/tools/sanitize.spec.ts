@@ -1,13 +1,9 @@
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
-
 import { type Document, Window } from 'happy-dom';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { CaptureError } from '../../tools/capture-error';
 import { loadSeeds, SEEDS_PATH } from '../../tools/capture-output';
 import { findForeignAts } from '../../tools/capture-pii';
-import { createInertWindow } from '../../tools/capture-dom';
 import {
   assertSelectorsValid,
   pickSeeds,
@@ -95,7 +91,9 @@ describe('sanitizeHtml strips what executes', () => {
     expect(out).not.toContain(forbidden);
     expect(out).not.toContain('<!--');
   });
+});
 
+describe('sanitizeHtml strips frames, event handlers and script URLs', () => {
   it('removes a frameset and its frames', () => {
     const out = run(
       `<!doctype html><html><head></head><frameset><frame src="https://${HOST}/f"></frameset></html>`,
@@ -174,7 +172,9 @@ describe('sanitizeHtml neutralises every external resource', () => {
         : page('', head);
     expect(run(html)).not.toContain(HOST);
   });
+});
 
+describe('sanitizeHtml keeps the page itself and drops what points elsewhere', () => {
   it('keeps same-document references: svg <use href="#id"> and url(#id)', () => {
     const out = run(
       page(
@@ -211,51 +211,6 @@ describe('sanitizeHtml neutralises every external resource', () => {
     expect(out).toContain(`href="https://${HOST}/mail/u/0/#inbox/123"`);
     expect(out).toContain(`xlink:href="https://${HOST}/s"`);
     expect(out).not.toMatch(/abc123|user:pw|tok=/);
-  });
-
-  async function countingServer(): Promise<{ origin: string; hits: () => number; close: () => void }> {
-    let hits = 0;
-    const server = http.createServer((_request, response) => {
-      hits += 1;
-      response.end('x');
-    });
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const { port } = server.address() as AddressInfo;
-    return { origin: `http://127.0.0.1:${port}`, hits: () => hits, close: () => server.close() };
-  }
-
-  it('the sanitiser window refuses every fetch (451) without reaching the server', async () => {
-    const server = await countingServer();
-    const window = createInertWindow();
-    try {
-      expect((await window.fetch(`${server.origin}/direct`)).status).toBe(451);
-      // Sync XHR blocks this event loop, so it targets a closed port: unblocked, it fails fast with status 0.
-      const xhr = new window.XMLHttpRequest();
-      xhr.open('GET', 'http://127.0.0.1:9/sync', false);
-      xhr.send();
-      expect(xhr.status).toBe(451);
-      expect(server.hits()).toBe(0);
-    } finally {
-      await window.happyDOM.close();
-      server.close();
-    }
-  });
-
-  it('never touches the network while sanitising', async () => {
-    const server = await countingServer();
-    const origin = server.origin;
-    const head =
-      `<link rel="preload" as="fetch" href="${origin}/preload"><link rel="stylesheet" href="${origin}/css">` +
-      `<link rel="modulepreload" href="${origin}/mod"><script src="${origin}/js"></script>` +
-      `<style>@import url(${origin}/import);</style><meta http-equiv="refresh" content="0;url=${origin}/refresh">`;
-    const body = `<img src="${origin}/img"><iframe src="${origin}/frame"></iframe><svg><image href="${origin}/svg"/></svg>`;
-    try {
-      run(page(body, head));
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(server.hits()).toBe(0);
-    } finally {
-      server.close();
-    }
   });
 });
 

@@ -110,6 +110,33 @@ async function openAll(session: GuardedSession): Promise<Page[]> {
   return pages;
 }
 
+/**
+ * The negative control's canary requests: a fetch and a WebSocket from the service worker, a fetch from an extension
+ * page and a fetch from a fixture page. Each host must come back as a violation.
+ */
+async function plantCanaries(session: GuardedSession): Promise<void> {
+  const worker = await session.extension.serviceWorker();
+  await worker.evaluate(() => fetch('https://sw-canary.example.com/attest').catch(() => undefined));
+  // Playwright routing never sees WebSockets, so only the NetLog layer can catch this one.
+  await worker.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const socket = new WebSocket('wss://ws-canary.example.com/attest');
+        socket.onerror = () => {
+          resolve();
+        };
+        socket.onclose = () => {
+          resolve();
+        };
+      }),
+  );
+  const options = await session.extension.openExtensionPage('options.html');
+  await options.evaluate(() => fetch('https://page-canary.example.org/attest').catch(() => undefined));
+  const fixture = await session.extension.context.newPage();
+  await fixture.goto(session.server.url('_harness/blank.html'));
+  await fixture.evaluate(() => fetch('https://fixture-canary.example.net/attest').catch(() => undefined));
+}
+
 test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
   test('the allowlist asserted here is the allowlist the extension ships', () => {
     expect([...NETWORK_ALLOWLIST]).toEqual([...ALLOWLIST]);
@@ -149,26 +176,7 @@ test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
     const session = await startGuardedSession();
     let report: NetworkReport;
     try {
-      const worker = await session.extension.serviceWorker();
-      await worker.evaluate(() => fetch('https://sw-canary.example.com/attest').catch(() => undefined));
-      // Playwright routing never sees WebSockets, so only the NetLog layer can catch this one.
-      await worker.evaluate(
-        () =>
-          new Promise<void>((resolve) => {
-            const socket = new WebSocket('wss://ws-canary.example.com/attest');
-            socket.onerror = () => {
-              resolve();
-            };
-            socket.onclose = () => {
-              resolve();
-            };
-          }),
-      );
-      const options = await session.extension.openExtensionPage('options.html');
-      await options.evaluate(() => fetch('https://page-canary.example.org/attest').catch(() => undefined));
-      const fixture = await session.extension.context.newPage();
-      await fixture.goto(session.server.url('_harness/blank.html'));
-      await fixture.evaluate(() => fetch('https://fixture-canary.example.net/attest').catch(() => undefined));
+      await plantCanaries(session);
     } finally {
       report = await finishGuardedSession(session);
     }

@@ -506,5 +506,26 @@
     "c3": "1YHTX9Q7SJYGR0FE2FJ83ZHMP9",
     "o1": "4RFCKVAC8YVQAJMAT3NNCTEP61",
     "o2": "0PCB5ZWYTD8GWG7RG54EX75ABH"
+  },
+  "95-regrade-sees-row-observed-after-first-pass.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "4BM8GQDZHXVR2F2T6HCXYGB4PN",
+    "o2": "04Z2PR0B6CDAF8KQMEQ75Q1YQ1"
+  },
+  "96-best-tie-differing-cp-codes.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "24EHQHJKFT3Y2Z5XE7BSSNQ0V1",
+    "o2": "4BM8GQDZHXVR2F2T6HCXYGB4PN"
+  },
+  "97-calendar-preexisting-event-outscores.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "5BK1BZ102855P0PC3HJY38EXC8",
+    "o2": "6RKV4TV70SDXB01HKYPCQKT9GV"
+  },
+  "98-currencyless-cumulative-finalises-at-once.json": {
+    "c1": "53ZPCPTW2FEPZ23WTDJZ2278M6",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "092E3BFAWGX4VF10YW67NZ5702",
+    "o2": "1HWXGX73ZH9ZDJYFGS42X8RG4E"
   }
 }

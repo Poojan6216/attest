@@ -78,13 +78,23 @@ export type ReasonTextErrorCode =
   /** A param the code needs is missing or malformed (§15). */
   | 'invalid_params';
 
-/** A reason that does not fit the closed vocabulary (§15): never rendered as a guess (Hard Rule 6). */
+/**
+ * What a `ReasonTextError` may name besides its code: the validated ReasonCode, and for `invalid_params` the param
+ * (one of that code's own §15 param names). Never text from the reason itself.
+ */
+export type ReasonTextDetail = ReasonCode | `${ReasonCode}.${string}`;
+
+/**
+ * A reason that does not fit the closed vocabulary (§15): never rendered as a guess (Hard Rule 6). The message
+ * carries the code and, when there is one, a detail built from the closed vocabulary only (`ReasonTextDetail`): an
+ * unknown code is not repeated, since an unparsed reason's code may hold any text (Hard Rule 10).
+ */
 export class ReasonTextError extends Error {
   constructor(
     readonly code: ReasonTextErrorCode,
-    readonly detail: string,
+    readonly detail?: ReasonTextDetail,
   ) {
-    super(`reason text ${code}: ${detail}`);
+    super(detail === undefined ? `reason text ${code}` : `reason text ${code}: ${detail}`);
     this.name = 'ReasonTextError';
   }
 }
@@ -257,7 +267,7 @@ const TEXT: Readonly<Record<ReasonCode, Render>> = Object.freeze({
  */
 export function reasonText(reason: ReasonLike): string {
   const code = ReasonCode.safeParse(reason.code);
-  if (!code.success) throw new ReasonTextError('unknown_code', reason.code);
+  if (!code.success) throw new ReasonTextError('unknown_code');
   // The code's whole params object, exactly as the Reason schema checks it (strict: no extra param).
   if (ReasonParams.get(code.data)?.safeParse(reason.params).success !== true) {
     throw new ReasonTextError('invalid_params', code.data);

@@ -9,7 +9,8 @@
  *    underspecified claim, a calendar claim without `targetAt`, or a type with no sources), observations are
  *    assigned one-to-one (fixed pairs first, then best score first), and `grade` sees the claim's candidates
  *    minus those assigned to other claims or fixed as taken, with `priorSpendCents` read from
- *    `activity.claims` (§6.3, which holds FINAL and USER_OVERRIDDEN claims too);
+ *    `activity.claims` (§6.3, which holds FINAL and USER_OVERRIDDEN claims too) plus any graded claim it omits
+ *    (`historyOf`), a missing currency read as the grant's `spendCurrency`;
  *  - one UNASKED receipt per orphan that `grade` calls UNASKED: an observation of a covered type in a window
  *    its own source's observer saw, assigned to no claim and not taken, attributed with `attributor` (§7);
  *  - one OVER_SCOPE receipt per observed scope of a grant in force that `grade` calls OVER_SCOPE (rule
@@ -38,13 +39,20 @@ import { candidatesOfAll } from './batch-retrieve';
 import { assignablePairs, type ScoredClaim, scoreClaim } from './batch-score';
 import { attributor } from './attribution';
 import { assign, type FixedPair, type ObservationIndex } from './candidates';
-import { evaluateConditions, firstMatch, observedScopeExceedsDeclared, unaskedLikely } from './conditions';
+import {
+  evaluateConditions,
+  firstMatch,
+  observedScopeExceedsDeclared,
+  unaskedLikely,
+  unaskedLikelyAt,
+} from './conditions';
 import { isAssignable, planClaims, TextFacts } from './features';
 import { grade, gradeOrphan } from './grade';
 import { instantMs } from './normalize';
-import type { Policy, RuleOutcome } from './policy';
+import { assertLoadedPolicy, type Policy, type RuleOutcome } from './policy';
 import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, Ulid } from './schema';
 import { scopeSubjects, spendIndex } from './scope';
+import { compareText as compareTextShared } from './order';
 
 export { BatchError, type BatchErrorCode } from './batch-error';
 export type { BatchInputs, BatchReceipt } from './batch-grade';
@@ -69,10 +77,8 @@ interface Batch {
   readonly claimless: Map<number, RuleOutcome | null>;
 }
 
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+/** The one code-unit order (order.ts), bound once: the test transform turns an imported call into a getter. */
+const compareText = compareTextShared;
 
 /** The keys of the Claim schema (a strict object), in schema order. */
 const CLAIM_KEYS: ReadonlySet<string> = new Set([
@@ -132,6 +138,30 @@ function claimsSeenBy(claims: readonly Claim[], evaluatedMs: number): Claim[] {
   return seen;
 }
 
+/**
+ * §3, §6.3, §7: the claims cumulative spend and attribution read: `activity.claims` first seen by `evaluatedMs`,
+ * plus each graded claim whose id they do not list. `activity.claims` should hold every claim (§3), the graded ones
+ * included; one the caller left out is still the user's claim, so it still counts toward the cumulative ceiling and
+ * still suppresses adjacency, never silently skipped (Hard Rules 5, 6). Each claim is read through its uniform copy;
+ * an id listed in both is kept once (the `activity.claims` copy), so nothing is counted twice and the fast spend
+ * index never sees a repeated id because of the union.
+ */
+function historyOf(
+  listed: readonly Claim[],
+  graded: readonly Claim[],
+  uniform: ReadonlyMap<Claim, Claim>,
+  evaluatedMs: number,
+): Claim[] {
+  const history: Claim[] = [];
+  const ids = new Set<Ulid>();
+  for (const claim of claimsSeenBy(listed, evaluatedMs)) {
+    history.push(uniform.get(claim) ?? uniformClaim(claim));
+    ids.add(claim.id);
+  }
+  for (const claim of graded) if (!ids.has(claim.id)) history.push(claim);
+  return history;
+}
+
 /** Fixed pairs and taken observations, after checking no graded claim is also fixed (it is FINAL). */
 function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[]) {
   const fixedPairs: FixedPair[] = [];
@@ -181,6 +211,31 @@ async function retrieveAndScore(
 /** The values a condition can take: holds, does not hold, not applicable. */
 const CONDITION_VALUES: readonly (boolean | null)[] = [true, false, null];
 
+/** `claimlessOutcome`'s memo key for the values of `unaskedLikely` and `observedScopeExceedsDeclared`. */
+function claimlessKey(unasked: boolean | null, scope: boolean | null): number {
+  return CONDITION_VALUES.indexOf(unasked) * CONDITION_VALUES.length + CONDITION_VALUES.indexOf(scope);
+}
+
+/** A context with no scope and no attribution: `observedScopeExceedsDeclared` reads an orphan's context as this. */
+const NO_SCOPE: GradeContext = { priorSpendCents: 0 };
+
+/**
+ * For `attributor`: whether an orphan whose likely agent is `agent`, at `scoreBp`, can become an UNASKED receipt,
+ * read from `claimlessOutcome`'s memo without building its attribution (§7). Unknown (no orphan with those condition
+ * values decided yet) counts as wanted: the attribution is built and decided as before. Reads the agent's grant in
+ * force first (`grantOf` throws for an agent with none, as it did once the attribution was built).
+ */
+function wantedOrphans(batch: Batch) {
+  return (agent: AgentId, scoreBp: number): boolean => {
+    const grant = grantOf(batch.grants, agent);
+    const key = claimlessKey(
+      unaskedLikelyAt(scoreBp, batch.policy),
+      observedScopeExceedsDeclared(grant, NO_SCOPE),
+    );
+    return !batch.claimless.has(key) || batch.claimless.get(key) === 'UNASKED';
+  };
+}
+
 /**
  * The outcome `grade` reaches for a claim-less subject, from the same evaluators and the same first match, without
  * building a receipt. Claim-less, only `unaskedLikely` and `observedScopeExceedsDeclared` are applicable (§6.1), so
@@ -189,9 +244,7 @@ const CONDITION_VALUES: readonly (boolean | null)[] = [true, false, null];
  */
 function claimlessOutcome(grant: Grant, context: GradeContext, batch: Batch): RuleOutcome | null {
   const { policy, coverage } = batch;
-  const unasked = CONDITION_VALUES.indexOf(unaskedLikely(context, policy));
-  const scope = CONDITION_VALUES.indexOf(observedScopeExceedsDeclared(grant, context));
-  const key = unasked * CONDITION_VALUES.length + scope;
+  const key = claimlessKey(unaskedLikely(context, policy), observedScopeExceedsDeclared(grant, context));
   if (!batch.claimless.has(key)) {
     const facts = { claim: null, grant, policy, coverage, context, bestScore: null, assigned: null };
     batch.claimless.set(key, firstMatch(policy.rules, evaluateConditions(facts))?.then ?? null);
@@ -213,10 +266,11 @@ function unaskedReceipts(
 ): BatchReceipt[] {
   const { policy, coverage } = batch;
   const attribute = attributor(activity, policy, coverage.evaluatedAt);
+  const wanted = wantedOrphans(batch);
   const receipts: BatchReceipt[] = [];
   for (const { observation: orphan, atMs } of covered) {
     if (assignment.has(orphan.id) || batch.taken.has(orphan.id)) continue;
-    const attribution = attribute(orphan, atMs);
+    const attribution = attribute(orphan, atMs, wanted);
     if (attribution === null) continue;
     const grant = grantOf(batch.grants, attribution.agent);
     const context: GradeContext = { priorSpendCents: 0, attribution };
@@ -266,9 +320,12 @@ function byReceiptId(graded: readonly BatchReceipt[]): BatchReceipt[] {
  * the grant, context and policy hash it was graded with (the coverage is `coverage`). A claim first seen after
  * `evaluatedAt` is ignored (§3): no receipt, no evidence, no spend.
  *
- * Throws `BatchError` for a claim given twice (seen or not) or also fixed, an agent with no grant in force (or two
- * at one instant), or two receipts with one id; `CandidatesError('fixed_conflict')` for fixed pairs that are not
- * one-to-one; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6).
+ * Throws `PolicyError('policy_not_loaded')` for a policy `loadPolicy` did not return, before reading anything;
+ * `BatchError` for a claim given twice (seen or not) or also fixed, an agent with no grant in force (or two at one
+ * instant), or two receipts with one id; `CandidatesError('fixed_conflict')` for fixed pairs that are not
+ * one-to-one; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6). A graded
+ * claim that `activity.claims` omits still counts in the spend history and still suppresses adjacency (§3, §6.3,
+ * §7: `historyOf`).
  */
 export async function gradeBatch(
   claims: readonly Claim[],
@@ -279,6 +336,7 @@ export async function gradeBatch(
   activity: Activity,
   fixed: readonly BatchFixed[] = [],
 ): Promise<BatchReceipt[]> {
+  assertLoadedPolicy(policy);
   const evaluatedMs = instantMs(coverage.evaluatedAt);
   const { fixedPairs, taken } = splitFixed(claims, fixed);
   const uniform = new Map<Claim, Claim>();
@@ -288,11 +346,7 @@ export async function gradeBatch(
     uniform.set(claim, copy);
     graded.push(copy);
   }
-  const history: Claim[] = [];
-  for (const claim of claimsSeenBy(activity.claims, evaluatedMs)) {
-    history.push(uniform.get(claim) ?? uniformClaim(claim));
-  }
-  const read: Activity = { ...activity, claims: history };
+  const read: Activity = { ...activity, claims: historyOf(activity.claims, graded, uniform, evaluatedMs) };
   const inForce = grantsInForce(grants, evaluatedMs);
   const batch: Batch = { policy, coverage, grants: inForce, fixedPairs, taken, claimless: new Map() };
   const visible = visibleAt(index, evaluatedMs);

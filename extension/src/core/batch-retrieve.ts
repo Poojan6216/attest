@@ -6,14 +6,15 @@
  *
  * For each type, the claims' windows are merged into disjoint intervals and each interval is read once through
  * the index (every read is bounded in time and never wider than the union of the windows, §4.2). The rows are
- * filtered by type, grouped by `contentHash` and ordered once; each claim's candidates are then the groups whose
- * `occurredAt` lies in its window, in the same order, with the same `calendar.created` first-seen rule. This is
+ * filtered by type and relevant source, grouped by `contentHash` and ordered once; each claim's candidates are then
+ * the groups whose `occurredAt` lies in its window, in the same order, with the same first-seen rule. This is
  * `candidates()` exactly because equal content hashes mean equal `occurredAt` (it is hashed, §10): every
  * sighting of an event is in or out of a window together, so grouping within each window and grouping once give
  * the same groups, the same representative (lowest id, then earliest sighting, then the smaller `observedAt`
  * text: a total order) and the same first sighting. If the rows of a type ever break that (one content hash at
  * two instants, which only a corrupt ledger can hold), that type's claims are read claim by claim with
- * `candidates()` itself. A property test pins the two together.
+ * `candidates()` itself. A property test pins the two together. The representative, the candidate order, the
+ * interval merge and the first-seen bound are order.ts's: the very functions `candidates()` uses.
  *
  * Each type's rows become one `CandidateTable` (batch-table.ts) and each claim's candidates a list of row indexes
  * into it, so what grading reads of a row is read once per batch, not once per claim that sees it.
@@ -22,13 +23,30 @@
  */
 import { CandidateTable } from './batch-table';
 import type { TextFacts } from './features';
-import { candidates, type ObservationIndex } from './candidates';
-import { observedMs, occurredMs } from './candidates-time';
+import { candidates, type CandidatesPolicy, type ObservationIndex } from './candidates';
+import { occurredMs } from './candidates-time';
+import { instantMs } from './normalize';
+import {
+  compareCandidates,
+  firstSeenFromMs,
+  fromRelevantSource,
+  hasFirstSeenRule,
+  mergeIntervals,
+  representative,
+} from './order';
 import type { ActionType, Claim, Observation } from './schema';
-import { MS_PER_MINUTE } from './units';
-import { claimWindow, type Interval, precisionStartMs, type WindowPolicy } from './window';
+import { claimWindow, type Interval } from './window';
 
-/** One claim's window and, for `calendar.created`, its first-seen bound (candidates.ts `firstSeenFromMs`). */
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const instantMsLocal = instantMs;
+const representativeLocal = representative;
+const fromRelevantSourceLocal = fromRelevantSource;
+const hasFirstSeenRuleLocal = hasFirstSeenRule;
+
+/** One claim's window and, for `calendar.created`, its first-seen bound (order.ts `firstSeenFromMs`). */
 interface Wanted {
   readonly claim: Claim;
   readonly fromMs: number;
@@ -39,60 +57,21 @@ interface Wanted {
 /** One `contentHash`: its representative, `occurredAt` instant, and (for `calendar.created`) earliest sighting. */
 interface Group {
   observation: Observation;
-  readonly occurredMs: number;
+  readonly atMs: number;
   firstSeenMs: number;
 }
 
-/** The first-seen rule reads sightings for `calendar.created` only (§4.1). */
+/**
+ * A row's sighting, read only for a type with the first-seen rule (§4.1, order.ts `hasFirstSeenRule`). Instants are
+ * read from the text, here and in `addRows`, not through the per-object memo (batch-orphans.ts `seenBy`).
+ */
 function sightedAt(type: ActionType, observation: Observation): number {
-  return type === 'calendar.created' ? observedMs(observation) : 0;
+  return hasFirstSeenRuleLocal(type) ? instantMsLocal(observation.observedAt) : 0;
 }
 
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
-function compareNumbers(a: number, b: number): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
-/** candidates.ts `preferA`: the lower id, then the earlier sighting, then the smaller `observedAt` text. */
-function prefer(a: Observation, b: Observation): boolean {
-  const order =
-    compareText(a.id, b.id) ||
-    compareNumbers(observedMs(a), observedMs(b)) ||
-    compareText(a.observedAt, b.observedAt);
-  return order <= 0;
-}
-
-/** candidates.ts `compareSightings`: (`occurredAt` instant, id, `contentHash`). */
-function compareGroups(a: Group, b: Group): number {
-  return (
-    compareNumbers(a.occurredMs, b.occurredMs) ||
-    compareText(a.observation.id, b.observation.id) ||
-    compareText(a.observation.contentHash, b.observation.contentHash)
-  );
-}
-
-function byFrom(a: Wanted, b: Wanted): number {
-  return a.fromMs - b.fromMs;
-}
-
-/** Closed intervals merged where they overlap or touch, in ascending order. */
-function mergedIntervals(wanted: readonly Wanted[]): Interval[] {
-  const sorted = [...wanted].sort(byFrom);
-  const merged: Interval[] = [];
-  for (const { fromMs, toMs } of sorted) {
-    const last = merged[merged.length - 1];
-    if (last !== undefined && fromMs <= last.endMs) {
-      merged[merged.length - 1] = { startMs: last.startMs, endMs: Math.max(last.endMs, toMs) };
-    } else {
-      merged.push({ startMs: fromMs, endMs: toMs });
-    }
-  }
-  return merged;
+/** Each claim's window as an interval, merged where they overlap or touch (order.ts `mergeIntervals`). */
+function mergedWindows(wanted: readonly Wanted[]): Interval[] {
+  return mergeIntervals(wanted.map(({ fromMs, toMs }) => ({ startMs: fromMs, endMs: toMs })));
 }
 
 /**
@@ -104,23 +83,20 @@ function addRows(
   type: ActionType,
   { startMs, endMs }: Interval,
   rows: readonly Observation[],
+  policy: CandidatesPolicy,
 ): boolean {
   for (const observation of rows) {
-    if (observation.type !== type) continue;
-    const atMs = occurredMs(observation);
+    if (observation.type !== type || !fromRelevantSourceLocal(observation, type, policy)) continue;
+    const atMs = instantMsLocal(observation.occurredAt);
     if (atMs < startMs || atMs > endMs) continue;
     const held = groups.get(observation.contentHash);
     if (held === undefined) {
-      groups.set(observation.contentHash, {
-        observation,
-        occurredMs: atMs,
-        firstSeenMs: sightedAt(type, observation),
-      });
+      groups.set(observation.contentHash, { observation, atMs, firstSeenMs: sightedAt(type, observation) });
       continue;
     }
-    if (held.occurredMs !== atMs) return false;
+    if (held.atMs !== atMs) return false;
     held.firstSeenMs = Math.min(held.firstSeenMs, sightedAt(type, observation));
-    if (!prefer(held.observation, observation)) held.observation = observation;
+    held.observation = representativeLocal(held.observation, observation);
   }
   return true;
 }
@@ -133,13 +109,14 @@ async function groupsOf(
   type: ActionType,
   intervals: readonly Interval[],
   index: ObservationIndex,
+  policy: CandidatesPolicy,
 ): Promise<Group[] | null> {
   const groups = new Map<string, Group>();
   for (const interval of intervals) {
     const rows = await index.byTypeAndBucket(type, interval.startMs, interval.endMs);
-    if (!addRows(groups, type, interval, rows)) return null;
+    if (!addRows(groups, type, interval, rows, policy)) return null;
   }
-  return [...groups.values()].sort(compareGroups);
+  return [...groups.values()].sort(compareCandidates);
 }
 
 /** The index of the first group at or after `ms`. */
@@ -148,7 +125,7 @@ function firstAtOrAfter(groups: readonly Group[], ms: number): number {
   let high = groups.length;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if ((groups[middle]?.occurredMs ?? ms) < ms) low = middle + 1;
+    if ((groups[middle]?.atMs ?? ms) < ms) low = middle + 1;
     else high = middle;
   }
   return low;
@@ -165,20 +142,16 @@ function slice(groups: readonly Group[], wanted: Wanted): number[] {
   const rows: number[] = [];
   for (let i = firstAtOrAfter(groups, wanted.fromMs); i < groups.length; i += 1) {
     const group = groups[i];
-    if (group === undefined || group.occurredMs > wanted.toMs) break;
+    if (group === undefined || group.atMs > wanted.toMs) break;
     if (wanted.firstSeenFrom === null || group.firstSeenMs >= wanted.firstSeenFrom) rows.push(i);
   }
   return rows;
 }
 
-function wantedOf(claim: Claim, policy: WindowPolicy): Wanted | null {
+function wantedOf(claim: Claim, policy: CandidatesPolicy): Wanted | null {
   const window = claimWindow(claim, policy);
   if (window === null) return null;
-  const firstSeenFrom =
-    claim.type === 'calendar.created'
-      ? precisionStartMs(claim) - policy.windows.beforeClaimMin * MS_PER_MINUTE
-      : null;
-  return { claim, fromMs: window.fromMs, toMs: window.toMs, firstSeenFrom };
+  return { claim, fromMs: window.fromMs, toMs: window.toMs, firstSeenFrom: firstSeenFromMs(claim, policy) };
 }
 
 /**
@@ -188,7 +161,7 @@ function wantedOf(claim: Claim, policy: WindowPolicy): Wanted | null {
 async function claimByClaim(
   wanted: readonly Wanted[],
   index: ObservationIndex,
-  policy: WindowPolicy,
+  policy: CandidatesPolicy,
   texts: TextFacts,
 ): Promise<Map<Claim, ClaimCandidates>> {
   const rowOf = new Map<Observation, number>();
@@ -216,7 +189,7 @@ async function claimByClaim(
 export async function candidatesOfAll(
   claims: readonly Claim[],
   index: ObservationIndex,
-  policy: WindowPolicy,
+  policy: CandidatesPolicy,
   texts: TextFacts,
 ): Promise<Map<Claim, ClaimCandidates>> {
   const byType = new Map<ActionType, Wanted[]>();
@@ -230,7 +203,7 @@ export async function candidatesOfAll(
     else held.push(wanted);
   }
   for (const [type, wanted] of byType) {
-    const groups = await groupsOf(type, mergedIntervals(wanted), index);
+    const groups = await groupsOf(type, mergedWindows(wanted), index, policy);
     if (groups === null) {
       for (const [claim, own] of await claimByClaim(wanted, index, policy, texts)) found.set(claim, own);
       continue;
@@ -239,7 +212,7 @@ export async function candidatesOfAll(
     const instants: number[] = [];
     for (const group of groups) {
       rows.push(group.observation);
-      instants.push(group.occurredMs);
+      instants.push(group.atMs);
     }
     const table = new CandidateTable(rows, instants, texts);
     for (const one of wanted) found.set(one.claim, { table, rows: slice(groups, one) });

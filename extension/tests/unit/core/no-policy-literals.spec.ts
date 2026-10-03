@@ -171,7 +171,9 @@ describe('no policy value is hardcoded in code', () => {
     const offenders = scan(ALL_FILES).filter((hit) => FRACTIONS.has(hit.value));
     expect(offenders.map(describeHit)).toEqual([]);
   });
+});
 
+describe('src/core holds no magic number and imports no other data file', () => {
   it('src/core contains no numeric literal other than 0 and 1 (outside the named exemptions)', () => {
     expect(CORE_FILES.length).toBeGreaterThan(0);
     const checked = CORE_FILES.filter(

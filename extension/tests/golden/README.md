@@ -6,7 +6,7 @@ is written to satisfy them, not the other way round (sprint 1: "write scenarios 
 
 | File                                    | Role                                                                                              |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NN-slug.json`                          | One scenario (§15 format, extended below).                                                        |
+| `NN-slug.json`                          | One scenario, in the §15 format.                                                                  |
 | `scenario-schema.ts`                    | Strict Zod schema for a scenario file, and the §15 params table. Unknown keys fail.               |
 | `load.ts`                               | Builds schema-valid core inputs from a file: defaults, ids, hashes, receipt ids, reasons.         |
 | `build.ts`                              | Per-object builders (claim, observation, grant, coverage) and the policy merge patch.             |
@@ -31,10 +31,12 @@ is written to satisfy them, not the other way round (sprint 1: "write scenarios 
 | `runner-inputs.ts`                      | Checks the inputs gradeBatch returns with every receipt, by replaying them through `grade`.       |
 | `runner-diff.ts`                        | Compares a run with the expectations, one line per disagreement.                                  |
 | `runner-v14.spec.ts`                    | The v1.4 runner checks (inputs, regrade, rejected events) report broken runs and expectations.    |
+| `timezones.spec.ts`                     | Every file graded again under seven host time zones (odd offsets, DST): identical receipts.       |
 
 ## File format
 
-The §15 format, plus a few fields the contract needs but the §15 example does not show:
+`docs/grading.md` §15 is the format, and it documents every key below: `pnpm check-docs` fails when a key that
+`scenario-schema.ts` accepts is missing from §15's examples. The same catalogue, for reference while writing a file:
 
 ```jsonc
 {
@@ -291,6 +293,12 @@ adversarial verifier recomputed `85`–`94`, `06`, `76` and `81` from v1.4/v1.5 
 the suite against copies of the core with one v1.4 rule broken at a time: two broken rules passed, so `89` gained
 a fourth grant and the in-force grant at `evaluatedAt` itself (a grant picked as the first one already in force
 passed), and `81` gained c3 (the claim's currency named before the candidate's; the reverse order passed).
+The Sprint 1 close added `95`–`97`, computed from v1.5 alone, for the score cross-check in
+`tests/unit/core/features-golden.spec.ts` (each one failed the cross-check as committed and passes the core):
+`95` a regrade whose only candidate was first observed after the first pass, with a better row observed only
+after the regrade (candidates are read at the receipt's own grading instant, §3, §8); `96` two tied best candidates
+whose `cp.*` codes differ, the lower id occurring later (`assertIds`; §8 ties by observation id, §15 `cp.*` from the
+best only); `97` a `calendar.created` claim whose pre-existing event outscores the new one (§4.1 first-seen).
 
 ## Adding a scenario
 

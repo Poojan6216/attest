@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { LEDGER_EXPORT_FORMAT, LedgerExport, exportLedger } from '../../../src/ledger/export';
 import { INDEX_FIELDS, LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
@@ -50,7 +51,7 @@ afterEach(() => {
 async function populate(db: LedgerDb, reverse = false): Promise<void> {
   const order = <T>(items: T[]): T[] => (reverse ? [...items].reverse() : items);
   for (const n of order([2, 1])) {
-    await upsertObservation(db, makeObservation({ contentHash: sha(n) }));
+    await upsertObservation(db, makeObservation({ rowKeyHash: sha(n) }), DEFAULT_POLICY);
     await upsertClaim(db, makeClaim({ rawHash: sha(100 + n) }));
     await putRequest(db, makeRequest({ id: ulid(200 + n) }));
     await putReceipt(db, makeReceipt({ id: ulid(300 + n), agent: n === 1 ? 'muse' : 'claude' }));
@@ -175,7 +176,7 @@ describe('exportLedger: an empty ledger and a bad exportedAt', () => {
 describe('LedgerExport schema', () => {
   it('rejects an export whose rows carry extra fields (index or smuggled)', async () => {
     const db = await open('export-schema');
-    await upsertObservation(db, makeObservation());
+    await upsertObservation(db, makeObservation(), DEFAULT_POLICY);
     const exported = await exportLedger(db, { exportedAt: EXPORTED_AT });
     const first = exported.tables.observations[0];
     if (first === undefined) throw new Error('expected one observation');

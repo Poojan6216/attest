@@ -13,7 +13,10 @@
  * directly on its candidates found by brute force (no index), minus the observations other receipts hold. Every
  * receipt comes with the inputs it was graded with (§3): the claim's grant in force and its context, and the
  * policy hash; every 50th claim-less receipt is graded again by `grade()` from those inputs alone, as replay does.
+ * Every run is checked after its timer stops, and only a digest of its receipts is kept (tests/perf/measure.ts).
  */
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { describeRuns, measure, RUNS } from './measure';
@@ -82,7 +85,9 @@ function checkSample(workload: GradingWorkload, graded: readonly BatchReceipt[])
     );
     const grant = workload.grants.find((g) => g.agent === claim.agent);
     if (grant === undefined) throw new Error('no grant');
-    const context = { priorSpendCents: priorSpendCents(claim, workload.activity.claims, DEFAULT_POLICY) };
+    // §6.3: a claim without a currency is counted in the grant's spendCurrency, as gradeBatch counts it.
+    const spent = priorSpendCents(claim, workload.activity.claims, DEFAULT_POLICY, grant.spendCurrency);
+    const context = { priorSpendCents: spent };
     const direct = grade(claim, own, grant, DEFAULT_POLICY, workload.coverage, context);
     const entry = byClaim.get(claim.id);
     expect(canonicalJson(entry?.receipt), `claim ${String(i)}`).toBe(canonicalJson(direct));
@@ -121,6 +126,25 @@ function checkClaimless(workload: GradingWorkload, graded: readonly BatchReceipt
   });
 }
 
+/** A run is right: one receipt per claim, one-to-one evidence, real grades, and the sampled receipts and
+ * claim-less receipts equal grade() on their inputs. Returns the digest of the run's receipts and inputs. */
+function checkRun(workload: GradingWorkload, graded: readonly BatchReceipt[]): string {
+  const receipts = graded.map((entry) => entry.receipt);
+  expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
+  expect(workload.claims).toHaveLength(CLAIM_COUNT);
+  const claimReceipts = receipts.filter((r) => r.claimId !== undefined);
+  expect(new Set(claimReceipts.map((r) => r.claimId)).size).toBe(CLAIM_COUNT);
+  const evidence = claimReceipts.flatMap((r) => r.observationIds);
+  expect(new Set(evidence).size).toBe(evidence.length);
+  const count = (grade: string) => receipts.filter((r) => r.grade === grade).length;
+  expect(count('VERIFIED')).toBeGreaterThan(CLAIM_COUNT / 10);
+  expect(count('NOT_FOUND')).toBeGreaterThan(CLAIM_COUNT / 10);
+  expect(count('UNASKED')).toBeGreaterThan(0);
+  checkSample(workload, graded);
+  checkClaimless(workload, graded);
+  return createHash('sha256').update(canonicalJson(graded)).digest('hex');
+}
+
 describe('perf gate (task 1.5): gradeBatch over 5,000 claims × 50,000 observations', () => {
   it(`grades the whole batch in a median < ${String(GATE_MS)} ms of CPU over ${String(RUNS)} fresh runs, and is right`, async () => {
     const measured = await measure(
@@ -128,32 +152,12 @@ describe('perf gate (task 1.5): gradeBatch over 5,000 claims × 50,000 observati
         const workload = buildGradingWorkload();
         return { workload, index: createMemoryIndex(workload.observations, BUCKET_MINUTES) };
       },
-      async ({ workload, index }) => ({ workload, graded: await gradeAll(workload, index) }),
+      ({ workload, index }) => gradeAll(workload, index),
+      ({ workload }, graded) => checkRun(workload, graded),
     );
     console.log(describeRuns(`gradeBatch for ${String(CLAIM_COUNT)} claims`, measured));
-
-    for (const { result } of measured.runs) {
-      const { workload, graded } = result;
-      const receipts = graded.map((entry) => entry.receipt);
-      expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
-      expect(workload.claims).toHaveLength(CLAIM_COUNT);
-      const claimReceipts = receipts.filter((r) => r.claimId !== undefined);
-      expect(new Set(claimReceipts.map((r) => r.claimId)).size).toBe(CLAIM_COUNT);
-      const evidence = claimReceipts.flatMap((r) => r.observationIds);
-      expect(new Set(evidence).size).toBe(evidence.length);
-      const count = (grade: string) => receipts.filter((r) => r.grade === grade).length;
-      expect(count('VERIFIED')).toBeGreaterThan(CLAIM_COUNT / 10);
-      expect(count('NOT_FOUND')).toBeGreaterThan(CLAIM_COUNT / 10);
-      expect(count('UNASKED')).toBeGreaterThan(0);
-    }
-    const first = measured.runs[0]?.result;
-    if (first === undefined) throw new Error('no run');
-    checkSample(first.workload, first.graded);
-    checkClaimless(first.workload, first.graded);
     // Every run graded identical inputs, so their results must be identical (no memo carried a result over).
-    const canonical = measured.runs.map((r) => canonicalJson(r.result.graded));
-    expect(new Set(canonical).size).toBe(1);
-
+    expect(new Set(measured.runs.map((r) => r.result)).size).toBe(1);
     expect(measured.medianCpuMs).toBeLessThan(GATE_MS);
   }, 600_000);
 });

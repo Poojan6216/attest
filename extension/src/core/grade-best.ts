@@ -19,6 +19,7 @@ import type { Policy } from './policy';
 import { compareScores, type Ratio, ratioGteBasisPoints, type Score } from './ratio';
 import { uniqueRows } from './receipt';
 import type { Claim, Coverage, Observation, ObserverCoverage, ReasonCode } from './schema';
+import { compareText as compareTextShared } from './order';
 
 export interface VisibleInputs {
   readonly coverage: Coverage;
@@ -38,10 +39,8 @@ export interface BestCandidate {
   readonly reasonCodes: readonly ReasonCode[];
 }
 
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+/** The one code-unit order (order.ts), bound once: the test transform turns an imported call into a getter. */
+const compareText = compareTextShared;
 
 /** The coverage `grade()` sees, remembered per input coverage with what it was filtered from. */
 interface VisibleCoverage {

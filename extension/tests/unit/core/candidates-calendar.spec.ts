@@ -5,9 +5,10 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import defaultPolicyJson from '../../../../policy/default.json';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
-import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import { type ActionType, Observation } from '../../../src/core/schema';
 import type { WindowClaim } from '../../../src/core/window';
 
@@ -99,7 +100,10 @@ describe('calendar.created: an event already on the calendar before the claim ca
 
   it('follows policy.windows.beforeClaimMin', async () => {
     const early = event('calendar.created', occurredAt, '2026-10-06T13:55:00-04:00');
-    const policy = { windows: { ...DEFAULT_POLICY.windows, beforeClaimMin: 10 } };
+    const policy = loadPolicy({
+      ...defaultPolicyJson,
+      windows: { ...defaultPolicyJson.windows, beforeClaimMin: 10 },
+    });
     const claim = calendarClaim('calendar.created');
     expect(await candidates(claim, createMemoryIndex([early], 60), DEFAULT_POLICY)).toEqual([]);
     expect(await candidates(claim, createMemoryIndex([early], 60), policy)).toEqual([early]);

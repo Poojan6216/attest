@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 
 const EXTENSION_ROOT = path.resolve(import.meta.dirname, '../../..');
 const CORE_TSCONFIG = path.join(EXTENSION_ROOT, 'src', 'core', 'tsconfig.json');
-const COMPILE_TIMEOUT_MS = 60_000;
 
 function loadCoreConfig(): ts.ParsedCommandLine {
   const parsed = ts.getParsedCommandLineOfConfigFile(
@@ -63,43 +62,31 @@ describe('src/core/tsconfig.json is DOM-free', () => {
     expect(fileNames).toContain(path.join(EXTENSION_ROOT, 'src', 'core', 'policy.ts'));
   });
 
-  it(
-    'src/core typechecks under it without pulling in lib.dom or preact',
-    () => {
-      const config = loadCoreConfig();
-      const program = ts.createProgram(config.fileNames, config.options);
-      expect(messages(ts.getPreEmitDiagnostics(program))).toEqual([]);
-      const loaded = program.getSourceFiles().map((file) => file.fileName);
-      expect(loaded.some((file) => file.endsWith('/lib.dom.d.ts'))).toBe(false);
-      expect(loaded.some((file) => file.includes('/preact/'))).toBe(false);
-      expect(loaded.some((file) => file.includes('/@types/node/'))).toBe(false);
-    },
-    COMPILE_TIMEOUT_MS,
-  );
+  it('src/core typechecks under it without pulling in lib.dom or preact', () => {
+    const config = loadCoreConfig();
+    const program = ts.createProgram(config.fileNames, config.options);
+    expect(messages(ts.getPreEmitDiagnostics(program))).toEqual([]);
+    const loaded = program.getSourceFiles().map((file) => file.fileName);
+    expect(loaded.some((file) => file.endsWith('/lib.dom.d.ts'))).toBe(false);
+    expect(loaded.some((file) => file.includes('/preact/'))).toBe(false);
+    expect(loaded.some((file) => file.includes('/@types/node/'))).toBe(false);
+  });
 
-  it(
-    'a DOM or Node reference in src/core fails to typecheck',
-    () => {
-      const { diagnostics } = compileProbe(
-        loadCoreConfig(),
-        'export const title: string = document.title;\nexport const env: unknown = process.env;\n',
-      );
-      expect(diagnostics.some((message) => message.startsWith("Cannot find name 'document'."))).toBe(true);
-      expect(diagnostics.some((message) => message.startsWith("Cannot find name 'process'."))).toBe(true);
-      expect(diagnostics).toHaveLength(2);
-    },
-    COMPILE_TIMEOUT_MS,
-  );
+  it('a DOM or Node reference in src/core fails to typecheck', () => {
+    const { diagnostics } = compileProbe(
+      loadCoreConfig(),
+      'export const title: string = document.title;\nexport const env: unknown = process.env;\n',
+    );
+    expect(diagnostics.some((message) => message.startsWith("Cannot find name 'document'."))).toBe(true);
+    expect(diagnostics.some((message) => message.startsWith("Cannot find name 'process'."))).toBe(true);
+    expect(diagnostics).toHaveLength(2);
+  });
 
-  it(
-    'a plain ES2023 probe compiles cleanly (the probe harness itself works)',
-    () => {
-      const { diagnostics } = compileProbe(
-        loadCoreConfig(),
-        'export const sorted: readonly number[] = [1, 0].toSorted((a, b) => a - b);\n',
-      );
-      expect(diagnostics).toEqual([]);
-    },
-    COMPILE_TIMEOUT_MS,
-  );
+  it('a plain ES2023 probe compiles cleanly (the probe harness itself works)', () => {
+    const { diagnostics } = compileProbe(
+      loadCoreConfig(),
+      'export const sorted: readonly number[] = [1, 0].toSorted((a, b) => a - b);\n',
+    );
+    expect(diagnostics).toEqual([]);
+  });
 });

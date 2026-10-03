@@ -32,6 +32,12 @@ import type {
 } from './schema';
 
 /**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const compareAtLocal = compareAt;
+
+/**
  * What a caller stores beside a batch receipt so replay can grade it again (§3, §9 `receiptInputs`): the grant in
  * force and the context it was graded with, and the policy's hash. The coverage is the batch's own, so it is not
  * repeated per receipt.
@@ -56,8 +62,11 @@ export interface ReceiptBatch {
   readonly grants: ReadonlyMap<AgentId, Grant>;
   readonly assignment: ReadonlyMap<Ulid, Ulid>;
   readonly taken: ReadonlySet<Ulid>;
-  /** §6.3 `priorSpendCents` of a claim against the batch's activity (scope.ts `spendIndex`). */
-  readonly priorSpend: (claim: Claim) => number;
+  /**
+   * §6.3 `priorSpendCents` of a claim against the batch's spend history (scope.ts `spendIndex`), a missing currency
+   * read as the grant's `spendCurrency`.
+   */
+  readonly priorSpend: (claim: Claim, spendCurrency: string | undefined) => number;
 }
 
 /** The evidence parts every grading of a batch shares, each computed once per batch (or per grant), on first use. */
@@ -133,7 +142,9 @@ export class BatchEvidence {
 
 /**
  * Writes to `kept` the positions (into the claim's rows) of the candidates `grade` sees, §4.3
- * `exclusiveCandidates`; returns how many.
+ * `exclusiveCandidates`; returns how many. They pass `grade`'s candidate check (grade-guard.ts) by construction:
+ * batch retrieval returns exactly `candidates()` per claim (the same type, source, window and first-seen predicates,
+ * order.ts and window.ts).
  */
 function keptPositions(scored: ScoredClaim, batch: ReceiptBatch, kept: Int32Array): number {
   const { table, rows } = scored.found;
@@ -156,7 +167,7 @@ function bestOf(scored: ScoredClaim, kept: Int32Array, count: number): BestCandi
   let best = -1;
   for (let i = 0; i < count; i += 1) {
     const k = kept[i] ?? 0;
-    const order = best < 0 ? 1 : compareAt(scored, k, best);
+    const order = best < 0 ? 1 : compareAtLocal(scored, k, best);
     if (order > 0 || (order === 0 && table.id(rows[k] ?? 0) < table.id(rows[best] ?? 0))) best = k;
   }
   if (best < 0) return null;
@@ -184,8 +195,8 @@ function claimReceipt(
   const length = scored?.found.rows.length ?? 0;
   const [kept, order] = [shared.scratch(0, length), shared.scratch(1, length)];
   const count = scored === null ? 0 : keptPositions(scored, batch, kept);
-  const context: GradeContext = { priorSpendCents: batch.priorSpend(claim) };
   const grant = grantOf(batch.grants, claim.agent);
+  const context: GradeContext = { priorSpendCents: batch.priorSpend(claim, grant.spendCurrency) };
   const { policy } = batch;
   const inputs: BatchInputs = { grant, context, policyHash: policy.policyHash };
   if (scored !== null && scored.found.table.ranks() === null) {

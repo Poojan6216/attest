@@ -7,8 +7,12 @@
  * `String#toLowerCase`, which maps the Kelvin sign to `k`). Names and subjects, which are never identities on
  * their own, are folded (NFKC, case, and for names diacritics and invisible marks) so a claim's "Priyá" can meet
  * an observation's "priya".
+ *
+ * Every character property is Unicode 15.0's and the engine's NFKC and lowercase never see a code point 15.0 does
+ * not assign (unicode-baseline.ts), so a reader gives the same answer on every engine (Hard Rule 4).
  */
 import { isAceLabel } from './punycode';
+import { asBaseline, BASELINE_CLASS, lowerBaseline, onBaseline, trimBaseline } from './unicode-baseline';
 
 const ASCII_UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const ASCII_LOWER = 'abcdefghijklmnopqrstuvwxyz';
@@ -20,11 +24,11 @@ const ASCII_UPPER_LETTER = /[A-Z]/g;
  * and isolates, the BOM, soft hyphen, tag characters) and every other default-ignorable code point (Hangul
  * fillers, variation selectors, the combining grapheme joiner).
  */
-const INVISIBLE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+const INVISIBLE = new RegExp(`[${BASELINE_CLASS.invisible}]`, 'gu');
 const NON_ASCII = /\P{ASCII}/u;
-const NONSPACING_MARK = /\p{Mn}/gu;
+const NONSPACING_MARK = new RegExp(`[${BASELINE_CLASS.nonspacingMark}]`, 'gu');
 /** JS `\s` plus the rest of Unicode White_Space (NEL U+0085 is whitespace but not `\s`). */
-const WHITESPACE_RUN = /[\s\p{White_Space}]+/gu;
+const WHITESPACE_RUN = new RegExp(`[${BASELINE_CLASS.space}${BASELINE_CLASS.whiteSpace}]+`, 'gu');
 
 /**
  * The bidi embeddings LRE (U+202A) and RLE (U+202B) and overrides LRO (U+202D) and RLO (U+202E) make text
@@ -38,10 +42,10 @@ const BIDI_REORDER = /[\u202A\u202B\u202D\u202E]/u;
  * "$9⁹⁹" (nine dollars ninety-nine) would read as "$999", "5² min ago" as "52 min ago" and "Priya²" as
  * "priya2". A `\p{No}` character NFKC leaves alone (Ethiopic ፲, Bengali ৴) reads as it displays.
  */
-const OTHER_NUMBER = /\p{No}/gu;
+const OTHER_NUMBER = new RegExp(`[${BASELINE_CLASS.otherNumber}]`, 'gu');
 
 /** Characters that can never appear in an unquoted address (RFC 5322 specials, whitespace, controls). */
-const ADDRESS_FORBIDDEN = /[\s\p{Cc}()<>[\]\\,;:"]/u;
+const ADDRESS_FORBIDDEN = new RegExp(`[${BASELINE_CLASS.space}\\p{Cc}()<>[\\]\\\\,;:"]`, 'u');
 /** A quoted string in a display name (`"…"`, backslash escapes allowed). */
 const QUOTED_STRING = /"(?:[^"\\]|\\.)*"/gu;
 const ANGLE_BRACKET = /[<>]/;
@@ -57,9 +61,9 @@ const ASCII_ONLY = /^\p{ASCII}*$/u;
 const ASCII_NON_TOKEN = /[^a-z0-9]+/;
 const ASCII_WHITESPACE_RUN = /[\t\n\v\f\r ]+/g;
 /** Name tokens: runs of letters, digits and the (spacing or enclosing) marks left after diacritic folding. */
-const NAME_TOKEN_SEPARATOR = /[^\p{L}\p{N}\p{M}]+/u;
+const NAME_TOKEN_SEPARATOR = new RegExp(`[^${BASELINE_CLASS.token}]+`, 'u');
 /** Subject tokens, exactly per §11: a combining mark NFKC cannot compose (İ → i + U+0307) never splits a word. */
-const SUBJECT_TOKEN_SEPARATOR = /[^\p{L}\p{N}\p{M}]+/u;
+const SUBJECT_TOKEN_SEPARATOR = new RegExp(`[^${BASELINE_CLASS.token}]+`, 'u');
 const REPLY_PREFIXES: ReadonlySet<string> = new Set(['re', 'fw', 'fwd']);
 
 /** Lowercases ASCII A–Z only; every other code unit (including K U+212A and İ U+0130) is left as is. */
@@ -122,12 +126,12 @@ export type Counterparty =
  * `"P" <evil@x<p@y>`): which address is meant would be a guess.
  */
 function extractAddress(raw: string): string | null {
-  const text = raw.trim();
+  const text = trimBaseline(raw);
   if (!text.endsWith('>')) return text;
   const open = text.lastIndexOf('<');
   if (open < 0) return null;
   const displayName = text.slice(0, open).replace(QUOTED_STRING, '');
-  return ANGLE_BRACKET.test(displayName) ? null : text.slice(open + 1, -1).trim();
+  return ANGLE_BRACKET.test(displayName) ? null : trimBaseline(text.slice(open + 1, -1));
 }
 
 /** Dot-separated, non-empty parts: no leading, trailing or doubled dot (and not empty). */
@@ -180,25 +184,34 @@ export function sameAddress(a: EmailAddress, b: EmailAddress): AddressComparison
  * from how it displays (`readsDifferently`) folds to '' and so has no tokens: "\u202Eayirp" shows "priya".
  */
 export function name(raw: string): string {
-  if (ASCII_ONLY.test(raw)) return raw.toLowerCase().replace(ASCII_WHITESPACE_RUN, ' ').trim();
-  if (readsDifferently(raw)) return '';
-  const compatible = stripInvisible(stripInvisible(raw).normalize('NFKC'));
-  const folded = compatible.toLowerCase().normalize('NFD').replace(NONSPACING_MARK, '').normalize('NFC');
-  return folded.replace(WHITESPACE_RUN, ' ').trim();
+  return ASCII_ONLY.test(raw) ? asciiName(raw) : onBaseline(raw, foldName);
+}
+
+function asciiName(raw: string): string {
+  return raw.toLowerCase().replace(ASCII_WHITESPACE_RUN, ' ').trim();
+}
+
+/** `name()` of non-ASCII text that holds no code point outside Unicode 15.0 (`asBaseline`). */
+function foldName(text: string): string {
+  if (readsDifferently(text)) return '';
+  const compatible = stripInvisible(stripInvisible(text).normalize('NFKC'));
+  const folded = lowerBaseline(compatible).normalize('NFD').replace(NONSPACING_MARK, '').normalize('NFC');
+  return trimBaseline(folded.replace(WHITESPACE_RUN, ' '));
 }
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-/** The distinct tokens of `name(raw)`, in order of first appearance. */
+/**
+ * The distinct tokens of `name(raw)`, in order of first appearance. A code point outside Unicode 15.0 is no
+ * letter, digit or mark, so it separates tokens and is in none (as on a 15.0 engine).
+ */
 export function nameTokens(raw: string): string[] {
-  const separator = ASCII_ONLY.test(raw) ? ASCII_NON_TOKEN : NAME_TOKEN_SEPARATOR;
-  return unique(
-    name(raw)
-      .split(separator)
-      .filter((token) => token !== ''),
-  );
+  const words = ASCII_ONLY.test(raw)
+    ? asciiName(raw).split(ASCII_NON_TOKEN)
+    : foldName(asBaseline(raw)).split(NAME_TOKEN_SEPARATOR);
+  return unique(words.filter((token) => token !== ''));
 }
 
 /**
@@ -209,10 +222,10 @@ export function nameTokens(raw: string): string[] {
  * while Attest matched another ("ayirp").
  */
 export function counterparty(raw: string | undefined): Counterparty | null {
-  if (raw === undefined || raw.trim() === '') return null;
+  if (raw === undefined || trimBaseline(raw) === '') return null;
   const address = email(raw);
   if (address !== null) return { kind: 'address', ...address };
-  if (ADDRESS_MARKERS.test(raw.normalize('NFKC')) || readsDifferently(raw)) return null;
+  if (ADDRESS_MARKERS.test(asBaseline(raw).normalize('NFKC')) || readsDifferently(raw)) return null;
   return { kind: 'name', tokens: nameTokens(raw) };
 }
 
@@ -221,17 +234,26 @@ export function counterparty(raw: string | undefined): Counterparty | null {
  * are not letters, digits or marks → drop empty → strip leading `re`, `fw`, `fwd` tokens repeatedly → drop stop
  * words → a set, returned sorted by code unit (deterministic). "Inv\u200Boice" is one token, "İstanbul" is
  * one token, and a subject holding a bidi embedding or override has none (its displayed words are not its
- * stored ones).
+ * stored ones). All of it as Unicode 15.0 defines it: a newer character (an outlined digit, U+1CCF0–U+1CCF9)
+ * is not a letter, digit or mark, so it separates tokens and is in none.
  */
 export function subjectTokens(raw: string, stopWords: readonly string[]): string[] {
   const ascii = ASCII_ONLY.test(raw);
   if (!ascii && BIDI_REORDER.test(raw)) return [];
   const words = ascii
     ? raw.toLowerCase().split(ASCII_NON_TOKEN)
-    : stripInvisible(raw).normalize('NFKC').toLowerCase().split(SUBJECT_TOKEN_SEPARATOR);
+    : lowerBaseline(asBaseline(stripInvisible(raw)).normalize('NFKC')).split(SUBJECT_TOKEN_SEPARATOR);
   const tokens = words.filter((token) => token !== '');
   const first = tokens.findIndex((token) => !REPLY_PREFIXES.has(token));
   const body = first < 0 ? [] : tokens.slice(first);
-  const stop = new Set(stopWords.map((word) => word.normalize('NFKC').toLowerCase()));
+  const stop = new Set(stopWords.map(stopWordKey));
   return unique(body.filter((token) => !stop.has(token))).sort();
+}
+
+/**
+ * A stop word as `subjectTokens` compares it with a token: NFKC-normalised and lowercased, as Unicode 15.0 does
+ * it. A code point outside 15.0 stays in the key as it was, so that key matches no token (none holds one).
+ */
+export function stopWordKey(word: string): string {
+  return onBaseline(word, (text) => lowerBaseline(text.normalize('NFKC')));
 }

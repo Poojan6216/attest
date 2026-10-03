@@ -18,7 +18,6 @@ import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../src/core/policy';
 import { ActionType } from '../../src/core/schema';
 
 const RUNS = { numRuns: 1_000 };
-const PROPERTY_TIMEOUT_MS = 60_000;
 
 const POLICIES: readonly Policy[] = [
   DEFAULT_POLICY,
@@ -27,8 +26,11 @@ const POLICIES: readonly Policy[] = [
     normalize: { stopWords: [...defaultPolicyJson.normalize.stopWords, 'deck', 'acme'] },
   }),
   loadPolicy({ ...defaultPolicyJson, windows: { ...defaultPolicyJson.windows, afterClaimMin: 90 } }),
-  // Built by hand: other windows, but the shipped policy's very own stop-word array.
-  { ...DEFAULT_POLICY, windows: { ...DEFAULT_POLICY.windows, beforeClaimMin: 30, afterClaimMin: 5 } },
+  // Other windows on both sides, loaded (a hand-built copy is refused, SEC-2).
+  loadPolicy({
+    ...defaultPolicyJson,
+    windows: { ...defaultPolicyJson.windows, beforeClaimMin: 30, afterClaimMin: 5 },
+  }),
 ];
 
 const times = fc.constantFrom(
@@ -105,38 +107,34 @@ function summary(result: Outcome): string {
 const tally = { steps: 0, changed: 0, threw: 0 };
 
 describe('features() memos (property)', () => {
-  it(
-    'after any sequence of in-place edits, scores exactly like fresh copies',
-    () => {
-      fc.assert(
-        fc.property(fc.array(step, { minLength: 1, maxLength: 10 }), (steps) => {
-          const claim: FeatureClaim = {
-            type: 'email.sent',
-            claimedAt: '2026-10-06T14:02:00-04:00',
-            claimedAtPrecision: 'minute',
-            counterparty: 'priya@company.com',
-          };
-          const observation: FeatureObservation = { occurredAt: '2026-10-06T14:20:00-04:00' };
-          let policy = DEFAULT_POLICY;
-          let previous = outcome(claim, observation, policy);
-          for (const next of steps) {
-            if (next.kind === 'claim') Object.assign(claim, next.edit);
-            else if (next.kind === 'observation') Object.assign(observation, next.edit);
-            else policy = POLICIES[next.index] ?? DEFAULT_POLICY;
-            const memo = outcome(claim, observation, policy);
-            expect(memo).toStrictEqual(outcome(structuredClone(claim), structuredClone(observation), policy));
-            tally.steps += 1;
-            if (summary(memo) !== summary(previous)) tally.changed += 1;
-            if ('threw' in memo) tally.threw += 1;
-            previous = memo;
-          }
-        }),
-        RUNS,
-      );
-      // Not vacuous: edits really changed results (so a stale memo would show), and errors were compared too.
-      expect(tally.changed).toBeGreaterThan(tally.steps / 4);
-      expect(tally.threw).toBeGreaterThan(20);
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('after any sequence of in-place edits, scores exactly like fresh copies', () => {
+    fc.assert(
+      fc.property(fc.array(step, { minLength: 1, maxLength: 10 }), (steps) => {
+        const claim: FeatureClaim = {
+          type: 'email.sent',
+          claimedAt: '2026-10-06T14:02:00-04:00',
+          claimedAtPrecision: 'minute',
+          counterparty: 'priya@company.com',
+        };
+        const observation: FeatureObservation = { occurredAt: '2026-10-06T14:20:00-04:00' };
+        let policy = DEFAULT_POLICY;
+        let previous = outcome(claim, observation, policy);
+        for (const next of steps) {
+          if (next.kind === 'claim') Object.assign(claim, next.edit);
+          else if (next.kind === 'observation') Object.assign(observation, next.edit);
+          else policy = POLICIES[next.index] ?? DEFAULT_POLICY;
+          const memo = outcome(claim, observation, policy);
+          expect(memo).toStrictEqual(outcome(structuredClone(claim), structuredClone(observation), policy));
+          tally.steps += 1;
+          if (summary(memo) !== summary(previous)) tally.changed += 1;
+          if ('threw' in memo) tally.threw += 1;
+          previous = memo;
+        }
+      }),
+      RUNS,
+    );
+    // Not vacuous: edits really changed results (so a stale memo would show), and errors were compared too.
+    expect(tally.changed).toBeGreaterThan(tally.steps / 4);
+    expect(tally.threw).toBeGreaterThan(20);
+  });
 });

@@ -45,6 +45,11 @@ jobs:
       - name: Unit + property tests
         run: pnpm test
 
+      # The Sprint 1 Gate's "core coverage >= 95%": the suite again, instrumented. Prints lines, branches, functions
+      # and statements for src/core and fails below 95% lines (extension/vitest.config.ts).
+      - name: Core coverage
+        run: pnpm test:coverage
+
       # src/core must not depend on the host time zone (Hard Rule 4): run the core suites in two more zones.
       - name: Core tests in other time zones
         run: pnpm --dir extension run test:tz

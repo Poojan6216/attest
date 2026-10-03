@@ -2,16 +2,16 @@
  * Core perf bench (sprint tasks 1.3 and 1.5; ledger_engineer rule 9; qa_tester rule 7): over 5,000 claims and
  * 50,000 observations, candidate lookup and the whole `gradeBatch` must each take under 2 s in Node. Workloads
  * are synthetic and deterministic (seeded mulberry32, no Math.random), so the gate tests (tests/perf/
- * candidates.perf.spec.ts, grading.perf.spec.ts) measure what this bench measures. Each figure is the wall-clock
- * median of 5 cold runs, with the CPU median beside it (the gates' clock inside a parallel suite), written to
- * bench/results/core-<yyyy-mm-dd>.json for `pnpm bench` to render into RESULTS.md (Hard Rule 12). Grading reuses
- * the lookup's observations and claim timings; a second seeded stream gives each claim an agent and an identity
- * (40% restate a real observation, 10% are vague), plus one coverage pass per source per day, a grant per agent
- * bound to one account, and modest agent activity, so some orphans become UNASKED.
+ * candidates.perf.spec.ts, grading.perf.spec.ts) measure what this bench measures. Each operation runs on 5 freshly
+ * built workloads; its gate passes on the median CPU time of those runs, the statistic the gate tests use (bench/
+ * timing.ts), and the wall-clock median, min and max are reported beside it. `pnpm bench` (bench/run_bench.ts)
+ * writes the metrics, with the commit and Node version, to bench/results/core-<yyyy-mm-dd>.json and renders them
+ * into RESULTS.md (Hard Rule 12); it exits non-zero when a gate fails. Grading reuses the lookup's observations
+ * and claim timings; a second seeded stream gives each claim an agent and an identity (40% restate a real
+ * observation, 10% are vague), plus one coverage pass per source per day, a grant per agent bound to one account,
+ * and modest agent activity, so some orphans become UNASKED.
  */
-import { writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { median, round, summarize, timed, type Timed } from './timing';
 
 import { type BatchReceipt, gradeBatch } from '../extension/src/core/batch';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../extension/src/core/candidates';
@@ -31,7 +31,6 @@ const RUNS = 5;
 const SEED = 0x5eed_1_3;
 
 const MS_PER_MINUTE = 60_000;
-const MICROSECONDS_PER_MS = 1_000;
 const MS_PER_DAY = 86_400_000;
 const START_MS = Date.parse('2026-09-01T00:00:00Z');
 const SPAN_DAYS = 30;
@@ -291,34 +290,6 @@ export async function gradeAll(workload: GradingWorkload, index: ObservationInde
   return gradeBatch(claims, index, grants, DEFAULT_POLICY, coverage, activity);
 }
 
-function median(values: readonly number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? Number.NaN;
-}
-
-const round = (ms: number): number => Math.round(ms * 10) / 10;
-
-/** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
-function localDate(now: Date): string {
-  return `${String(now.getFullYear())}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
-}
-
-interface Timed<T> {
-  readonly wallMs: number;
-  readonly cpuMs: number;
-  readonly result: T;
-}
-
-/** Wall and CPU time of `act` (user + system CPU of this process). */
-async function timed<T>(act: () => T | Promise<T>): Promise<Timed<T>> {
-  const cpuBefore = process.cpuUsage();
-  const startedAt = performance.now();
-  const result = await act();
-  const wallMs = performance.now() - startedAt;
-  const cpu = process.cpuUsage(cpuBefore);
-  return { wallMs, cpuMs: (cpu.user + cpu.system) / MICROSECONDS_PER_MS, result };
-}
-
 /**
  * Each run rebuilds the (identical, seeded) workload as fresh objects, so no run reuses parses memoised by
  * an earlier one: every run's build and lookup are cold.
@@ -334,23 +305,23 @@ async function measure(): Promise<Record<string, number | string | boolean>> {
   }
   const totals = new Set(lookups.map(({ result }) => result.reduce((sum, list) => sum + list.length, 0)));
   if (totals.size !== 1) throw new Error('core bench: runs disagree on the candidate count');
-  const walls = lookups.map((lookup) => lookup.wallMs);
-  const lookupMedianMs = round(median(walls));
+  const lookup = summarize(lookups, GATE_MS);
+  const buildPlusLookup = builds.map((build, i) => build + (lookups[i]?.wallMs ?? Number.NaN));
   return {
     observations: OBSERVATION_COUNT,
     claims: CLAIM_COUNT,
     runs: RUNS,
     bucketMinutes: BUCKET_MINUTES,
-    lookupMedianMs,
-    lookupMinMs: round(Math.min(...walls)),
-    lookupMaxMs: round(Math.max(...walls)),
-    lookupCpuMedianMs: round(median(lookups.map((lookup) => lookup.cpuMs))),
+    lookupMedianMs: lookup.medianMs,
+    lookupMinMs: lookup.minMs,
+    lookupMaxMs: lookup.maxMs,
+    lookupCpuMedianMs: lookup.cpuMedianMs,
     indexBuildMedianMs: round(median(builds)),
-    buildPlusLookupMedianMs: round(median(builds.map((build, i) => build + (walls[i] ?? Number.NaN)))),
+    buildPlusLookupMedianMs: round(median(buildPlusLookup)),
     candidatesReturned: [...totals][0] ?? 0,
     gateMs: GATE_MS,
-    gatePassed: lookupMedianMs < GATE_MS,
-    node: process.version,
+    gateMetric: 'lookupCpuMedianMs',
+    gatePassed: lookup.passed,
   };
 }
 
@@ -363,7 +334,7 @@ function receiptCounts(graded: readonly BatchReceipt[]): Record<string, number> 
 }
 
 /** `gradeBatch` over the grading workload: median of RUNS cold runs (fresh objects and index each run). */
-async function measureGrading(): Promise<Record<string, number | boolean>> {
+async function measureGrading(): Promise<Record<string, number | string | boolean>> {
   const runs: Timed<BatchReceipt[]>[] = [];
   for (let run = 0; run < RUNS; run += 1) {
     const workload = buildGradingWorkload();
@@ -373,27 +344,20 @@ async function measureGrading(): Promise<Record<string, number | boolean>> {
   const counts = runs.map(({ result }) => receiptCounts(result));
   const agree = new Set(counts.map((c) => JSON.stringify(c))).size === 1;
   if (!agree) throw new Error('core bench: grading runs disagree on the receipts');
-  const walls = runs.map((graded) => graded.wallMs);
-  const gradingMedianMs = round(median(walls));
+  const grading = summarize(runs, GATE_MS);
   return {
-    gradingMedianMs,
-    gradingMinMs: round(Math.min(...walls)),
-    gradingMaxMs: round(Math.max(...walls)),
-    gradingCpuMedianMs: round(median(runs.map((graded) => graded.cpuMs))),
+    gradingMedianMs: grading.medianMs,
+    gradingMinMs: grading.minMs,
+    gradingMaxMs: grading.maxMs,
+    gradingCpuMedianMs: grading.cpuMedianMs,
     ...counts[0],
     gradingGateMs: GATE_MS,
-    gradingGatePassed: gradingMedianMs < GATE_MS,
+    gradingGateMetric: 'gradingCpuMedianMs',
+    gradingGatePassed: grading.passed,
   };
 }
 
-/** Runs the bench and writes bench/results/core-<date>.json. */
-export async function runCoreBench(): Promise<void> {
-  const metrics = { ...(await measure()), ...(await measureGrading()) };
-  const date = localDate(new Date());
-  const resultsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'results');
-  const file = path.join(resultsDir, `core-${date}.json`);
-  const result = { bench: 'core', date, command: 'pnpm bench', metrics };
-  writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
-  const summary = `lookup median ${String(metrics.lookupMedianMs)} ms, grading median ${String(metrics.gradingMedianMs)} ms`;
-  console.log(`core: ${summary} → ${path.relative(process.cwd(), file)}`);
+/** Runs the core bench and returns its metrics; bench/run_bench.ts adds the provenance and writes the result. */
+export async function runCoreBench(): Promise<Record<string, number | string | boolean>> {
+  return { ...(await measure()), ...(await measureGrading()) };
 }

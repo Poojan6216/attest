@@ -9,7 +9,8 @@
  * target), purchases against a spend ceiling and a currency, an agent whose accounts are unbound (coverage capped,
  * PENDING until `finalizeUnverifiableHours`), coverage passes with gaps, an undeclared observed scope (OVER_SCOPE
  * scope receipts), an allowlist, a disallowed type, a grant that changes mid-ledger, a policy that changes
- * mid-ledger, and activity that makes some orphans UNASKED.
+ * mid-ledger, activity that makes some orphans UNASKED, and a few rows read by an observer the policy does not list
+ * for their type (still orphans in a window of their own source, §3).
  */
 import defaultPolicyJson from '../../../policy/default.json';
 
@@ -45,6 +46,9 @@ const PASS_EVERY_MS = 3 * MS_PER_HOUR;
 const PASS_WINDOW_MS = 4 * MS_PER_HOUR;
 /** The share of coverage passes skipped: each skip leaves a gap that caps coverage at partial. */
 const PASS_SKIP = 0.08;
+/** The share of observations read by a source the policy does not list for their type (§3: still orphans). */
+const STRAY_SOURCE = 0.05;
+type Source = (typeof SOURCES)[number];
 
 /** Type mix of observations and of non-vague claims: [type, cumulative weight out of 100]. */
 const TYPE_MIX: readonly (readonly [ActionType, number])[] = [
@@ -97,7 +101,7 @@ function typeOf(random: Random): ActionType {
   return (TYPE_MIX.find(([, upTo]) => roll < upTo) ?? ['email.sent'])[0];
 }
 
-export function sourceOf(type: ActionType): (typeof SOURCES)[number] {
+export function sourceOf(type: ActionType): Source {
   if (type === 'email.sent') return 'gmail.sent';
   return type.startsWith('calendar.') ? 'gcal.event' : 'gmail.receipt';
 }
@@ -105,10 +109,10 @@ export function sourceOf(type: ActionType): (typeof SOURCES)[number] {
 const person = (k: number): string => `person${String(k % PERSONS)}@example${String(k % DOMAINS)}.com`;
 const merchant = (k: number): string => `merchant ${String(k % MERCHANTS)}`;
 
-/** The counterparty and money of a row of `type`: an address, or a merchant with an amount. */
-function identity(random: Random, type: ActionType): Record<string, unknown> {
+/** The counterparty and money a row from `source` holds: an address, or a merchant with an amount. */
+function identity(random: Random, source: Source): Record<string, unknown> {
   const k = Math.floor(random() * PERSONS * MERCHANTS);
-  if (sourceOf(type) !== 'gmail.receipt') return { counterparty: person(k) };
+  if (source !== 'gmail.receipt') return { counterparty: person(k) };
   const currency = random() < 0.9 ? 'USD' : 'EUR';
   return { merchant: merchant(k), amountCents: 100 + Math.floor(random() * 90_000), currency };
 }
@@ -116,21 +120,33 @@ function identity(random: Random, type: ActionType): Record<string, unknown> {
 /**
  * Observation number `n` with the given content fields, `occurredAt` and `observedAt`, hashed as redact.ts
  * `project` hashes a row (§10): `contentHash` = SHA-256 of the canonical JSON of `{source, type, ...content,
- * rowKeyHash}`, `id = idFromHash(contentHash)`, `source` from the type. The row key is the counter, so two
- * observations with the same content stay two (as two identical sends do).
+ * rowKeyHash}`, `id = idFromHash(contentHash)`, `source` from the type unless given. The row key is the counter, so
+ * two observations with the same content stay two (as two identical sends do).
  */
 export function buildObservation(
   n: number,
-  fields: Record<string, unknown> & { type: ActionType; observedAt: string },
+  fields: Record<string, unknown> & { type: ActionType; observedAt: string; source?: Source },
 ): Observation {
-  const { observedAt, ...content } = fields;
-  const hashed = { source: sourceOf(fields.type), ...content, rowKeyHash: hashOf(n) };
+  const { observedAt, source = sourceOf(fields.type), ...content } = fields;
+  const hashed = { source, ...content, rowKeyHash: hashOf(n) };
   const contentHash = sha256Hex(canonicalJson(hashed));
   return Observation.parse({ ...hashed, id: idFromHash(contentHash), observedAt, contentHash });
 }
 
+/** The type's own source, or for a `STRAY_SOURCE` share of rows another one. */
+function sourceFor(random: Random, type: ActionType): Source {
+  const own = sourceOf(type);
+  return random() < STRAY_SOURCE
+    ? pick(
+        random,
+        SOURCES.filter((source) => source !== own),
+      )
+    : own;
+}
+
 export function makeObservation(random: Random, n: number): Observation {
   const type = typeOf(random);
+  const source = sourceFor(random, type);
   const occurredMs = START_MS + Math.floor(random() * SPAN_MS);
   const offset = pick(random, OFFSETS);
   const seenMs = type.startsWith('calendar.')
@@ -138,7 +154,8 @@ export function makeObservation(random: Random, n: number): Observation {
     : occurredMs + Math.floor(random() * 90 * MS_PER_MINUTE);
   return buildObservation(n, {
     type,
-    ...identity(random, type),
+    source,
+    ...identity(random, source),
     subjectHint: `subject ${String(n % SUBJECTS)}`,
     occurredAt: isoAt(occurredMs, offset),
     observedAt: isoAt(seenMs, offset),
@@ -168,7 +185,7 @@ function randomFields(random: Random): Record<string, unknown> {
   const roll = random();
   const claimedAtPrecision = roll < 0.8 ? 'minute' : roll < 0.95 ? 'hour' : 'day';
   const claimedAt = isoAt(START_MS + Math.floor(random() * SPAN_MS), pick(random, OFFSETS));
-  const found = identity(random, type);
+  const found = identity(random, sourceOf(type));
   const counterparty = found.counterparty ?? found.merchant;
   const { amountCents, currency } = found;
   const target = type.startsWith('calendar.') && random() < 0.9;
@@ -220,7 +237,7 @@ export function makeClaim(random: Random, i: number, fields: Record<string, unkn
 }
 
 /** A coverage pass of `source` synced at `syncMs`, seeing the `PASS_WINDOW_MS` before it, bound to ACCOUNT. */
-export function makePass(source: (typeof SOURCES)[number], syncMs: number, windowMs = PASS_WINDOW_MS) {
+export function makePass(source: Source, syncMs: number, windowMs = PASS_WINDOW_MS) {
   return ObserverCoverage.parse({
     observerId: source,
     source,

@@ -9,6 +9,8 @@
  *  - Times (normalize-time.ts, normalize-relative.ts): ISO-with-offset instants, and vendor-relative text
  *    resolved against a reference instant and an injected UTC-offset function.
  *  - IDN display (punycode.ts): decoding `xn--` labels for display only.
+ *  - Unicode (unicode-baseline.ts): every reader uses Unicode 15.0's character properties, and the engine's
+ *    normalisation and case mapping never see a newer code point, so the answer is the same on every engine.
  *
  * Split across files to keep each one small; import from here.
  */
@@ -22,6 +24,7 @@ export {
   name,
   nameTokens,
   sameAddress,
+  stopWordKey,
   stripInvisible,
   subjectTokens,
 } from './normalize-text';

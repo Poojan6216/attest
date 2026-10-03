@@ -8,6 +8,7 @@
  * observation is already taken. One-to-one both ways. A pair below partial never consumes anything.
  */
 import { CandidatesError } from './candidates-error';
+import { compareNumbers, compareText } from './order';
 import type { Policy } from './policy';
 import { compareRatio, type Ratio, ratioGteBasisPoints } from './ratio';
 import type { Ulid } from './schema';
@@ -29,16 +30,6 @@ export interface FixedPair {
 
 /** The policy fields assignment reads. A loaded `Policy` satisfies it. */
 export type AssignPolicy = Pick<Policy, 'bp'>;
-
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
-function compareNumbers(a: number, b: number): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
 
 /** Best score first, then earlier claimedAt, then claim id, then observation id: a total order on pairs. */
 function comparePairs(a: ScoredPair, b: ScoredPair): number {

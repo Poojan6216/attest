@@ -69,7 +69,9 @@ describe('parseCaptureArgs', () => {
       force: true,
     });
   });
+});
 
+describe('parseCaptureArgs: help and invalid commands', () => {
   it('returns help for -h and --help', () => {
     expect(parseCaptureArgs(['-h'], NOW)).toBe('help');
     expect(parseCaptureArgs(['--help', '--vendor', 'x'], NOW)).toBe('help');

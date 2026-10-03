@@ -202,13 +202,13 @@ const TABLES: readonly Table[] = [
       { ...OVERRIDE, reason: 'x'.repeat(120) },
       { ...OVERRIDE, reason: 'x' },
       { ...OVERRIDE, at: '2026-10-06T19:00:00Z' },
-      { ...OVERRIDE, reason: '​Já cancelei' },
+      { ...OVERRIDE, reason: '\u200BJá cancelei' },
     ],
     invalid: [
       ['an override to PARTIAL', { ...OVERRIDE, grade: 'PARTIAL' }, ['grade']],
       ['an empty reason', { ...OVERRIDE, reason: '' }, ['reason']],
       ['a blank reason', { ...OVERRIDE, reason: ' \t ' }, ['reason']],
-      ['an invisible-only reason', { ...OVERRIDE, reason: '​‎﻿' }, ['reason']],
+      ['an invisible-only reason', { ...OVERRIDE, reason: '\u200B\u200E\uFEFF' }, ['reason']],
       ['a smuggled note', { ...OVERRIDE, note: 'called Priya' }, []],
       ['a reason over 120', { ...OVERRIDE, reason: 'x'.repeat(121) }, ['reason']],
       ['a previous USER_OVERRIDDEN', { ...OVERRIDE, previousState: 'USER_OVERRIDDEN' }, ['previousState']],
@@ -290,7 +290,7 @@ describe('Claim.claimedAtEnd: the messages say which rule failed', () => {
       }),
       { numRuns: 1_000 },
     );
-  }, 30_000);
+  });
 });
 
 describe('Receipt signals and the policy share one feature vocabulary', () => {

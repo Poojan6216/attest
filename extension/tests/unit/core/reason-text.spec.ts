@@ -225,4 +225,23 @@ describe('a reason outside the closed vocabulary is never rendered as a guess', 
     expect(() => reasonText({ code: 'made.up', params: {} })).toThrow(ReasonTextError);
     expect(() => reasonText({ code: 'made.up', params: {} })).toThrow(/unknown_code/);
   });
+
+  it('an unknown code is never copied into the error (SEC-6, Hard Rule 10): an unparsed code may hold any text', () => {
+    const code = 'Priya Patel <priya@company.com> door code 4417';
+    let error: unknown;
+    try {
+      reasonText({ code, params: {} });
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toBeInstanceOf(ReasonTextError);
+    if (!(error instanceof ReasonTextError)) return;
+    expect([error.code, error.detail, error.message]).toEqual([
+      'unknown_code',
+      undefined,
+      'reason text unknown_code',
+    ]);
+    expect(String(error)).not.toContain('priya');
+    expect(JSON.stringify(Object.entries(error))).not.toContain('4417');
+  });
 });

@@ -3,9 +3,11 @@
  * through project() that the table and property tests do not reach. Prototype keys (`__proto__` as an own
  * key from JSON.parse, `__proto__` as a literal prototype, `constructor`), proxies whose `get` lies, values
  * that coerce to a valid string (boxed primitives, toString, toJSON, Symbol.toPrimitive), arrays and
- * functions as rows, non-enumerable and symbol keys, and code points at every cap.
+ * functions as rows, non-enumerable and symbol keys, code points at every cap, and text that is not one line
+ * (SEC-3: a message body passed off as a counterparty, a merchant or a subject).
  *
- * Each case names a secret that must never appear in JSON.stringify(output), and pins the exact output.
+ * Each case names a secret that must never appear in JSON.stringify(output), and pins the exact output. A row
+ * whose allowlisted value is not a valid fact is refused whole (`invalid_field`), with the code only.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -22,7 +24,6 @@ const SMILE = '\u{1F600}';
 const sent = (raw: unknown) => project('gmail.sent', raw, SENT, DEFAULT_POLICY);
 const receipt = (raw: unknown) => project('gmail.receipt', raw, RECEIPT, DEFAULT_POLICY);
 const MINIMAL_SENT = () => sent({ occurredAt: OCCURRED });
-const MINIMAL_RECEIPT = () => receipt({ occurredAt: OCCURRED });
 /** A boxed primitive (`new String(x)`, `new Number(x)`), typed as unknown. */
 const boxed = (value: string | number): unknown => Object(value);
 
@@ -31,6 +32,21 @@ function expectClean(out: Observation): void {
   expect(text).not.toContain('7731');
   expect(text).not.toContain('QUOKKA');
   expect(Observation.safeParse(out).success).toBe(true);
+}
+
+/** `run` refuses the row with `invalid_field`, and the error carries the code only, never the secret. */
+function expectRefused(run: () => unknown): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(RedactError);
+  expect(caught).toMatchObject({ code: 'invalid_field', message: 'redact: invalid_field' });
+  const shown = `${String(caught)} ${JSON.stringify(caught)}`;
+  expect(shown).not.toContain('7731');
+  expect(shown).not.toContain('QUOKKA');
 }
 
 describe('prototype keys never carry content', () => {
@@ -71,7 +87,7 @@ describe('a proxy whose get trap lies is read through its own-property descripto
   });
 });
 
-describe('a value that only coerces to a valid one is dropped, never coerced', () => {
+describe('a value that only coerces to a valid one refuses the row, never coerced', () => {
   const coercing: readonly (readonly [string, unknown])[] = [
     ['a boxed string', boxed(SECRET)],
     ['an object with toString', { toString: () => SECRET }],
@@ -81,16 +97,14 @@ describe('a value that only coerces to a valid one is dropped, never coerced', (
     ['a symbol', Symbol(SECRET)],
   ];
 
-  it.each(coercing)('subjectHint and counterparty as %s', (_label, value) => {
-    const out = sent({ subjectHint: value, counterparty: value, occurredAt: OCCURRED });
-    expect(out).toStrictEqual(MINIMAL_SENT());
-    expectClean(out);
+  it.each(coercing)('subjectHint or counterparty as %s', (_label, value) => {
+    expectRefused(() => sent({ subjectHint: value, counterparty: value, occurredAt: OCCURRED }));
+    expectRefused(() => sent({ subjectHint: value, occurredAt: OCCURRED }));
+    expectRefused(() => sent({ counterparty: value, occurredAt: OCCURRED }));
   });
 
   it.each(coercing)('merchant as %s', (_label, value) => {
-    const out = receipt({ merchant: value, occurredAt: OCCURRED });
-    expect(out).toStrictEqual(MINIMAL_RECEIPT());
-    expectClean(out);
+    expectRefused(() => receipt({ merchant: value, occurredAt: OCCURRED }));
   });
 
   it.each<readonly [string, unknown]>([
@@ -99,9 +113,7 @@ describe('a value that only coerces to a valid one is dropped, never coerced', (
     ['an object with valueOf', { valueOf: () => 7731 }],
     ['a Date', new Date(7731)],
   ])('amountCents as %s', (_label, value) => {
-    const out = receipt({ amountCents: value, occurredAt: OCCURRED });
-    expect(out).toStrictEqual(MINIMAL_RECEIPT());
-    expect(JSON.stringify(out)).not.toContain('7731');
+    expectRefused(() => receipt({ amountCents: value, occurredAt: OCCURRED }));
   });
 
   it.each<readonly [string, unknown]>([
@@ -166,19 +178,18 @@ describe('unusual rows', () => {
 });
 
 describe('every cap, at and beyond, in code points', () => {
-  it('counterparty: exactly the cap in astral code points is kept; one more is dropped whole', () => {
+  it('counterparty: exactly the cap in astral code points is kept; one more refuses the row, never cut', () => {
     const at = SMILE.repeat(SCHEMA_LIMITS.COUNTERPARTY);
     expect(sent({ counterparty: at, occurredAt: OCCURRED }).counterparty).toBe(at);
-    expect(sent({ counterparty: `${at}a`, occurredAt: OCCURRED })).toStrictEqual(MINIMAL_SENT());
+    expectRefused(() => sent({ counterparty: `${at}a`, occurredAt: OCCURRED }));
   });
 
-  it('merchant: exactly the cap is kept; one more is dropped whole, never cut', () => {
+  it('merchant: exactly the cap is kept; one more refuses the row, never cut', () => {
     const at = SMILE.repeat(SCHEMA_LIMITS.MERCHANT);
     expect(receipt({ merchant: at, occurredAt: OCCURRED }).merchant).toBe(at);
-    const over = `${'m'.repeat(SCHEMA_LIMITS.MERCHANT)}${SECRET}`;
-    const out = receipt({ merchant: over, occurredAt: OCCURRED });
-    expect(out).toStrictEqual(MINIMAL_RECEIPT());
-    expectClean(out);
+    expectRefused(() =>
+      receipt({ merchant: `${'m'.repeat(SCHEMA_LIMITS.MERCHANT)}${SECRET}`, occurredAt: OCCURRED }),
+    );
   });
 
   it('subjectHint: a secret starting at the 81st code point never survives, whatever precedes it', () => {
@@ -204,5 +215,40 @@ describe('every cap, at and beyond, in code points', () => {
     expect(() => sent({ occurredAt: '2026-10-06T14:02:00.1234567890123+00:00' })).toThrow(
       'redact: missing_occurred_at',
     );
+  });
+});
+
+describe('text that is not one line refuses the row (SEC-3)', () => {
+  const BREAKS = ['\n', '\r\n', '\r', '\u2028', '\u2029', '\u0085', '\t', '\u0000', '\u001B', '\u007F'];
+
+  it.each(BREAKS.map((mark) => [JSON.stringify(mark), mark]))(
+    '%s in a counterparty, merchant or subject',
+    (_label, mark) => {
+      const body = `Hi Priya,${mark}${SECRET}`;
+      expectRefused(() => sent({ counterparty: body, occurredAt: OCCURRED }));
+      expectRefused(() => sent({ subjectHint: body, occurredAt: OCCURRED }));
+      expectRefused(() => receipt({ merchant: body, occurredAt: OCCURRED }));
+      expectRefused(() =>
+        project(
+          'gcal.event',
+          { counterparty: body, occurredAt: OCCURRED },
+          { ...SENT, type: 'calendar.created' },
+          DEFAULT_POLICY,
+        ),
+      );
+    },
+  );
+
+  it('a line break inside the first 80 code points of a subject refuses the row; one past the cut is cut away', () => {
+    const head = 'a'.repeat(SCHEMA_LIMITS.SUBJECT_HINT - 1);
+    expectRefused(() => sent({ subjectHint: `${head}\n${SECRET}`, occurredAt: OCCURRED }));
+    const out = sent({ subjectHint: `${head}b\n${SECRET}`, occurredAt: OCCURRED });
+    expect(out.subjectHint).toBe(`${head}b`);
+    expectClean(out);
+  });
+
+  it('invisible format marks are one-line text and are kept as read (§11 strips them when it reads)', () => {
+    const counterparty = 'pri\u200Bya@company.com\u200E';
+    expect(sent({ counterparty, occurredAt: OCCURRED }).counterparty).toBe(counterparty);
   });
 });

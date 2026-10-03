@@ -4,35 +4,46 @@
  *
  *  - `visibleAt(index, evaluatedMs)`: the index as it was at `evaluatedAt`. Observations with
  *    `observedAt > evaluatedAt` are ignored (§3), so replay at an earlier instant sees exactly what grading saw.
- *  - `coveredObservations(index, coverage, policy)`: every observation of a covered type (one with sources)
- *    whose `occurredAt` lies in a window its own source's observer saw (`windowStart..windowEnd` of a coverage
- *    entry synced by `evaluatedAt`), counted once per `contentHash` (§4.1: the lowest id is kept, then the
- *    earliest sighting). These are the observations an orphan can be (§4.3: assigned to no claim, not taken).
+ *  - `isOrphanCandidate(observation, windows, policy)`: the one definition of an orphan candidate (§3): an
+ *    observation of a type with sources whose `occurredAt` lies in a window its OWN source's observer saw
+ *    (`windowStart..windowEnd` of a coverage entry synced by `evaluatedAt`, `seenWindows`), whatever sources the
+ *    policy lists for its type. Batch grading (`coveredObservations`) and replay (replay.ts, for an UNASKED receipt's
+ *    observation) both decide with it, so replay reproduces every UNASKED receipt the batch issues (Hard Rule 4).
+ *  - `coveredObservations(index, coverage, policy)`: every orphan candidate, counted once per `contentHash` (§4.1:
+ *    the lowest id is kept, then the earliest sighting; order.ts `representative`). These are the observations an
+ *    orphan can be (§4.3: assigned to no claim, not taken).
  */
 import type { ObservationIndex } from './candidates';
-import { observedMs, occurredMs } from './candidates-time';
+import { occurredMs } from './candidates-time';
 import { instantMs } from './normalize';
+import { compareCandidates, mergeIntervals, type Placed, representative } from './order';
 import type { Policy } from './policy';
 import { ActionType, type Coverage, type Observation, type ObservationSource } from './schema';
 import type { Interval } from './window';
 
+/**
+ * Imported functions called once per pair or row, bound here once: the test runner's module transform turns every
+ * read of an imported binding into a getter call (normalize-time.ts binds its units for the same reason).
+ */
+const instantMsLocal = instantMs;
+const representativeLocal = representative;
+const compareCandidatesLocal = compareCandidates;
+
 /** The policy fields orphan discovery reads. A loaded `Policy` satisfies it. */
 export type OrphanPolicy = Pick<Policy, 'sourcesByType'>;
 
-function compareText(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+/** Per source, the closed, disjoint, ascending windows its observers saw (`seenWindows`). */
+export type SeenWindows = ReadonlyMap<ObservationSource, readonly Interval[]>;
 
-function compareNumbers(a: number, b: number): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
-/** The rows first seen by `evaluatedMs`, in order. */
+/**
+ * The rows first seen by `evaluatedMs`, in order. Instants are read from the text here, not through the per-object
+ * memo (candidates-time.ts): a batch reads each row a few times at most, and a memo entry per row would live as long
+ * as the observation does, long after the batch (the task 1.5 perf gate: memory a major GC must mark).
+ */
 function seenBy(rows: readonly Observation[], evaluatedMs: number): Observation[] {
   const seen: Observation[] = [];
-  for (const observation of rows) if (observedMs(observation) <= evaluatedMs) seen.push(observation);
+  for (const observation of rows)
+    if (instantMsLocal(observation.observedAt) <= evaluatedMs) seen.push(observation);
   return seen;
 }
 
@@ -46,30 +57,13 @@ export function visibleAt(index: ObservationIndex, evaluatedMs: number): Observa
   };
 }
 
-/** Closed intervals merged where they overlap or touch, in ascending order. */
-function mergeIntervals(intervals: readonly Interval[]): Interval[] {
-  const sorted = [...intervals].sort(
-    (a, b) => compareNumbers(a.startMs, b.startMs) || compareNumbers(a.endMs, b.endMs),
-  );
-  const merged: Interval[] = [];
-  for (const next of sorted) {
-    const last = merged[merged.length - 1];
-    if (last !== undefined && next.startMs <= last.endMs) {
-      merged[merged.length - 1] = { startMs: last.startMs, endMs: Math.max(last.endMs, next.endMs) };
-    } else {
-      merged.push(next);
-    }
-  }
-  return merged;
-}
-
 /** Per source, the union of the windows its observers saw in passes synced by `evaluatedAt` (§3). */
-export function seenWindows(coverage: Coverage): ReadonlyMap<ObservationSource, readonly Interval[]> {
-  const evaluatedMs = instantMs(coverage.evaluatedAt);
+export function seenWindows(coverage: Coverage): SeenWindows {
+  const evaluatedMs = instantMsLocal(coverage.evaluatedAt);
   const bySource = new Map<ObservationSource, Interval[]>();
   for (const entry of coverage.observers) {
-    if (instantMs(entry.lastSyncAt) > evaluatedMs) continue;
-    const interval = { startMs: instantMs(entry.windowStart), endMs: instantMs(entry.windowEnd) };
+    if (instantMsLocal(entry.lastSyncAt) > evaluatedMs) continue;
+    const interval = { startMs: instantMsLocal(entry.windowStart), endMs: instantMsLocal(entry.windowEnd) };
     const held = bySource.get(entry.source);
     if (held === undefined) bySource.set(entry.source, [interval]);
     else held.push(interval);
@@ -77,29 +71,8 @@ export function seenWindows(coverage: Coverage): ReadonlyMap<ObservationSource, 
   return new Map([...bySource].map(([source, intervals]) => [source, mergeIntervals(intervals)]));
 }
 
-/** §4.1's representative of one `contentHash`: the lower id, then the earlier sighting, then the text. */
-function preferred(held: Observation, next: Observation): Observation {
-  const order =
-    compareText(held.id, next.id) ||
-    compareNumbers(observedMs(held), observedMs(next)) ||
-    compareText(held.observedAt, next.observedAt);
-  return order <= 0 ? held : next;
-}
-
 /** A covered observation and its `occurredAt` instant (epoch ms). */
-export interface Keyed {
-  readonly observation: Observation;
-  readonly atMs: number;
-}
-
-/** (`occurredAt` instant, id, `contentHash`): the candidate order of §4.1, total after dedupe. */
-function compareKeyed(a: Keyed, b: Keyed): number {
-  return (
-    compareNumbers(a.atMs, b.atMs) ||
-    compareText(a.observation.id, b.observation.id) ||
-    compareText(a.observation.contentHash, b.observation.contentHash)
-  );
-}
+export type Keyed = Placed;
 
 /**
  * True iff `atMs` lies in one of `windows` (closed, disjoint and ascending, as `seenWindows` merges them): the
@@ -117,19 +90,52 @@ function inWindows(windows: readonly Interval[], atMs: number): boolean {
   return window !== undefined && atMs <= window.endMs;
 }
 
-/** Adds the rows of `type` that lie in a window their OWN source was seen in (§3) to `found`, with their instant. */
+/**
+ * §3: whether `observation` can be an orphan of a batch whose observers saw `windows` (`seenWindows` of its
+ * coverage): its type has sources, and its `occurredAt` lies in a window its OWN source was seen in, whatever sources
+ * the policy lists for its type. The only definition: gradeBatch (`coveredObservations`) and replay (replay.ts, for
+ * an UNASKED receipt's observation) both call it.
+ */
+export function isOrphanCandidate(
+  observation: Observation,
+  windows: SeenWindows,
+  policy: OrphanPolicy,
+): boolean {
+  return orphanInstant(observation, windows, policy, occurredMs) !== null;
+}
+
+/**
+ * `isOrphanCandidate`, returning the observation's `occurredAt` instant (read only once its own source has windows)
+ * when it is an orphan candidate, else null.
+ */
+function orphanInstant(
+  observation: Observation,
+  windows: SeenWindows,
+  policy: OrphanPolicy,
+  occurredAtMs: (observation: Observation) => number,
+): number | null {
+  if (policy.sourcesByType[observation.type].length === 0) return null;
+  const own = windows.get(observation.source);
+  if (own === undefined) return null;
+  const atMs = occurredAtMs(observation);
+  return inWindows(own, atMs) ? atMs : null;
+}
+
+/** `occurredAt` read from its text (see `seenBy`). */
+const occurredAtText = (observation: Observation): number => instantMsLocal(observation.occurredAt);
+
+/** Adds the rows of `type` that are orphan candidates (`isOrphanCandidate`) to `found`, with their instant. */
 function keepSeen(
   found: Keyed[],
   rows: readonly Observation[],
   type: ActionType,
-  windows: ReadonlyMap<ObservationSource, readonly Interval[]>,
+  windows: SeenWindows,
+  policy: OrphanPolicy,
 ): void {
   for (const observation of rows) {
     if (observation.type !== type) continue;
-    const own = windows.get(observation.source);
-    if (own === undefined) continue;
-    const atMs = occurredMs(observation);
-    if (inWindows(own, atMs)) found.push({ observation, atMs });
+    const atMs = orphanInstant(observation, windows, policy, occurredAtText);
+    if (atMs !== null) found.push({ observation, atMs });
   }
 }
 
@@ -137,30 +143,32 @@ function keepSeen(
 async function readWindows(
   index: ObservationIndex,
   type: ActionType,
-  windows: ReadonlyMap<ObservationSource, readonly Interval[]>,
+  windows: SeenWindows,
   union: readonly Interval[],
+  policy: OrphanPolicy,
 ): Promise<Keyed[]> {
   const found: Keyed[] = [];
   for (const window of union) {
-    keepSeen(found, await index.byTypeAndBucket(type, window.startMs, window.endMs), type, windows);
+    keepSeen(found, await index.byTypeAndBucket(type, window.startMs, window.endMs), type, windows, policy);
   }
   return found;
 }
 
-/** Adds `rows` to `byHash`, one representative per `contentHash` (§4.1, `preferred`), with its own instant. */
+/** Adds `rows` to `byHash`, one representative per `contentHash` (§4.1, `representative`), with its own instant. */
 function addOnce(byHash: Map<string, Keyed>, rows: readonly Keyed[]): void {
   for (const row of rows) {
     const { contentHash } = row.observation;
     const held = byHash.get(contentHash)?.observation;
-    if (held === undefined || preferred(held, row.observation) !== held) byHash.set(contentHash, row);
+    if (held === undefined || representativeLocal(held, row.observation) !== held)
+      byHash.set(contentHash, row);
   }
 }
 
 /**
- * Every observation of a type with sources whose `occurredAt` lies in a window its OWN source's observer saw (§3:
- * the observation's source, whether or not the policy lists it for the type), once per `contentHash`, in candidate
- * order (each instant read once, not once per comparison), with its `occurredAt` instant. `index` should already
- * be `visibleAt(evaluatedAt)`.
+ * Every orphan candidate (`isOrphanCandidate`), once per `contentHash`, in candidate order (each instant read once,
+ * not once per comparison), with its `occurredAt` instant. Each type with sources is read once over the union of
+ * every source's windows, then each row is held to its own source's windows. `index` should already be
+ * `visibleAt(evaluatedAt)`.
  */
 export async function coveredObservations(
   index: ObservationIndex,
@@ -172,7 +180,7 @@ export async function coveredObservations(
   const byHash = new Map<string, Keyed>();
   for (const type of ActionType.options) {
     if (policy.sourcesByType[type].length > 0)
-      addOnce(byHash, await readWindows(index, type, windows, union));
+      addOnce(byHash, await readWindows(index, type, windows, union, policy));
   }
-  return [...byHash.values()].sort(compareKeyed);
+  return [...byHash.values()].sort(compareCandidatesLocal);
 }

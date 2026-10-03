@@ -14,7 +14,7 @@
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
 import { GradeError } from './grade-error';
-import { canonicalJson, idFromHash, sha256Hex } from './hash';
+import { hashCanonical, idFromHash } from './hash';
 import {
   type AgentId,
   type Claim,
@@ -51,7 +51,7 @@ export type ReceiptSubject =
 
 /** §3: the receipt id of a subject. The same subject always gets the same id. */
 export function receiptId(subject: ReceiptSubject): Ulid {
-  return Ulid.parse(idFromHash(sha256Hex(canonicalJson(subject))));
+  return Ulid.parse(idFromHash(hashCanonical(subject)));
 }
 
 /**

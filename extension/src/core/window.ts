@@ -14,7 +14,7 @@ import { instantMs } from './normalize';
 import { trailingOffsetMinutes } from './normalize-time';
 import type { Policy } from './policy';
 import type { ActionType, ClaimPrecision } from './schema';
-import { MINUTES_PER_HOUR, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
+import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
 /**
  * The timing fields of a claim. A parsed `Claim` satisfies it (its optional fields are typed `T | undefined`, so
@@ -51,7 +51,11 @@ export interface ClaimWindow {
 /** The policy fields a window reads. A loaded `Policy` satisfies it. */
 export type WindowPolicy = Pick<Policy, 'windows'>;
 
-export type WindowErrorCode = 'end_not_after_claimed_at' | 'unsafe_window';
+export type WindowErrorCode =
+  | 'end_not_after_claimed_at'
+  | 'unsafe_window'
+  /** A timestamp that ends in neither `Z` nor `±hh:mm` (`instantMs` rejects such text before a window reads it). */
+  | 'no_offset';
 
 /** A claim whose timing cannot form a window: fail loud rather than grade against a wrong interval (HR6). */
 export class WindowError extends Error {
@@ -67,22 +71,20 @@ const UNIT_MS: Readonly<Record<ClaimPrecision, number>> = Object.freeze({
   day: MS_PER_DAY,
 });
 
-/** The trailing UTC offset of an ISO timestamp that `instantMs` already accepted. */
-const ISO_OFFSET = /(?:Z|(?<sign>[+-])(?<hours>\d{2}):(?<minutes>\d{2}))$/;
-
 /** §4.1: `calendar.created`, `calendar.updated` and `calendar.deleted` are centred on `targetAt`. */
 export function isCalendarType(type: ActionType): boolean {
   return type.startsWith('calendar.');
 }
 
-/** The UTC offset written in `iso`, in minutes (`Z` is 0). Call only after `instantMs(iso)` succeeded. */
-function writtenOffsetMinutes(iso: string): number {
-  const plain = trailingOffsetMinutes(iso);
-  if (plain !== null) return plain;
-  const groups = ISO_OFFSET.exec(iso)?.groups;
-  if (groups?.sign === undefined) return 0;
-  const magnitude = Number(groups.hours) * MINUTES_PER_HOUR + Number(groups.minutes);
-  return groups.sign === '-' ? -magnitude : magnitude;
+/**
+ * The UTC offset written at the end of `iso`, in minutes (`Z` is 0). Every timestamp `instantMs` accepts ends in
+ * one (a property test pins `trailingOffsetMinutes` to it), so a window, which reads `instantMs` first, never
+ * reaches the throw; text without one is `WindowError('no_offset')`, never a guessed offset (Hard Rule 6).
+ */
+export function writtenOffsetMinutes(iso: string): number {
+  const minutes = trailingOffsetMinutes(iso);
+  if (minutes === null) throw new WindowError('no_offset');
+  return minutes;
 }
 
 /** `value mod unit` in [0, unit), also for instants before 1970. */
@@ -141,6 +143,11 @@ export function precisionBounds(claim: WindowClaim): Interval {
   const bounds = computeBounds(claim);
   BOUNDS.set(claim, { claimedAt, precision, end, bounds });
   return bounds;
+}
+
+/** §4.1: whether an `occurredAt` instant lies in the claim window (inclusive at both ends). */
+export function inClaimWindow(window: Pick<ClaimWindow, 'fromMs' | 'toMs'>, atMs: number): boolean {
+  return atMs >= window.fromMs && atMs <= window.toMs;
 }
 
 /**

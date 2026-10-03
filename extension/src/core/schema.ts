@@ -4,8 +4,8 @@
  * Every object is strict: an unknown key is an error, so nothing outside the allowlist reaches storage, the
  * bus or a hash (Hard Rule 2). Every free-text string and every array is capped (SCHEMA_LIMITS, SECURITY-4).
  * Ids, hashes and timestamps are branded, so a plain string cannot pass for a `Ulid` without a parse.
- * Cross-field invariants live in ./schema-checks. src/ledger/types.ts re-exports all of this.
- * PURE: no I/O, no clock, no locale (Hard Rule 4).
+ * Counterparty, merchant and subject text is one line (./schema-text, SEC-3). Cross-field invariants live in
+ * ./schema-checks. src/ledger/types.ts re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
  *
  * This file is exempt from the core no-literal rule for SCHEMA_LIMITS only: a length cap is schema, not policy.
  */
@@ -27,6 +27,7 @@ import {
   signalProblems,
 } from './schema-checks';
 import { receiptProblems } from './schema-receipt';
+import { oneLineText, VISIBLE } from './schema-text';
 import { BASIS_POINTS } from './units';
 
 /** Length caps on every free-text string and every array (SECURITY-4, Hard Rule 2; Decisions [0.close]). */
@@ -71,8 +72,6 @@ const ULID_UPPER = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const RULE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]*$/;
-/** A visible character: not whitespace and not an invisible format mark (zero-width space, bidi, BOM). */
-const VISIBLE = /[^\s\p{Cf}]/u;
 
 /** Uppercase Crockford only, the form `idFromHash` emits: one id has exactly one spelling (Hard Rule 4). */
 export const Ulid = z.ulid().regex(ULID_UPPER, 'expected an uppercase ULID').brand<'Ulid'>();
@@ -145,10 +144,10 @@ export const Claim = z
     agent: AgentId,
     requestId: Ulid.optional(),
     type: ActionType,
-    counterparty: z.string().max(L.COUNTERPARTY).optional(),
+    counterparty: oneLineText(L.COUNTERPARTY).optional(),
     amountCents: AmountCents.optional(),
     currency: Currency.optional(),
-    subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
+    subjectHint: oneLineText(L.SUBJECT_HINT).optional(),
     /** When the agent says it acted, read at `claimedAtPrecision`. */
     claimedAt: IsoTs,
     claimedAtPrecision: ClaimPrecision,
@@ -173,17 +172,17 @@ export const Claim = z
 
 // ── Evidence side ───────────────────────────────────────────────────────────────────────────────
 
-/** Derived facts only; redact.ts applies the allowlist (Hard Rule 2). `id` = `idFromHash(contentHash)` (§10). */
+/** Derived facts only: redact.ts projects them, the ledger re-checks them (Hard Rule 2). `id` per §10. */
 export const Observation = z
   .strictObject({
     id: Ulid,
     source: ObservationSource,
     type: ActionType,
-    counterparty: z.string().max(L.COUNTERPARTY).optional(),
-    merchant: z.string().max(L.MERCHANT).optional(),
+    counterparty: oneLineText(L.COUNTERPARTY).optional(),
+    merchant: oneLineText(L.MERCHANT).optional(),
     amountCents: AmountCents.optional(),
     currency: Currency.optional(),
-    subjectHint: z.string().max(L.SUBJECT_HINT).optional(),
+    subjectHint: oneLineText(L.SUBJECT_HINT).optional(),
     occurredAt: IsoTs,
     observedAt: IsoTs,
     /** SHA-256 of the vendor's own row id, so two identical rows stay two observations (§10). */

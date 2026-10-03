@@ -1,13 +1,16 @@
 /**
- * candidates() (docs/grading.md §4.1, §4.2): same type, inclusive window bounds to the millisecond, the
- * calendar.created first-seen rule, contentHash dedupe (lowest id), (occurredAt instant, id) order, exact
- * filtering over an index that over-returns, and independence from the index's return order.
+ * candidates() (docs/grading.md §4.1, §4.2): same type, a source the policy lists for it (§6.1), inclusive window
+ * bounds to the millisecond, the calendar.created first-seen rule, contentHash dedupe (lowest id), (occurredAt
+ * instant, id) order, exact filtering over an index that over-returns, and independence from the index's return
+ * order.
  */
 import { describe, expect, it } from 'vitest';
 
+import defaultPolicyJson from '../../../../policy/default.json';
+
 import { candidates, createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
-import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import { type ActionType, IsoTs, Observation, type ObservationSource, Ulid } from '../../../src/core/schema';
 import type { WindowClaim } from '../../../src/core/window';
 
@@ -199,5 +202,28 @@ describe('candidates: ordered by (occurredAt instant, id), never by ISO text', (
     expect(await run(claim, [q, p])).toEqual(byHash);
     expect(await candidates(claim, everything([q, p]), DEFAULT_POLICY)).toEqual(byHash);
     expect(await candidates(claim, everything([p, q]), DEFAULT_POLICY)).toEqual(byHash);
+  });
+});
+
+describe('candidates: from a source the policy lists for the type only (§6.1)', () => {
+  const at = '2026-10-06T14:02:00-04:00';
+  const own = obs({ occurredAt: at, subjectHint: 'own' });
+  // An email.sent row the calendar observer read: email.sent's coverage never reads gcal.event.
+  const content = { source: 'gcal.event', type: 'email.sent', subjectHint: 'stray', occurredAt: at } as const;
+  const contentHash = sha256Hex(canonicalJson(content));
+  const stray = Observation.parse({ ...content, id: idFromHash(contentHash), contentHash, observedAt: at });
+
+  it('is no candidate of a claim of its type, from any index', async () => {
+    expect(subjects(await run(emailClaim(at), [stray, own]))).toEqual(['own']);
+    expect(subjects(await candidates(emailClaim(at), everything([stray, own]), DEFAULT_POLICY))).toEqual([
+      'own',
+    ]);
+  });
+
+  it('is one when the policy lists its source for the type', async () => {
+    const sourcesByType = { ...defaultPolicyJson.sourcesByType, 'email.sent': ['gmail.sent', 'gcal.event'] };
+    const both = loadPolicy({ ...defaultPolicyJson, sourcesByType });
+    const found = await candidates(emailClaim(at), createMemoryIndex([stray, own], 60), both);
+    expect(subjects(found).sort()).toEqual(['own', 'stray']);
   });
 });

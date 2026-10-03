@@ -96,6 +96,24 @@ export function counterpartyNotAllowed(
   return { value: ownFails || evidenceFails, candidateOnly: !ownFails && evidenceFails };
 }
 
+/**
+ * The currency a claim's amount is counted in under a grant (§6.1, §6.3): its own, or the grant's `spendCurrency`
+ * when it has none (undefined when neither is set). The one reading of a missing claim currency, for the Amount of
+ * `amountAboveCeiling`, the guard of `cumulativeAboveCeiling` and the priors `priorSpendCents` sums (scope.ts), so a
+ * claim that leaves its currency out never escapes the cumulative ceiling its amount would break (Hard Rule 5).
+ */
+export function spendCurrencyOf(
+  currency: string | undefined,
+  spendCurrency: string | undefined,
+): string | undefined {
+  return currency ?? spendCurrency;
+}
+
+/** §6.1 "counted in spendCurrency": the claim's currency is absent or equals `spendCurrency` (`spendCurrencyOf`). */
+export function countedInSpendCurrency(currency: string | undefined, spendCurrency: string): boolean {
+  return spendCurrencyOf(currency, spendCurrency) === spendCurrency;
+}
+
 /** The spend guard shared by both ceiling conditions: a spend type and a ceiling (then a currency, by schema). */
 function ceilingOf(
   claim: Claim,
@@ -129,7 +147,7 @@ export function amountAboveCeiling(
   const ceiling = ceilingOf(claim, grant, policy);
   if (ceiling === null) return null;
   if (claim.amountCents === undefined && assigned?.amountCents === undefined) return null;
-  const claimCounts = claim.currency === undefined || claim.currency === ceiling.currency;
+  const claimCounts = countedInSpendCurrency(claim.currency, ceiling.currency);
   const claimAmount = claimCounts ? claim.amountCents : undefined;
   const candidateAmount = assigned?.currency === ceiling.currency ? assigned.amountCents : undefined;
   const amountCents = larger(claimAmount, candidateAmount);
@@ -153,8 +171,9 @@ export function amountAboveCeiling(
 }
 
 /**
- * §6.1 `cumulativeAboveCeiling`: applicable for a spend type with a ceiling and a claim amount in
- * `spendCurrency`; true when `context.priorSpendCents + claim.amountCents > spendCeilingCents` (exact, BigInt).
+ * §6.1 `cumulativeAboveCeiling`: applicable for a spend type with a ceiling and a claim amount counted in
+ * `spendCurrency` (`countedInSpendCurrency`: its currency absent or equal); true when `context.priorSpendCents +
+ * claim.amountCents > spendCeilingCents` (exact, BigInt).
  */
 export function cumulativeAboveCeiling(
   claim: Claim,
@@ -163,7 +182,8 @@ export function cumulativeAboveCeiling(
   policy: ScopePolicy,
 ): CumulativeCheck | null {
   const ceiling = ceilingOf(claim, grant, policy);
-  if (ceiling === null || claim.amountCents === undefined || claim.currency !== ceiling.currency) return null;
+  if (ceiling === null || claim.amountCents === undefined) return null;
+  if (!countedInSpendCurrency(claim.currency, ceiling.currency)) return null;
   const total = BigInt(context.priorSpendCents) + BigInt(claim.amountCents);
   return {
     value: total > BigInt(ceiling.cents),
@@ -182,5 +202,10 @@ export function observedScopeExceedsDeclared(grant: Grant, context: GradeContext
 /** §6.1 `unaskedLikely` (claim-less): the attribution score ≥ `unasked.threshold`, exactly in basis points. */
 export function unaskedLikely(context: GradeContext, policy: ScopePolicy): boolean | null {
   if (context.attribution === undefined) return null;
-  return context.attribution.scoreBp >= policy.bp.unasked.threshold;
+  return unaskedLikelyAt(context.attribution.scoreBp, policy);
+}
+
+/** `unaskedLikely` of a context whose attribution scores `scoreBp` basis points. */
+export function unaskedLikelyAt(scoreBp: number, policy: ScopePolicy): boolean {
+  return scoreBp >= policy.bp.unasked.threshold;
 }

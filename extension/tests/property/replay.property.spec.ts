@@ -8,16 +8,22 @@
  * change mid-ledger. Then:
  *  - the Done-when ledger (1,000 claims, 10,000 observations): replay reproduces 100% of the receipts, and mutating
  *    one stored receipt's grade makes replay report exactly that one mismatch;
- *  - smaller ledgers, many more of them: the same for grade and ruleId, an inputsHash mismatch when one receipt's
- *    inputs row moves, a receiptInputs mismatch when one row is lost, and the same report whatever the input order.
+ *  - small ledgers (1–20 claims, 1–100 observations, 2–4 batches), 1,000 of them per property (qa_tester rule 4):
+ *    the same for grade and ruleId, an inputsHash mismatch when one receipt's inputs row moves, a receiptInputs
+ *    mismatch when one row is lost, and the same report whatever the input order.
+ * The world mixes in rows read by a source the policy does not list for their type (attest-world.ts), so UNASKED
+ * receipts the batch issues for them are replayed too (§3; Sprint 1 tech review TECH-C1).
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { canonicalJson } from '../../src/core/hash';
+import { DEFAULT_POLICY } from '../../src/core/policy';
+import { observationIntegrityProblems } from '../../src/core/redact';
 import { type LedgerSnapshot, replay, type ReplayReport } from '../../src/core/replay';
 import { Grade, type Receipt, Sha256 } from '../../src/core/schema';
 import { simulate } from '../tools/attest-ledger';
+import { sourceOf } from '../tools/attest-world';
 
 const DONE_WHEN = { claims: 1_000, observations: 10_000 } as const;
 
@@ -43,6 +49,19 @@ function expectReproduced(report: ReplayReport, snapshot: LedgerSnapshot): void 
   expect(report.receipts).toBe(snapshot.receipts.length);
 }
 
+/**
+ * UNASKED receipts for a row read by a source other than its type's own (attest-world's stray rows: §3 orphans the
+ * batch issues whatever sources the policy lists for the type; Sprint 1 tech review TECH-C1).
+ */
+function strayUnasked(snapshot: LedgerSnapshot): number {
+  const byId = new Map(snapshot.observations.map((observation) => [observation.id, observation]));
+  return snapshot.receipts.filter((receipt) => {
+    const [id] = receipt.observationIds;
+    const row = receipt.grade === 'UNASKED' && id !== undefined ? byId.get(id) : undefined;
+    return row !== undefined && row.source !== sourceOf(row.type);
+  }).length;
+}
+
 /** The ledger is not vacuous: several batches, real grades, and receipts that lived through more than one batch. */
 function expectRealLedger(snapshot: LedgerSnapshot, report: ReplayReport): void {
   const count = (grade: Grade) => snapshot.receipts.filter((receipt) => receipt.grade === grade).length;
@@ -59,6 +78,12 @@ function expectRealLedger(snapshot: LedgerSnapshot, report: ReplayReport): void 
   }
   expect(snapshot.receipts.filter((receipt) => receipt.override !== undefined).length).toBeGreaterThan(0);
   expect(snapshot.receipts.filter((receipt) => receipt.observationIds.length > 0).length).toBeGreaterThan(0);
+  expect(strayUnasked(snapshot)).toBeGreaterThan(0);
+  // Every row, stray ones included, is one project() could return (its source's allowlisted fields, §10 hash).
+  const unprojectable = snapshot.observations.filter(
+    (observation) => observationIntegrityProblems(observation, DEFAULT_POLICY).length > 0,
+  );
+  expect(unprojectable).toEqual([]);
   expectFinalisedAcrossBatches(snapshot);
 }
 
@@ -119,13 +144,19 @@ describe('replay of a synthetic ledger (task 1.9 Done-when)', () => {
   }, 600_000);
 });
 
-/** Small ledgers: any size from one claim and one observation up. */
+/** qa_tester rule 4: every core property runs at least 1,000 examples. */
+const SMALL_RUNS = 1_000;
+
+/** Small ledgers holding a stray-source UNASKED receipt: asserted after the property, so it is never vacuous. */
+const tally = { strayLedgers: 0 };
+
+/** Small ledgers, so 1,000 of them stay cheap: any size from one claim and one observation up. */
 const ledgerArb = fc.record({
   seed: fc.integer({ min: 0, max: 0x7fff_ffff }),
-  claims: fc.integer({ min: 1, max: 60 }),
-  observations: fc.integer({ min: 1, max: 500 }),
-  batches: fc.integer({ min: 2, max: 7 }),
-  overridesPerGap: fc.integer({ min: 0, max: 5 }),
+  claims: fc.integer({ min: 1, max: 20 }),
+  observations: fc.integer({ min: 1, max: 100 }),
+  batches: fc.integer({ min: 2, max: 4 }),
+  overridesPerGap: fc.integer({ min: 0, max: 3 }),
   pick: fc.nat(),
 });
 
@@ -135,6 +166,7 @@ describe('replay of many small synthetic ledgers', () => {
       fc.asyncProperty(ledgerArb, async ({ pick, ...options }) => {
         const { snapshot } = await simulate(options);
         expectReproduced(await replay(snapshot), snapshot);
+        if (strayUnasked(snapshot) > 0) tally.strayLedgers += 1;
         if (snapshot.receipts.length === 0) return;
         const target = receiptAt(snapshot, pick);
         const grade = otherGrade(target.grade, pick);
@@ -145,8 +177,9 @@ describe('replay of many small synthetic ledgers', () => {
           { receiptId: target.id, field: 'ruleId', stored: ruleId, replayed: target.ruleId },
         ]);
       }),
-      { numRuns: 60 },
+      { numRuns: SMALL_RUNS },
     );
+    expect(tally.strayLedgers).toBeGreaterThan(SMALL_RUNS / 20);
   }, 600_000);
 });
 
@@ -172,7 +205,7 @@ describe('replay of many small synthetic ledgers, tampered', () => {
           { receiptId: target.id, field: 'receiptInputs', stored: target.inputsHash, replayed: null },
         ]);
       }),
-      { numRuns: 40 },
+      { numRuns: SMALL_RUNS },
     );
   }, 600_000);
 
@@ -199,7 +232,7 @@ describe('replay of many small synthetic ledgers, tampered', () => {
         const [a, b] = await Promise.all([replay(tampered), replay(shuffled)]);
         expect(canonicalJson(b)).toBe(canonicalJson(a));
       }),
-      { numRuns: 30 },
+      { numRuns: SMALL_RUNS },
     );
   }, 600_000);
 });

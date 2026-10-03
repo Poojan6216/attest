@@ -330,7 +330,7 @@ describe('Reason params never carry content (property)', () => {
     );
     // Not vacuous: valid params were offered and accepted often enough to have been checked.
     expect(parsedWithParams).toBeGreaterThan(10);
-  }, 60_000);
+  });
 });
 
 describe('§15 v1.4: numeric params are non-negative integers, and -0 is written 0', () => {

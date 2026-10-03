@@ -14,6 +14,7 @@
  * Grouped integers are Western (1,234,567) or Indian (12,34,567) and never start with 0.
  */
 import { asciiLower, readsDifferently, stripInvisible } from './normalize-text';
+import { asBaseline, BASELINE_CLASS, trimBaseline } from './unicode-baseline';
 import { CURRENCY_MINOR_UNITS, DECIMAL_RADIX } from './units';
 
 export type CurrencyCode = keyof typeof CURRENCY_MINOR_UNITS;
@@ -77,12 +78,16 @@ const CURRENCY_BY_TOKEN: ReadonlyMap<string, CurrencyCode> = new Map([
   ...SYMBOLS,
 ]);
 
+/** Whitespace as Unicode 15.0 defines it (JS `\s`). */
+const SPACE = BASELINE_CLASS.space;
 /**
  * Prefix token, number, suffix token. The number starts and ends with a digit and may hold `.`, `,`, spaces and
  * apostrophes (' and U+2019); tokens hold no digit, space or separator.
  */
-const AMOUNT_SHAPE =
-  /^(?<prefix>[^\d\s.,'\u2019]*)\s*(?<number>\d(?:[\d.,' \u2019]*\d)?)\s*(?<suffix>[^\d\s.,'\u2019]*)$/u;
+const AMOUNT_SHAPE = new RegExp(
+  `^(?<prefix>[^\\d${SPACE}.,'\\u2019]*)[${SPACE}]*(?<number>\\d(?:[\\d.,' \\u2019]*\\d)?)[${SPACE}]*(?<suffix>[^\\d${SPACE}.,'\\u2019]*)$`,
+  'u',
+);
 const DIGIT = /\d/g;
 const DIGITS = /^\d+$/;
 const DECIMAL_SEPARATORS: ReadonlySet<string> = new Set(['.', ',']);
@@ -182,11 +187,12 @@ function minorUnits(text: string, exponent: number): number | null {
 /**
  * "$1,234.50", "CA$10", "US$5", "€9,99", "9,99 €", "£3.20", "¥980", "USD 10.00", "10 EUR", "1.234,50 €",
  * "1 234,50 €", "CHF 1'234.50", "₹1,23,456.00" → `{ minor, currency }`; anything else → null. Invisible marks
- * are dropped and the text is NFKC-folded first (fullwidth ￥９８０ is ¥980).
+ * are dropped and the text is NFKC-folded first (fullwidth ￥９８０ is ¥980), as Unicode 15.0 folds it: a newer
+ * character, such as an outlined digit (U+1CCF0–U+1CCF9, Unicode 16.0), is not a digit (unicode-baseline.ts).
  */
 export function amount(raw: string, options: AmountOptions = {}): Money | null {
   if (readsDifferently(raw)) return null;
-  const text = stripInvisible(raw.normalize('NFKC')).trim();
+  const text = trimBaseline(stripInvisible(asBaseline(raw).normalize('NFKC')));
   const groups = AMOUNT_SHAPE.exec(text)?.groups;
   if (groups === undefined) return null;
   const currency = resolveCurrency(groups.prefix ?? '', groups.suffix ?? '', options);

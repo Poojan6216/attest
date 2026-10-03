@@ -157,6 +157,10 @@ const WEIGHT_CASES: readonly Case[] = [
   ),
   one('unasked threshold 0.33333', ['unasked', 'threshold'], 0.33333, `unasked.threshold: ${MULTIPLE}`),
   one('weight above 1', ['features', 'amountExact'], 1.0001, 'features.amountExact: must be <= 1'),
+  // QA-R11: not JSON, but loadPolicy takes any value; a non-finite number is named as such, every run.
+  one('NaN weight', ['features', 'amountExact'], Number.NaN, 'features.amountExact: must be a finite number'),
+  one('Infinity threshold', ['unasked', 'threshold'], Infinity, 'unasked.threshold: must be a finite number'),
+  one('-Infinity window', ['windows', 'graceMin'], -Infinity, 'windows.graceMin: must be a finite number'),
 ];
 
 const PER_TYPE_CASES: readonly Case[] = [

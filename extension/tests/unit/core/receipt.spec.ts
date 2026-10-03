@@ -1,11 +1,8 @@
 /**
  * Task 1.5: receipt ids, `inputsHash` and the receipt builder (docs/grading.md §3, §8, §10, §15).
  */
-import { createHash } from 'node:crypto';
-
 import { describe, expect, it } from 'vitest';
 
-import defaultPolicyJson from '../../../../policy/default.json';
 import { GradeError } from '../../../src/core/grade';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import {
@@ -18,77 +15,22 @@ import {
   orderReasons,
   reasonCode,
   receiptId,
-  type ReceiptParts,
   refHash,
   uniqueById,
 } from '../../../src/core/receipt';
-import {
-  Attribution,
-  IsoTs,
-  type Observation,
-  type Reason,
-  ReasonCode,
-  Receipt,
-  Sha256,
-  Ulid,
-} from '../../../src/core/schema';
-import { buildClaim, buildCoverage, buildGrant, buildObservation, PolicyView } from '../../golden/build';
+import { IsoTs, type Reason, ReasonCode, Receipt, Sha256, Ulid } from '../../../src/core/schema';
 import { receiptIdFor } from '../../golden/load';
-
-const EVAL = '2026-10-06T15:00:00-04:00';
-const VIEW = PolicyView.parse(defaultPolicyJson);
-const CLAIM = buildClaim({
-  ref: 'c1',
-  agent: 'muse',
-  type: 'email.sent',
-  counterparty: 'priya@company.com',
-  claimedAt: '2026-10-06T14:02:00-04:00',
-});
-const obs = (ref: string, counterparty: string): Observation =>
-  buildObservation(
-    { ref, source: 'gmail.sent', type: 'email.sent', counterparty, occurredAt: '2026-10-06T14:02:00-04:00' },
-    [],
-    EVAL,
-    VIEW,
-  );
-const O1 = obs('o1', 'priya@company.com');
-const O2 = obs('o2', 'raj@company.com');
-const POLICY_HASH = sha256Hex('policy');
-
-function inputs(over: Partial<GradeInputs> = {}): GradeInputs {
-  return {
-    claim: CLAIM,
-    candidates: [O1, O2],
-    grant: buildGrant(
-      {
-        agent: 'muse',
-        allowedTypes: ['email.sent', 'calendar.created'],
-        counterpartyAllowlist: ['company.com', 'b@x.example'],
-        declaredScopes: ['gmail.send', 'calendar.write'],
-        observedScopes: ['gmail.read', 'gmail.send'],
-        accounts: { 'gmail.sent': ['acct-a', 'acct-b'] },
-      },
-      EVAL,
-    ),
-    policyHash: POLICY_HASH,
-    coverage: buildCoverage(
-      [
-        { source: 'gmail.sent', lastSyncAt: EVAL, windowStart: '2026-10-06T12:00:00-04:00', windowEnd: EVAL },
-        { source: 'gcal.event', lastSyncAt: EVAL, windowStart: '2026-10-01T00:00:00-04:00', windowEnd: EVAL },
-      ],
-      EVAL,
-    ),
-    context: {
-      priorSpendCents: 0,
-      attribution: Attribution.parse({
-        agent: 'muse',
-        scoreBp: 7000,
-        signals: ['userIdle', 'agentSessionActive'],
-      }),
-    },
-    ...over,
-  };
-}
+import {
+  CLAIM,
+  definedCandidatesHash,
+  EVAL,
+  inputs,
+  nodeSha256,
+  O1,
+  O2,
+  POLICY_HASH,
+  receiptParts,
+} from './receipt-fixtures';
 
 describe('receiptId (§3)', () => {
   it('is idFromHash(sha256Hex(canonicalJson(subject))) for each kind of subject, as the golden loader computes', () => {
@@ -134,24 +76,6 @@ function canonicalParts(input: GradeInputs) {
       observers: [...coverage.observers].sort((a, b) => (a.source < b.source ? -1 : 1)),
     },
   };
-}
-
-/** SHA-256 with Node's crypto, independent of core's own implementation. */
-const nodeSha256 = (data: string | Buffer): Buffer => createHash('sha256').update(data).digest();
-
-/**
- * §3 v1.5, recomputed from the contract with Node's crypto: each candidate's refHash is the SHA-256 of the canonical
- * JSON of {id, contentHash, observedAt}; candidatesHash is the SHA-256 of their 32-byte digests concatenated in id
- * order, one per id (the empty list hashes the empty byte string).
- */
-function definedCandidatesHash(candidates: readonly Observation[]): string {
-  const byId = new Map(candidates.map((o) => [o.id, o]));
-  const refs = [...byId.values()]
-    .sort((a, b) => (a.id < b.id ? -1 : 1))
-    .map((o) =>
-      nodeSha256(canonicalJson({ id: o.id, contentHash: o.contentHash, observedAt: o.observedAt })),
-    );
-  return nodeSha256(Buffer.concat(refs)).toString('hex');
 }
 
 describe('inputsHash (§3 v1.5, §10)', () => {
@@ -203,128 +127,6 @@ describe('inputsHash (§3 v1.5, §10)', () => {
     expect(inputsHash(inputs({ candidates: [seenLater, O2] }))).not.toBe(base);
     expect(inputsHash(inputs({ candidates: [{ ...O1 }, { ...O2 }] }))).toBe(base);
   });
-
-  it('refHash is remembered per observation, never stale: an observation edited in place is hashed again', () => {
-    const edited: Mutable<Observation> = { ...O1 };
-    const before = candidatesHash([edited, O2]);
-    expect(before).toBe(definedCandidatesHash([O1, O2]));
-    edited.observedAt = IsoTs.parse('2026-10-06T14:59:00-04:00');
-    expect(candidatesHash([edited, O2])).toBe(definedCandidatesHash([edited, O2]));
-    expect(candidatesHash([edited, O2])).not.toBe(before);
-    edited.contentHash = Sha256.parse(sha256Hex('another row'));
-    expect(candidatesHash([edited, O2])).toBe(definedCandidatesHash([edited, O2]));
-  });
-});
-
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
-type MutableGrant = Mutable<GradeInputs['grant']>;
-type MutableEntry = Mutable<GradeInputs['coverage']['observers'][number]>;
-
-describe('grantHash and coverageHash are remembered per object, never stale (§3: once per batch)', () => {
-  it('a grant edited in place hashes exactly like a fresh copy, edit after edit', () => {
-    const grant: MutableGrant = structuredClone(inputs().grant);
-    // [edit, whether it changes the grant as a set]: reordering a set-like array never changes the hash.
-    const edits: (readonly [(g: MutableGrant) => void, boolean])[] = [
-      [(g) => g.counterpartyAllowlist.push('raj@company.com'), true],
-      [(g) => (g.declaredScopes = ['gmail.send']), true],
-      [(g) => g.accounts?.['gmail.sent']?.reverse(), false],
-      [(g) => g.accounts?.['gmail.sent']?.pop(), true],
-      [(g) => (g.observedScopes = undefined), true],
-      [(g) => (g.spendCeilingCents = 500), true],
-      [(g) => (g.spendCurrency = 'USD'), true],
-    ];
-    let previous = grantHash(grant);
-    for (const [edit, changes] of edits) {
-      edit(grant);
-      const hash = grantHash(grant);
-      expect(hash).toBe(grantHash(structuredClone(grant)));
-      expect(hash).toBe(sha256Hex(canonicalJson({ ...grant, ...sortedSets(grant) })));
-      expect(hash !== previous).toBe(changes);
-      previous = hash;
-    }
-  });
-
-  it('a coverage whose entries are edited, added or removed in place hashes like a fresh copy', () => {
-    const coverage: Mutable<GradeInputs['coverage']> = structuredClone(inputs().coverage);
-    const entries: MutableEntry[] = coverage.observers;
-    const [first, second] = entries;
-    if (first === undefined || second === undefined) throw new Error('two entries expected');
-    const edits: (() => void)[] = [
-      () => (first.windowStart = IsoTs.parse('2026-10-06T11:00:00-04:00')),
-      () => (second.allCalendars = true),
-      () => entries.push({ ...first, observerId: 'second' }),
-      () => entries.pop(),
-      () => (coverage.evaluatedAt = IsoTs.parse('2026-10-06T15:30:00-04:00')),
-    ];
-    let previous = coverageHash(coverage);
-    for (const edit of edits) {
-      edit();
-      const hash = coverageHash(coverage);
-      expect(hash).toBe(coverageHash(structuredClone(coverage)));
-      expect(hash).not.toBe(previous);
-      previous = hash;
-    }
-  });
-});
-
-function sortedSets(grant: GradeInputs['grant']) {
-  return {
-    allowedTypes: [...new Set(grant.allowedTypes)].sort(),
-    counterpartyAllowlist: [...new Set(grant.counterpartyAllowlist)].sort(),
-    declaredScopes: [...new Set(grant.declaredScopes)].sort(),
-    observedScopes:
-      grant.observedScopes === undefined ? undefined : [...new Set(grant.observedScopes)].sort(),
-    accounts:
-      grant.accounts === undefined
-        ? undefined
-        : Object.fromEntries(Object.entries(grant.accounts).map(([k, v]) => [k, [...new Set(v)].sort()])),
-  };
-}
-
-describe('inputsHash: set-like arrays and sensitivity (§3)', () => {
-  const base = inputsHash(inputs());
-
-  it('ignores the order and repetition of every set-like array', () => {
-    const { grant, coverage, context } = inputs();
-    const reversed = <T>(values: readonly T[] | undefined): T[] => [...(values ?? [])].reverse();
-    const shuffled = inputs({
-      candidates: [O2, O1, O2],
-      grant: {
-        ...grant,
-        allowedTypes: reversed(grant.allowedTypes),
-        counterpartyAllowlist: [...reversed(grant.counterpartyAllowlist), 'company.com'],
-        declaredScopes: reversed(grant.declaredScopes),
-        observedScopes: reversed(grant.observedScopes),
-        accounts: { 'gmail.sent': reversed(grant.accounts?.['gmail.sent']) },
-      },
-      coverage: { ...coverage, observers: [...reversed(coverage.observers), ...coverage.observers] },
-      context: {
-        ...context,
-        attribution: Attribution.parse({
-          agent: 'muse',
-          scoreBp: 7000,
-          signals: ['agentSessionActive', 'userIdle'],
-        }),
-      },
-    });
-    expect(inputsHash(shuffled)).toBe(base);
-  });
-
-  it('changes when any input changes', () => {
-    const { coverage, context } = inputs();
-    const changed = [
-      inputs({ claim: null }),
-      inputs({ candidates: [O1] }),
-      inputs({ grant: buildGrant({ agent: 'muse' }, EVAL) }),
-      inputs({ policyHash: sha256Hex('another policy') }),
-      inputs({ coverage: { ...coverage, evaluatedAt: IsoTs.parse('2026-10-06T15:00:01-04:00') } }),
-      inputs({ coverage: { ...coverage, observers: coverage.observers.slice(1) } }),
-      inputs({ context: { ...context, priorSpendCents: 1 } }),
-      inputs({ context: { priorSpendCents: 0, scope: { observed: 'gmail.read' } } }),
-    ];
-    const hashes = new Set([base, ...changed.map(inputsHash)]);
-    expect(hashes.size).toBe(changed.length + 1);
-  });
 });
 
 describe('uniqueById', () => {
@@ -373,37 +175,15 @@ describe('reasons (§15 order)', () => {
 });
 
 describe('buildReceipt (§8 invariants by construction)', () => {
-  const parts = (over: Partial<ReceiptParts> = {}): ReceiptParts => ({
-    subject: { k: 'claim', claimId: CLAIM.id },
-    agent: 'muse',
-    claim: CLAIM,
-    observationIds: [O1.id],
-    grade: 'VERIFIED',
-    confidence: 1,
-    ruleId: 'verified',
-    reasons: {
-      rule: [],
-      allowlist: [],
-      coverage: [],
-      match: [{ code: 'match.best', params: { observationId: O1.id } }],
-    },
-    signals: { timeProximity: 1, score: 1 },
-    final: true,
-    policyHash: Sha256.parse(POLICY_HASH),
-    inputsHash: Sha256.parse(sha256Hex('inputs')),
-    computedAt: IsoTs.parse(EVAL),
-    ...over,
-  });
-
   it('FINAL with finalAt = computedAt; PENDING without finalAt; always schema-valid', () => {
-    const finalReceipt = buildReceipt(parts());
+    const finalReceipt = buildReceipt(receiptParts());
     expect(finalReceipt).toMatchObject({
       state: 'FINAL',
       finalAt: EVAL,
       claimId: CLAIM.id,
       id: receiptId({ k: 'claim', claimId: CLAIM.id }),
     });
-    const pending = buildReceipt(parts({ final: false }));
+    const pending = buildReceipt(receiptParts({ final: false }));
     expect(pending.state).toBe('PENDING');
     expect('finalAt' in pending).toBe(false);
     for (const receipt of [finalReceipt, pending]) expect(Receipt.parse(receipt)).toEqual(receipt);
@@ -411,7 +191,7 @@ describe('buildReceipt (§8 invariants by construction)', () => {
 
   it("UNASKED: attribution 'likely', no claimId; only UNASKED carries attribution", () => {
     const unasked = buildReceipt(
-      parts({
+      receiptParts({
         subject: { k: 'unasked', observationId: O1.id },
         claim: null,
         grade: 'UNASKED',
@@ -422,41 +202,21 @@ describe('buildReceipt (§8 invariants by construction)', () => {
     expect(unasked).toMatchObject({ grade: 'UNASKED', attribution: 'likely' });
     expect('claimId' in unasked).toBe(false);
     expect(Receipt.safeParse(unasked).success).toBe(true);
-    expect('attribution' in buildReceipt(parts())).toBe(false);
+    expect('attribution' in buildReceipt(receiptParts())).toBe(false);
   });
 });
 
 describe('buildReceipt: claim fields and refusals (§8)', () => {
-  const parts = (over: Partial<ReceiptParts> = {}): ReceiptParts => ({
-    subject: { k: 'claim', claimId: CLAIM.id },
-    agent: 'muse',
-    claim: CLAIM,
-    observationIds: [O1.id],
-    grade: 'VERIFIED',
-    confidence: 1,
-    ruleId: 'verified',
-    reasons: {
-      rule: [],
-      allowlist: [],
-      coverage: [],
-      match: [{ code: 'match.best', params: { observationId: O1.id } }],
-    },
-    signals: { timeProximity: 1, score: 1 },
-    final: true,
-    policyHash: Sha256.parse(POLICY_HASH),
-    inputsHash: Sha256.parse(sha256Hex('inputs')),
-    computedAt: IsoTs.parse(EVAL),
-    ...over,
-  });
-
   it('carries the claim requestId when the claim has one, and never an override or supersededBy', () => {
     const requestId = Ulid.parse(idFromHash(sha256Hex('request')));
-    const receipt = buildReceipt(parts({ claim: { ...CLAIM, requestId } }));
+    const receipt = buildReceipt(receiptParts({ claim: { ...CLAIM, requestId } }));
     expect(receipt.requestId).toBe(requestId);
     expect(['override', 'supersededBy'].filter((key) => key in receipt)).toEqual([]);
   });
 
   it('refuses an UNASKED grade on a claim receipt', () => {
-    expect(() => buildReceipt(parts({ grade: 'UNASKED' }))).toThrow(new GradeError('unasked_with_claim'));
+    expect(() => buildReceipt(receiptParts({ grade: 'UNASKED' }))).toThrow(
+      new GradeError('unasked_with_claim'),
+    );
   });
 });

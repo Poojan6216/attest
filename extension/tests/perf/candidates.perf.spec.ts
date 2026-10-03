@@ -17,6 +17,7 @@ import { describeRuns, measure, RUNS } from './measure';
 
 import {
   buildCoreWorkload,
+  type CoreWorkload,
   buildIndex,
   CLAIM_COUNT,
   GATE_MS,
@@ -57,6 +58,21 @@ function bruteForce(claim: WindowClaim, observations: readonly Parsed[]): string
     .map((o) => o.id);
 }
 
+/** A run's lookups are right: one list per claim, real volume, and every 50th list equals brute force. */
+function checkLookups(workload: CoreWorkload, results: readonly Observation[][]): number {
+  expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
+  expect(workload.claims).toHaveLength(CLAIM_COUNT);
+  expect(results).toHaveLength(CLAIM_COUNT);
+  const total = results.reduce((sum, list) => sum + list.length, 0);
+  expect(total).toBeGreaterThan(CLAIM_COUNT * 10);
+  const parsed = workload.observations.map((o) => ({ o, t: Date.parse(o.occurredAt) }));
+  workload.claims.forEach((claim, i) => {
+    if (i % SAMPLE_EVERY !== 0) return;
+    expect(results[i]?.map((o) => o.id)).toEqual(bruteForce(claim, parsed));
+  });
+  return total;
+}
+
 describe('perf gate (task 1.3): 5,000 claims × 50,000 observations', () => {
   it(`candidate lookup for every claim takes a median < ${String(GATE_MS)} ms of CPU over ${String(RUNS)} fresh runs, and is right`, async () => {
     const measured = await measure(
@@ -64,23 +80,10 @@ describe('perf gate (task 1.3): 5,000 claims × 50,000 observations', () => {
         const workload = buildCoreWorkload();
         return { workload, index: buildIndex(workload) };
       },
-      async ({ workload, index }) => ({ workload, results: await lookupAll(workload, index) }),
+      ({ workload, index }) => lookupAll(workload, index),
+      ({ workload }, results) => checkLookups(workload, results),
     );
     console.log(describeRuns(`candidate lookup for ${String(CLAIM_COUNT)} claims`, measured));
-
-    for (const { result } of measured.runs) {
-      const { workload, results } = result;
-      expect(workload.observations).toHaveLength(OBSERVATION_COUNT);
-      expect(workload.claims).toHaveLength(CLAIM_COUNT);
-      expect(results).toHaveLength(CLAIM_COUNT);
-      const total = results.reduce((sum, list) => sum + list.length, 0);
-      expect(total).toBeGreaterThan(CLAIM_COUNT * 10);
-      const parsed = workload.observations.map((o) => ({ o, t: Date.parse(o.occurredAt) }));
-      workload.claims.forEach((claim, i) => {
-        if (i % SAMPLE_EVERY !== 0) return;
-        expect(results[i]?.map((o) => o.id)).toEqual(bruteForce(claim, parsed));
-      });
-    }
     expect(measured.medianCpuMs).toBeLessThan(GATE_MS);
   }, 120_000);
 });

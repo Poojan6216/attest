@@ -21,6 +21,7 @@
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
 import { canonicalJson, hashCanonical } from './hash';
+import { contentHashOf as projectedContentHash } from './redact';
 import type { Observation, Reason, Receipt } from './schema';
 
 /** The compared receipt fields, in report order: the subject, the four of §9, then Receipt schema order. */
@@ -99,5 +100,5 @@ export function compareReceipts(stored: Receipt, replayed: Receipt): FieldDiffer
 
 /** The §10 content hash of `observation`, recomputed from its own content fields (see the file comment). */
 export function contentHashOf(observation: Observation): string {
-  return hashCanonical({ ...observation, id: undefined, observedAt: undefined, contentHash: undefined });
+  return projectedContentHash(observation); // redact.ts: the one definition project() and the ledger use
 }

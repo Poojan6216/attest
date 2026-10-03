@@ -69,9 +69,12 @@ describe('typeNotInGrant and targetMissing', () => {
   });
 });
 
-describe('counterpartyNotAllowed (§6.1)', () => {
-  const check = (claim: Claim, allowlist: readonly string[], assigned: Observation | null = null) =>
-    counterpartyNotAllowed(claim, assigned, grantOf({ counterpartyAllowlist: [...allowlist] }), P);
+/** `counterpartyNotAllowed` under a grant with `allowlist`, with `assigned` as the assigned candidate. */
+const allowCheck = (claim: Claim, allowlist: readonly string[], assigned: Observation | null = null) =>
+  counterpartyNotAllowed(claim, assigned, grantOf({ counterpartyAllowlist: [...allowlist] }), P);
+
+describe('counterpartyNotAllowed (§6.1): how an address matches an entry', () => {
+  const check = allowCheck;
 
   it('is false for a type outside allowlistTypes or with an empty allowlist', () => {
     const purchase = claimOf({ type: 'purchase.made', counterparty: 'evil@evil.example' });
@@ -103,6 +106,10 @@ describe('counterpartyNotAllowed (§6.1)', () => {
       true,
     );
   });
+});
+
+describe('counterpartyNotAllowed (§6.1): which addresses are read', () => {
+  const check = allowCheck;
 
   it('not applicable with no known address: a name or no counterparty, and no assigned candidate', () => {
     expect(check(claimOf({ counterparty: 'Priya' }), ['company.com'])).toBeNull();
@@ -264,9 +271,8 @@ describe('cumulativeAboveCeiling (§6.1, §6.3)', () => {
     expect(check(purchase({ amountCents: 0, currency: 'USD' }), huge)?.value).toBe(true);
   });
 
-  it('is not applicable without a claim amount in spendCurrency, a ceiling, or a spend type', () => {
+  it('is not applicable without a claim amount counted in spendCurrency, a ceiling, or a spend type', () => {
     expect(check(purchase({ amountCents: 2001, currency: 'EUR' }), 3000)).toBeNull();
-    expect(check(purchase({ amountCents: 2001 }), 3000)).toBeNull();
     expect(check(purchase({ currency: 'USD' }), 3000)).toBeNull();
     expect(
       cumulativeAboveCeiling(
@@ -277,6 +283,18 @@ describe('cumulativeAboveCeiling (§6.1, §6.3)', () => {
       ),
     ).toBeNull();
     expect(check(claimOf({ amountCents: 9000, currency: 'USD' }), 3000)).toBeNull();
+  });
+
+  it('counts a claim amount with no currency in spendCurrency, as amountAboveCeiling does (Hard Rule 5)', () => {
+    const bare = purchase({ amountCents: 2001 });
+    expect(check(bare, 3000)).toEqual({
+      value: true,
+      priorSpendCents: 3000,
+      amountCents: 2001,
+      ceilingCents: 5000,
+    });
+    expect(check(bare, 2999)?.value).toBe(false);
+    expect(amountAboveCeiling(bare, null, ceiling, P)?.amountCents).toBe(2001);
   });
 });
 

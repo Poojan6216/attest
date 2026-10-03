@@ -22,7 +22,6 @@ import {
 } from '../../src/core/state';
 
 const RUNS = { numRuns: 1_000 };
-const PROPERTY_TIMEOUT_MS = 30_000;
 
 const ulid = (n: number): string => String(n).padStart(26, '0');
 const HASHES = ['ab'.repeat(32), 'cd'.repeat(32)];
@@ -177,32 +176,28 @@ function step(current: Receipt, event: unknown): Receipt | IllegalTransitionErro
 }
 
 describe('state machine: random valid event sequences follow the §8 table', () => {
-  it(
-    'never a schema-invalid receipt, never a changed computed grade, every refusal the table code',
-    () => {
-      fc.assert(
-        fc.property(scenarioArb, ({ start, events }) => {
-          let current = start;
-          for (const event of events) {
-            const expected = model(current, event);
-            const outcome = step(current, event);
-            if (outcome instanceof IllegalTransitionError) {
-              expect(outcome.code).toBe(expected);
-              expect(outcome.from).toBe(current.state);
-              continue;
-            }
-            expect(outcome.state).toBe(expected);
-            invariantsHold(outcome);
-            if (event.event === 'regrade') expect(outcome).toStrictEqual(event.next);
-            else expect(computedFields(outcome)).toStrictEqual(computedFields(current));
-            current = outcome;
+  it('never a schema-invalid receipt, never a changed computed grade, every refusal the table code', () => {
+    fc.assert(
+      fc.property(scenarioArb, ({ start, events }) => {
+        let current = start;
+        for (const event of events) {
+          const expected = model(current, event);
+          const outcome = step(current, event);
+          if (outcome instanceof IllegalTransitionError) {
+            expect(outcome.code).toBe(expected);
+            expect(outcome.from).toBe(current.state);
+            continue;
           }
-        }),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+          expect(outcome.state).toBe(expected);
+          invariantsHold(outcome);
+          if (event.event === 'regrade') expect(outcome).toStrictEqual(event.next);
+          else expect(computedFields(outcome)).toStrictEqual(computedFields(current));
+          current = outcome;
+        }
+      }),
+      RUNS,
+    );
+  });
 });
 
 /** Events with arbitrary payloads: wrong grades, blank or binary reasons, bad timestamps and ids, other ids. */
@@ -234,59 +229,51 @@ const isRegrade = (event: unknown): boolean =>
   typeof event === 'object' && event !== null && 'event' in event && event.event === 'regrade';
 
 describe('state machine: arbitrary payloads', () => {
-  it(
-    'only IllegalTransitionError, never an invalid receipt, the grade changes only by regrade',
-    () => {
-      fc.assert(
-        fc.property(fuzzScenarioArb, ({ start, events }) => {
-          let current = start;
-          for (const event of events) {
-            const before = JSON.stringify(current);
-            const outcome = step(current, event);
-            expect(JSON.stringify(current)).toBe(before);
-            if (outcome instanceof IllegalTransitionError) continue;
-            invariantsHold(outcome);
-            expect(outcome.id).toBe(current.id);
-            if (!isRegrade(event)) expect(computedFields(outcome)).toStrictEqual(computedFields(current));
-            current = outcome;
-          }
-        }),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('only IllegalTransitionError, never an invalid receipt, the grade changes only by regrade', () => {
+    fc.assert(
+      fc.property(fuzzScenarioArb, ({ start, events }) => {
+        let current = start;
+        for (const event of events) {
+          const before = JSON.stringify(current);
+          const outcome = step(current, event);
+          expect(JSON.stringify(current)).toBe(before);
+          if (outcome instanceof IllegalTransitionError) continue;
+          invariantsHold(outcome);
+          expect(outcome.id).toBe(current.id);
+          if (!isRegrade(event)) expect(computedFields(outcome)).toStrictEqual(computedFields(current));
+          current = outcome;
+        }
+      }),
+      RUNS,
+    );
+  });
 });
 
 describe('state machine: override then revert', () => {
-  it(
-    'restores the exact prior receipt, superseded or not',
-    () => {
-      const receiptArb = fc
-        .constantFrom<Kind>('claim', 'unasked')
-        .chain((kind) =>
-          fc.tuple(fc.constant(kind), computedArb(kind), fc.oneof(ulidArb, fc.constant(undefined))),
-        )
-        .map(([kind, computed, supersededBy]) => {
-          const receipt = build(kind, computed);
-          return kind === 'unasked' && supersededBy !== undefined
-            ? transition(receipt, { event: 'supersede', claimId: supersededBy })
-            : receipt;
-        });
-      // §8 (v1.4): an override is never before the receipt was computed; `after` ms later, as a Z timestamp.
-      const after = fc.integer({ min: 0, max: 400 * 24 * 3_600_000 });
-      fc.assert(
-        fc.property(receiptArb, overrideArb, after, (receipt, override, delay) => {
-          const at = new Date(Date.parse(receipt.computedAt) + delay).toISOString();
-          const event = { ...override, at };
-          const overridden = transition(receipt, event);
-          expect(overridden.state).toBe('USER_OVERRIDDEN');
-          expect(overridden.grade).toBe(receipt.grade);
-          expect(transition(overridden, { event: 'revert' })).toStrictEqual(receipt);
-        }),
-        RUNS,
-      );
-    },
-    PROPERTY_TIMEOUT_MS,
-  );
+  it('restores the exact prior receipt, superseded or not', () => {
+    const receiptArb = fc
+      .constantFrom<Kind>('claim', 'unasked')
+      .chain((kind) =>
+        fc.tuple(fc.constant(kind), computedArb(kind), fc.oneof(ulidArb, fc.constant(undefined))),
+      )
+      .map(([kind, computed, supersededBy]) => {
+        const receipt = build(kind, computed);
+        return kind === 'unasked' && supersededBy !== undefined
+          ? transition(receipt, { event: 'supersede', claimId: supersededBy })
+          : receipt;
+      });
+    // §8 (v1.4): an override is never before the receipt was computed; `after` ms later, as a Z timestamp.
+    const after = fc.integer({ min: 0, max: 400 * 24 * 3_600_000 });
+    fc.assert(
+      fc.property(receiptArb, overrideArb, after, (receipt, override, delay) => {
+        const at = new Date(Date.parse(receipt.computedAt) + delay).toISOString();
+        const event = { ...override, at };
+        const overridden = transition(receipt, event);
+        expect(overridden.state).toBe('USER_OVERRIDDEN');
+        expect(overridden.grade).toBe(receipt.grade);
+        expect(transition(overridden, { event: 'revert' })).toStrictEqual(receipt);
+      }),
+      RUNS,
+    );
+  });
 });
