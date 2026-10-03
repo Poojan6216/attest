@@ -101,7 +101,7 @@ describe('docs/assets/receipt-states.svg: content', () => {
     for (const label of ['PENDING', 'FINAL', 'USER_OVERRIDDEN', 'superseded']) {
       expect(SVG).toMatch(new RegExp(`>${label}</text>`));
     }
-    for (const event of ['regrade', 'override', 'revert', 'supersede(claimId)', 'grade()']) {
+    for (const event of ['regrade', 'override', 'revert(at)', 'supersede(claimId)', 'grade()']) {
       expect(SVG).toContain(`>${event}</text>`);
     }
     expect(SVG).toContain('IllegalTransitionError');

@@ -2,7 +2,9 @@
  * SEC-1 (Hard Rule 4): negative and positive controls for the unicode fence (unicode-fence.spec.ts). Each probe
  * below reads the engine's Unicode tables and got past an earlier, text-based scan: a class escape or case-folding
  * flags built at run time, `iu` flags in a string, `\s` before a letter, and code after a string holding `//`. The
- * scan must find every one, and nothing in the patterns src/core builds from the Unicode 15.0 tables.
+ * scan must find every one, and nothing in the patterns src/core builds from the Unicode 15.0 tables. Each row holds
+ * one probe, so no probe can hide another's miss behind the same rule (unicode-fence-pins.spec.ts pins every method,
+ * property name and case-folding form one by one).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -51,18 +53,18 @@ describe('the unicode fence finds what it looks for (negative controls)', () => 
       [String.raw`const k = 'normalize'; const f = (s: string) => Reflect.get(s, k);`, ['normalize']],
       [String.raw`const f = (s: string) => Reflect.get(s, 'norm' + 'alize');`, ['normalize']],
       [String.raw`const f = (s: string) => Reflect.get(s, ~toLower#{'Case'}~);`, ['lowercase']],
-      [String.raw`const B = '\\'; const P = B + 'p{L}'; const Q = ~#{B}s~;`, ['property', 'space-class']],
-      [
-        String.raw`const { match } = String.prototype; const R = Reflect.get(/x/, 'compile');`,
-        ['regexp-built'],
-      ],
+      [String.raw`const B = '\\'; const P = B + 'p{L}';`, ['property']],
+      [String.raw`const B = '\\'; const Q = ~#{B}s~;`, ['space-class']],
+      [String.raw`const { match } = String.prototype;`, ['regexp-built']],
+      [String.raw`const R = Reflect.get(/x/, 'compile');`, ['regexp-built']],
     ]);
   });
 
   it('folds case by the engine tables: i with u or v, or i on a pattern that is not plain ASCII', () => {
     expectRules([
-      [String.raw`const R = /x/vi; const S = new RegExp('x', 'giu');`, ['unicode-ignore-case']],
-      [String.raw`const R = /caf\u00E9/i;`, ['unicode-ignore-case']],
+      [String.raw`const R = /x/vi;`, ['unicode-ignore-case']],
+      [String.raw`const S = new RegExp('x', 'giu');`, ['unicode-ignore-case']],
+      [String.raw`const R = /café/i;`, ['unicode-ignore-case']],
       [String.raw`const R = new RegExp('\\u0264', 'i');`, ['unicode-ignore-case']],
       [`${IMPORT}const R = new RegExp(~[#{BASELINE_CLASS.token}]~, 'i');`, ['unicode-ignore-case']],
     ]);
@@ -90,6 +92,10 @@ describe('the unicode fence refuses a regular expression built at run time', () 
       `${IMPORT}const SPACE = BASELINE_CLASS.space; const f = (SPACE: string) => new RegExp(~[#{SPACE}]~, 'u');`,
       `${IMPORT}let SPACE = BASELINE_CLASS.space; const R = new RegExp(~[#{SPACE}]~, 'u');`,
       `${IMPORT}const R = new RegExp(~[#{BASELINE_CLASS.nothing}]~, 'u');`,
+      // A name declared twice is never resolved: here the pattern reads the inner, run-time SPACE.
+      `${IMPORT}function g(x: string) { const SPACE = x; return new RegExp(~[#{SPACE}]~, 'u'); } const SPACE = BASELINE_CLASS.space;`,
+      // Text that refers to itself is never known (and the scan ends).
+      String.raw`const A = ~x#{B}~; const B = ~#{A}~; const R = new RegExp(A, 'u');`,
     ];
     for (const source of built) expect([source, rulesOf(source)]).toEqual([source, ['regexp-built']]);
   });
@@ -111,23 +117,21 @@ describe('the unicode fence finds a class escape however it is written (negative
   it('in raw and cooked text, in a composed pattern, and engine case or normalisation however reached', () => {
     expectRules([
       [String.raw`const R = new RegExp(String.raw~\p{L}~, 'u');`, ['regexp-built', 'property']],
-      [String.raw`const S = '\x5Cp{L}'; const T = '\\S+';`, ['property', 'space-class']],
+      [String.raw`const S = '\x5Cp{L}';`, ['property']],
+      [String.raw`const T = '\\S+';`, ['space-class']],
       [String.raw`const S = 'Q3 \p{L}';`, ['property']],
       [`${IMPORT}const R = new RegExp(~[#{BASELINE_CLASS.token}\\\\s]~, 'u');`, ['space-class']],
-      [String.raw`const f = (s: string) => s['normalize']('NFC') + s.trimStart();`, ['normalize', 'trim']],
-      [
-        String.raw`const { toLowerCase } = String.prototype; const c = Intl.Collator;`,
-        ['lowercase', 'other-case'],
-      ],
-      [
-        String.raw`const f = (a: string, b: string) => a.localeCompare(b) + a.toLocaleUpperCase();`,
-        ['other-case'],
-      ],
+      [String.raw`const f = (s: string) => s['normalize']('NFC');`, ['normalize']],
+      [String.raw`const f = (s: string) => s.trimStart();`, ['trim']],
+      [String.raw`const { toLowerCase } = String.prototype;`, ['lowercase']],
+      [String.raw`const c = Intl.Collator;`, ['other-case']],
+      [String.raw`const f = (a: string, b: string) => a.localeCompare(b);`, ['other-case']],
+      [String.raw`const f = (a: string) => a.toLocaleUpperCase();`, ['other-case']],
+      [String.raw`const f = (a: string) => a.toLocaleLowerCase();`, ['other-case']],
       [String.raw`const f = (s: string) => String.prototype.normalize.call(s, 'NFC');`, ['normalize']],
-      [
-        String.raw`const f = (s: string) => [s.trim, s.normalize.bind(s), s['toLowerCase']['apply']];`,
-        ['trim', 'normalize', 'lowercase'],
-      ],
+      [String.raw`const f = (s: string) => [s.trim];`, ['trim']],
+      [String.raw`const f = (s: string) => [s.normalize.bind(s)];`, ['normalize']],
+      [String.raw`const f = (s: string) => [s['toLowerCase']['apply']];`, ['lowercase']],
       [String.raw`const { call, length } = String.prototype.toUpperCase;`, ['other-case']],
     ]);
   });

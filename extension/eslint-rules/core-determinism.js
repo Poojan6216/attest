@@ -14,18 +14,27 @@
  *  - `Math` may only be read as `Math.<name>` with a written name other than `random`: `Math.random`,
  *    `Math[k]`, `const { random } = Math`, `const M = Math` and `f(Math)` are reported.
  *  - Methods whose answer depends on the host's time zone or locale are reported on any object: local-time
- *    getters and setters, `getTimezoneOffset`, `toLocale*`, `localeCompare`, `toDateString`, `toTimeString`.
- *  - With type information (the real `pnpm lint` run, projectService), conversions that render a Date in the
- *    host's time zone are reported too: `date.toString()` (also read as a value), `String(date)`, `new String(date)`,
- *    and `join` or `toString` on an array of dates (TECH-C2); so is a computed member of a Date whose key is not
- *    written (`date[key]`, `date[Symbol.toPrimitive]`), and any value typed DateConstructor other than the global
- *    `Date` itself (`(new Date(0).constructor as DateConstructor).now()`, PI-3). Templates and `+` on a Date are
- *    already reported by restrict-template-expressions and restrict-plus-operands. Without type information (a
- *    virtual file in a lint test) these checks are skipped; the core suites also run under two time zones in CI
- *    (`test:tz`), and tests/unit/core/core-poison.spec.ts runs the core with every impure global poisoned.
+ *    getters and setters, `getTimezoneOffset`, `toLocale*`, `localeCompare`, `toDateString`, `toTimeString`; so is
+ *    the same name given as the written key of `Reflect.get(o, '…')` or `Object.getOwnPropertyDescriptor`.
+ *  - `Reflect` may only be read as `Reflect.get`, `Reflect.has` or `Reflect.isExtensible`, and `Object` only as a
+ *    member with a written name other than those that list, define or re-parent properties
+ *    (`getOwnPropertyNames`, `getOwnPropertyDescriptors`, `getOwnPropertySymbols`, `defineProperty`,
+ *    `defineProperties`, `setPrototypeOf`, `assign`, `preventExtensions`, `seal`), or as `x instanceof Object`
+ *    (FR3-2). Aliasing either (`const R = Reflect`), passing it, or a computed member is reported. The key of
+ *    `Reflect.get` and `Object.getOwnPropertyDescriptor` must be written: a string, a template without expressions,
+ *    or a plain name (`'getTimezone' + 'Offset'` is reported).
+ *  - With type information (the real `pnpm lint` run, projectService; core-determinism-types.js), conversions that
+ *    render a Date in the host's time zone are reported too: `date.toString()` (also read as a value),
+ *    `String(date)`, `new String(date)`, `${date}`, `date + …`, and `join` or `toString` on an array of dates
+ *    (TECH-C2); the same on a value whose type may hide a Date (`unknown`, `any`, `object`, `{}`, a type parameter,
+ *    or an array of them; FR3-2); `Object.getPrototypeOf`, `Object.getOwnPropertyDescriptor`, `Reflect.get` and
+ *    `Reflect.has` on a Date; a computed member of a Date whose key is not written (`date[key]`,
+ *    `date[Symbol.toPrimitive]`); and any value typed DateConstructor other than the global `Date` itself
+ *    (`(new Date(0).constructor as DateConstructor).now()`, PI-3). Without type information (a virtual file in a lint
+ *    test) these checks are skipped; the core suites also run under two time zones in CI (`test:tz`), and under the
+ *    runtime guard (tests/unit/core/core-poison.ts) in `pnpm test:poison`.
  */
-import ts from 'typescript';
-
+import { typedListener, typeTests } from './core-determinism-types.js';
 import { forEachGlobalReference, propertyName } from './scope-globals.js';
 
 const LOCAL_TIME_METHODS = new Set([
@@ -51,9 +60,6 @@ const LOCAL_TIME_METHODS = new Set([
   'toTimeString',
 ]);
 
-/** Methods that turn a Date (or an array of dates) into local-time text; reported only with type information. */
-const DATE_STRING_METHODS = new Set(['toString', 'join']);
-
 const LOCALE_METHODS = new Set([
   'toLocaleString',
   'toLocaleDateString',
@@ -61,6 +67,31 @@ const LOCALE_METHODS = new Set([
   'toLocaleUpperCase',
   'toLocaleLowerCase',
   'localeCompare',
+]);
+
+/**
+ * Reflect may only be read as `Reflect.<one of these>` (FR3-2): `apply`, `construct`, `set`, `defineProperty`,
+ * `ownKeys`, `getPrototypeOf` and the rest reach or change built-ins by a path no fence can follow.
+ */
+const REFLECT_ALLOWED = new Set(['get', 'has', 'isExtensible']);
+
+/** What Object may not be read as (FR3-2): every way to list, define or re-parent a built-in's properties. */
+const OBJECT_BANNED = new Set([
+  'getOwnPropertyNames',
+  'getOwnPropertyDescriptors',
+  'getOwnPropertySymbols',
+  'defineProperty',
+  'defineProperties',
+  'setPrototypeOf',
+  'assign',
+  'preventExtensions',
+  'seal',
+]);
+
+/** The calls that read one property by a key argument: that key must be written (FR3-2). */
+const KEYED_READS = new Map([
+  ['Reflect', 'get'],
+  ['Object', 'getOwnPropertyDescriptor'],
 ]);
 
 /** @typedef {import('estree').Node & { parent?: import('estree').Node }} NodeWithParent */
@@ -81,186 +112,39 @@ function dateUseAllowed(identifier) {
   );
 }
 
+/**
+ * Reflect and Object only as a member with a written name it may use; Object also as `x instanceof Object`.
+ * @param {NodeWithParent} identifier
+ * @param {string} name
+ */
+function reflectionUseAllowed(identifier, name) {
+  const parent = identifier.parent;
+  if (parent?.type === 'BinaryExpression' && parent.operator === 'instanceof' && parent.right === identifier)
+    return name === 'Object';
+  if (parent?.type !== 'MemberExpression' || parent.object !== identifier) return false;
+  const member = propertyName(parent);
+  if (member === null) return false;
+  return name === 'Reflect' ? REFLECT_ALLOWED.has(member) : !OBJECT_BANNED.has(member);
+}
+
+/**
+ * A key written in the source: a string, a template without expressions, or a plain name (a const holds it).
+ * @param {import('estree').Node | undefined} key
+ * @returns {{ written: boolean, text: string | null }}
+ */
+function writtenKey(key) {
+  if (key?.type === 'Literal')
+    return { written: true, text: typeof key.value === 'string' ? key.value : null };
+  if (key?.type === 'TemplateLiteral' && key.expressions.length === 0)
+    return { written: true, text: key.quasis[0]?.value.cooked ?? null };
+  return { written: key?.type === 'Identifier', text: null };
+}
+
 /** @param {NodeWithParent} identifier */
 function mathUseAllowed(identifier) {
   const parent = identifier.parent;
   if (parent?.type !== 'MemberExpression' || parent.object !== identifier || parent.computed) return false;
   return propertyName(parent) !== 'random';
-}
-
-/**
- * Whether `type` (or a part of a union or intersection) is the interface named `name` (`Date`, `DateConstructor`).
- * @param {import('typescript').Type} type
- * @param {string} name
- * @returns {boolean}
- */
-function isNamed(type, name) {
-  if (type.isUnionOrIntersection()) return type.types.some((part) => isNamed(part, name));
-  return type.getSymbol()?.getName() === name;
-}
-
-/**
- * Whether a value of `type` renders as local time when made a string: a Date, a union or intersection holding one,
- * or an array or tuple of them.
- * @param {import('typescript').TypeChecker} checker
- * @param {import('typescript').Type} type
- * @returns {boolean}
- */
-function holdsDate(checker, type) {
-  if (type.isUnionOrIntersection()) return type.types.some((part) => holdsDate(checker, part));
-  if (type.getSymbol()?.getName() === 'Date') return true;
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
-    return checker
-      .getTypeArguments(/** @type {import('typescript').TypeReference} */ (type))
-      .some((element) => holdsDate(checker, element));
-  }
-  return false;
-}
-
-/**
- * Whether `type` is a number or a Date, every part of it: the only values `new Date(value)` reads the same way
- * everywhere.
- * @param {import('typescript').Type} type
- * @returns {boolean}
- */
-function numberOrDate(type) {
-  if (type.isUnion()) return type.types.every(numberOrDate);
-  return (type.flags & ts.TypeFlags.NumberLike) !== 0 || type.getSymbol()?.getName() === 'Date';
-}
-
-/**
- * @typedef {object} TypeTests
- * @property {(node: import('estree').Node) => boolean} holdsDate A Date, or an array or tuple of them.
- * @property {(node: import('estree').Node) => boolean} isDate A Date (or a union holding one), not an array.
- * @property {(node: import('estree').Node) => boolean} isDateConstructor Typed DateConstructor.
- * @property {(node: import('estree').Node) => boolean} numberOrDate A number or a Date and nothing else.
- */
-
-/**
- * Tests on an expression's type, from the parser's type information; null when there is none.
- * @param {import('eslint').Rule.RuleContext} context
- * @returns {TypeTests | null}
- */
-function typeTests(context) {
-  const services = /** @type {any} */ (context.sourceCode.parserServices);
-  const program = /** @type {import('typescript').Program | null | undefined} */ (services?.program);
-  if (program === null || program === undefined) return null;
-  const checker = program.getTypeChecker();
-  /** @type {Map<import('estree').Node, import('typescript').Node>} */
-  const toTs = services.esTreeNodeToTSNodeMap;
-  /** @param {(type: import('typescript').Type) => boolean} test */
-  const on = (test) => (/** @type {import('estree').Node} */ node) => {
-    const tsNode = toTs.get(node);
-    return tsNode !== undefined && test(checker.getTypeAtLocation(tsNode));
-  };
-  return {
-    holdsDate: on((type) => holdsDate(checker, type)),
-    isDate: on((type) => isNamed(type, 'Date')),
-    isDateConstructor: on((type) => isNamed(type, 'DateConstructor')),
-    numberOrDate: on(numberOrDate),
-  };
-}
-
-/**
- * The expressions a node hands on as values: where a DateConstructor-typed value would be read, called or passed.
- * @param {import('estree').Node} node
- * @returns {(import('estree').Node | null | undefined)[]}
- */
-function valueSites(node) {
-  switch (node.type) {
-    case 'MemberExpression':
-      return [node.object];
-    case 'CallExpression':
-    case 'NewExpression':
-      return [node.callee, ...node.arguments];
-    case 'VariableDeclarator':
-      return [node.init];
-    case 'AssignmentExpression':
-      return [node.right];
-    case 'ReturnStatement':
-      return [node.argument];
-    case 'ArrowFunctionExpression':
-      return node.body.type === 'BlockStatement' ? [] : [node.body];
-    case 'Property':
-      return [/** @type {import('estree').Node} */ (node.value)];
-    case 'ArrayExpression':
-      return node.elements;
-    default:
-      return [node];
-  }
-}
-
-/** The node types valueSites reads: the assertion forms are checked as values themselves. */
-const VALUE_SITE_TYPES = [
-  'MemberExpression',
-  'CallExpression',
-  'NewExpression',
-  'VariableDeclarator',
-  'AssignmentExpression',
-  'ReturnStatement',
-  'ArrowFunctionExpression',
-  'Property',
-  'ArrayExpression',
-  'TSAsExpression',
-  'TSTypeAssertion',
-  'TSSatisfiesExpression',
-  'TSNonNullExpression',
-];
-
-/**
- * The typed checks: a Date made into text, a Date read with a key that is not written, a Date built from anything
- * but a number or a Date, and a DateConstructor value other than the global `Date` (collected into
- * `constructors`; the global ones are told apart at Program:exit, after scope analysis).
- * @param {import('eslint').Rule.RuleContext} context
- * @param {TypeTests} types
- * @param {Set<import('estree').Node>} constructors
- * @returns {import('eslint').Rule.RuleListener}
- */
-function typedListener(context, types, constructors) {
-  /** @param {import('estree').Node} node */
-  const sites = (node) => {
-    for (const site of valueSites(node)) {
-      if (
-        site !== null &&
-        site !== undefined &&
-        site.type !== 'SpreadElement' &&
-        types.isDateConstructor(site)
-      )
-        constructors.add(site);
-    }
-  };
-  /** @param {import('estree').CallExpression | import('estree').NewExpression} node */
-  const stringOf = (node) => {
-    const [argument] = node.arguments;
-    if (argument === undefined || argument.type === 'SpreadElement') return;
-    if (node.callee.type === 'Identifier' && node.callee.name === 'String' && types.holdsDate(argument))
-      context.report({ node, messageId: 'localTime', data: { name: 'String(date)' } });
-  };
-  return {
-    ...Object.fromEntries(VALUE_SITE_TYPES.map((type) => [type, sites])),
-    'MemberExpression:exit'(node) {
-      const name = propertyName(node);
-      if (name !== null && DATE_STRING_METHODS.has(name) && types.holdsDate(node.object)) {
-        const what = name === 'join' ? 'join over Date values' : 'toString of a Date';
-        context.report({ node, messageId: 'localTime', data: { name: what } });
-      } else if (node.computed && name === null && types.isDate(node.object)) {
-        context.report({ node, messageId: 'dateKey' });
-      }
-    },
-    'CallExpression:exit': stringOf,
-    'NewExpression:exit'(node) {
-      stringOf(node);
-      const [argument] = node.arguments;
-      const isDate = node.callee.type === 'Identifier' && node.callee.name === 'Date';
-      if (
-        isDate &&
-        argument !== undefined &&
-        argument.type !== 'SpreadElement' &&
-        !types.numberOrDate(argument)
-      )
-        context.report({ node: argument, messageId: 'dateArgument' });
-    },
-  };
 }
 
 /**
@@ -285,6 +169,20 @@ function merge(first, second) {
   return merged;
 }
 
+/** The globals whose every use is checked, by scope analysis (aliasing and passing as a value included). */
+const GUARDED_GLOBALS = new Set(['Date', 'Math', 'Reflect', 'Object']);
+
+/**
+ * Reports a member name (written, or a written key of `Reflect.get`) whose answer depends on the host.
+ * @param {import('eslint').Rule.RuleContext} context
+ * @param {import('estree').Node} node
+ * @param {string} name
+ */
+function reportName(context, node, name) {
+  if (LOCAL_TIME_METHODS.has(name)) context.report({ node, messageId: 'localTime', data: { name } });
+  else if (LOCALE_METHODS.has(name)) context.report({ node, messageId: 'locale', data: { name } });
+}
+
 /** @type {import('eslint').Rule.RuleModule} */
 const rule = {
   meta: {
@@ -304,6 +202,14 @@ const rule = {
       localTime:
         "src/core is deterministic: '{{name}}' depends on the host time zone. Use the UTC methods (Hard Rule 4).",
       locale: "src/core is deterministic: '{{name}}' depends on the host locale (Hard Rule 4).",
+      localText:
+        "src/core is deterministic: '{{name}}' of a value whose type may hide a Date (`unknown`, `any`, `object`, a type parameter) renders the host's time zone when one is passed. Narrow it first (Hard Rule 4).",
+      dateReflection:
+        'src/core is deterministic: no reflection on a Date (its prototype holds the local-time methods and the constructor with the clock) (Hard Rule 4).',
+      reflect:
+        "src/core is pure: '{{name}}' may be read only as a member with a written name, and never as one that lists, defines, re-parents or calls through built-ins (Reflect: get, has, isExtensible; Object: no getOwnPropertyNames, defineProperty, setPrototypeOf, assign, …) (Hard Rule 4).",
+      reflectKey:
+        "src/core is pure: `{{name}}` takes a written key (a string or a plain name), never one built at run time (`'getTimezone' + 'Offset'`) (Hard Rule 4).",
     },
   },
   create(context) {
@@ -313,9 +219,17 @@ const rule = {
     return merge(types === null ? {} : typedListener(context, types, constructors), {
       MemberExpression(node) {
         const name = propertyName(node);
-        if (name === null) return;
-        if (LOCAL_TIME_METHODS.has(name)) context.report({ node, messageId: 'localTime', data: { name } });
-        else if (LOCALE_METHODS.has(name)) context.report({ node, messageId: 'locale', data: { name } });
+        if (name !== null) reportName(context, node, name);
+      },
+      CallExpression(node) {
+        const callee = node.callee;
+        if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') return;
+        const method = KEYED_READS.get(callee.object.name);
+        if (method === undefined || propertyName(callee) !== method) return;
+        const key = writtenKey(node.arguments[1]);
+        const name = `${callee.object.name}.${method}`;
+        if (!key.written) context.report({ node, messageId: 'reflectKey', data: { name } });
+        else if (key.text !== null) reportName(context, node, key.text);
       },
       NewExpression(node) {
         // Without type information, a written string or template is still seen.
@@ -330,8 +244,13 @@ const rule = {
       'Program:exit'(program) {
         /** @type {Set<import('estree').Node>} */
         const globalDate = new Set();
-        forEachGlobalReference(context, program, new Set(['Date', 'Math']), (identifier, name) => {
+        forEachGlobalReference(context, program, GUARDED_GLOBALS, (identifier, name) => {
           if (name === 'Date') globalDate.add(identifier);
+          if (name === 'Reflect' || name === 'Object') {
+            if (!reflectionUseAllowed(identifier, name))
+              context.report({ node: identifier, messageId: 'reflect', data: { name } });
+            return;
+          }
           const allowed = name === 'Date' ? dateUseAllowed(identifier) : mathUseAllowed(identifier);
           if (!allowed) context.report({ node: identifier, messageId: name === 'Date' ? 'date' : 'math' });
         });

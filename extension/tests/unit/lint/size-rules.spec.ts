@@ -157,22 +157,47 @@ describe('no `as unknown as`', () => {
       expect(await limits(file, angle), file).toHaveLength(1);
   });
 
-  it('control: an `as const` under an assertion, and `as const satisfies T`, pass', async () => {
-    const code = [
-      "export const a = ['x', 'y'] as const as readonly string[];",
-      "export const b = { k: 'v' } as const satisfies Record<string, string>;",
-      'export const c = (x: unknown): number => x as number;',
-      '',
-    ].join('\n');
-    for (const file of ['src/core/probe.ts', 'tests/unit/probe.spec.ts', '../bench/probe.ts'])
-      expect(await limits(file, code), file).toEqual([]);
-  });
-
   it('the scopes that set their own no-restricted-syntax keep their other entries', async () => {
     const clock = 'export const now = (): number => Date.now();\n';
     expect((await limits('src/core/probe.ts', clock)).join('\n')).toMatch(/src\/core is pure: no clock/);
     const messaging = 'chrome.runtime.sendMessage({});\n';
     expect((await limits('src/ui/probe.ts', messaging)).join('\n')).toMatch(/goes through src\/bus/);
+  });
+});
+
+describe('no assertion stacked through a container that hands the value on (FR3-6)', () => {
+  it('fails in every scope of both configs: a conditional, an array or object read back, `??`, `await`', async () => {
+    const stacked = [
+      "export const probe = (c: boolean, x: number): string => (c ? (x as unknown) : 'y') as string;\n",
+      'export const probe = (x: number): string => [x as unknown][0] as string;\n',
+      'export const probe = (x: number): string => ({ v: x as unknown }).v as string;\n',
+      'export const probe = (x: number, y: string): string => ((x as unknown) ?? y) as string;\n',
+      'export const probe = (c: boolean, x: number): string => (c ? [x as unknown][0] : 1) as string;\n',
+      'export const probe = async (x: Promise<number>): Promise<string> => (await (x as unknown)) as string;\n',
+    ];
+    for (const file of ALL_SCOPES) {
+      for (const code of stacked) {
+        const found = await limits(file, code);
+        expect(found, `${file}: ${code}`).toHaveLength(1);
+        expect(found[0], `${file}: ${code}`).toMatch(
+          /^no-restricted-syntax: No `as unknown as`, and no assertion stacked/,
+        );
+      }
+    }
+  });
+
+  it('control: an `as const` under an assertion, `as const satisfies T`, and a call or member read in between, pass', async () => {
+    const code = [
+      "export const a = ['x', 'y'] as const as readonly string[];",
+      "export const b = { k: 'v' } as const satisfies Record<string, string>;",
+      'export const c = (x: unknown): number => x as number;',
+      "export const d = [1 as number, 'b'] as const;",
+      'export const e = (x: string): number => JSON.parse(x as string) as number;',
+      'export const f = (x: unknown): number => (x as { a: unknown }).a as number;',
+      "export const g = (x: unknown): 'a' | 'b' => ((x as boolean) ? 'a' : 'b') as 'a' | 'b';",
+    ].join('\n');
+    for (const file of ['src/core/probe.ts', 'tests/unit/probe.spec.ts', '../bench/probe.ts'])
+      expect(await limits(file, code), file).toEqual([]);
   });
 });
 

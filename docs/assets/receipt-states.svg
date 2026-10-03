@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="title desc">
   <title id="title">Receipt state machine (docs/grading.md §8)</title>
-  <desc id="desc">grade() creates a receipt as PENDING or FINAL, as isFinalizable decides. regrade replaces a PENDING receipt with grade()'s next receipt for the same subject, PENDING or FINAL. override moves PENDING or FINAL to USER_OVERRIDDEN and stores previousState; revert returns to previousState. supersede applies only to UNASKED receipts, from any state: the state is unchanged and supersededBy is set. Any other state and event pair throws IllegalTransitionError.</desc>
+  <desc id="desc">grade() creates a receipt as PENDING or FINAL, as isFinalizable decides. regrade replaces a PENDING receipt with grade()'s next receipt for the same subject, PENDING or FINAL. override moves PENDING or FINAL to USER_OVERRIDDEN and stores previousState; revert(at) returns to previousState and keeps the override in reverted. supersede applies only to UNASKED receipts, from any state: the state is unchanged and supersededBy is set. Any other state and event pair throws IllegalTransitionError.</desc>
   <!--
     Legible on light and dark pages with no media query: the background is transparent and every colour is a
     mid-tone with at least 4:1 contrast against both white (#ffffff) and GitHub dark (#0d1117). A media query
@@ -76,9 +76,9 @@
   <text class="t" x="710" y="354">grade, reason, at</text>
 
   <path class="edge dashed" d="M392 372 L 292 274" marker-end="url(#arrow)"/>
-  <text class="t code" x="352" y="314">revert</text>
+  <text class="t code" x="352" y="314">revert(at)</text>
   <path class="edge dashed" d="M568 372 L 668 274" marker-end="url(#arrow)"/>
-  <text class="t code" x="608" y="314" text-anchor="end">revert</text>
+  <text class="t code" x="608" y="314" text-anchor="end">revert(at)</text>
   <text class="t" x="480" y="340" text-anchor="middle">revert returns to previousState</text>
 
   <!-- supersede -->

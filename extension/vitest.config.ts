@@ -39,6 +39,7 @@ export default defineConfig({
     mockReset: true,
     restoreMocks: true,
     testTimeout: TEST_TIMEOUT_MS,
+    setupFiles: ['tests/unit/lint/test-timeout-setup.ts'],
     tags: TEST_TAGS,
     coverage: {
       provider: 'v8',

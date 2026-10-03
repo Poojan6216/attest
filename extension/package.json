@@ -24,7 +24,8 @@
     "postinstall": "wxt prepare",
     "test:tz": "TZ=Pacific/Kiritimati vitest run tests/unit/core tests/property tests/golden && TZ=America/St_Johns vitest run tests/unit/core tests/property tests/golden",
     "test:perf": "vitest run --config vitest.perf.config.ts",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:poison": "vitest run --config vitest.poison.config.ts"
   },
   "dependencies": {
     "dexie": "4.4.6",

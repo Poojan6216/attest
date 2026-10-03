@@ -12,9 +12,26 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
-import { listAdapterHealth, putAdapterHealth, putCoveragePing, upsertClaim } from '../../../src/ledger/repo';
-import type { AdapterHealthInput } from '../../../src/ledger/types';
-import { captureLogs, expectLedgerError, makeClaim, makeHealth, makePing, uniqueDbName } from './fixtures';
+import {
+  listAdapterHealth,
+  putAdapterHealth,
+  putCoveragePing,
+  putGrant,
+  putRequest,
+  setMeta,
+  upsertClaim,
+} from '../../../src/ledger/repo';
+import type { AdapterHealthInput, GrantInput } from '../../../src/ledger/types';
+import {
+  captureLogs,
+  expectLedgerError,
+  makeClaim,
+  makeGrant,
+  makeHealth,
+  makePing,
+  makeRequest,
+  uniqueDbName,
+} from './fixtures';
 
 /** Probe p8: a message body padded to the old 120-character reason cap. */
 const BODY = 'Hi Priya,\nthe door code is 4417 and my SSN is 078-05-1120.\nThanks, P'.padEnd(120, '.');
@@ -91,6 +108,48 @@ describe('claims and coverage refuse a component id that quotes the page (probe 
     );
     expect(error.context).toMatchObject({ table: 'coverage', paths: 'observerId' });
     expect(await db.coverage.count()).toBe(0);
+    await expectNoSeed(error);
+  });
+});
+
+describe('a conversation id, a scope and an allowlist entry are never page text (R3-LEDGER-2, probes r4, r8)', () => {
+  /** Probe r4: a conversation's opening lines taken for its id, padded to the 128-character cap. */
+  const QUOTE = 'Hi Priya,\nthe door code is 4417.\nSSN 078-05-1120\nThanks, P'.padEnd(128, '.');
+
+  it.each([QUOTE, 'Hi Priya the door code is 4417', 'SSN 078-05-1120'])(
+    'putRequest refuses the conversationId %j, writes nothing and exports nothing of it',
+    async (conversationId) => {
+      const error = await expectLedgerError(putRequest(db, makeRequest({ conversationId })), 'invalid_input');
+      expect(error.context).toStrictEqual({ table: 'requests', paths: 'conversationId' });
+      expect(await db.requests.count()).toBe(0);
+      expect(await db.requests.where('conversationId').equals(conversationId).count()).toBe(0);
+      await expectNoSeed(error);
+    },
+  );
+
+  it('putRequest stores a UUID conversation id as it is', async () => {
+    const request = makeRequest({ conversationId: '6710a2b4-0c3e-8001-9a7f-1c2d3e4f5a6b' });
+    await putRequest(db, request);
+    expect(await db.requests.where('conversationId').equals(request.conversationId).count()).toBe(1);
+  });
+
+  const GRANT_TEXT: readonly (readonly [string, Partial<GrantInput>])[] = [
+    ['observedScopes.0', { observedScopes: [QUOTE.slice(0, 120)] }],
+    ['declaredScopes.1', { declaredScopes: ['gmail.send', 'Read your mail\nSSN 078-05-1120'] }],
+    ['counterpartyAllowlist.0', { counterpartyAllowlist: ['example.com\nthe door code is 4417'] }],
+  ];
+
+  it.each(GRANT_TEXT)('putGrant refuses a multi-line %s and writes nothing', async (path, overrides) => {
+    const error = await expectLedgerError(putGrant(db, makeGrant(overrides)), 'invalid_input');
+    expect(error.context).toStrictEqual({ table: 'grants', paths: path });
+    expect(await db.grants.count()).toBe(0);
+    await expectNoSeed(error);
+  });
+
+  it('setMeta refuses a key that is not a token', async () => {
+    const error = await expectLedgerError(setMeta(db, 'door code 4417', 1), 'invalid_input');
+    expect(error.context).toStrictEqual({ table: 'meta', paths: 'key' });
+    expect(await db.meta.count()).toBe(0);
     await expectNoSeed(error);
   });
 });

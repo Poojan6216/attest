@@ -38,18 +38,28 @@ export type IllegalTransitionCode =
    */
   | 'regrade_not_unasked'
   /**
+   * `regrade` with a receipt computed while one of the stored receipt's reverted overrides was still in force
+   * (§8; schema-receipt.ts `revertedHoldsAt`): that batch left the claim out, or had the orphan taken, so it cannot
+   * have graded it. A caller that passes such a claim to a batch would make the ledger disagree with replay.
+   */
+  | 'regrade_held'
+  /**
    * The stored receipt fails the Receipt schema, or its lifecycle reasons (`override.user`, `superseded`) are
    * not exactly the ones its `override` and `supersededBy` imply, last and in §15 order.
    */
   | 'invalid_receipt'
   /**
    * The event's payload is invalid: a `regrade` whose `next` is not a valid stored receipt or is not grade()'s
-   * output (USER_OVERRIDDEN, or superseded), an `override` that is not a valid ReceiptOverride (grade, visible
-   * reason, timestamp) or whose `at` is before the receipt's `computedAt`, a `supersede` whose claimId is not a
-   * Ulid, or an event kind the machine does not know.
+   * output (USER_OVERRIDDEN, superseded, or with reverted overrides), an `override` that is not a valid
+   * ReceiptOverride (grade, visible reason, timestamp) or whose `at` is before the receipt's `computedAt` or its
+   * last revert, a `revert` whose `at` is not a timestamp or is before the override's `at`, a `supersede` whose
+   * claimId is not a Ulid, or an event kind the machine does not know.
    */
   | 'invalid_event'
-  /** The event is legal but its result breaks the schema (one reason more than SCHEMA_LIMITS.REASONS allows). */
+  /**
+   * The event is legal but its result breaks the schema: one reason more than SCHEMA_LIMITS.REASONS allows, or one
+   * reverted override more than the schema keeps.
+   */
   | 'invalid_result';
 
 /** Fail loud (Hard Rule 6): an event that the state machine cannot apply never changes a stored receipt. */

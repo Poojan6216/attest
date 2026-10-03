@@ -15,7 +15,8 @@
  * neither verifies a claim nor accuses an agent, so no receipt names it, even inside a window of its own source (§3,
  * §4.1; Hard Rule 5). LedgerSim reads some claims first at a batch's very instant (that batch grades them, §3) and
  * stamps some overrides at a batch instant or just after one that batch then reads (batch-fixed.ts), so replay is
- * held to those boundaries too.
+ * held to those boundaries too. It also reverts overrides, whichever batches graded under them, stamped like
+ * overrides: replay must still rebuild those batches (§8: a revert never erases what a batch saw).
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -25,6 +26,7 @@ import { DEFAULT_POLICY } from '../../src/core/policy';
 import { observationIntegrityProblems } from '../../src/core/redact';
 import { type LedgerSnapshot, replay, type ReplayReport } from '../../src/core/replay';
 import { Grade, type Observation, type Receipt, Sha256 } from '../../src/core/schema';
+import { revertedHoldsAt } from '../../src/core/schema-receipt';
 import { simulate } from '../tools/attest-ledger';
 import { sourceOf } from '../tools/attest-world';
 
@@ -76,6 +78,19 @@ function strayInOwnWindow(snapshot: LedgerSnapshot): number {
         pass.source === row.source && Date.parse(pass.windowStart) <= t && t <= Date.parse(pass.windowEnd),
     );
   }).length;
+}
+
+/**
+ * Reverted overrides a batch graded under: one evaluated while it was in force (a claim's from the grading it sat
+ * beside, an orphan's from its `at`, up to its revert, schema-receipt.ts `revertedHoldsAt`).
+ */
+function revertedUnderBatch(snapshot: LedgerSnapshot, batchTimes: readonly string[]): number {
+  const instants = batchTimes.map((at) => Date.parse(at));
+  return snapshot.receipts
+    .flatMap((receipt) => (receipt.reverted ?? []).map((entry) => ({ receipt, entry })))
+    .filter(({ receipt, entry }) =>
+      instants.some((ms) => revertedHoldsAt(entry, receipt.claimId === undefined, ms)),
+    ).length;
 }
 
 /** Claims first read at the very instant of a batch (a receipt's `computedAt`): that batch graded them (§3). */
@@ -138,6 +153,8 @@ function expectFinalisedAcrossBatches(snapshot: LedgerSnapshot): void {
 
 describe('replay of a synthetic ledger (task 1.9 Done-when)', () => {
   it('1,000 claims and 10,000 observations graded in several batches: replay reproduces 100%, and one mutated grade is exactly one mismatch', async () => {
+    /** Reverted overrides a batch graded under, over every run: so the reverts are not vacuous. */
+    let reverted = 0;
     await fc.assert(
       fc.asyncProperty(
         fc.record({
@@ -147,12 +164,15 @@ describe('replay of a synthetic ledger (task 1.9 Done-when)', () => {
           pick: fc.nat(),
         }),
         async ({ seed, batches, overridesPerGap, pick }) => {
-          const { snapshot } = await simulate({ seed, ...DONE_WHEN, batches, overridesPerGap });
+          // One revert a gap, of an override a batch graded under: fewer than the overrides, so some stay.
+          const options = { seed, ...DONE_WHEN, batches, overridesPerGap, revertsPerGap: 1 };
+          const { snapshot, world } = await simulate(options);
           expect(snapshot.claims).toHaveLength(DONE_WHEN.claims);
           expect(snapshot.observations).toHaveLength(DONE_WHEN.observations);
           const report = await replay(snapshot);
           expectReproduced(report, snapshot);
           expectRealLedger(snapshot, report);
+          reverted += revertedUnderBatch(snapshot, world.batchTimes);
 
           const target = receiptAt(snapshot, pick);
           const grade = otherGrade(target.grade, pick);
@@ -165,6 +185,7 @@ describe('replay of a synthetic ledger (task 1.9 Done-when)', () => {
       ),
       { numRuns: 5 },
     );
+    expect(reverted).toBeGreaterThan(0);
   }, 600_000);
 });
 
@@ -173,7 +194,7 @@ const SMALL_RUNS = 1_000;
 
 /** Small ledgers with a stray row in its own source's window, and with a claim read at a batch instant: asserted
  * after the property, so it is never vacuous. */
-const tally = { strayLedgers: 0, readAtBatch: 0 };
+const tally = { strayLedgers: 0, readAtBatch: 0, revertedUnderBatch: 0 };
 
 /** Small ledgers, so 1,000 of them stay cheap: any size from one claim and one observation up. */
 const ledgerArb = fc.record({
@@ -182,6 +203,7 @@ const ledgerArb = fc.record({
   observations: fc.integer({ min: 1, max: 100 }),
   batches: fc.integer({ min: 2, max: 4 }),
   overridesPerGap: fc.integer({ min: 0, max: 3 }),
+  revertsPerGap: fc.integer({ min: 0, max: 2 }),
   pick: fc.nat(),
 });
 
@@ -189,11 +211,12 @@ describe('replay of many small synthetic ledgers', () => {
   it('reproduces 100%, and one mutated grade or ruleId is exactly that one mismatch', async () => {
     await fc.assert(
       fc.asyncProperty(ledgerArb, async ({ pick, ...options }) => {
-        const { snapshot } = await simulate(options);
+        const { snapshot, world } = await simulate(options);
         expectReproduced(await replay(snapshot), snapshot);
         expect(strayReceipts(snapshot)).toBe(0);
         if (strayInOwnWindow(snapshot) > 0) tally.strayLedgers += 1;
         if (readAtBatch(snapshot) > 0) tally.readAtBatch += 1;
+        if (revertedUnderBatch(snapshot, world.batchTimes) > 0) tally.revertedUnderBatch += 1;
         if (snapshot.receipts.length === 0) return;
         const target = receiptAt(snapshot, pick);
         const grade = otherGrade(target.grade, pick);
@@ -208,6 +231,7 @@ describe('replay of many small synthetic ledgers', () => {
     );
     expect(tally.strayLedgers).toBeGreaterThan(SMALL_RUNS / 20);
     expect(tally.readAtBatch).toBeGreaterThan(SMALL_RUNS / 20);
+    expect(tally.revertedUnderBatch).toBeGreaterThan(SMALL_RUNS / 20);
     console.log(`replay property tally: ${JSON.stringify(tally)}`);
   }, 600_000);
 });

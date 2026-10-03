@@ -19,6 +19,7 @@
     "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",
     "test:coverage": "pnpm --dir extension run test:coverage",
+    "test:poison": "pnpm --dir extension run test:poison",
     "e2e": "pnpm --dir extension run e2e",
     "bench": "pnpm --dir extension run bench",
     "capture": "pnpm --dir extension run capture",

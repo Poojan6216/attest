@@ -11,7 +11,8 @@
  * The names a component gives itself are not text at all (OBS-1): an adapter, observer or extractor id and a
  * version are one ASCII token (`componentId`), and a health reason is a code (`healthReason`). Health runs inside
  * the vendor tab, next to message bodies, so a reason that quoted the page would carry mail into the ledger and
- * the export (Hard Rules 2, 6).
+ * the export (Hard Rules 2, 6). A vendor's own id for a thing on its page (a conversation id) is a token too
+ * (`vendorId`): an adapter that took a conversation's title, or its first lines, for its id is refused.
  *
  * PURE (Hard Rule 4). Imports nothing from ./schema, so the two never form an import cycle.
  */
@@ -48,4 +49,16 @@ export function componentId(max: number): z.ZodString {
 /** A HEALTH_REASON code of at most `max` characters (a SCHEMA_LIMITS cap), never free text. */
 export function healthReason(max: number): z.ZodString {
   return z.string().max(max).regex(HEALTH_REASON, 'expected a reason code');
+}
+
+/**
+ * A vendor's opaque id for a thing on its page (a conversation id: a UUID, `conv-1`, `c_8f3a:2`): an ASCII letter
+ * or digit, then letters, digits, `.`, `_`, `:`, `+` or `-`; or empty when the page shows none. No space and no
+ * line break, so no title or sentence fits (Hard Rule 2).
+ */
+export const VENDOR_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._:+-]*)?$/;
+
+/** A VENDOR_ID of at most `max` characters (a SCHEMA_LIMITS cap). */
+export function vendorId(max: number): z.ZodString {
+  return z.string().max(max).regex(VENDOR_ID, 'expected a vendor id');
 }

@@ -8,7 +8,7 @@
  */
 import 'fake-indexeddb/auto';
 
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 
 import { idFromHash } from '../../../src/core/hash';
 import { contentHashOf } from '../../../src/core/redact';
@@ -23,6 +23,24 @@ import type {
   RequestInput,
 } from '../../../src/ledger/types';
 import { setLogSink, type LogRecord } from '../../../src/log';
+
+/**
+ * The instant the ledger specs' clock reads (`pinClock`): before every fixture's `observedAt`, so a write stores
+ * each sighting as given unless a test moves the clock (a new row is stamped no earlier than now,
+ * src/ledger/batch-instant.ts).
+ */
+export const LEDGER_TEST_NOW = '2026-01-01T00:00:00Z';
+
+/** Pins `Date`, and so src/clock.ts, at `at`. Only `Date` is faked: IndexedDB's own scheduling runs as usual. */
+export function pinClock(at: string = LEDGER_TEST_NOW): void {
+  if (!vi.isFakeTimers()) vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(at));
+}
+
+/** Restores the real clock (`afterEach` of a spec that pins it). */
+export function releaseClock(): void {
+  vi.useRealTimers();
+}
 
 /** A valid ULID whose lexical order follows `n` (Crockford digits only). */
 export function ulid(n: number): string {

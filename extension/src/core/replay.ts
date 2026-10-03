@@ -26,8 +26,8 @@
  * compared fields, or names why the receipt could not be graded again (REPLAY_FIELDS). Values are ids, hashes,
  * grades, rule ids, states, numbers, timestamps and error codes only, never content (Hard Rules 2, 10).
  *
- * Replay is exact only for a ledger whose overrides were never reverted: a revert erases the span in which the
- * receipt was fixed (raised as a contract issue).
+ * A reverted override is kept on its receipt (`reverted`, state.ts), and batch-fixed.ts keeps it in force for the
+ * batches evaluated up to its revert, so replay rebuilds the batches that graded under it exactly (Hard Rule 4).
  *
  * PURE: no I/O but reading the snapshot, no clock, no logging (Hard Rule 4). Async only because the index is.
  */

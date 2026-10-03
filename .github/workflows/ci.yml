@@ -50,6 +50,11 @@ jobs:
       - name: Core coverage
         run: pnpm test:coverage
 
+      # src/core under the runtime guard (Hard Rule 4): every core, golden and property test with every impure global
+      # poisoned before src/core loads; fails on any impure use, any changed built-in, or below 95% of src/core's lines.
+      - name: Core under the runtime guard
+        run: pnpm test:poison
+
       # src/core must not depend on the host time zone (Hard Rule 4): run the core suites in two more zones.
       - name: Core tests in other time zones
         run: pnpm --dir extension run test:tz

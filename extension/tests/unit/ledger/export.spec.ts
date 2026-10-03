@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -29,6 +29,8 @@ import {
   makeRequest,
   observationId,
   omit,
+  pinClock,
+  releaseClock,
   sha,
   ulid,
   uniqueDbName,
@@ -43,8 +45,13 @@ async function open(prefix: string, migrations = MIGRATIONS): Promise<LedgerDb> 
   return db;
 }
 
+beforeEach(() => {
+  pinClock();
+});
+
 afterEach(() => {
   for (const db of opened.splice(0)) db.close();
+  releaseClock();
 });
 
 /** Two of everything, written in the given order (`reverse` flips it) so ordering is exercised. */

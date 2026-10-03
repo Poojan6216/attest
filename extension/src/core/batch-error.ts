@@ -12,7 +12,13 @@ export type BatchErrorCode =
   /** Two grants of one agent took effect at the same instant: which one is in force is undecidable. */
   | 'ambiguous_grant'
   /** Two receipts of one batch have the same id (a corrupt ledger: two observations, one id). */
-  | 'duplicate_receipt';
+  | 'duplicate_receipt'
+  /**
+   * A claim pre-assignment starts at or after `evaluatedAt`: a batch stamped at an instant a batch already graded
+   * (or before it). Batches are stamped strictly in order (§3), so the earlier batch's FINAL evidence is fixed in
+   * this one; graded anyway, it would be free again, and replay could not rebuild either batch (Hard Rule 4).
+   */
+  | 'stale_evaluated_at';
 
 /** Fail loud (Hard Rule 6): a batch that cannot be graded exactly is never graded approximately. */
 export class BatchError extends Error {

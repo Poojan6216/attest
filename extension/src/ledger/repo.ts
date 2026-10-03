@@ -11,11 +11,14 @@
  *    carry a field its source never stores nor choose its own id (Hard Rule 2). Reads return the parsed
  *    domain types.
  *  - Observations and claims are idempotent: keyed on contentHash / rawHash inside one rw transaction.
- *    A repeat returns the stored id and never leaks a ConstraintError. It must be the same fact: one that
- *    differs in anything but `observedAt` throws `LedgerError('id_conflict')` and changes nothing (Hard Rule 6).
- *    The stored row keeps the earliest `observedAt` of all its sightings, in whatever order they arrive
- *    (docs/grading.md §4.1, Hard Rule 5). A stored row no read can return (it fails its schema) is replaced,
- *    not kept as a ghost.
+ *    A repeat returns the stored id and never leaks a ConstraintError. A stored row is never rewritten, because
+ *    a batch may have graded with it (docs/grading.md §3, Hard Rule 4). A repeat must be the same fact: one that
+ *    differs in anything but `observedAt` (and a claim's `extractor`) throws `LedgerError('id_conflict')`, and
+ *    one sighted earlier than the stored row throws `LedgerError('late_sighting')`; both change nothing (Hard
+ *    Rule 6). A new row is stored with the `observedAt` `stampObservedAt` gives (./batch-instant.ts): never at or
+ *    before the instant of a batch that did not read it. A stored row no read can return (it fails its schema)
+ *    is replaced, not kept as a ghost.
+ *  - A grading batch records its instant with `recordBatchInstant` before it reads (./batch-instant.ts).
  *  - Adapter health and coverage keep the latest report: an older timestamp never replaces a newer one.
  *  - Reads strip derived index fields and Zod-parse; an invalid row is skipped and logged by id only.
  */
@@ -24,14 +27,13 @@ import { z } from 'zod';
 import { assertLoadedPolicy, type Policy } from '../core/policy';
 import { observationIntegrityProblems } from '../core/redact';
 import { log } from '../log';
+import { LAST_EVALUATED_AT } from './batch-instant';
 import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import {
   accountKeyOf,
   normalizeToken,
-  toClaimRow,
   toCoverageRow,
-  toObservationRow,
   toReceiptRow,
   toRequestRow,
   type LedgerTableName,
@@ -65,6 +67,7 @@ import {
 } from './upsert';
 
 export type { UpsertResult } from './upsert';
+export { recordBatchInstant } from './batch-instant';
 
 export interface WriteResult {
   /** False when the incoming report was older than the stored one and was ignored. */
@@ -99,8 +102,9 @@ function assertProjected(observation: Observation, policy: Policy): void {
 }
 
 /**
- * Inserts an observation, or returns the existing id when its contentHash is already stored (keeping the
- * earlier `observedAt` of the two, §4.1; a stored row that differs in anything else throws `id_conflict`).
+ * Inserts an observation (its `observedAt` stamped, ./batch-instant.ts), or returns the existing id when its
+ * contentHash is already stored and the stored row is the same fact sighted no later (`id_conflict` for another
+ * fact, `late_sighting` for an earlier sighting; the stored row never changes).
  * `policy` is the loaded policy whose allowlist the observation was projected under; a row it could not have
  * produced is refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a
  * widened allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
@@ -113,11 +117,9 @@ export async function upsertObservation(
   assertLoadedPolicy(policy);
   const observation = parseInput('observations', Observation, input);
   assertProjected(observation, policy);
-  const row = toObservationRow(observation);
   return insertUnlessHashExists(db, observationsByHash(db), {
     hash: observation.contentHash,
     fact: observation,
-    row,
   });
 }
 
@@ -160,17 +162,15 @@ export async function observationsByCounterpartyToken(db: LedgerDb, token: strin
 // ── Claims ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Inserts a claim, or returns the existing id when its rawHash is already stored (keeping the earlier
- * `observedAt`). The raw text is never stored, so the rawHash cannot be checked against it: a claim that
- * differs from the stored one in anything but `observedAt` throws `LedgerError('id_conflict')` instead.
+ * Inserts a claim (its `observedAt` stamped, ./batch-instant.ts), or returns the existing id when its rawHash
+ * is already stored and the stored claim is the same one sighted no later. The raw text is never stored, so the
+ * rawHash cannot be checked against it: a claim that differs from the stored one in anything but `observedAt` and
+ * `extractor` throws `LedgerError('id_conflict')` instead, and an earlier sighting `late_sighting`. A newer
+ * extractor that reads the claim the same way changes nothing (the stored extractor is kept).
  */
 export async function upsertClaim(db: LedgerDb, input: ClaimInput): Promise<UpsertResult> {
   const claim = parseInput('claims', Claim, input);
-  return insertUnlessHashExists(db, claimsByHash(db), {
-    hash: claim.rawHash,
-    fact: claim,
-    row: toClaimRow(claim),
-  });
+  return insertUnlessHashExists(db, claimsByHash(db), { hash: claim.rawHash, fact: claim });
 }
 
 export async function getClaim(db: LedgerDb, id: string): Promise<Claim | undefined> {
@@ -301,7 +301,14 @@ export async function getMeta(db: LedgerDb, key: string): Promise<MetaEntry['val
   return readRow('meta', MetaEntry, await db.meta.get(key))?.value;
 }
 
+/** Stores a meta value. The last batch instant is written only by `recordBatchInstant` (it never moves back). */
 export async function setMeta(db: LedgerDb, key: string, value: MetaEntry['value']): Promise<void> {
+  if (key === LAST_EVALUATED_AT) {
+    throw new LedgerError('invalid_input', 'This meta key is written only by recordBatchInstant', {
+      table: 'meta',
+      paths: 'key',
+    });
+  }
   await db.meta.put(parseInput('meta', MetaEntry, { key, value }));
 }
 

@@ -222,13 +222,13 @@ describe('loadPolicy: basis points (§5.3)', () => {
   it('a weight written as -0 is 0 basis points (never -0); the document keeps it and hashes it as 0', () => {
     const doc = structuredClone(policyJson);
     doc.features.timeProximity = -0;
-    doc.unasked.threshold = -0;
+    doc.unasked.signals.userIdle = -0;
     const zero = structuredClone(policyJson);
     zero.features.timeProximity = 0;
-    zero.unasked.threshold = 0;
+    zero.unasked.signals.userIdle = 0;
     const policy = loadPolicy(doc);
     expect(Object.is(policy.bp.features.timeProximity, 0)).toBe(true);
-    expect(Object.is(policy.bp.unasked.threshold, 0)).toBe(true);
+    expect(Object.is(policy.bp.unasked.signals.userIdle, 0)).toBe(true);
     expect(Object.is(policy.features.timeProximity, -0)).toBe(true);
     expect(policy.policyHash).toBe(loadPolicy(zero).policyHash);
   });
@@ -266,11 +266,11 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
     );
   });
 
-  it('property: ordered thresholds (partial above 0) and the unasked threshold convert exactly', () => {
+  it('property: ordered thresholds (partial above 0) and the unasked threshold (above 0) convert exactly', () => {
     fc.assert(
       fc.property(
         fc.uniqueArray(fc.integer({ min: 1, max: BASIS_POINTS }), { minLength: 2, maxLength: 2 }),
-        fc.integer({ min: 0, max: BASIS_POINTS }),
+        fc.integer({ min: 1, max: BASIS_POINTS }),
         ([a = 0, b = 0], unasked) => {
           const doc = structuredClone(policyJson);
           doc.thresholds = {

@@ -1,14 +1,16 @@
 /**
  * Property tests for the receipt state machine (docs/grading.md §8; task 1.6, contract v1.4), 1,000 runs each:
  *  - a random sequence of well-formed events, checked step by step against an independent model of the §8
- *    table and its v1.4 payload rules (regrade: computed no earlier, UNASKED stays UNASKED; override: at no
- *    earlier than computedAt): each legal event lands in the model's state, each illegal one throws the model's
- *    code and changes nothing,
+ *    table and its payload rules (regrade: computed no earlier, UNASKED stays UNASKED, not while a reverted
+ *    override was in force; override: at no earlier than computedAt or the last revert; revert: at no earlier than
+ *    the override): each legal event lands in the model's state, each illegal one throws the model's code and
+ *    changes nothing,
  *    every receipt parses with the Receipt schema with its lifecycle reasons last and in §15 order, and no
  *    event but `regrade` changes the computed grade (or any other computed field);
  *  - the same with arbitrary, mostly invalid payloads and unknown event kinds: the only failure is an
  *    IllegalTransitionError, and nothing schema-invalid ever comes out;
- *  - override then revert restores the exact prior receipt, for any receipt and any valid override.
+ *  - override then revert restores the prior receipt and keeps the override as reverted, for any receipt and any
+ *    valid override and revert.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -38,7 +40,13 @@ const GRADED_REASONS = [
 ] as const;
 const CLAIM_GRADES = Grade.options.filter((grade) => grade !== 'UNASKED');
 const LIFECYCLE: ReadonlySet<string> = new Set(['override.user', 'superseded']);
-const NOT_COMPUTED: ReadonlySet<string> = new Set(['state', 'override', 'supersededBy', 'reasons']);
+const NOT_COMPUTED: ReadonlySet<string> = new Set([
+  'state',
+  'override',
+  'reverted',
+  'supersededBy',
+  'reasons',
+]);
 
 type Kind = 'claim' | 'unasked';
 
@@ -105,7 +113,7 @@ const eventArb = (kind: Kind): fc.Arbitrary<ReceiptEvent> =>
       next: build(kind === 'claim' ? 'claim' : 'orphanOther', computed),
     })),
     overrideArb,
-    fc.constant({ event: 'revert' as const }),
+    isoArb.map((at): ReceiptEvent => ({ event: 'revert', at })),
     ulidArb.map((claimId): ReceiptEvent => ({ event: 'supersede', claimId })),
   );
 
@@ -119,11 +127,37 @@ const scenarioArb = fc.constantFrom<Kind>('claim', 'unasked').chain((kind) =>
 
 const instant = (iso: string): number => Date.parse(iso);
 
-/** §8 regrade from PENDING (v1.4): computed no earlier, and an UNASKED receipt only to an UNASKED one. */
+/**
+ * Whether a reverted override of `current` was in force in the batch that computed at `atMs` (§8): a claim up to
+ * its revert, an orphan from the override's `at` up to its revert.
+ */
+function held(current: Receipt, atMs: number): boolean {
+  return (current.reverted ?? []).some(
+    (entry) =>
+      atMs <= instant(entry.revertedAt) && (current.claimId !== undefined || atMs > instant(entry.at)),
+  );
+}
+
+/**
+ * §8 regrade from PENDING: computed no earlier, an UNASKED receipt only to an UNASKED one, not while a reverted
+ * override was in force; a reverted override recorded at next's very instant must match next's state (a second
+ * batch at one instant), else the result breaks the schema.
+ */
 function regradeModel(current: Receipt, next: Receipt): ReceiptState | IllegalTransitionCode {
-  if (instant(next.computedAt) < instant(current.computedAt)) return 'regrade_stale';
+  const atMs = instant(next.computedAt);
+  if (atMs < instant(current.computedAt)) return 'regrade_stale';
   if (current.grade === 'UNASKED' && next.grade !== 'UNASKED') return 'regrade_not_unasked';
-  return next.state;
+  if (held(current, atMs)) return 'regrade_held';
+  const clash = (current.reverted ?? []).some(
+    (entry) => instant(entry.computedAt) === atMs && entry.previousState !== next.state,
+  );
+  return clash ? 'invalid_result' : next.state;
+}
+
+/** The instant no override may precede (§8): the receipt's computedAt, or its last revert when later. */
+function overrideFloor(current: Receipt): number {
+  const last = current.reverted?.at(-1);
+  return Math.max(instant(current.computedAt), last === undefined ? -Infinity : instant(last.revertedAt));
 }
 
 /** The §8 table, independently: the state a legal event leads to, or the code an illegal one throws. */
@@ -135,9 +169,12 @@ function model(current: Receipt, event: ReceiptEvent): ReceiptState | IllegalTra
       return current.supersededBy === undefined ? regradeModel(current, event.next) : 'regrade_superseded';
     case 'override':
       if (current.state === 'USER_OVERRIDDEN') return 'already_overridden';
-      return instant(event.at) < instant(current.computedAt) ? 'invalid_event' : 'USER_OVERRIDDEN';
+      return instant(event.at) < overrideFloor(current) ? 'invalid_event' : 'USER_OVERRIDDEN';
     case 'revert':
-      return current.override?.previousState ?? 'not_overridden';
+      if (current.override === undefined) return 'not_overridden';
+      return instant(event.at) < instant(current.override.at)
+        ? 'invalid_event'
+        : current.override.previousState;
     case 'supersede':
       return current.grade === 'UNASKED' ? current.state : 'not_unasked';
   }
@@ -190,8 +227,12 @@ describe('state machine: random valid event sequences follow the §8 table', () 
           }
           expect(outcome.state).toBe(expected);
           invariantsHold(outcome);
-          if (event.event === 'regrade') expect(outcome).toStrictEqual(event.next);
-          else expect(computedFields(outcome)).toStrictEqual(computedFields(current));
+          if (event.event === 'regrade') {
+            const kept = current.reverted === undefined ? {} : { reverted: current.reverted };
+            expect(outcome).toStrictEqual({ ...event.next, ...kept });
+          } else expect(computedFields(outcome)).toStrictEqual(computedFields(current));
+          if (event.event === 'revert') expect(outcome.reverted?.at(-1)?.revertedAt).toBe(event.at);
+          else expect(outcome.reverted).toStrictEqual(current.reverted);
           current = outcome;
         }
       }),
@@ -250,7 +291,7 @@ describe('state machine: arbitrary payloads', () => {
 });
 
 describe('state machine: override then revert', () => {
-  it('restores the exact prior receipt, superseded or not', () => {
+  it('restores the prior receipt, superseded or not, and keeps the override as reverted', () => {
     const receiptArb = fc
       .constantFrom<Kind>('claim', 'unasked')
       .chain((kind) =>
@@ -265,13 +306,18 @@ describe('state machine: override then revert', () => {
     // §8 (v1.4): an override is never before the receipt was computed; `after` ms later, as a Z timestamp.
     const after = fc.integer({ min: 0, max: 400 * 24 * 3_600_000 });
     fc.assert(
-      fc.property(receiptArb, overrideArb, after, (receipt, override, delay) => {
+      fc.property(receiptArb, overrideArb, after, after, (receipt, override, delay, revertDelay) => {
         const at = new Date(Date.parse(receipt.computedAt) + delay).toISOString();
         const event = { ...override, at };
         const overridden = transition(receipt, event);
         expect(overridden.state).toBe('USER_OVERRIDDEN');
         expect(overridden.grade).toBe(receipt.grade);
-        expect(transition(overridden, { event: 'revert' })).toStrictEqual(receipt);
+        const revertedAt = new Date(Date.parse(at) + revertDelay).toISOString();
+        const { reverted, ...rest } = transition(overridden, { event: 'revert', at: revertedAt });
+        expect(rest).toStrictEqual(receipt);
+        const { computedAt, observationIds, state: previousState } = receipt;
+        const entry = { grade: override.grade, at, revertedAt, previousState, computedAt, observationIds };
+        expect(reverted).toStrictEqual([entry]);
       }),
       RUNS,
     );

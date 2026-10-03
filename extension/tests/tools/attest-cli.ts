@@ -6,7 +6,9 @@
  * stored receipt with src/core/replay.ts (docs/grading.md §9), and prints a summary: receipts, batches, how many were
  * reproduced, mismatches by field, and the first mismatches. Output holds ids, hashes, grades, rule ids, states,
  * numbers and timestamps only, never content (Hard Rules 2, 10), and every line is written through printable.ts, so
- * nothing in an export (a crafted key in an error path) can drive the terminal.
+ * nothing in an export (a crafted key in an error path) can drive the terminal. Text the CLI echoes inside one of
+ * its own lines (the file name it was given, a value it reports) is escaped with `printable` first, line breaks
+ * included, so it can never start a line of its own either.
  *
  * Exit codes: 0 every receipt reproduced; 1 at least one mismatch; 2 bad arguments or an unreadable export.
  *
@@ -19,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { REPLAY_FIELDS, replay, type ReplayMismatch, type ReplayReport } from '../../src/core/replay';
 
 import { readSnapshot, SnapshotError } from './attest-snapshot';
-import { printableLines } from './printable';
+import { printable, printableLines } from './printable';
 
 export const EXIT = { reproduced: 0, mismatch: 1, unusable: 2 } as const;
 
@@ -51,14 +53,19 @@ const CONSOLE_IO: CliIo = {
   },
 };
 
-function describeMismatch(one: ReplayMismatch): string {
-  return `    ${one.receiptId} ${one.field}: stored ${one.stored ?? '(none)'}, replayed ${one.replayed ?? '(none)'}`;
+/** A reported value, escaped (`printable`): absent is `(none)`. */
+function shown(value: string | null): string {
+  return value === null ? '(none)' : printable(value);
 }
 
-/** The summary `attest replay` prints for a report. */
+function describeMismatch(one: ReplayMismatch): string {
+  return `    ${printable(one.receiptId)} ${one.field}: stored ${shown(one.stored)}, replayed ${shown(one.replayed)}`;
+}
+
+/** The summary `attest replay` prints for a report; `file` is echoed escaped (`printable`), on its own line. */
 export function summarize(file: string, report: ReplayReport): string[] {
   const lines = [
-    `attest replay ${file}`,
+    `attest replay ${printable(file)}`,
     `  receipts    ${String(report.receipts)} in ${String(report.batches)} batches`,
     `  reproduced  ${String(report.reproduced)}`,
     `  mismatched  ${String(report.mismatched)}`,
@@ -83,12 +90,12 @@ async function readJson(file: string): Promise<unknown> {
     text = await readFile(file, 'utf8');
   } catch (error) {
     const code = error instanceof Error && 'code' in error ? String(error.code) : 'error';
-    throw new SnapshotError('invalid_snapshot', `cannot read ${file} (${code})`);
+    throw new SnapshotError('invalid_snapshot', `cannot read ${printable(file)} (${printable(code)})`);
   }
   try {
     return JSON.parse(text);
   } catch {
-    throw new SnapshotError('invalid_snapshot', `${file} is not JSON`);
+    throw new SnapshotError('invalid_snapshot', `${printable(file)} is not JSON`);
   }
 }
 

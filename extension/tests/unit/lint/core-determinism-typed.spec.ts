@@ -143,3 +143,69 @@ describe('the real eslint.config.js lints src/core with type information', () =>
     expect(config.rules?.['attest/core-determinism']).toEqual([2]);
   });
 });
+
+const LOCAL_TEXT = (name: string) =>
+  `src/core is deterministic: '${name}' of a value whose type may hide a Date (\`unknown\`, \`any\`, \`object\`, a type parameter) renders the host's time zone when one is passed. Narrow it first (Hard Rule 4).`;
+const DATE_REFLECTION =
+  'src/core is deterministic: no reflection on a Date (its prototype holds the local-time methods and the constructor with the clock) (Hard Rule 4).';
+
+describe('attest/core-determinism, typed: text of a value whose type may hide a Date (FR3-2)', () => {
+  it.each([
+    ['const text = (value: unknown): string => String(value);', 'String(value)'],
+    ['export const s = (value: object): string => new String(value).valueOf();', 'String(value)'],
+    ['export const s = <T,>(value: T): string => String(value);', 'String(value)'],
+    ['export const s = (value: {}): string => String(value);', 'String(value)'],
+    ["const joined = (values: readonly unknown[]): string => values.join('|');", 'join'],
+    ['export const s = <T extends object>(values: T[]): string => values.toString();', 'toString'],
+    ['export const s = (value: object): string => value.toString();', 'toString'],
+    ['export const s = (value: unknown): string => `v=${value as object}`;', 'a template'],
+    ["export const s = (value: object): string => 'v=' + value;", '+'],
+  ])('%s', async (code, name) => {
+    expect(await messages(code)).toEqual([LOCAL_TEXT(name)]);
+  });
+
+  it('a Date in a template or after `+` is reported as local time', async () => {
+    expect(await messages('export const s = (d: Date): string => `${d}`;')).toEqual([
+      "src/core is deterministic: 'a template of a Date' depends on the host time zone. Use the UTC methods (Hard Rule 4).",
+    ]);
+    expect(await messages("export const s = (d: Date): string => '' + d;")).toEqual([
+      "src/core is deterministic: '+ on a Date' depends on the host time zone. Use the UTC methods (Hard Rule 4).",
+    ]);
+  });
+
+  it('control: text of strings, numbers, narrowed values and string-constrained type parameters passes', async () => {
+    const code = [
+      'export const a = (n: number, s: string): string => String(n) + String(s) + `${n}${s}`;',
+      "export const b = (xs: readonly (string | number)[]): string => xs.join(',') + xs.toString();",
+      "export const c = <T extends string>(x: T): string => `${x}` + String(x) + [x].join('');",
+      "export const d = (x: unknown): string => (typeof x === 'string' ? String(x) : 'other');",
+      'export const e = (x: string & {}): string => `${x}` + x;',
+      'export const f = (t: TemplateStringsArray, ...v: unknown[]): number => t.length + v.length;',
+      'export const g = f`a${1 as unknown}b`;',
+      'export const h = (n: number, m: number): number => n + m;',
+    ].join('\n');
+    expect(await messages(code)).toEqual([]);
+  });
+});
+
+describe('attest/core-determinism, typed: no reflection on a Date (FR3-2)', () => {
+  it.each([
+    'export const p = Object.getPrototypeOf(new Date(0));',
+    "export const p = (d: Date): unknown => Object.getOwnPropertyDescriptor(d, 'getTime');",
+    "export const p = (d: Date): unknown => Reflect.get(d, 'getTime');",
+    "export const p = (d: Date | undefined): boolean => d !== undefined && Reflect.has(d, 'getTime');",
+  ])('%s', async (code) => {
+    expect(await messages(code)).toEqual([DATE_REFLECTION]);
+  });
+
+  it('the verifier probes q01 to q04 each fail', async () => {
+    const probes = [
+      "const DATE_PROTOTYPE: unknown = Object.getPrototypeOf(new Date(0));\nexport const OFFSET: unknown = typeof DATE_PROTOTYPE === 'object' && DATE_PROTOTYPE !== null ? Reflect.get(DATE_PROTOTYPE, 'getTimezone' + 'Offset') : undefined;",
+      "const DATE_PROTOTYPE: unknown = Object.getPrototypeOf(new Date(0));\nexport const KEY = typeof DATE_PROTOTYPE === 'object' && DATE_PROTOTYPE !== null ? Object.getOwnPropertyNames(DATE_PROTOTYPE).find((name) => name.startsWith('con')) : '';",
+      "export const FORMAT: unknown = Reflect.get(Number, 'toLocale' + 'String');",
+      'const text = (value: unknown): string => String(value);\nexport const q04 = (ms: number): string => text(new Date(ms));',
+      "const joined = (values: readonly unknown[]): string => values.join('|');\nexport const q04join = (ms: number): string => joined([new Date(ms)]);",
+    ];
+    for (const code of probes) expect((await messages(code)).length, code).toBeGreaterThan(0);
+  });
+});

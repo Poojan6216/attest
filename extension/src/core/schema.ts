@@ -4,8 +4,8 @@
  * Every object is strict: an unknown key is an error, so nothing outside the allowlist reaches storage, the
  * bus or a hash (Hard Rule 2). Every free-text string and every array is capped (SCHEMA_LIMITS, SECURITY-4).
  * Ids, hashes and timestamps are branded, so a plain string cannot pass for a `Ulid` without a parse.
- * Counterparty, merchant and subject text is one line (SEC-3); component ids, versions and health reasons are
- * tokens (OBS-1; both in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
+ * Counterparty, merchant, subject, allowlist and scope text is one line (SEC-3); component ids, versions, health
+ * reasons and a vendor's conversation id are tokens (OBS-1; all in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
  * re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
  *
  * This file is exempt from the core no-literal rule for SCHEMA_LIMITS only: a length cap is schema, not policy.
@@ -27,8 +27,8 @@ import {
   refineWith,
   signalProblems,
 } from './schema-checks';
-import { receiptProblems } from './schema-receipt';
-import { componentId, healthReason, oneLineText, VISIBLE } from './schema-text';
+import { receiptProblems, revertedOverrides } from './schema-receipt';
+import { componentId, healthReason, oneLineText, vendorId, VISIBLE } from './schema-text';
 import { BASIS_POINTS } from './units';
 
 /** Length caps on every free-text string and every array (SECURITY-4, Hard Rule 2; Decisions [0.close]). */
@@ -134,7 +134,7 @@ export const ReceiptSignal = z.enum(RECEIPT_SIGNALS);
 export const Request = z.strictObject({
   id: Ulid,
   agent: AgentId,
-  conversationId: z.string().max(L.CONVERSATION_ID),
+  conversationId: vendorId(L.CONVERSATION_ID),
   textHint: z.string().max(L.TEXT_HINT),
   textHash: Sha256,
   ts: IsoTs,
@@ -226,14 +226,14 @@ export const Grant = z
     agent: AgentId,
     allowedTypes: z.array(ActionType).max(ActionType.options.length),
     /** Domains or exact addresses. */
-    counterpartyAllowlist: z.array(z.string().max(L.COUNTERPARTY)).max(L.LIST),
+    counterpartyAllowlist: z.array(oneLineText(L.COUNTERPARTY)).max(L.LIST),
     spendCeilingCents: AmountCents.nullable(),
     /** Required when `spendCeilingCents` is set (§6.1). */
     spendCurrency: Currency.optional(),
     /** What the user says the agent may access. */
-    declaredScopes: z.array(z.string().max(L.ITEM)).max(L.LIST),
+    declaredScopes: z.array(oneLineText(L.ITEM)).max(L.LIST),
     /** What the vendor settings page shows. */
-    observedScopes: z.array(z.string().max(L.ITEM)).max(L.LIST).optional(),
+    observedScopes: z.array(oneLineText(L.ITEM)).max(L.LIST).optional(),
     /** The account hashes that belong to this agent, per source (§6.1). */
     accounts: z.partialRecord(ObservationSource, z.array(Sha256).max(L.ACCOUNTS)).optional(),
     updatedAt: IsoTs,
@@ -310,6 +310,7 @@ export const Receipt = z
     /** Hard Rule 7: every UNASKED receipt says "likely", and only UNASKED receipts carry it. */
     attribution: z.literal('likely').optional(),
     override: ReceiptOverride.optional(),
+    reverted: revertedOverrides(OverrideGrade, IsoTs, Ulid, L).optional(),
     supersededBy: Ulid.optional(),
     computedAt: IsoTs,
     finalAt: IsoTs.optional(),
@@ -334,7 +335,7 @@ export const GradeContext = z.strictObject({
   priorSpendCents: z.number().int().min(0),
   attribution: Attribution.optional(),
   /** Claim-less scope-diff receipts only: the observed scope under test. */
-  scope: z.strictObject({ observed: z.string().min(1).max(L.ITEM) }).optional(),
+  scope: z.strictObject({ observed: oneLineText(L.ITEM).min(1) }).optional(),
 });
 
 const AgentAt = z.strictObject({ agent: AgentId, at: IsoTs });

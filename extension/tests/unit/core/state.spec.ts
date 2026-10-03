@@ -23,6 +23,7 @@ const HASH = 'ab'.repeat(32);
 const T_PENDING = '2026-10-06T14:20:00-04:00';
 const T_FINAL = '2026-10-06T14:48:00-04:00';
 const T_OVERRIDE = '2026-10-06T15:05:00-04:00';
+const T_REVERT = '2026-10-06T15:30:00-04:00';
 const LATER_CLAIM = ulid(900);
 
 const CLAIM_BASE = {
@@ -117,7 +118,7 @@ const eventFor = (kind: Kind, event: ReceiptEventKind): ReceiptEvent => {
     case 'override':
       return { event, grade: 'NOT_FOUND', reason: 'I cancelled it myself', at: T_OVERRIDE };
     case 'revert':
-      return { event };
+      return { event, at: T_REVERT };
     case 'supersede':
       return { event, claimId: LATER_CLAIM };
   }
@@ -181,7 +182,13 @@ const ROWS = KINDS.flatMap((kind) =>
 );
 
 const LIFECYCLE: ReadonlySet<string> = new Set(['override.user', 'superseded']);
-const NOT_COMPUTED: ReadonlySet<string> = new Set(['state', 'override', 'supersededBy', 'reasons']);
+const NOT_COMPUTED: ReadonlySet<string> = new Set([
+  'state',
+  'override',
+  'reverted',
+  'supersededBy',
+  'reasons',
+]);
 
 /** The receipt's reasons as §15 orders them: graded reasons, then override.user, then superseded. */
 function lifecycleOrdered(receipt: Receipt): Reason[] {
@@ -192,7 +199,7 @@ function lifecycleOrdered(receipt: Receipt): Reason[] {
   return [...graded, ...tail];
 }
 
-/** The fields grade() computed: every field but state, override, supersededBy and the lifecycle reasons. */
+/** The fields grade() computed: every field but state, override, reverted, supersededBy and the lifecycle reasons. */
 function computed(receipt: Receipt): Record<string, unknown> {
   const rest = Object.entries(receipt).filter(([key]) => !NOT_COMPUTED.has(key));
   return {
@@ -278,15 +285,26 @@ describe('state table: what each legal pair stores', () => {
     }
   });
 
-  it('revert removes the override and its reason and returns to previousState', () => {
+  it('revert removes the override and its reason, returns to previousState and keeps the override as reverted', () => {
     for (const kind of KINDS) {
-      const result = transition(FIXTURES[kind].USER_OVERRIDDEN, { event: 'revert' });
-      expect(result).toStrictEqual(NEXT[kind]);
+      const stored = FIXTURES[kind].USER_OVERRIDDEN;
+      const result = transition(stored, eventFor(kind, 'revert'));
+      const { grade, at, previousState } = stored.override ?? {
+        grade: 'none',
+        at: '',
+        previousState: 'none',
+      };
+      const { computedAt, observationIds } = stored;
+      const reverted = [{ grade, at, revertedAt: T_REVERT, previousState, computedAt, observationIds }];
+      expect(result).toStrictEqual(Receipt.parse({ ...NEXT[kind], reverted }));
       expect(result.override).toBeUndefined();
       expect(result.reasons.map((reason) => reason.code)).not.toContain('override.user');
+      expect(JSON.stringify(result)).not.toContain('Sent it from my phone');
     }
   });
+});
 
+describe('state table: what supersede, regrade and revert from PENDING store', () => {
   it('supersede sets supersededBy and appends superseded {claimId}, in every state', () => {
     for (const state of ReceiptState.options) {
       const receipt = FIXTURES.unasked[state];
@@ -310,8 +328,19 @@ describe('state table: what each legal pair stores', () => {
 
   it('a USER_OVERRIDDEN receipt overridden from PENDING reverts to PENDING, with no finalAt', () => {
     const pending = FIXTURES.claim.PENDING;
-    const result = transition(overridden(pending, 'VERIFIED'), { event: 'revert' });
-    expect(result).toStrictEqual(pending);
+    const result = transition(overridden(pending, 'VERIFIED'), { event: 'revert', at: T_REVERT });
+    const { reverted, ...rest } = result;
+    expect(rest).toStrictEqual(pending);
+    expect(reverted).toEqual([
+      {
+        grade: 'VERIFIED',
+        at: T_OVERRIDE,
+        revertedAt: T_REVERT,
+        previousState: 'PENDING',
+        computedAt: T_PENDING,
+        observationIds: [],
+      },
+    ]);
     expect(result.finalAt).toBeUndefined();
   });
 });

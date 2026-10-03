@@ -43,13 +43,20 @@ function windowIssues({ windows }: PolicyDocument): PolicyIssue[] {
  * matches nothing (score 0) would be assigned, named as the claim's evidence, kept from orphan detection and graded
  * PARTIAL, and NOT_FOUND could never be reached (Hard Rule 5). A score can be partial without being verified only
  * if the partial threshold is strictly lower.
+ *
+ * §7: likewise UNASKED names its evidence, the signals that fired, so its threshold must be above 0 too (at least
+ * 1 bp): at 0 an attribution whose every fired signal weighs 0 (score 0) would still be "likely", a FINAL accusation
+ * resting on nothing (Hard Rules 5, 7). At 1 bp or more, an UNASKED receipt needs a signal with a positive weight.
  */
-function thresholdIssues({ thresholds }: PolicyDocument): PolicyIssue[] {
+function thresholdIssues({ thresholds, unasked }: PolicyDocument): PolicyIssue[] {
   const partial = roundedBasisPoints(thresholds.partial);
   const issues: PolicyIssue[] = [];
   if (partial === 0) issues.push({ path: ['thresholds', 'partial'], message: 'must be > 0' });
   if (!(partial < roundedBasisPoints(thresholds.verified))) {
     issues.push({ path: ['thresholds', 'partial'], message: 'must be < thresholds.verified' });
+  }
+  if (roundedBasisPoints(unasked.threshold) === 0) {
+    issues.push({ path: ['unasked', 'threshold'], message: 'must be > 0' });
   }
   return issues;
 }

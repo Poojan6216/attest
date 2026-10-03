@@ -33,13 +33,17 @@ const INSTANTS = new Map([
   [OVERRIDE_AT, 'OVERRIDE_AT'],
 ]);
 
-/** [observation, claim (null: taken), after, until?] by scenario name. */
+/** [observation, claim (null: taken), after, until?, released?] by scenario name; a released span `from…to`. */
 function named(fixed: readonly BatchFixed[]): (string | null)[][] {
+  const name = (at: string) => INSTANTS.get(at) ?? at;
   return fixed.map((pair) => {
     const claim = pair.claimId === null ? null : (CLAIM_REFS.get(pair.claimId) ?? pair.claimId);
     const row = [OBSERVATION_REFS.get(pair.observationId) ?? pair.observationId, claim];
     const instants = pair.until === undefined ? [pair.after] : [pair.after, pair.until];
-    return [...row, ...instants.map((at) => INSTANTS.get(at) ?? at)];
+    const released = (pair.released ?? []).map(
+      ({ from, to }) => `released ${name(from)}…${to === undefined ? '' : name(to)}`,
+    );
+    return [...row, ...instants.map(name), ...released];
   });
 }
 
@@ -63,7 +67,7 @@ describe('preAssignments of the scenario ledger (§4.3)', () => {
       ['o1', 'c1', 'T1'], // FINAL at T1
       ['o3', 'c3', 'T2'], // PENDING at T1, FINAL at T2: fixed only after its last grading
       ['o5', 'c5', 'T1'], // PENDING until an override to VERIFIED: after its last grading, not after the override
-      ['o7', 'c7', 'T1', 'OVERRIDE_AT'], // FINAL until an override to NOT_FOUND, which ends it at its `at`
+      ['o7', 'c7', 'T1', 'released OVERRIDE_AT…'], // FINAL until an override to NOT_FOUND, which releases it after its `at`
       ['o7', 'c8', 'T2'],
       ['o9', null, 'OVERRIDE_AT'], // an overridden UNASKED receipt takes its orphan after the override
     ]);

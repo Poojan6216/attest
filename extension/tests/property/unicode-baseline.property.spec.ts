@@ -19,16 +19,23 @@ import {
 } from '../../src/core/features-content';
 import {
   amount,
+  asciiLower,
   counterparty,
   email,
+  isCurrencyCode,
   name,
   nameTokens,
   resolveRelative,
+  sameAddress,
+  stopWordKey,
   subjectTokens,
 } from '../../src/core/normalize';
+import * as normalizeAmount from '../../src/core/normalize-amount';
+import * as normalizeRelative from '../../src/core/normalize-relative';
+import * as normalizeText from '../../src/core/normalize-text';
 import { readsDifferently, stripInvisible } from '../../src/core/normalize-text';
-import { lowerBaseline } from '../../src/core/unicode-baseline';
 import { ASSIGNED, RESERVED_IGNORABLE } from '../../src/core/unicode-table-assigned';
+import { READER_FILES } from '../unit/core/unicode-fence-files';
 
 const RUNS = { numRuns: 2_000 };
 const IN_BASELINE = new RegExp(`^[${ASSIGNED}${RESERVED_IGNORABLE}]$`, 'u');
@@ -146,21 +153,44 @@ function mapStrings(value: unknown, map: (text: string) => string): unknown {
 }
 
 const CONTEXT = { referenceIso: '2026-10-06T14:00:00-04:00', offsetAt: () => -240 };
-const READERS: readonly (readonly [string, (text: string, stop: readonly string[]) => unknown])[] = [
-  ['name', (text) => name(text)],
-  ['nameTokens', (text) => nameTokens(text)],
-  ['subjectTokens', (text, stop) => subjectTokens(text, stop)],
-  ['counterparty', (text) => counterparty(text)],
-  ['email', (text) => email(text)],
-  ['amount', (text) => amount(text, { defaultDollar: 'USD' })],
-  ['resolveRelative', (text) => resolveRelative(text, CONTEXT)],
-  ['readsDifferently', (text) => readsDifferently(text)],
-  ['stripInvisible', (text) => stripInvisible(text)],
-  ['stopWordSet', (text, stop) => stopWordSet([...stop, text])],
-  ['subjectTokensWithout', (text, stop) => subjectTokensWithout(text, stopWordSet(stop))],
-  ['merchantName', (text) => merchantName(text)],
-  ['prepareMerchant', (text) => prepareMerchant(text)],
+/** Two addresses read from the text and the last stop word, compared (an address compared with itself if one). */
+function comparedAddresses(text: string, stop: readonly string[]): unknown {
+  const address = email(text);
+  return address === null ? null : sameAddress(address, email(stop.at(-1) ?? '') ?? address);
+}
+/** Each reader, by its function (its name labels a failure), and how the properties call it on text. */
+const READERS: readonly (readonly [
+  (...args: never[]) => unknown,
+  (text: string, stop: readonly string[]) => unknown,
+])[] = [
+  [name, (text) => name(text)],
+  [nameTokens, (text) => nameTokens(text)],
+  [subjectTokens, (text, stop) => subjectTokens(text, stop)],
+  [counterparty, (text) => counterparty(text)],
+  [email, (text) => email(text)],
+  [sameAddress, comparedAddresses],
+  [asciiLower, (text) => asciiLower(text)],
+  [stopWordKey, (text) => stopWordKey(text)],
+  [amount, (text) => amount(text, { defaultDollar: 'USD' })],
+  [isCurrencyCode, (text) => isCurrencyCode(text)],
+  [resolveRelative, (text) => resolveRelative(text, CONTEXT)],
+  [readsDifferently, (text) => readsDifferently(text)],
+  [stripInvisible, (text) => stripInvisible(text)],
+  [stopWordSet, (text, stop) => stopWordSet([...stop, text])],
+  [subjectTokensWithout, (text, stop) => subjectTokensWithout(text, stopWordSet(stop))],
+  [merchantName, (text) => merchantName(text)],
+  [prepareMerchant, (text) => prepareMerchant(text)],
 ];
+/**
+ * The files whose every export the properties must run, by name: the only src/core files that may call `normalize`
+ * (READER_FILES, which tests/unit/core/unicode-fence.spec.ts holds src/core to), so every engine normalisation is
+ * reached through one of their exports.
+ */
+const READER_MODULES: Readonly<Record<string, object>> = {
+  'normalize-text.ts': normalizeText,
+  'normalize-amount.ts': normalizeAmount,
+  'normalize-relative.ts': normalizeRelative,
+};
 
 describe('every reader treats a code point Unicode 15.0 does not assign as unassigned (property)', () => {
   it('the engine running the suite assigns characters 15.0 does not, so the property is not vacuous', () => {
@@ -196,9 +226,9 @@ describe('every reader treats a code point Unicode 15.0 does not assign as unass
             ['the', fill(stop, from)],
             ['the', fill(stop, to)],
           ];
-          for (const [label, read] of READERS) {
-            expect([label, read(after, stopAfter)]).toEqual([
-              label,
+          for (const [reader, read] of READERS) {
+            expect([reader.name, read(after, stopAfter)]).toEqual([
+              reader.name,
               mapStrings(read(before, stopBefore), substitute),
             ]);
           }
@@ -276,6 +306,17 @@ function onLaterEngine<T>(read: () => T): T {
 }
 
 describe('every reader keeps a code point Unicode 15.0 does not assign from a later engine (property)', () => {
+  it('runs every export of the files that may normalise, so no reader there is left out', () => {
+    expect(Object.keys(READER_MODULES).sort()).toEqual([...READER_FILES].sort());
+    const run: ReadonlySet<unknown> = new Set(READERS.map(([reader]) => reader));
+    const exports = Object.entries(READER_MODULES).flatMap(([file, module]) =>
+      Object.entries(module).map(([key, value]): [string, unknown] => [`${file} ${key}`, value]),
+    );
+    expect(exports.length).toBeGreaterThanOrEqual(13);
+    const notRun = exports.filter(([, value]) => typeof value !== 'function' || !run.has(value));
+    expect(notRun.map(([label]) => label)).toEqual([]);
+  });
+
   it('the simulated engine reads those code points (so the property is not vacuous)', () => {
     expect(onLaterEngine(() => 'p\u0378x.com'.normalize('NFKC'))).toBe('p@x.com');
     expect(onLaterEngine(() => 'A\u0381'.toLowerCase())).toBe('aq');
@@ -290,8 +331,11 @@ describe('every reader keeps a code point Unicode 15.0 does not assign from a la
     fc.assert(
       fc.property(template, template, codes, (parts, stopParts, fill3) => {
         const [text, stop] = [fill(parts, fill3), ['the', fill(stopParts, fill3)]];
-        for (const [label, read] of READERS) {
-          expect([label, onLaterEngine(() => read(text, stop))]).toEqual([label, read(text, stop)]);
+        for (const [reader, read] of READERS) {
+          expect([reader.name, onLaterEngine(() => read(text, stop))]).toEqual([
+            reader.name,
+            read(text, stop),
+          ]);
         }
       }),
       RUNS,
@@ -301,18 +345,35 @@ describe('every reader keeps a code point Unicode 15.0 does not assign from a la
 
 /** Readers whose result keeps the text as read (an address) are compared with each lone half replaced there too. */
 const wellFormed = (text: string): string => text.toWellFormed();
+/**
+ * Readers that see a lone half as itself, by design: stripInvisible removes marks and keeps the rest as is (the
+ * step every reader runs after asBaseline), and sameAddress compares two addresses code point by code point as read
+ * (§5.1), so two different lone halves are two different addresses (both are `confusable`).
+ */
+const KEEPS_HALVES: ReadonlySet<unknown> = new Set([stripInvisible, sameAddress]);
 
 describe('a lone surrogate reads as the U+FFFD it displays as, whatever is removed around it (property)', () => {
+  it('leaves out only the readers that see a lone half as itself, each for the reason given', () => {
+    expect([...KEEPS_HALVES]).toEqual([stripInvisible, sameAddress]);
+    expect(stripInvisible('\uD835​\uDC29')).toBe('\u{1D429}');
+    const [a, b] = [email('\uD835@x.com'), email('\uD900@x.com')];
+    expect(a !== null && b !== null && sameAddress(a, b)).toMatchObject({
+      exact: false,
+      confusablePair: true,
+    });
+    const replaced = email('�@x.com');
+    expect(replaced !== null && sameAddress(replaced, replaced).exact).toBe(true);
+  });
+
   it('gives every reader the same answer as on the text with each lone half replaced by U+FFFD', () => {
     const codes = fc.uniqueArray(outside, { minLength: HOLES, maxLength: HOLES });
     fc.assert(
       fc.property(template, template, codes, (parts, stopParts, fill3) => {
         const [text, stop] = [fill(parts, fill3), ['the', fill(stopParts, fill3)]];
-        for (const [label, read] of READERS) {
-          // stripInvisible removes marks and keeps the rest as is: the step every reader runs after asBaseline.
-          if (label === 'stripInvisible') continue;
-          expect([label, mapStrings(read(text, stop), wellFormed)]).toEqual([
-            label,
+        for (const [reader, read] of READERS) {
+          if (KEEPS_HALVES.has(reader)) continue;
+          expect([reader.name, mapStrings(read(text, stop), wellFormed)]).toEqual([
+            reader.name,
             read(wellFormed(text), stop.map(wellFormed)),
           ]);
         }
@@ -320,26 +381,4 @@ describe('a lone surrogate reads as the U+FFFD it displays as, whatever is remov
       RUNS,
     );
   }, 120_000);
-});
-
-/**
- * Characters around a capital sigma that decide its lowercase (Final_Sigma): cased letters (Lu, Ll, Lt, astral),
- * case-ignorable marks, modifiers, format characters and mid-word punctuation, characters that are both (ICU
- * skips them), uncased characters, noncharacters and a character outside 15.0. U+1171E, whose Case_Ignorable
- * property 16.0 changed, is left out: unicode-baseline.spec.ts pins it to the 15.0 answer.
- */
-const SIGMA_CONTEXT = Array.from(
-  "A\u03A3\u03A3\u03C3\u03C2a\u01C5\u0391\u03C9\u0301\u0345\u02B0\u1D2C\u00B4:.'\u00AD\u200B 1-\u4E2D\uFDD0\u0378\u00DF\u0130",
-).concat(['\u{1D400}', '\u{1D41A}', '\u{1FFFE}', '\u{1CCF1}', '\u{E0001}', '\u{10400}']);
-
-describe('lowerBaseline equals the engine lowercase wherever the engine agrees with 15.0 (property)', () => {
-  it('decides every final sigma as ICU does, in random sigma contexts', () => {
-    const text = fc.string({ unit: fc.constantFrom(...SIGMA_CONTEXT), maxLength: 12 });
-    fc.assert(
-      fc.property(text, (raw) => {
-        expect([raw, lowerBaseline(raw)]).toEqual([raw, raw.toLowerCase()]);
-      }),
-      { numRuns: 5_000 },
-    );
-  });
 });

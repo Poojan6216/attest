@@ -385,7 +385,9 @@ describe('redact (property)', () => {
     expect(counts.rejected).toBeGreaterThan(50);
     expect(counts.refused).toBeGreaterThan(100);
     expect(counts.multiLine).toBeGreaterThan(20);
-    expect(counts.accessor).toBeGreaterThan(50);
+    // A floor that proves the channel ran, set ~5 standard deviations under its mean (68 ± 7 over 1,000 runs, measured),
+    // so it can never fail without a defect (qa_tester rule 10); the assertions that matter run inside `check`.
+    expect(counts.accessor).toBeGreaterThan(30);
     expect(counts.loaded).toBeGreaterThan(20);
     expect(counts.handBuilt).toBeGreaterThan(20);
     for (const channel of CHANNELS) expect(counts.channels[channel], channel).toBeGreaterThan(20);

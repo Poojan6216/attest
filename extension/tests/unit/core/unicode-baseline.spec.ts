@@ -18,7 +18,14 @@ import {
   subjectTokens,
 } from '../../../src/core/normalize';
 import { stripInvisible } from '../../../src/core/normalize-text';
-import { asBaseline, lowerBaseline, onBaseline, trimBaseline } from '../../../src/core/unicode-baseline';
+import {
+  asBaseline,
+  BASELINE_CLASS,
+  lowerBaseline,
+  onBaseline,
+  trimBaseline,
+} from '../../../src/core/unicode-baseline';
+import { INVISIBLE } from '../../../src/core/unicode-table-classes';
 
 /** OUTLINED DIGIT ZERO–NINE (Unicode 16.0, Nd; NFKC gives 0–9 on a 16.0 engine). */
 const outlined = (digits: string): string =>
@@ -81,6 +88,26 @@ describe('a character Unicode 15.0 does not assign reads as unassigned', () => {
     expect(amount('$1\u{E0080}0', { defaultDollar: 'USD' })).toEqual({ minor: 1000, currency: 'USD' });
     expect(stripInvisible('a\u2065b\u{E01F0}c')).toBe('abc');
     expect(subjectTokens('in\u2065voice', STOP)).toEqual(['invoice']);
+  });
+});
+
+/** Whether `value` is a primitive, or a frozen object whose every own property is deeply frozen. */
+function deeplyFrozen(value: unknown): boolean {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return true;
+  return (
+    Object.isFrozen(value) && Reflect.ownKeys(value).every((key) => deeplyFrozen(Reflect.get(value, key)))
+  );
+}
+
+describe('BASELINE_CLASS, which the unicode fence trusts as the 15.0 classes', () => {
+  it('is deeply frozen: no module can rewrite a class at load time', () => {
+    expect(deeplyFrozen(BASELINE_CLASS)).toBe(true);
+    expect(Object.values(BASELINE_CLASS).every((body) => typeof body === 'string')).toBe(true);
+    expect(() => Object.assign(BASELINE_CLASS, { invisible: ['\\', 'p{Cf}'].join('') })).toThrow(TypeError);
+    expect(() => Object.defineProperty(BASELINE_CLASS, 'extra', { value: '' })).toThrow(TypeError);
+    expect(BASELINE_CLASS.invisible).toBe(INVISIBLE);
+    expect(deeplyFrozen({ a: Object.freeze({}) })).toBe(false);
+    expect(deeplyFrozen(Object.freeze({ a: {} }))).toBe(false);
   });
 });
 

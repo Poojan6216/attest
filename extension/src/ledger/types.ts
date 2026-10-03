@@ -15,7 +15,6 @@ export { HealthReport as AdapterHealth } from '../core/schema';
 export type { HealthReportInput as AdapterHealthInput } from '../core/schema';
 
 const L = SCHEMA_LIMITS;
-const Id = z.string().min(1).max(L.ID);
 
 /**
  * What an observer could see, and when (Hard Rule 5: no coverage → UNVERIFIABLE). The ledger's storage
@@ -31,9 +30,12 @@ export const CoveragePing = z.strictObject({
   userActive: z.boolean(),
 });
 
-/** Small key/value facts about the ledger itself (schema version, last purge, …). */
+/**
+ * Small key/value facts about the ledger itself (schema version, last purge, last batch instant, …). The key is
+ * a developer-chosen token (`ComponentId`), never text.
+ */
 export const MetaEntry = z.strictObject({
-  key: Id,
+  key: ComponentId,
   value: z.union([z.string().max(L.META_VALUE), z.number(), z.boolean()]),
 });
 

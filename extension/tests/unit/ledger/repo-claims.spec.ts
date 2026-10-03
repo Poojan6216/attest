@@ -5,13 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { claimsByAgentAndDate, getClaim, upsertClaim } from '../../../src/ledger/repo';
-import type { ClaimInput } from '../../../src/ledger/types';
+import { Claim, type ClaimInput } from '../../../src/ledger/types';
 import {
   captureLogs,
   claimId,
   expectLedgerError,
   makeClaim,
   omit,
+  pinClock,
+  releaseClock,
   sha,
   ulid,
   uniqueDbName,
@@ -20,11 +22,13 @@ import {
 let db: LedgerDb;
 
 beforeEach(async () => {
+  pinClock();
   db = await openLedger(uniqueDbName('claims'));
 });
 
 afterEach(() => {
   db.close();
+  releaseClock();
 });
 
 describe('upsertClaim', () => {
@@ -70,48 +74,124 @@ describe('upsertClaim', () => {
   });
 });
 
-describe('upsertClaim: a rawHash read again keeps its earliest observedAt (§4.1, OBS-2)', () => {
-  it('a sighting that lands late, then an earlier one: the earlier observedAt is stored', async () => {
+describe('upsertClaim: a stored claim never moves (§3, R3-LEDGER-1, RP3-3)', () => {
+  it('a sighting earlier than the stored one is refused with late_sighting and changes nothing', async () => {
     const late = makeClaim({ observedAt: '2026-10-01T11:00:00-04:00' });
     const early = makeClaim({ observedAt: '2026-10-01T10:20:00-04:00' });
     await upsertClaim(db, late);
-    expect(await upsertClaim(db, early)).toEqual({ id: late.id, inserted: false });
-    expect(await getClaim(db, late.id)).toEqual(early);
+    const error = await expectLedgerError(upsertClaim(db, early), 'late_sighting');
+    expect(error.context).toStrictEqual({ table: 'claims', id: late.id });
+    expect(await getClaim(db, late.id)).toEqual(late);
     expect(await upsertClaim(db, late)).toEqual({ id: late.id, inserted: false });
-    expect(await getClaim(db, late.id)).toEqual(early);
-    expect(await claimsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([early]);
+    expect(await claimsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([late]);
+  });
+
+  it('a newer extractor that reads the claim with an earlier sighting is still refused', async () => {
+    const stored = makeClaim();
+    await upsertClaim(db, stored);
+    const reread = makeClaim({
+      observedAt: '2026-10-01T10:29:00-04:00',
+      extractor: { id: 'muse.activity', version: '1.0.1', confidence: 0.9 },
+    });
+    await expectLedgerError(upsertClaim(db, reread), 'late_sighting');
+    expect(await getClaim(db, stored.id)).toEqual(stored);
   });
 });
 
-describe('upsertClaim: one rawHash, one claim (OBS-4)', () => {
-  const EDITS: readonly (readonly [string, Partial<ClaimInput>])[] = [
-    ['counterparty', { counterparty: 'mallory@evil.example' }],
-    ['type, amount and currency', { type: 'purchase.made', amountCents: 999_999, currency: 'USD' }],
-    ['extractor version', { extractor: { id: 'muse.activity', version: '2.0.0', confidence: 0.9 } }],
-    ['extractor confidence', { extractor: { id: 'muse.activity', version: '1.0.0', confidence: 0.5 } }],
-    ['requestId', { requestId: ulid(202) }],
-    ['subjectHint (dropped)', { subjectHint: undefined }],
-    ['claimedAt', { claimedAt: '2026-10-01T10:15:00-04:00' }],
-  ];
+type Outcome = 'id_conflict' | 'invalid_input' | 'kept';
 
-  it.each(EDITS)(
-    'a claim with a different %s under a stored rawHash throws id_conflict',
-    async (_label, edit) => {
-      const first = makeClaim();
-      await upsertClaim(db, first);
-      const logs = captureLogs();
-      try {
-        const error = await expectLedgerError(upsertClaim(db, makeClaim(edit)), 'id_conflict');
-        expect(error.context).toEqual({ table: 'claims', id: first.id });
+/** A claim with every optional field a minute-precision claim can hold. */
+const FULL = makeClaim({ amountCents: 1250, currency: 'USD', targetAt: '2026-10-02T09:00:00-04:00' });
+/** A day-precision claim, the only kind that holds `claimedAtEnd` (§4.1). */
+const DAY: ClaimInput = { ...FULL, claimedAtPrecision: 'day', claimedAtEnd: '2026-10-02T00:00:00-04:00' };
+const LATER = '2026-10-02T08:00:00-04:00';
+
+/**
+ * One row per Claim field but `observedAt` (the sighting), each changed alone (R3-LEDGER-4): the field, the
+ * stored claim, the edit, and what a re-read under the same rawHash does. No field but the rawHash and the id is
+ * in the rawHash the ledger can check (§10), so each content field must be compared on its own.
+ */
+const FIELD_EDITS: readonly (readonly [string, ClaimInput, Partial<ClaimInput>, Outcome])[] = [
+  ['id', FULL, { id: claimId(999) }, 'invalid_input'],
+  ['agent', FULL, { agent: 'claude' }, 'id_conflict'],
+  ['requestId', FULL, { requestId: ulid(202) }, 'id_conflict'],
+  ['type', FULL, { type: 'purchase.made' }, 'id_conflict'],
+  ['counterparty', FULL, { counterparty: 'mallory@evil.example' }, 'id_conflict'],
+  ['amountCents', FULL, { amountCents: 125_000 }, 'id_conflict'],
+  ['currency', FULL, { currency: 'EUR' }, 'id_conflict'],
+  ['subjectHint', FULL, { subjectHint: 'Other numbers' }, 'id_conflict'],
+  ['claimedAt', FULL, { claimedAt: '2026-10-01T10:15:00-04:00' }, 'id_conflict'],
+  ['claimedAtPrecision', FULL, { claimedAtPrecision: 'hour' }, 'id_conflict'],
+  ['claimedAtEnd', DAY, { claimedAtEnd: '2026-10-01T23:00:00-04:00' }, 'id_conflict'],
+  ['targetAt', FULL, { targetAt: '2026-10-02T10:00:00-04:00' }, 'id_conflict'],
+  ['sourceKind', FULL, { sourceKind: 'chat' }, 'id_conflict'],
+  ['extractor', FULL, { extractor: { id: 'muse.chat', version: '2.0.0', confidence: 0.5 } }, 'kept'],
+  ['rawHash', FULL, { rawHash: sha(999) }, 'invalid_input'],
+];
+
+/** Each optional field dropped alone: a re-read that lost a field is another reading (OBS-4). */
+const DROPS: readonly (readonly [string, ClaimInput, ClaimInput])[] = [
+  ['requestId', FULL, omit(FULL, 'requestId')],
+  ['counterparty', FULL, omit(FULL, 'counterparty')],
+  ['amountCents', FULL, omit(FULL, 'amountCents')],
+  ['currency', FULL, omit(FULL, 'currency')],
+  ['subjectHint', FULL, omit(FULL, 'subjectHint')],
+  ['targetAt', FULL, omit(FULL, 'targetAt')],
+  ['claimedAtEnd', DAY, omit(DAY, 'claimedAtEnd')],
+];
+
+describe('upsertClaim: one rawHash, one claim (OBS-4, R3-LEDGER-3, R3-LEDGER-4)', () => {
+  it('names every Claim field but observedAt, each changed alone', () => {
+    const fields = FIELD_EDITS.map(([field]) => field);
+    expect([...fields].sort()).toEqual(
+      Object.keys(Claim.shape)
+        .filter((key) => key !== 'observedAt')
+        .sort(),
+    );
+    for (const [field, , edit] of FIELD_EDITS) expect(Object.keys(edit)).toEqual([field]);
+  });
+
+  it.each(FIELD_EDITS)('%s changed alone under a stored rawHash', async (_field, stored, edit, outcome) => {
+    await upsertClaim(db, stored);
+    const logs = captureLogs();
+    try {
+      const reread = upsertClaim(db, { ...stored, ...edit, observedAt: LATER });
+      if (outcome === 'kept') expect(await reread).toEqual({ id: stored.id, inserted: false });
+      else {
+        const error = await expectLedgerError(reread, outcome);
+        if (outcome === 'id_conflict')
+          expect(error.context).toStrictEqual({ table: 'claims', id: stored.id });
+        // The schema ties the id to the rawHash (§10): either changed alone is refused at `id`.
+        else expect(error.context).toStrictEqual({ table: 'claims', paths: 'id' });
         expect(`${error.message} ${JSON.stringify(error)}`).not.toContain('mallory');
-      } finally {
-        logs.restore();
       }
-      expect(JSON.stringify(logs.records)).not.toContain('mallory');
-      expect(await getClaim(db, first.id)).toEqual(first);
-      expect(await db.claims.count()).toBe(1);
+    } finally {
+      logs.restore();
+    }
+    expect(JSON.stringify(logs.records)).not.toContain('mallory');
+    // The stored claim is kept exactly, its extractor and observedAt included (Hard Rule 4).
+    expect(await getClaim(db, stored.id)).toEqual(stored);
+    expect(await db.claims.count()).toBe(1);
+  });
+
+  it.each(DROPS)(
+    '%s dropped alone under a stored rawHash throws id_conflict',
+    async (_field, stored, dropped) => {
+      await upsertClaim(db, stored);
+      await expectLedgerError(upsertClaim(db, { ...dropped, observedAt: LATER }), 'id_conflict');
+      expect(await getClaim(db, stored.id)).toEqual(stored);
     },
   );
+});
+
+describe('upsertClaim: a re-read that differs is refused whatever else it carries (OBS-4)', () => {
+  it('a newer extractor that reads the claim differently still throws id_conflict', async () => {
+    await upsertClaim(db, FULL);
+    const extractor = { id: 'muse.activity', version: '1.0.1', confidence: 0.9 };
+    const reread = { ...FULL, extractor, amountCents: 125_000, observedAt: LATER };
+    await expectLedgerError(upsertClaim(db, reread), 'id_conflict');
+    expect(await getClaim(db, FULL.id)).toEqual(FULL);
+  });
 
   it('a different claim that claims an earlier sighting changes nothing, its observedAt included', async () => {
     const first = makeClaim();

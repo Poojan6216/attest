@@ -101,7 +101,40 @@ interface Case {
   readonly policy: Policy;
 }
 
-const caseArb: fc.Arbitrary<Case> = fc
+/**
+ * Every source seen whole, bound to its account, synced long after grace, and graded after the sync: the cases
+ * where `not_found` can match. The random entries above reach it about 3 times in 1,000, too rarely to pin it.
+ */
+const coveredArb: fc.Arbitrary<Case> = fc
+  .record({ claim: claimArb, policy: fc.constantFrom(...POLICIES) })
+  .map(({ claim, policy }) => {
+    const at = (minutes: number) => isoWithOffset(BASE_MS + minutes * MS_PER_MINUTE, -240);
+    const evaluatedAt = at(3_100);
+    const entries = SOURCES.map((source) =>
+      ScenarioCoverage.parse(
+        defined({
+          source,
+          windowStart: at(-4_400),
+          windowEnd: at(3_000),
+          lastSyncAt: at(3_010),
+          accountHash: 'acct-a',
+          allCalendars: source === 'gcal.event' ? true : undefined,
+        }),
+      ),
+    );
+    const grant = ScenarioGrant.parse({
+      agent: 'muse',
+      accounts: { 'gmail.sent': ['acct-a'], 'gcal.event': ['acct-a'] },
+    });
+    return {
+      claim,
+      grant: buildGrant(grant, evaluatedAt),
+      coverage: buildCoverage(entries, evaluatedAt),
+      policy,
+    };
+  });
+
+const randomArb: fc.Arbitrary<Case> = fc
   .record({
     claim: claimArb,
     grant: grantArb,
@@ -115,6 +148,11 @@ const caseArb: fc.Arbitrary<Case> = fc
     coverage: buildCoverage(entries, evaluatedAt),
     policy,
   }));
+
+const caseArb: fc.Arbitrary<Case> = fc.oneof(
+  { arbitrary: randomArb, weight: 4 },
+  { arbitrary: coveredArb, weight: 1 },
+);
 
 function evaluators(c: Case) {
   return evaluateConditions({

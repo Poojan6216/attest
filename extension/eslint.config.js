@@ -58,9 +58,44 @@ export const SIZE_RULES = {
  */
 const STACKED_ASSERTION =
   ":matches(TSAsExpression, TSTypeAssertion, TSSatisfiesExpression).expression:not([typeAnnotation.typeName.name='const'])";
+
+/**
+ * The same through the values an expression hands on unchanged (FR3-6): a conditional's branches, either side of
+ * `??`, `||` or `&&`, a sequence, an element of an array literal or a property of an object literal read back at
+ * once, a spread, `await` and `!`: `(c ? (x as unknown) : y) as T`, `[x as unknown][0] as T`,
+ * `({ v: x as unknown }).v as T`. Generated up to CONTAINER_DEPTH containers deep; a call or a function in between
+ * ends the chain (its result is a new value). The outer assertion may be `as const` here only when nothing in it is
+ * asserted.
+ */
+const CONTAINER_DEPTH = 5;
+const CONTAINER = [
+  'ConditionalExpression',
+  'LogicalExpression',
+  'SequenceExpression',
+  'ArrayExpression',
+  'ObjectExpression',
+  'Property',
+  'SpreadElement',
+  'AwaitExpression',
+  'ChainExpression',
+  'TSNonNullExpression',
+  "MemberExpression:matches([object.type='ArrayExpression'], [object.type='ObjectExpression'])",
+].join(', ');
+const PASSED_ON =
+  ':matches(.expression, .consequent, .alternate, .left, .right, .expressions, .elements, .properties, .value, .argument, .object)';
+const INNER_ASSERTION =
+  ":matches(TSAsExpression, TSTypeAssertion, TSSatisfiesExpression):not([typeAnnotation.typeName.name='const'])";
+const CONTAINED_ASSERTIONS = Array.from({ length: CONTAINER_DEPTH }, (_, depth) =>
+  [
+    ":matches(TSAsExpression, TSTypeAssertion):not([typeAnnotation.typeName.name='const'])",
+    ...Array.from({ length: depth + 1 }, () => `:matches(${CONTAINER})${PASSED_ON}`),
+    `${INNER_ASSERTION}${PASSED_ON}`,
+  ].join(' > '),
+);
+
 export const DOUBLE_ASSERTION_SYNTAX = [
   `:matches(TSAsExpression, TSTypeAssertion) > ${STACKED_ASSERTION}`,
-  `:matches(TSAsExpression, TSTypeAssertion) > TSNonNullExpression.expression > ${STACKED_ASSERTION}`,
+  ...CONTAINED_ASSERTIONS,
 ].map((selector) => ({
   selector,
   message:

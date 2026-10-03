@@ -2,21 +2,24 @@
  * A ledger graded the way the background grades it (docs/grading.md §3, §4.3, §7, §8, §9), for the replay tests
  * and the `attest replay` CLI tests.
  *
- * `LedgerSim` plays the background over a World (attest-world.ts). At each batch instant it passes every claim
- * whose stored receipt is not FINAL or overridden to `gradeBatch`, with core's `preAssignments` of the rows it holds
- * right then (gradeBatch keeps those in force at the batch's instant), and stores what comes back as the ledger does:
+ * `LedgerSim` plays the background over a World (attest-world.ts). Batch instants are strictly increasing (§3: the
+ * background stamps each batch after the last; `grade` refuses one that is not). At each batch instant it passes
+ * every claim core's `gradedAt` says the batch grades (its stored receipt PENDING, or none yet, and no reverted
+ * override of it still in force) to `gradeBatch`, with core's `preAssignments` of the rows it holds right then
+ * (gradeBatch keeps those in force at the batch's instant), and stores what comes back as the ledger does:
  *  - a new subject's receipt is inserted; a PENDING row is replaced through state.ts `regrade`;
- *  - a FINAL or overridden row is kept and the regrade discarded (UNASKED and scope receipts, §3);
- *  - a PENDING claim-less row the batch no longer produces is deleted (§7);
+ *  - a FINAL, overridden or superseded row is kept and the regrade discarded (UNASKED and scope receipts, §3);
+ *  - a PENDING claim-less row the batch no longer produces is deleted (§7), unless it holds reverted overrides:
+ *    the batches that ran while one was in force had its orphan taken, which replay must still see (§8, §9);
  *  - each stored receipt's inputs ({coverage, grant, context, policyHash}) are kept under its `inputsHash` (§9).
- * Between batches the user may override receipts (`override`), and a FINAL claim supersedes the UNASKED receipt of
- * the observation it holds (`supersede`). `snapshot()` is what an export holds.
+ * Between batches the user may override receipts (`override`) and revert overrides (`revert`), and a FINAL claim
+ * supersedes the UNASKED receipt of the observation it holds (`supersede`). `snapshot()` is what an export holds.
  *
  * The pre-assignments here are read from the live rows (what is FINAL or overridden now), while replay reads them
  * from the stored rows afterwards; both go through batch-fixed.ts, and the property tests hold the two together,
- * including overrides stamped at a batch's very instant or just after it but read by it (`simulate`).
+ * including overrides and reverts stamped at a batch's very instant or just after it but read by it (`simulate`).
  */
-import { gradeBatch, preAssignments } from '../../src/core/batch';
+import { gradeBatch, gradedAt, preAssignments } from '../../src/core/batch';
 import { createMemoryIndex, type ObservationIndex } from '../../src/core/candidates';
 import type { Policy } from '../../src/core/policy';
 import { receiptId } from '../../src/core/receipt';
@@ -36,6 +39,8 @@ export class LedgerSim {
   readonly #inputs = new Map<string, ReceiptInputs>();
   readonly #policies = new Map<string, Policy>();
   readonly #index: ObservationIndex;
+  /** The last batch's instant: each batch is stamped strictly after it (§3). */
+  #lastBatchMs = Number.NEGATIVE_INFINITY;
 
   constructor(readonly world: World) {
     this.#index = createMemoryIndex(world.observations, BUCKET_MINUTES);
@@ -48,15 +53,25 @@ export class LedgerSim {
     return Coverage.parse({ evaluatedAt: at, observers });
   }
 
-  /** One batch at `at` under `policy`; stores the result (see the file comment). */
+  /** The claims a batch at `atMs` grades: first seen by then, with no stored receipt or one `gradedAt` admits. */
+  #batchClaims(seen: readonly Claim[], atMs: number): Claim[] {
+    const stored = new Map<Ulid, Receipt>();
+    for (const receipt of this.receipts.values()) {
+      if (receipt.claimId !== undefined) stored.set(receipt.claimId, receipt);
+    }
+    return seen.filter((claim) => {
+      const receipt = stored.get(claim.id);
+      return receipt === undefined || gradedAt(receipt, atMs);
+    });
+  }
+
+  /** One batch at `at` under `policy`, strictly after the last; stores the result (see the file comment). */
   async grade(at: string, policy: Policy): Promise<void> {
     const atMs = Date.parse(at);
-    const closed = new Set<Ulid>();
-    for (const receipt of this.receipts.values()) {
-      if (receipt.claimId !== undefined && receipt.state !== 'PENDING') closed.add(receipt.claimId);
-    }
+    if (!(atMs > this.#lastBatchMs)) throw new Error(`batch at ${at} is not after the last batch`);
+    this.#lastBatchMs = atMs;
     const seen = this.world.claims.filter((claim) => Date.parse(claim.observedAt) <= atMs);
-    const pending = seen.filter((claim) => !closed.has(claim.id));
+    const pending = this.#batchClaims(seen, atMs);
     const coverage = this.coverageAt(at);
     const activity = { ...this.world.activity, claims: seen };
     const fixed = preAssignments(this.receipts.values());
@@ -74,14 +89,14 @@ export class LedgerSim {
     for (const { receipt, inputs } of graded) {
       produced.add(receipt.id);
       const held = this.receipts.get(receipt.id);
-      if (held !== undefined && held.state !== 'PENDING') continue;
+      if (held !== undefined && (held.state !== 'PENDING' || held.supersededBy !== undefined)) continue;
       const next = held === undefined ? receipt : transition(held, { event: 'regrade', next: receipt });
       this.receipts.set(receipt.id, next);
       this.#inputs.set(receipt.inputsHash, { coverage, ...inputs });
     }
     for (const [id, receipt] of this.receipts) {
-      if (receipt.claimId === undefined && receipt.state === 'PENDING' && !produced.has(id))
-        this.receipts.delete(id);
+      if (receipt.claimId !== undefined || receipt.state !== 'PENDING' || produced.has(id)) continue;
+      if (receipt.reverted === undefined) this.receipts.delete(id);
     }
   }
 
@@ -90,6 +105,13 @@ export class LedgerSim {
     const held = this.receipts.get(id);
     if (held === undefined) throw new Error(`no receipt ${id}`);
     this.receipts.set(id, transition(held, { event: 'override', grade, reason: 'synthetic override', at }));
+  }
+
+  /** The user reverts the override of one stored receipt, at `at` (§8). */
+  revert(id: Ulid, at: string): void {
+    const held = this.receipts.get(id);
+    if (held === undefined) throw new Error(`no receipt ${id}`);
+    this.receipts.set(id, transition(held, { event: 'revert', at }));
   }
 
   /** Every FINAL claim receipt supersedes the UNASKED receipt of the observation it holds (§7, §8). */
@@ -120,6 +142,8 @@ export class LedgerSim {
 export interface SimulationOptions extends WorldOptions {
   /** Overrides the user makes after each batch but the last (see `overrideInstant`). */
   readonly overridesPerGap: number;
+  /** Overrides the user reverts after each batch but the last, whichever batch read them (`revertSome`). */
+  readonly revertsPerGap?: number;
 }
 
 export interface Simulation {
@@ -163,6 +187,12 @@ function overrideInstant(random: () => number, fromMs: number, toMs: number): nu
   return fromMs + 1 + Math.floor(random() * (toMs - fromMs - 1));
 }
 
+/** The instant of `receipt`'s last revert (state.ts: a new override is stamped no earlier), or -Infinity. */
+function lastRevertMs(receipt: Receipt): number {
+  const last = receipt.reverted?.at(-1);
+  return last === undefined ? Number.NEGATIVE_INFINITY : Date.parse(last.revertedAt);
+}
+
 /** Overrides `count` random claim or UNASKED receipts not yet overridden (`overrideInstant`). */
 function overrideSome(
   sim: LedgerSim,
@@ -177,7 +207,25 @@ function overrideSome(
     );
     if (open.length === 0 || toMs - fromMs < 2) return;
     const atMs = overrideInstant(random, fromMs, toMs);
-    sim.override(pick(random, open).id, pick(random, OVERRIDE_GRADES), isoAt(atMs, 0));
+    const receipt = pick(random, open);
+    sim.override(receipt.id, pick(random, OVERRIDE_GRADES), isoAt(Math.max(atMs, lastRevertMs(receipt)), 0));
+  }
+}
+
+/**
+ * Reverts `count` random overridden receipts, stamped like an override (`overrideInstant`), never before the override's
+ * own `at` (§8). The first of each gap is one a batch has graded under (stamped before the batch just run at
+ * `fromMs`) when there is one, so every ledger with two gaps or more reverts what a batch saw; the rest are any.
+ */
+function revertSome(sim: LedgerSim, random: () => number, count: number, fromMs: number, toMs: number): void {
+  for (let n = 0; n < count; n += 1) {
+    const overridden = [...sim.receipts.values()].filter((r) => r.override !== undefined);
+    const read = overridden.filter((r) => Date.parse(r.override?.at ?? '') < fromMs);
+    const pool = n === 0 && read.length > 0 ? read : overridden;
+    if (pool.length === 0 || toMs - fromMs < 2) return;
+    const atMs = overrideInstant(random, fromMs, toMs);
+    const receipt = pick(random, pool);
+    sim.revert(receipt.id, isoAt(Math.max(atMs, Date.parse(receipt.override?.at ?? '')), 0));
   }
 }
 
@@ -192,8 +240,9 @@ export async function simulate(options: SimulationOptions): Promise<Simulation> 
     await sim.grade(at, world.policyAt(i).policy);
     sim.supersede();
     const next = batchTimes[i + 1];
-    if (next !== undefined)
-      overrideSome(sim, random, options.overridesPerGap, Date.parse(at), Date.parse(next));
+    if (next === undefined) continue;
+    overrideSome(sim, random, options.overridesPerGap, Date.parse(at), Date.parse(next));
+    revertSome(sim, random, options.revertsPerGap ?? 0, Date.parse(at), Date.parse(next));
   }
   return { world, sim, snapshot: sim.snapshot() };
 }

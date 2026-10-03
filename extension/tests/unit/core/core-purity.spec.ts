@@ -10,13 +10,17 @@
  *
  * The scanner (./core-scan.ts) reduces each file to its code with the TypeScript scanner, so comments and strings
  * are not hits; it reads a member with a written key (`Date['now']`) as `Date.now`, and matches over the whole file,
- * so a call split across lines is still found (PI-6). It needs no lint and no types: computed keys, `globalThis` and
- * `Reflect` reads, a spread or multi-field `new Date`, ambient declarations, `.constructor` and
- * `Symbol.toPrimitive` are all its own patterns (PI-1 to PI-4, PI-6). Imports are read with ts.preProcessFile
+ * so a call split across lines is still found (PI-6); it reads a global through `(X)`, `(0, X)`, `[X][0]` and `X!`,
+ * and a `/` after any property name as division (FR3-5). It needs no lint and no types: computed keys, `globalThis`
+ * and `Reflect` reads, a spread or multi-field `new Date`, ambient declarations, `.constructor` (destructured too),
+ * `Symbol.toPrimitive`, local-time and locale methods, error stacks, `import.meta`, and reflection or mutation of
+ * built-ins are all its own patterns (PI-1 to PI-4, PI-6, FR3-2, FR3-3, UNI-R3-3). Imports are read with ts.preProcessFile
  * (static, type-only, re-exports, dynamic import(), require) and checked against the allowlist: a sibling module
  * that exists in src/core, `zod`, and policy/default.json. Negative controls prove every pattern and the allowlist
  * catch what they claim, and that comments and strings are not hits. tests/unit/core/core-poison.spec.ts is the
- * third check: it runs the core with every impure global poisoned, whatever the syntax that reaches it.
+ * third check: it runs the core with every impure global poisoned, whatever the syntax that reaches it (and
+ * `pnpm test:poison` runs every core, golden and property test that way). Deliberately evasive code (a name built
+ * from fragments, a reflection chain built to dodge the patterns) is a review matter: docs/grading.md §14 lists it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -207,11 +211,123 @@ describe('core purity scan: the bypasses lint alone used to stop (PI-1 to PI-4, 
       'export const e = (x: { itself: number; selfTest: number }) => x.itself + x.selfTest;',
       'export const f = (declare: number, global: number) => declare + global;',
       'export const g = (dates: readonly Date[]) => dates.length;',
-      'export const h = Math.max(1, 2) + Reflect.ownKeys({}).length;',
+      "export const h = Math.max(1, 2) + Number(Reflect.has({}, 'k'));",
     ].join('\n');
     expect(bannedUses(code)).toEqual([]);
   });
 });
+
+/** The verifier's destructured-constructor probes (UNI-R3-3), verbatim: the RegExp and the Date constructor. */
+const CONSTRUCTOR_PROBES: Readonly<Record<string, string>> = {
+  'zz-a7.ts': `function isRegExpConstructor(value: unknown): value is RegExpConstructor {
+  return typeof value === 'function';
+}
+const { constructor: found }: { constructor: unknown } = /a/;
+const Ctor = isRegExpConstructor(found) ? found : undefined;
+export function folds(text: string, pattern: string): boolean {
+  return Ctor !== undefined && new Ctor(pattern, 'iu').test(text);
+}`,
+  'zz-a9.ts': `type Clock = new () => { valueOf(): number };
+function isClock(value: unknown): value is Clock {
+  return typeof value === 'function';
+}
+const { constructor: found }: { constructor: unknown } = new Date(0);
+export function nowMs(): number {
+  return isClock(found) ? new found().valueOf() : 0;
+}`,
+  'zz-b5.ts': 'const { constructor } = /a/;\nexport const kind = typeof constructor;',
+};
+
+/**
+ * The forms found by the third verification (UNI-R3-3, FR3-2, FR3-3, FR3-5), each with every name the scan must
+ * report: a destructured constructor (the verifier's probes, as written), a global read through
+ * `(X)`, `(0, X)`, `[X][0]`, `new (X)` or `X!`, a `/` after a keyword-named property (it divides; it does not start
+ * a regex literal that would blank the code after it), host time-zone and locale methods on any value, error stacks
+ * and the stack API, `import.meta`, and reflection or mutation of built-ins.
+ */
+const ROUND_THREE: readonly (readonly [string, readonly string[]])[] = [
+  ['const { constructor } = /a/;', ['constructor destructured']],
+  ['const { constructor: C }: { constructor: unknown } = new Date(0);', ['constructor destructured']],
+  ['export const t = (Date).now();', ['Date.now']],
+  ['export const r = (Math).random();', ['Math.random']],
+  ['export const t = (0, Date).now();', ['Date.now']],
+  ['export const t = [Date][0].now();', ['Date.now']],
+  ['export const t = ((Date)).now();', ['Date.now']],
+  ['export const t = Date!.now();', ['Date.now']],
+  ['export const t = new (Date)();', ['new Date() with no argument']],
+  ["export const n = (Reflect.get)(Date, 'now');", ['Reflect on a global']],
+  ['export const a = (o: { type: number }) => o.type / Date.now() / 1;', ['Date.now']],
+  ['export const a = (o: { default: number }) => o.default / Math.random() / 1;', ['Math.random']],
+  ["export const a = (o: { from: number }) => o.from / Number(fetch('https://x.example')) / 1;", ['fetch']],
+  [
+    'export const a = (o: { of: number }) => o.of / new Date().getTime() / 1;',
+    ['new Date() with no argument'],
+  ],
+  ['export const a = (x: number) => x! / Date.now() / 1;', ['Date.now']],
+  ['export const o = (ms: number) => new Date(ms).getTimezoneOffset();', ['local-time or locale method']],
+  ['export const h = (ms: number) => new Date(ms).getHours();', ['local-time or locale method']],
+  ['export const l = (ms: number) => new Date(ms).toLocaleString();', ['local-time or locale method']],
+  ['export const l = (n: number) => (n).toLocaleString();', ['local-time or locale method']],
+  ['export const c = (a: string, b: string) => a.localeCompare(b);', ['local-time or locale method']],
+  ['export const s = (ms: number) => new Date(ms).toString();', ['toString of a new Date']],
+  ["export const s = new Error('probe').stack;", ['error stack or stack API']],
+  ['export const { stack } = new Error();', ['stack API destructured']],
+  ["export const k = Reflect.get(Error, 'captureStackTrace');", ["'captureStackTrace' as a string"]],
+  ['export const u = import.meta.url;', ['import.meta']],
+  ['export const p = Object.getPrototypeOf(new Date(0));', ['reflection on a new Date']],
+  [
+    'export const f = (g: () => number) => Reflect.apply(g, undefined, []);',
+    ['Reflect other than get, has, isExtensible'],
+  ],
+  ['const R = Reflect;\nexport const f = R;', ['Reflect other than get, has, isExtensible']],
+  ['export const n = (o: object) => Object.getOwnPropertyNames(o);', ['Object reflection or mutation']],
+  [
+    "Object.defineProperty(Array.prototype, 'probe', { value: 1 });",
+    ['Object reflection or mutation', 'built-in .prototype or __proto__'],
+  ],
+  [
+    "export const f = Reflect.get(Number.prototype, 'toLocale' + 'String');",
+    ['built-in .prototype or __proto__'],
+  ],
+  ['export const f = (g: (x: number) => number) => g.call(undefined, 1);', ['.call / .apply / .bind']],
+  ["export const f = (o: object) => Reflect.get(o, '__proto__');", ["'__proto__' as a string"]],
+  ['export const f = (o: { __proto__: unknown }) => o.__proto__;', ['built-in .prototype or __proto__']],
+  [
+    'export const w = Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);',
+    ['Atomics / SharedArrayBuffer'],
+  ],
+];
+
+describe(
+  'core purity scan: the forms found by the third verification (FR3-2, FR3-3, FR3-5, UNI-R3-3)',
+  GATE,
+  () => {
+    it.each(ROUND_THREE)('%s', (code, names) => {
+      const found = bannedUses(code).map((hit) => hit.replace(/^line \d+: /, ''));
+      for (const name of names) expect(found, code).toContain(name);
+    });
+
+    it.each(Object.entries(CONSTRUCTOR_PROBES))(
+      'the destructured-constructor probe %s is caught',
+      (_, code) => {
+        expect(bannedUses(code).join('\n')).toContain('constructor destructured');
+      },
+    );
+
+    it('control: division after keyword names, a regex after `!`, a class constructor and a local `stack` pass', () => {
+      const code = [
+        'export const a = (o: { type: number; of: number }) => o.type / 2 / o.of;',
+        'export const b = (x: number) => x! / 2 / 1;',
+        "export const c = !/a/.test('b') && /[/]/.test('c');",
+        'export class E extends Error {\n  constructor(readonly code: string) {\n    super(code);\n  }\n}',
+        'export const d = (x: number[]) => {\n  const stack = [...x];\n  return stack.length;\n};',
+        'export const e = (f: (n: number) => number) => f(Date.UTC(2026, 0, 1)) + Math.max(1, 2);',
+        "export const g = (o: object) => Reflect.get(o, 'code') ?? Object.getPrototypeOf(o) === Object.prototype;",
+      ].join('\n');
+      expect(bannedUses(code)).toEqual([]);
+    });
+  },
+);
 
 describe('core purity scan: controls (text is not code, legitimate code passes)', GATE, () => {
   it('a pattern in a comment, a string, a template or a regex literal is not a hit', () => {

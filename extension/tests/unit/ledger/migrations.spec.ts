@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -20,7 +20,16 @@ import {
   upsertObservation,
 } from '../../../src/ledger/repo';
 import { Observation, Ulid } from '../../../src/ledger/types';
-import { captureLogs, expectLedgerError, makeClaim, makeObservation, omit, uniqueDbName } from './fixtures';
+import {
+  captureLogs,
+  expectLedgerError,
+  makeClaim,
+  makeObservation,
+  omit,
+  pinClock,
+  releaseClock,
+  uniqueDbName,
+} from './fixtures';
 
 /** The seeded observation seen again later: same contentHash, so the same id (§10 v1.3). */
 const resighting = () => makeObservation({ observedAt: '2026-10-01T11:00:00-04:00' });
@@ -46,8 +55,13 @@ function indexOf(db: LedgerDb, table: string, name: string) {
   return db.table(table).schema.indexes.find((index) => index.name === name);
 }
 
+beforeEach(() => {
+  pinClock();
+});
+
 afterEach(() => {
   for (const db of opened.splice(0)) db.close();
+  releaseClock();
 });
 
 describe('schema v1', () => {

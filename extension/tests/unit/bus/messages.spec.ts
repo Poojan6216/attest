@@ -195,6 +195,38 @@ describe('ids, versions and health reasons are tokens, never page text (OBS-1, H
   });
 });
 
+describe("a vendor's conversation id is a token, never page text (R3-LEDGER-2, probe r4)", () => {
+  /** Probe r4: a conversation's opening lines taken for its id, padded to the 128-character cap. */
+  const QUOTE = 'Hi Priya,\nthe door code is 4417.\nSSN 078-05-1120\nThanks, P'.padEnd(128, '.');
+  const withId = (conversationId: string, count = 1) => ({
+    ...VALID['adapter.claims'],
+    requests: Array.from({ length: count }, () => ({ ...REQUEST, conversationId })),
+  });
+
+  it('refuses 500 requests whose conversationId quotes the page, each at its own path', () => {
+    const result = BusMessage.safeParse(withId(QUOTE, 500));
+    expect(result.success).toBe(false);
+    const paths = (result.error?.issues ?? []).map((issue) => issue.path.map(String).join('.'));
+    expect(new Set(paths)).toEqual(
+      new Set(Array.from({ length: 500 }, (_, i) => `requests.${String(i)}.conversationId`)),
+    );
+  });
+
+  it.each([QUOTE, 'Hi Priya', 'q3 review thread', 'a\nb', 'priya@company.com', ' conv-7', 'x'.repeat(129)])(
+    'refuses %j',
+    (id) => {
+      expect(BusMessage.safeParse(withId(id)).success).toBe(false);
+    },
+  );
+
+  it.each(['conv-7', '6710a2b4-0c3e-8001-9a7f-1c2d3e4f5a6b', 'c_8f3a:2', 'x'.repeat(128), ''])(
+    'accepts %j',
+    (id) => {
+      expect(BusMessage.safeParse(withId(id)).success).toBe(true);
+    },
+  );
+});
+
 describe('ledger.changed', () => {
   it('names only the eight ledger tables', () => {
     expect([...LedgerTable.options].sort()).toEqual(

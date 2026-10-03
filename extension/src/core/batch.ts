@@ -59,7 +59,7 @@ import { scopeSubjects, spendIndex } from './scope';
 import { compareText as compareTextShared } from './order';
 
 export { BatchError, type BatchErrorCode } from './batch-error';
-export { type BatchFixed, preAssignments } from './batch-fixed';
+export { type BatchFixed, gradedAt, preAssignments } from './batch-fixed';
 export type { BatchInputs, BatchReceipt } from './batch-grade';
 
 /** The batch facts every stage reads, computed once. */
@@ -160,19 +160,33 @@ function historyOf(
 
 /**
  * The fixed pairs and taken observations in force at `evaluatedMs` (batch-fixed.ts: the rule replay rebuilds the
- * batch with), after checking that no claim passed for grading has a pre-assignment at all, in force or not: a
- * claim with one is FINAL or overridden, never graded again (§4.3, §8).
+ * batch with), after checking the batch against them (Hard Rules 4, 6):
+ *  - no claim passed for grading has a pre-assignment, in force or not, unless it ended before `evaluatedMs` (the
+ *    `until` of an override from PENDING since reverted): a claim with one is FINAL, overridden, or held out by a
+ *    reverted override still in force, and never graded in this batch (§4.3, §8);
+ *  - no claim pair starts at or after `evaluatedMs`: a claim pair's `after` is a grading of its claim, so in a
+ *    ledger whose batches are stamped strictly in order it is always earlier; one that is not means a batch at an
+ *    instant already graded, whose pre-assignments the earlier batch's own receipts are not in force in, so FINAL
+ *    evidence would be free again (`stale_evaluated_at`). Taken pairs may start later: an override stamped after
+ *    `evaluatedAt` but read by this batch.
  */
 function splitFixed(claims: readonly Claim[], fixed: readonly BatchFixed[], evaluatedMs: number) {
-  const { fixed: fixedPairs, taken } = fixedInForce(fixed, evaluatedMs);
   const fixedClaims = new Set<Ulid>();
-  for (const { claimId } of fixed) if (claimId !== null) fixedClaims.add(claimId);
+  for (const pair of fixed) {
+    if (pair.claimId === null) continue;
+    if (pair.until === undefined || evaluatedMs <= instantMs(pair.until)) fixedClaims.add(pair.claimId);
+  }
   const seen = new Set<Ulid>();
   for (const claim of claims) {
     if (seen.has(claim.id)) throw new BatchError('duplicate_claim');
     if (fixedClaims.has(claim.id)) throw new BatchError('claim_fixed');
     seen.add(claim.id);
   }
+  for (const pair of fixed) {
+    if (pair.claimId !== null && instantMs(pair.after) >= evaluatedMs)
+      throw new BatchError('stale_evaluated_at');
+  }
+  const { fixed: fixedPairs, taken } = fixedInForce(fixed, evaluatedMs);
   return { fixedPairs, taken };
 }
 
@@ -318,8 +332,10 @@ function byReceiptId(graded: readonly BatchReceipt[]): BatchReceipt[] {
  * after `evaluatedAt` is ignored (§3): no receipt, no evidence, no spend.
  *
  * Throws `PolicyError('policy_not_loaded')` for a policy `loadPolicy` did not return, before reading anything;
- * `BatchError` for a claim given twice (seen or not) or also named by a pre-assignment (in force or not), an agent
- * with no grant in force (or two at one instant), or two receipts with one id; `CandidatesError('fixed_conflict')`
+ * `BatchError` for a claim given twice (seen or not) or also named by a pre-assignment that has not ended by
+ * `evaluatedAt` (in force or not), a claim pair that starts at or after `evaluatedAt` (`stale_evaluated_at`: a batch
+ * stamped at an instant already graded), an agent with no grant in force (or two at one instant), or two receipts
+ * with one id; `CandidatesError('fixed_conflict')`
  * for fixed pairs in force that are not one-to-one; `NormalizeError('invalid_iso')` for a pre-assignment instant that
  * is not an IsoTs; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6). A graded
  * claim that `activity.claims` omits still counts in the spend history and still suppresses adjacency (§3, §6.3,

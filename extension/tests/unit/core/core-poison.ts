@@ -9,7 +9,8 @@
  * Who made a call is read from the stack: the innermost frame that is neither this file nor a dependency (a file
  * under node_modules, a Node internal, native or eval'd code) decides. So a dependency src/core calls (zod running
  * one of core's refinements) counts as src/core, and a function the harness hands to src/core (an injected
- * `OffsetAt`) counts as the harness, as it does in the extension.
+ * `OffsetAt`) counts as the harness, as it does in the extension. A frame of the test runner itself (Vitest, Vite)
+ * is the harness wherever it sits: its module runner loads src/core's imports from inside src/core's own frames.
  *
  * Poisoned:
  *  - `Date.now`, `Date.parse`, `Date()` called as a function, and `new Date` given no argument, several (a spread
@@ -23,14 +24,45 @@
  * Two pure uses src/core makes all the time, `Date.UTC` and `new Date(value)`, are only witnessed: the first one seen
  * from src/core is noted, which proves the poison was live while src/core ran. A negative control can `forbid`
  * them, to show a real src/core call path is caught. `restore()` puts every original property back exactly.
+ *
+ * The guard is installed before any src/core module is evaluated (FR3-1): the poisoned run's setup file
+ * (./core-poison-setup.ts) and core-poison.spec.ts install it first and only then load src/core, so a built-in src/core
+ * captures or calls while its module loads is the twin, and a use made then is recorded like any other. It stays
+ * installed; `disarm()` lets every call through (the unpoisoned baseline) until `arm()`. It reads the stack, compares
+ * file names and records uses only through its own copies of the built-ins it needs (./core-poison-intrinsics.ts,
+ * FR3-3), taken before src/core loads, so src/core cannot blind it by replacing one of them.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  append,
+  call,
+  each,
+  pathOf,
+  SAFE,
+  setAdd,
+  setHas,
+  some,
+  stackFiles,
+  text,
+} from './core-poison-intrinsics';
+
 /** The directory whose files count as src/core. */
 export const CORE_DIR = path.resolve(import.meta.dirname, '../../../src/core');
-const THIS_FILE = fileURLToPath(import.meta.url);
-const DEPENDENCY = /[\\/]node_modules[\\/]/;
+const CORE_PREFIX = `${CORE_DIR}${path.sep}`;
+/** The guard's own files: never the caller. */
+const GUARD_FILES: ReadonlySet<string> = new Set([
+  fileURLToPath(import.meta.url),
+  path.join(import.meta.dirname, 'core-poison-intrinsics.ts'),
+]);
+const DEPENDENCY = `${path.sep}node_modules${path.sep}`;
+/**
+ * The test runner's own packages. A frame in one of them is the harness, wherever it sits: Vitest's module runner
+ * evaluates a src/core module's imports (and reads `performance` to time them) from inside that module's top-level
+ * code, and src/core can reach none of these packages (it imports only its siblings and zod).
+ */
+const RUNNER = ['vitest', '@vitest', 'vite'].map((name) => `${DEPENDENCY}${name}${path.sep}`);
 
 /** Globals src/core must never even read. Absent ones (Temporal in Node 22) are poisoned all the same. */
 export const POISONED_GLOBALS = [
@@ -79,6 +111,15 @@ const LOCAL_TIME_METHODS = [
 
 /** An ISO 8601 timestamp with an explicit offset: the one text `new Date` reads the same way in every time zone. */
 const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+/** RegExp.prototype.exec, copied when this module loads (`test` reads `exec` off the regex at call time). */
+const EXEC = SAFE.getOwnPropertyDescriptor(RegExp.prototype, 'exec')?.value as (
+  this: RegExp,
+  text: string,
+) => RegExpExecArray | null;
+const isoWithOffset = (value: string): boolean => call(EXEC, ISO_WITH_OFFSET, value) !== null;
+/** ECMAScript's own Date Time String Format with an offset (milliseconds, when given, exactly three digits). */
+const SPEC_ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+const specIsoWithOffset = (value: string): boolean => call(EXEC, SPEC_ISO_WITH_OFFSET, value) !== null;
 
 export class PoisonError extends Error {
   constructor(readonly use: string) {
@@ -90,37 +131,35 @@ export class PoisonError extends Error {
 export type Origin = 'core' | 'harness';
 
 /** Whether `file` is a src/core source file. */
-export const inCore = (file: string): boolean => file.startsWith(`${CORE_DIR}${path.sep}`);
+export const inCore = (file: string): boolean => text.startsWith(file, CORE_PREFIX);
 
 /** Who made a call, from its stack's file names, innermost first (see the file comment). */
 export function originOf(files: readonly string[], isCore: (file: string) => boolean = inCore): Origin {
-  for (const name of files) {
-    const file = name.startsWith('file://') ? fileURLToPath(name) : name;
-    if (file === '' || file === THIS_FILE || file.startsWith('node:') || DEPENDENCY.test(file)) continue;
-    return isCore(file) ? 'core' : 'harness';
-  }
-  return 'harness';
+  return decide(files, isCore) ?? 'harness';
 }
 
-/** The file name of every frame of the current stack, innermost first ('' for native and eval'd code). */
-function stackFiles(): string[] {
-  const prepare = Object.getOwnPropertyDescriptor(Error, 'prepareStackTrace');
-  const limit = Error.stackTraceLimit;
-  const holder: { stack?: unknown } = {};
-  let files: unknown;
-  try {
-    Error.stackTraceLimit = Infinity;
-    Error.prepareStackTrace = (_error, sites) => sites.map((site) => site.getFileName() ?? '');
-    Error.captureStackTrace(holder);
-    files = holder.stack;
-  } finally {
-    if (prepare === undefined) Reflect.deleteProperty(Error, 'prepareStackTrace');
-    else Object.defineProperty(Error, 'prepareStackTrace', prepare);
-    Error.stackTraceLimit = limit;
-  }
-  return Array.isArray(files)
-    ? files.filter((file: unknown): file is string => typeof file === 'string')
-    : [];
+/** The origin the innermost deciding frame of `files` gives, or undefined when no frame decides. */
+function decide(files: readonly string[], isCore: (file: string) => boolean): Origin | undefined {
+  let origin: Origin | undefined;
+  each(files, (name) => {
+    const file = pathOf(name);
+    const skip = file === '' || setHas(GUARD_FILES, file) || text.startsWith(file, 'node:');
+    if (origin !== undefined || skip) return;
+    if (some(RUNNER, (prefix) => text.includes(file, prefix))) origin = 'harness';
+    else if (!text.includes(file, DEPENDENCY)) origin = isCore(file) ? 'core' : 'harness';
+  });
+  return origin;
+}
+
+/**
+ * Frames read first: the caller is nearly always among them (the guard's own two or three frames, then the caller),
+ * so the whole stack is read only when these hold no deciding frame (a dependency's deep call chain).
+ */
+const SHALLOW_FRAMES = 16;
+
+/** Who called, from the stack: the first SHALLOW_FRAMES frames, then the whole stack if they did not decide. */
+function callerOf(isCore: (file: string) => boolean): Origin {
+  return decide(stackFiles(SHALLOW_FRAMES), isCore) ?? originOf(stackFiles(), isCore);
 }
 
 export interface PoisonOptions {
@@ -128,18 +167,33 @@ export interface PoisonOptions {
   readonly isCore?: (file: string) => boolean;
   /** Witnessed uses to treat as impure (`'Date.UTC'`, `'new Date(value)'`): a negative control on real src/core. */
   readonly forbid?: readonly string[];
+  /**
+   * Whether to note the pure uses src/core makes (default true). Each one the harness makes before src/core does
+   * reads the stack, so the poisoned run, which asserts only that nothing impure happened, turns it off.
+   */
+  readonly witness?: boolean;
+  /**
+   * Whether `Date.parse` of one ISO 8601 timestamp with an explicit offset counts as pure, as `new Date(text)` of one
+   * does (default false: every `Date.parse` from src/core is caught). It gives the same instant on every host; lint
+   * still bans `Date.parse` in src/core. The poisoned run turns it on: its harness parses millions of such
+   * timestamps, and reading the stack for each would take hours.
+   */
+  readonly offsetParse?: boolean;
 }
 
 /** A property as it was before the poison: restored exactly (deleted when it did not exist). */
 export type Saved = readonly [target: object, key: PropertyKey, before: PropertyDescriptor | undefined];
 
 export interface Poison {
-  /** Every impure use src/core made while the poison was installed, in order. */
+  /** Every impure use src/core made while the poison was installed and armed, in order. */
   readonly violations: readonly string[];
   /** The witnessed pure uses seen from src/core. */
   readonly witnessed: ReadonlySet<string>;
   /** Every property the poison replaced, with what it was before. */
   readonly saved: readonly Saved[];
+  /** Lets every call through, unchecked, until `arm()` (the unpoisoned baseline). Installed armed. */
+  disarm(): void;
+  arm(): void;
   /** Puts every original back (once; later calls do nothing). */
   restore(): void;
 }
@@ -150,11 +204,14 @@ interface Context {
   readonly check: (use: string) => void;
   /** Notes the first use from src/core (or checks it, when forbidden). */
   readonly witness: (use: string) => void;
+  /** PoisonOptions.offsetParse. */
+  readonly offsetParse: boolean;
 }
 
 function patch(saved: Saved[], target: object, key: PropertyKey, descriptor: PropertyDescriptor): void {
-  saved.push([target, key, Object.getOwnPropertyDescriptor(target, key)]);
-  Object.defineProperty(target, key, { ...descriptor, configurable: true });
+  append(saved, [target, key, SAFE.getOwnPropertyDescriptor(target, key)] as const);
+  if (!SAFE.defineProperty(target, key, { ...descriptor, configurable: true }))
+    throw new Error(`poison: cannot replace ${text.of(key)}`);
 }
 
 /** Replaces method `key` of `target` by one that runs `before` with the same arguments, then the original. */
@@ -164,38 +221,37 @@ function wrapMethod(
   key: PropertyKey,
   before: (args: unknown[]) => void,
 ): void {
-  const original: unknown = Reflect.get(target, key);
-  if (typeof original !== 'function') throw new Error(`poison: no method ${String(key)} to wrap`);
+  const original: unknown = SAFE.getOwnPropertyDescriptor(target, key)?.value;
+  if (typeof original !== 'function') throw new Error(`poison: no method ${text.of(key)} to wrap`);
   const wrapped = function (this: unknown, ...args: unknown[]): unknown {
     before(args);
-    const result: unknown = Reflect.apply(original, this, args);
-    return result;
+    return call(original as (...args: never[]) => unknown, this, ...args);
   };
   patch(saved, target, key, { value: wrapped, writable: true, enumerable: false });
 }
 
 /** Why `new Date(...args)` is impure, or null: one number, one Date or one ISO timestamp with an offset is not. */
 function dateUse(args: readonly unknown[], RealDate: DateConstructor): string | null {
-  if (args.length !== 1) return `new Date with ${String(args.length)} arguments`;
-  const [value] = args;
+  if (args.length !== 1) return `new Date with ${text.of(args.length)} arguments`;
+  const value = args[0];
   if (typeof value === 'number' || value instanceof RealDate) return null;
-  if (typeof value === 'string' && ISO_WITH_OFFSET.test(value)) return null;
+  if (typeof value === 'string' && isoWithOffset(value)) return null;
   return `new Date(${typeof value === 'string' ? 'text without an offset' : typeof value})`;
 }
 
-function poisonDate({ saved, check, witness }: Context): void {
+function poisonDate({ saved, check, witness, offsetParse }: Context): void {
   const RealDate = Date;
   const twin = new Proxy(RealDate, {
     apply(target, self, args): unknown {
       check('Date() called as a function');
-      const result: unknown = Reflect.apply(target, self, args);
+      const result: unknown = SAFE.apply(target, self, args);
       return result;
     },
     construct(target, args, newTarget): object {
       const use = dateUse(args, RealDate);
       if (use === null) witness('new Date(value)');
       else check(use);
-      const made: unknown = Reflect.construct(target, args, newTarget);
+      const made: unknown = SAFE.construct(target, args, newTarget);
       if (!(made instanceof RealDate)) throw new Error('poison: Date made no Date');
       return made;
     },
@@ -205,8 +261,10 @@ function poisonDate({ saved, check, witness }: Context): void {
   wrapMethod(saved, RealDate, 'now', () => {
     check('Date.now');
   });
-  wrapMethod(saved, RealDate, 'parse', () => {
-    check('Date.parse');
+  wrapMethod(saved, RealDate, 'parse', (args) => {
+    const text = args[0];
+    const offset = offsetParse && args.length === 1 && typeof text === 'string' && specIsoWithOffset(text);
+    if (!offset) check('Date.parse');
   });
   wrapMethod(saved, RealDate, 'UTC', () => {
     witness('Date.UTC');
@@ -216,8 +274,9 @@ function poisonDate({ saved, check, witness }: Context): void {
       check(`Date.prototype.${name}`);
     });
   }
-  wrapMethod(saved, RealDate.prototype, Symbol.toPrimitive, ([hint]) => {
-    if (hint !== 'number') check(`Date.prototype[Symbol.toPrimitive](${JSON.stringify(hint)})`);
+  wrapMethod(saved, RealDate.prototype, Symbol.toPrimitive, (args) => {
+    const hint = args[0];
+    if (hint !== 'number') check(`Date.prototype[Symbol.toPrimitive](${text.json(hint)})`);
   });
 }
 
@@ -243,9 +302,14 @@ function poisonLocales({ saved, check }: Context): void {
 
 function poisonGlobals({ saved, check }: Context): void {
   for (const name of POISONED_GLOBALS) {
-    const before = Object.getOwnPropertyDescriptor(globalThis, name);
-    const value: unknown = before?.value;
-    const read = (): unknown => (before?.get === undefined ? value : before.get.call(globalThis));
+    const before = SAFE.getOwnPropertyDescriptor(globalThis, name);
+    const getter = before?.get;
+    // An assignment (Vitest swaps its own timers in and out around each RPC) is kept here, so the twin stays.
+    let assigned: { readonly value: unknown } | null = null;
+    const read = (): unknown => {
+      if (assigned !== null) return assigned.value;
+      return getter === undefined ? before?.value : call(getter, globalThis);
+    };
     patch(saved, globalThis, name, {
       enumerable: before?.enumerable ?? false,
       get: (): unknown => {
@@ -253,7 +317,7 @@ function poisonGlobals({ saved, check }: Context): void {
         return read();
       },
       set: (next: unknown): void => {
-        Object.defineProperty(globalThis, name, { value: next, writable: true, configurable: true });
+        assigned = { value: next };
       },
     });
   }
@@ -266,19 +330,22 @@ export function installPoison(options: PoisonOptions = {}): Poison {
   const violations: string[] = [];
   const witnessed = new Set<string>();
   const saved: Saved[] = [];
-  const fromCore = (): boolean => originOf(stackFiles(), isCore) === 'core';
+  let armed = true;
+  const fromCore = (): boolean => armed && callerOf(isCore) === 'core';
   const check = (use: string): void => {
     if (!fromCore()) return;
-    violations.push(use);
+    append(violations, use);
     throw new PoisonError(use);
   };
+  const noting = options.witness ?? true;
   const witness = (use: string): void => {
-    if (forbid.has(use)) check(use);
-    else if (!witnessed.has(use) && fromCore()) witnessed.add(use);
+    if (setHas(forbid, use)) check(use);
+    else if (noting && !setHas(witnessed, use) && fromCore()) setAdd(witnessed, use);
   };
   let restored = false;
   try {
-    for (const install of [poisonDate, poisonLocales, poisonGlobals]) install({ saved, check, witness });
+    const context = { saved, check, witness, offsetParse: options.offsetParse ?? false };
+    for (const install of [poisonDate, poisonLocales, poisonGlobals]) install(context);
   } catch (error) {
     restoreAll(saved);
     throw error;
@@ -287,6 +354,12 @@ export function installPoison(options: PoisonOptions = {}): Poison {
     violations,
     witnessed,
     saved,
+    disarm(): void {
+      armed = false;
+    },
+    arm(): void {
+      armed = true;
+    },
     restore(): void {
       if (restored) return;
       restored = true;
@@ -295,9 +368,14 @@ export function installPoison(options: PoisonOptions = {}): Poison {
   };
 }
 
+/** Puts every saved property back, the last replaced first. */
 function restoreAll(saved: readonly Saved[]): void {
-  for (const [target, key, before] of [...saved].reverse()) {
-    if (before === undefined) Reflect.deleteProperty(target, key);
-    else Object.defineProperty(target, key, before);
-  }
+  const reversed: Saved[] = [];
+  each(saved, (entry, index) => {
+    reversed[saved.length - 1 - index] = entry;
+  });
+  each(reversed, ([target, key, before]) => {
+    if (before === undefined) SAFE.deleteProperty(target, key);
+    else SAFE.defineProperty(target, key, before);
+  });
 }

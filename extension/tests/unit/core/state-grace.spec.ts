@@ -118,7 +118,9 @@ describe('grace: a PENDING receipt with fresh coverage finalises to NOT_FOUND on
     const at = shiftIso(GRACE_AT, 2 * MS_PER_HOUR);
     expectPending(gradeAt(at, stale), at);
   });
+});
 
+describe('grace: an override and its revert never regrade a FINAL receipt', () => {
   it('a FINAL NOT_FOUND can be overridden and reverted, and is still never regraded', () => {
     const final = gradeAt(GRACE_AT);
     const event = {
@@ -129,8 +131,19 @@ describe('grace: a PENDING receipt with fresh coverage finalises to NOT_FOUND on
     } as const;
     const overridden = transition(final, event);
     expect(overridden).toMatchObject({ state: 'USER_OVERRIDDEN', grade: 'NOT_FOUND', finalAt: GRACE_AT });
-    const reverted = transition(overridden, { event: 'revert' });
-    expect(reverted).toStrictEqual(final);
+    const reverted = transition(overridden, { event: 'revert', at: GRACE_AT });
+    const { reverted: kept, ...rest } = reverted;
+    expect(rest).toStrictEqual(final);
+    expect(kept).toEqual([
+      {
+        grade: 'VERIFIED',
+        at: GRACE_AT,
+        revertedAt: GRACE_AT,
+        previousState: 'FINAL',
+        computedAt: final.computedAt,
+        observationIds: final.observationIds,
+      },
+    ]);
     expectRefusedRegrade(reverted, gradeAt(shiftIso(GRACE_AT, MS_PER_HOUR)));
   });
 });

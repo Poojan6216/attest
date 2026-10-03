@@ -158,6 +158,15 @@ Everything is exact: basis points and reduced fractions, never floats (§5.3). W
 the unit, 2 700 000 after it, 259 200 000 around a calendar target. `28` and `29` exercise the millisecond
 boundaries (9503999/9504000, 17/20 exactly, 8078399/9504000).
 
+## What v1.7 changed in the files
+
+v1.7 is the third Sprint 1 review close (the status note of `docs/grading.md`). No file's input or expectation
+changed, and the files keep the v1.6 format. Its rules touch what the files never state: the ledger's writes
+(§3, §10), reverted overrides (§4.3, §8; the `events` format has no `revert`), and a policy's `unasked.threshold`,
+which no `policyPatch` sets. Its new `gradeBatch` refusal (`stale_evaluated_at`, §3) never fires on a file: the
+loader dates `fixed` pairs before every instant the file grades at, so each pair's `after` is earlier than every
+`evaluatedAt`.
+
 ## What v1.6 changed in the files
 
 v1.6 is the Sprint 1 review close (the status note of `docs/grading.md`). One of its rules changes what a file

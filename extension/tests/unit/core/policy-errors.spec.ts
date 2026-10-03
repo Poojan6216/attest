@@ -162,6 +162,7 @@ const WEIGHT_CASES: readonly Case[] = [
     `unasked.signals.userIdle: ${MULTIPLE}`,
   ),
   one('unasked threshold 0.33333', ['unasked', 'threshold'], 0.33333, `unasked.threshold: ${MULTIPLE}`),
+  one('unasked threshold 0', ['unasked', 'threshold'], 0, 'unasked.threshold: must be > 0'),
   one('weight above 1', ['features', 'amountExact'], 1.0001, 'features.amountExact: must be <= 1'),
   // QA-R11: not JSON, but loadPolicy takes any value; a non-finite number is named as such, every run.
   one('NaN weight', ['features', 'amountExact'], Number.NaN, 'features.amountExact: must be a finite number'),

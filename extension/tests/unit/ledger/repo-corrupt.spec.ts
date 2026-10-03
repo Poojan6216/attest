@@ -36,6 +36,8 @@ import {
   makeObservation,
   makePing,
   observationId,
+  pinClock,
+  releaseClock,
   sha,
   uniqueDbName,
 } from './fixtures';
@@ -48,6 +50,7 @@ let db: LedgerDb;
 let logs: { records: LogRecord[]; restore: () => void };
 
 beforeEach(async () => {
+  pinClock();
   db = await openLedger(uniqueDbName('corrupt'));
   logs = captureLogs();
 });
@@ -55,6 +58,7 @@ beforeEach(async () => {
 afterEach(() => {
   logs.restore();
   db.close();
+  releaseClock();
 });
 
 /** Writes rows straight to the table, bypassing the repo's validation (what a buggy build might do). */

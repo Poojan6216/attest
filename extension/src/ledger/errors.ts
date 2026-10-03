@@ -10,9 +10,17 @@ export const LEDGER_ERROR_CODES = [
   'invalid_input',
   /**
    * A write reused an existing primary key for a different content/raw hash, or an existing content/raw hash
-   * for a different fact (anything but `observedAt` differs).
+   * for a different fact (anything but `observedAt` differs, and for a claim also anything but its `extractor`).
    */
   'id_conflict',
+  /**
+   * A sighting of a stored content/raw hash that is earlier than the stored row's `observedAt`. The stored row
+   * is kept as it is, because a batch may already have graded with it (docs/grading.md §3; Hard Rule 4).
+   * Nothing is written; the caller reports the pass DEGRADED (Hard Rule 6).
+   */
+  'late_sighting',
+  /** `recordBatchInstant` got an instant at or before the last recorded batch's. Nothing is written. */
+  'batch_out_of_order',
   /** The migration list is empty, unordered, or leaves a ledger table undeclared. */
   'invalid_migrations',
   /** IndexedDB refused to open or upgrade the database. */

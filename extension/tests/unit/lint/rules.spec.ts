@@ -91,6 +91,9 @@ tsTester.run('attest/core-determinism', coreDeterminism, {
     'export const sorted = (a: string[]) => [...a].sort();',
     'export const d = (ms: number) => new Date(ms);',
     'const Date = { now: () => 1 }; export const t = Date.now();',
+    "export const g = (o: object, k: string) => [Reflect.get(o, 'code'), Reflect.get(o, k), Reflect.has(o, k)];",
+    'export const p = (o: object) => Object.getPrototypeOf(o) === Object.prototype && o instanceof Object;',
+    'const Reflect = { apply: () => 1 }; export const a = Reflect.apply();',
   ],
   invalid: [
     invalid('declare const Date: DateConstructor; export const t = Date.now();', 'date'),
@@ -109,8 +112,12 @@ tsTester.run('attest/core-determinism', coreDeterminism, {
     invalid('const D = Date; D.now();', 'date'),
     {
       code: 'Reflect.apply(Date.now, Date, []);',
-      errors: [{ messageId: 'date' }, { messageId: 'date' }],
+      errors: [{ messageId: 'reflect' }, { messageId: 'date' }, { messageId: 'date' }],
     },
+    invalid('const R = Reflect; R.get(o, k);', 'reflect'),
+    invalid('export const n = Object.getOwnPropertyNames(o);', 'reflect'),
+    invalid("export const g = Reflect.get(o, 'getTimezone' + 'Offset');", 'reflectKey'),
+    invalid("export const g = Reflect.get(o, 'getTimezoneOffset');", 'localTime'),
     {
       code: "Reflect.get(Date, 'now');",
       errors: [{ messageId: 'date' }],

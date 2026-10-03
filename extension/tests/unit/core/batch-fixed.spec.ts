@@ -135,30 +135,48 @@ describe('gradeBatch: fixed pre-assignments and taken observations (§4.3)', () 
   });
 });
 
-describe('gradeBatch: only the pre-assignments in force at evaluatedAt are fixed (batch-fixed.ts, §4.3, §9)', () => {
-  const at = (iso: string) => IsoTs.parse(iso);
-  const BEFORE = at('2026-10-06T14:59:59.999-04:00');
-  /** c9 → o9 with these instants, o3 taken throughout; c1 alone is graded. */
-  async function c1With(instants: Pick<BatchFixed, 'after' | 'until'>) {
-    const loaded = fixedScenario();
-    const fixed: BatchFixed[] = [
-      { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9'), ...instants },
-      { observationId: observationId(loaded, 'o3'), claimId: null, after: FIXED_AFTER },
-    ];
-    const c1 = (await run(loaded, { fixed })).find((r) => r.id === claimReceiptId(loaded, 'c1'));
-    const o9 = observationId(loaded, 'o9');
-    return c1?.observationIds[0] === o9 ? 'o9' : c1?.observationIds[0] === undefined ? 'none' : 'other';
-  }
+const at = (iso: string) => IsoTs.parse(iso);
+const BEFORE = at('2026-10-06T14:59:59.999-04:00');
+/** c9 → o9 with these instants, o3 taken throughout; c1 alone is graded. */
+async function c1With(instants: Pick<BatchFixed, 'after' | 'until' | 'released'>) {
+  const loaded = fixedScenario();
+  const fixed: BatchFixed[] = [
+    { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9'), ...instants },
+    { observationId: observationId(loaded, 'o3'), claimId: null, after: FIXED_AFTER },
+  ];
+  const c1 = (await run(loaded, { fixed })).find((r) => r.id === claimReceiptId(loaded, 'c1'));
+  const o9 = observationId(loaded, 'o9');
+  return c1?.observationIds[0] === o9 ? 'o9' : c1?.observationIds[0] === undefined ? 'none' : 'other';
+}
 
-  it('fixes a pair strictly after its `after` and up to its `until` inclusive; otherwise c1 takes o9', async () => {
+describe('gradeBatch: only the pre-assignments in force at evaluatedAt are fixed (batch-fixed.ts, §4.3, §9)', () => {
+  it('fixes a pair strictly after its `after`, up to its `until` inclusive and outside its released spans; otherwise c1 takes o9', async () => {
     expect(await c1With({ after: FIXED_AFTER })).toBe('other');
     expect(await c1With({ after: BEFORE })).toBe('other');
-    expect(await c1With({ after: at(EVALUATED_AT) })).toBe('o9');
     expect(await c1With({ after: FIXED_AFTER, until: at(EVALUATED_AT) })).toBe('other');
     expect(await c1With({ after: FIXED_AFTER, until: BEFORE })).toBe('o9');
     // The same instants in another offset: compared as instants, never as text.
     expect(await c1With({ after: at('2026-10-07T04:29:59.999+09:30') })).toBe('other');
-    expect(await c1With({ after: at('2026-10-07T04:30:00+09:30') })).toBe('o9');
+    const open = (from: IsoTs) => ({ after: FIXED_AFTER, released: [{ from }] });
+    expect(await c1With(open(BEFORE))).toBe('o9');
+    expect(await c1With(open(at(EVALUATED_AT)))).toBe('other');
+    const closed = (to: IsoTs) => ({ after: FIXED_AFTER, released: [{ from: FIXED_AFTER, to }] });
+    expect(await c1With(closed(at(EVALUATED_AT)))).toBe('o9');
+    expect(await c1With(closed(BEFORE))).toBe('other');
+  });
+});
+
+describe('gradeBatch: claim pre-assignments from an earlier grading only (§3: batches in order)', () => {
+  it('throws stale_evaluated_at for a claim pair from a grading at or after evaluatedAt (§3: batches in order)', async () => {
+    // A claim pair's `after` is its claim's grading: a batch at that instant again (or earlier) is a second batch at
+    // an instant already graded, and its earlier receipts' FINAL evidence would be free in it.
+    await expect(c1With({ after: at(EVALUATED_AT) })).rejects.toMatchObject(batchError('stale_evaluated_at'));
+    await expect(c1With({ after: at('2026-10-07T04:30:00+09:30') })).rejects.toMatchObject(
+      batchError('stale_evaluated_at'),
+    );
+    await expect(c1With({ after: at('2026-10-06T15:00:00.001-04:00'), until: BEFORE })).rejects.toMatchObject(
+      batchError('stale_evaluated_at'),
+    );
   });
 
   it('takes an observation only strictly after the override’s instant', async () => {
@@ -172,7 +190,9 @@ describe('gradeBatch: only the pre-assignments in force at evaluatedAt are fixed
     expect((await c1(BEFORE))?.observationIds).toEqual([observationId(loaded, 'o2')]);
     expect((await c1(at(EVALUATED_AT)))?.observationIds).toEqual([observationId(loaded, 'o3')]);
   });
+});
 
+describe('gradeBatch: a graded claim named by a pre-assignment that has not ended (§4.3, §8)', () => {
   it('throws claim_fixed for a graded claim named by a pre-assignment not yet in force, and refuses a bad instant', async () => {
     const loaded = fixedScenario();
     const later = { observationId: observationId(loaded, 'o9'), claimId: claimId(loaded, 'c9') };
@@ -182,6 +202,34 @@ describe('gradeBatch: only the pre-assignments in force at evaluatedAt are fixed
     ).rejects.toMatchObject(batchError('claim_fixed'));
     const broken = [{ ...later, after: 'yesterday' as IsoTs }];
     await expect(run(loaded, { fixed: broken })).rejects.toMatchObject({ code: 'invalid_iso' });
+    const badUntil = [{ ...later, after: FIXED_AFTER, until: 'tomorrow' as IsoTs }];
+    await expect(run(loaded, { claims: all, fixed: badUntil })).rejects.toMatchObject({
+      code: 'invalid_iso',
+    });
+  });
+
+  it('grades a claim named only by pairs that ended before evaluatedAt (an override from PENDING, since reverted)', async () => {
+    const loaded = fixedScenario();
+    const all = [...loaded.claims.values()];
+    const c9 = {
+      observationId: observationId(loaded, 'o9'),
+      claimId: claimId(loaded, 'c9'),
+      after: FIXED_AFTER,
+    };
+    // Ended before: c9 is graded again (and takes o9 back on its own); not yet ended, or never: claim_fixed.
+    const ended = await run(loaded, { claims: all, fixed: [{ ...c9, until: BEFORE }] });
+    expect(ended.map((r) => r.claimId).filter((id) => id !== undefined)).toHaveLength(2);
+    for (const until of [at(EVALUATED_AT), undefined]) {
+      const pair = until === undefined ? c9 : { ...c9, until };
+      await expect(run(loaded, { claims: all, fixed: [pair] })).rejects.toMatchObject(
+        batchError('claim_fixed'),
+      );
+    }
+    // A FINAL pair wholly released (a revert another claim's spell kept from fixing again) still names its claim.
+    const released = { ...c9, released: [{ from: FIXED_AFTER }] };
+    await expect(run(loaded, { claims: all, fixed: [released] })).rejects.toMatchObject(
+      batchError('claim_fixed'),
+    );
   });
 });
 

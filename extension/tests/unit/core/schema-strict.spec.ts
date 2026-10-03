@@ -49,9 +49,9 @@ describe('core schemas are strict everywhere', () => {
     const { objects, unknownKinds } = walkExports();
     expect([...unknownKinds]).toEqual([]);
     // Request, Claim + extractor, Observation, ObserverCoverage, Coverage, HealthReport, Grant, Reason,
-    // ReceiptOverride, Receipt, Attribution, GradeContext + scope, Activity + its four element shapes,
+    // ReceiptOverride, Receipt + a reverted override, Attribution, GradeContext + scope, Activity + its four element shapes,
     // and one params object per ReasonCode (§15).
-    expect(objects.size).toBe(19 + core.ReasonCode.options.length);
+    expect(objects.size).toBe(20 + core.ReasonCode.options.length);
   });
 
   it('every object, nested ones included, rejects unknown keys', () => {

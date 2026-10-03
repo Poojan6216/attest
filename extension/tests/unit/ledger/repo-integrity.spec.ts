@@ -26,7 +26,7 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { getObservation, upsertObservation } from '../../../src/ledger/repo';
 import type { ObservationInput } from '../../../src/ledger/types';
-import { expectLedgerError, uniqueDbName } from './fixtures';
+import { expectLedgerError, pinClock, releaseClock, uniqueDbName } from './fixtures';
 
 const OCCURRED = '2026-10-01T10:15:00-04:00';
 const OBSERVED = '2026-10-01T10:20:00-04:00';
@@ -68,11 +68,13 @@ function sealed(fields: Record<string, unknown>): ObservationInput {
 let db: LedgerDb;
 
 beforeEach(async () => {
+  pinClock();
   db = await openLedger(uniqueDbName('integrity'));
 });
 
 afterEach(() => {
   db.close();
+  releaseClock();
 });
 
 async function expectRefused(input: ObservationInput, paths: string): Promise<void> {

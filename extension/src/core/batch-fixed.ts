@@ -4,46 +4,51 @@
  * `evaluatedAt`, and replay (replay-timeline.ts) derives the same pairs from the stored receipts and keeps those in
  * force at each batch instant, so a batch and its replay fix exactly the same pairs (Hard Rule 4).
  *
- * A pair is in force in a batch whose `evaluatedAt` is strictly after its `after`, and, when it has an `until`, at
- * or before its `until`. `preAssignments(receipts)` reads them off each claim's latest receipt; every pair of a claim
- * starts strictly after its `computedAt`, the claim's last grading (its own batch graded it, so nothing is fixed
- * there; a later batch either regraded it, which would have moved `computedAt`, or left it out as FINAL or
- * overridden, §4.3):
- *  - a receipt FINAL before any override fixes its `observationIds` to its claim; an override to NOT_FOUND ends that
- *    at the override's `at` (`until`), an override to VERIFIED keeps it;
+ * A pair is in force in a batch whose `evaluatedAt` is strictly after its `after`, at or before its `until` when it
+ * has one, and outside each of its `released` spans. `preAssignments(receipts)` reads them off each claim's latest
+ * receipt. A claim pair's `after` is always a grading of its claim, so it is before every later batch (batch.ts
+ * refuses a batch that is not, `stale_evaluated_at`): every pair of a claim starts strictly after the grading it
+ * records (its own batch graded it, so nothing is fixed there; a later batch either regraded it, which would have
+ * moved `computedAt`, or left it out as FINAL or overridden, §4.3):
+ *  - a receipt FINAL before any override fixes its `observationIds` to its claim; an override to NOT_FOUND releases
+ *    them in batches after the override's `at` (a `released` span with no end), an override to VERIFIED keeps them;
  *  - a receipt PENDING until an override to VERIFIED fixes its `observationIds` too: every batch after its last
- *    grading left the claim out because the override was already written when that batch read it, even one
- *    evaluated before the override's `at`, so the stored evidence was never free for another claim there (left free,
+ *    grading left the claim out, because the override was already written when that batch read it (even one
+ *    evaluated before the override's `at`) or an earlier override since reverted still held the claim there (then
+ *    from that revert on), so the stored evidence was never free for another claim there (left free,
  *    another claim could take it FINAL and the next batch would find one observation fixed to two claims,
  *    `CandidatesError('fixed_conflict')`); one overridden to NOT_FOUND fixes nothing;
  *  - an overridden UNASKED receipt (claim-less, naming its orphan) takes that observation after the override's `at`
  *    (claim `null`; after its `computedAt` when that is later); a FINAL UNASKED receipt takes nothing: its
  *    observation stays assignable (§7), so an override is what takes it.
- * An override that releases or takes an observation does so strictly after its `at`: one stamped at a batch's very
- * `evaluatedAt`, or after it but before that batch read its pre-assignments, is not in force in that batch, on both
- * sides. The caller's duty (§3): read the claims and the pre-assignments of a batch, grade them and write the result
- * in one transaction begun after stamping `evaluatedAt`, and stamp each override's `at` inside the transaction that
- * writes it, so that every override stamped before `evaluatedAt` is in what the batch read.
+ * A reverted override (the receipt's `reverted`, state.ts) stays in force for the batches evaluated up to its
+ * `revertedAt`, so a revert never erases what a batch saw: an override from PENDING to VERIFIED fixed the evidence
+ * it sat beside up to the revert (`until`; from the revert of the override before it, when one held the claim since
+ * the same grading); a taken orphan was taken up to the revert (`until`); an override from FINAL to NOT_FOUND
+ * released the FINAL evidence from its `at` to its `revertedAt` (a closed `released` span). What a revert fixes again
+ * it fixes only if no other claim holds that observation then: batch-fixed-claims.ts keeps each claim's spells in
+ * the order they begin and drops one that begins while another claim holds the observation, so a released
+ * observation is never fixed again to a claim while another claim holds it, and never to two claims at once. A
+ * claim whose reverted override is still in force is left out of the batch like an overridden one (`heldOutAt`).
+ * An override or a revert releases, takes or restores an observation strictly after its instant: one stamped at a
+ * batch's very `evaluatedAt`, or after it but before that batch read its pre-assignments, does nothing in that
+ * batch, on both sides. The caller's duty (§3): read the claims and the pre-assignments of a batch, grade them and
+ * write the result in one transaction begun after stamping `evaluatedAt`, stamp each batch strictly after the last,
+ * and stamp each override's `at` and each revert's instant inside the transaction that writes it, so that every
+ * event stamped before `evaluatedAt` is in what the batch read.
  *
  * Nothing here reads a stored `grade` or `ruleId`, so a tampered grade changes no other receipt's pre-assignments.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
+import { type BatchFixed, claimPairs, type Release } from './batch-fixed-claims';
+
+export type { BatchFixed, Release } from './batch-fixed-claims';
 import type { FixedPair } from './candidates';
 import { instantMs } from './normalize';
 import { compareText } from './order';
 import type { IsoTs, Receipt, Ulid } from './schema';
-
-/** One pre-assignment and the batches it is in force in (see the file comment). */
-export interface BatchFixed {
-  readonly observationId: Ulid;
-  /** The claim the observation is fixed to; null: taken (an overridden UNASKED receipt's orphan). */
-  readonly claimId: Ulid | null;
-  /** In force only in batches whose `evaluatedAt` is strictly after this instant. */
-  readonly after: IsoTs;
-  /** When present, in force only in batches whose `evaluatedAt` is at or before this instant. */
-  readonly until?: IsoTs;
-}
+import { revertedHoldsAt } from './schema-receipt';
 
 /** The pre-assignments in force at one instant (§4.3 `assign(pairs, policy, fixed, taken)`). */
 export interface FixedAt {
@@ -52,10 +57,17 @@ export interface FixedAt {
   readonly taken: ReadonlySet<Ulid>;
 }
 
-/** Whether `pair` is in force in a batch evaluated at `evaluatedMs`. Throws for an `after`/`until` not an IsoTs. */
+/** Whether a batch evaluated at `evaluatedMs` is inside `span`. Throws for an instant that is not an IsoTs. */
+function releasedAt(span: Release, evaluatedMs: number): boolean {
+  if (instantMs(span.from) >= evaluatedMs) return false;
+  return span.to === undefined || evaluatedMs <= instantMs(span.to);
+}
+
+/** Whether `pair` is in force in a batch evaluated at `evaluatedMs`. Throws for an instant not an IsoTs. */
 export function inForceAt(pair: BatchFixed, evaluatedMs: number): boolean {
   if (instantMs(pair.after) >= evaluatedMs) return false;
-  return pair.until === undefined || evaluatedMs <= instantMs(pair.until);
+  if (pair.until !== undefined && evaluatedMs > instantMs(pair.until)) return false;
+  return !(pair.released?.some((span) => releasedAt(span, evaluatedMs)) ?? false);
 }
 
 /** The pairs of `fixed` in force at `evaluatedMs`: fixed to a claim, or taken. */
@@ -69,6 +81,24 @@ export function fixedInForce(fixed: readonly BatchFixed[], evaluatedMs: number):
   }
   pairs.sort((a, b) => compareText(a.claimId, b.claimId) || compareText(a.observationId, b.observationId));
   return { fixed: pairs, taken };
+}
+
+/**
+ * Whether a batch evaluated at `evaluatedMs` leaves the subject of `receipt` out because one of its reverted
+ * overrides is still in force there (§8): a claim from the grading the override sat beside up to the revert, an
+ * orphan from the override's `at` (it was taken) up to the revert.
+ */
+export function heldOutAt(receipt: Receipt, evaluatedMs: number): boolean {
+  const claimless = receipt.claimId === undefined;
+  return (receipt.reverted ?? []).some((entry) => revertedHoldsAt(entry, claimless, evaluatedMs));
+}
+
+/**
+ * Whether a batch evaluated at `evaluatedMs` grades the claim whose stored receipt is `receipt` (§3): PENDING, and
+ * no reverted override of it still in force there. The background passes exactly these claims to `gradeBatch`.
+ */
+export function gradedAt(receipt: Receipt, evaluatedMs: number): boolean {
+  return receipt.state === 'PENDING' && !heldOutAt(receipt, evaluatedMs);
 }
 
 /** (`computedAt` instant, id): the later grading of one subject. */
@@ -97,29 +127,33 @@ function laterOf(a: IsoTs, b: IsoTs): IsoTs {
   return instantMs(b) > instantMs(a) ? b : a;
 }
 
-/** What one claim receipt fixes (see the file comment): after its `computedAt`, until a releasing override's `at`. */
-function claimPairs(receipt: Receipt, claimId: Ulid): BatchFixed[] {
-  const { override, observationIds, computedAt } = receipt;
-  const before = override?.previousState ?? receipt.state;
-  if (before !== 'FINAL' && override?.grade !== 'VERIFIED') return [];
-  const until = override?.grade === 'NOT_FOUND' ? { until: override.at } : {};
-  return observationIds.map((observationId) => ({ observationId, claimId, after: computedAt, ...until }));
+/** What one claim-less receipt takes: its orphan, while each override (reverted or in force) was in force. */
+function takenPairs(receipt: Receipt): BatchFixed[] {
+  const [orphan] = receipt.observationIds;
+  if (receipt.claimId !== undefined || orphan === undefined) return [];
+  const pairs: BatchFixed[] = (receipt.reverted ?? []).map((entry) => ({
+    observationId: orphan,
+    claimId: null,
+    after: laterOf(entry.computedAt, entry.at),
+    until: entry.revertedAt,
+  }));
+  const { override } = receipt;
+  if (override !== undefined) {
+    pairs.push({ observationId: orphan, claimId: null, after: laterOf(receipt.computedAt, override.at) });
+  }
+  return pairs;
 }
 
 /**
  * Every pre-assignment the stored `receipts` make (§4.3; see the file comment), each with the batches it is in force
  * in: what the background passes to `gradeBatch` (which keeps those in force at its `evaluatedAt`), and what replay
- * rebuilds each batch with. Claim receipts first, in claim id order, then the taken orphans in receipt order.
+ * rebuilds each batch with. Claim receipts first, in claim id order (each claim's reverted spans, then its current
+ * evidence), then the taken orphans in receipt order.
  */
 export function preAssignments(receipts: Iterable<Receipt>): BatchFixed[] {
   const held = [...receipts];
   const latest = [...latestClaimReceipts(held)].sort(([a], [b]) => compareText(a, b));
-  const fixed = latest.flatMap(([claimId, receipt]) => claimPairs(receipt, claimId));
-  for (const receipt of held) {
-    const [orphan] = receipt.observationIds;
-    const { override } = receipt;
-    if (receipt.claimId !== undefined || override === undefined || orphan === undefined) continue;
-    fixed.push({ observationId: orphan, claimId: null, after: laterOf(receipt.computedAt, override.at) });
-  }
+  const fixed = claimPairs(latest);
+  for (const receipt of held) fixed.push(...takenPairs(receipt));
   return fixed;
 }

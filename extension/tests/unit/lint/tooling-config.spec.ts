@@ -5,7 +5,10 @@
  * - `pnpm test:coverage` measures src/core only and fails below 95% lines (the Gate), writing its report even
  *   when a test fails, and CI runs it;
  * - the perf pass prints each gate's medians, also when the gate passes;
- * - the `gate` tag exists and the Sprint 1 grep test over src/core carries it (TECH-R1, QA-R7).
+ * - the `gate` tag exists and the Sprint 1 grep test over src/core carries it (TECH-R1, QA-R7);
+ * - every test's timeout is checked as it runs, in both runs (FR3-7);
+ * - the poisoned run (FR3-4): every core, golden and property test under the runtime guard, installed before src/core
+ *   loads, with a binding 95% line floor on src/core under the guard; `pnpm test:poison` runs it and CI runs that.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -14,6 +17,12 @@ import { describe, expect, it } from 'vitest';
 
 import vitestConfig, { CORE_COVERAGE_LINES, TEST_TIMEOUT_MS } from '../../../vitest.config';
 import perfConfig from '../../../vitest.perf.config';
+import poisonConfig, {
+  POISON_EXCLUDE,
+  POISON_INCLUDE,
+  POISON_SETUP,
+  TIMEOUT_SETUP,
+} from '../../../vitest.poison.config';
 
 const EXTENSION = path.resolve(import.meta.dirname, '../../..');
 const REPO = path.resolve(EXTENSION, '..');
@@ -66,5 +75,49 @@ describe('core coverage (the Gate: core coverage >= 95%)', () => {
 describe('vitest.perf.config.ts: the medians are printed', () => {
   it('keeps the console output of a passing gate', () => {
     expect(perfConfig.test?.silent).toBe(false);
+  });
+});
+
+describe('the suite-wide timeout is checked on every test as it runs (FR3-7)', () => {
+  it('both runs load the setup file that checks it', () => {
+    expect(vitestConfig.test?.setupFiles).toContain(TIMEOUT_SETUP);
+    expect(poisonConfig.test?.setupFiles).toContain(TIMEOUT_SETUP);
+  });
+});
+
+describe('the poisoned run (FR3-4): core, golden and property tests under the runtime guard', () => {
+  it("runs every core, golden and property test but the guard's own specs, with the guard set up first", () => {
+    expect(POISON_INCLUDE).toEqual([
+      'tests/unit/core/**/*.spec.ts',
+      'tests/golden/**/*.spec.ts',
+      'tests/property/**/*.spec.ts',
+    ]);
+    expect(POISON_EXCLUDE).toEqual(['tests/unit/core/core-poison*.spec.ts']);
+    expect(poisonConfig.test?.include).toEqual(POISON_INCLUDE);
+    expect(poisonConfig.test?.exclude).toEqual(expect.arrayContaining(POISON_EXCLUDE));
+    expect(poisonConfig.test?.setupFiles).toEqual([TIMEOUT_SETUP, POISON_SETUP]);
+    expect(poisonConfig.test?.testTimeout).toBe(TEST_TIMEOUT_MS);
+    expect(poisonConfig.test?.retry ?? 0).toBe(0);
+  });
+
+  it('measures src/core under the guard and fails below 95% lines', () => {
+    expect(poisonConfig.test?.coverage).toMatchObject({
+      provider: 'v8',
+      enabled: true,
+      include: ['src/core/**/*.ts'],
+      thresholds: { lines: CORE_COVERAGE_LINES },
+      reportOnFailure: true,
+    });
+  });
+
+  it('has a test:poison script in both package.json files, and CI runs it', () => {
+    expect(readJson(path.join(EXTENSION, 'package.json')).scripts['test:poison']).toBe(
+      'vitest run --config vitest.poison.config.ts',
+    );
+    expect(readJson(path.join(REPO, 'package.json')).scripts['test:poison']).toBe(
+      'pnpm --dir extension run test:poison',
+    );
+    const ci = readFileSync(path.join(REPO, '.github/workflows/ci.yml'), 'utf8');
+    expect(ci).toContain('      - name: Core under the runtime guard\n        run: pnpm test:poison\n');
   });
 });

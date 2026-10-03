@@ -5,10 +5,14 @@
  *
  * Each file is reduced to its code with the TypeScript scanner: comments, string literals (all but their quotes),
  * template text and regular-expression literals become spaces, so prose such as "never calls Date.now()" is not a
- * hit and a call hidden after a string is still found. A member read with a written key (`Date['now']`,
- * Date[`now`]) is first rewritten as `Date.now`, and `?.` as `.`, so every spelling of a member meets the same
- * pattern. Banned patterns are matched over the whole file, not line by line, so a call split across lines
- * (`Date\n.now()`) is still found; a hit names the line it starts on.
+ * hit and a call hidden after a string is still found. A `/` after any property name (`o.type / 2`), a contextual
+ * keyword used as a name, or a non-null `x!` divides; it does not start a regex literal (FR3-5). A member read with a
+ * written key (`Date['now']`, Date[`now`]) is first rewritten as `Date.now`, `?.` as `.`, and a guarded global read
+ * through a wrapper (`(Date)`, `(0, Date)`, `[Date][0]`, `(Reflect.get)`, `Date!`) as the global itself, so every
+ * spelling of a member meets the same pattern. Banned patterns are matched over the whole file, not line by line, so
+ * a call split across lines (`Date\n.now()`) is still found; a hit names the line it starts on. Text alone cannot
+ * tell types: `String(date)`, a template of a Date and a key built from fragments are lint's and the runtime
+ * guard's (docs/grading.md §14 lists what is left to review).
  */
 import ts from 'typescript';
 
@@ -43,7 +47,32 @@ export const BANNED: readonly (readonly [string, RegExp])[] = [
     /\bReflect\s*\.\s*\w+\s*\(\s*(?:globalThis|self|window|Date|Math|crypto|performance|Intl|Temporal)\b/g,
   ],
   ['.constructor', /\.\s*constructor\b/g],
+  // `const { constructor } = /a/`, `{ constructor: C }` (UNI-R3-3); a class's `constructor(` is not a hit.
+  ['constructor destructured', /(?<![\w$.])constructor\s*(?=[:,}=])/g],
   ['Symbol.toPrimitive', /\bSymbol\s*\.\s*toPrimitive\b/g],
+  // Host time zone and locale, on any object (FR3-5): attest/core-determinism's names.
+  [
+    'local-time or locale method',
+    /\.\s*(?:getTimezoneOffset|get(?:Full)?Year|getMonth|getDate|getDay|getHours|getMinutes|getSeconds|getMilliseconds|set(?:Full)?Year|setMonth|setDate|setHours|setMinutes|setSeconds|setMilliseconds|toLocale\w*|localeCompare|toDateString|toTimeString)\b/g,
+  ],
+  ['reflection on a new Date', /\b(?:Object|Reflect)\s*\.\s*\w+\s*\(\s*new\s+Date\b/g],
+  ['toString of a new Date', /\bnew\s+Date\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\.\s*toString\b/g],
+  // Error stacks and V8's stack API, and the module URL (FR3-3).
+  ['error stack or stack API', /\.\s*(?:stack|captureStackTrace|prepareStackTrace|stackTraceLimit)\b/g],
+  [
+    'stack API destructured',
+    /(?<=[{,]\s*)(?:stack|captureStackTrace|prepareStackTrace|stackTraceLimit)\s*(?=[:,}=])/g,
+  ],
+  ['import.meta', /\bimport\s*\.\s*meta\b/g],
+  // Reflection and mutation of built-ins (FR3-2).
+  ['Reflect other than get, has, isExtensible', /\bReflect\b(?!\s*\.\s*(?:get|has|isExtensible)\b)/g],
+  [
+    'Object reflection or mutation',
+    /\bObject\s*\.\s*(?:getOwnPropertyNames|getOwnPropertyDescriptors|getOwnPropertySymbols|defineProperty|defineProperties|setPrototypeOf|assign|preventExtensions|seal)\b/g,
+  ],
+  ['.call / .apply / .bind', /\.\s*(?:call|apply|bind)\b/g],
+  ['built-in .prototype or __proto__', /(?<!\bObject\s*)\.\s*prototype\b|\b__proto__\b/g],
+  ['Atomics / SharedArrayBuffer', /\b(?:Atomics|SharedArrayBuffer)\b/g],
   [
     'ambient declaration',
     /\bdeclare\s+(?:const|let|var|function|class|enum|global|namespace|module|abstract\s+class)\b/g,
@@ -51,7 +80,18 @@ export const BANNED: readonly (readonly [string, RegExp])[] = [
 ];
 
 /** String values that are banned as code even when written as text: `Reflect.get(d, 'constructor')`. */
-const BANNED_STRINGS: ReadonlySet<string> = new Set(['constructor']);
+const BANNED_STRINGS: ReadonlySet<string> = new Set([
+  'constructor',
+  'stack',
+  'captureStackTrace',
+  'prepareStackTrace',
+  'stackTraceLimit',
+  'prototype',
+  '__proto__',
+  'call',
+  'apply',
+  'bind',
+]);
 
 const K = ts.SyntaxKind;
 
@@ -107,8 +147,26 @@ const ENDS_OPERAND: ReadonlySet<ts.SyntaxKind> = new Set([
   K.NullKeyword,
 ]);
 
+/** Contextual keywords after which an expression (so a regex literal) may start: `await /a/`, `for (x of /a/…)`. */
+const STARTS_EXPRESSION: ReadonlySet<ts.SyntaxKind> = new Set([K.AwaitKeyword, K.OfKeyword]);
+
+const isWord = (kind: ts.SyntaxKind): boolean =>
+  kind === K.Identifier || (kind >= K.FirstKeyword && kind <= K.LastKeyword);
+
+/**
+ * Whether a token ends an operand, so a `/` after it divides (FR3-5). Any word after `.` or `?.` is a property name
+ * (`o.type / 2`, `o.default / 2`); a contextual keyword is a plain name (`of`, `from`, `get`) unless an expression may
+ * follow it; a `!` right after an operand is TypeScript's non-null assertion (`x! / 2`).
+ */
+function endsOperand(kind: ts.SyntaxKind, previous: ts.SyntaxKind, previousEnds: boolean): boolean {
+  if ((previous === K.DotToken || previous === K.QuestionDotToken) && isWord(kind)) return true;
+  if (kind === K.ExclamationToken) return previousEnds;
+  const contextual = kind > K.LastFutureReservedWord && kind <= K.LastKeyword;
+  return ENDS_OPERAND.has(kind) || (contextual && !STARTS_EXPRESSION.has(kind));
+}
+
 /** The next token, re-scanned where the scanner alone cannot tell (template continuations, regex literals). */
-function nextToken(scanner: ts.Scanner, braces: string[], previous: ts.SyntaxKind): ts.SyntaxKind {
+function nextToken(scanner: ts.Scanner, braces: string[], afterOperand: boolean): ts.SyntaxKind {
   let kind = scanner.scan();
   if (kind === K.CloseBraceToken && braces.at(-1) === '${') {
     braces.pop();
@@ -117,7 +175,7 @@ function nextToken(scanner: ts.Scanner, braces: string[], previous: ts.SyntaxKin
   } else if (kind === K.OpenBraceToken) braces.push('{');
   else if (kind === K.CloseBraceToken) braces.pop();
   else if (kind === K.TemplateHead) braces.push('${');
-  else if ((kind === K.SlashToken || kind === K.SlashEqualsToken) && !ENDS_OPERAND.has(previous)) {
+  else if ((kind === K.SlashToken || kind === K.SlashEqualsToken) && !afterOperand) {
     kind = scanner.reScanSlashToken();
   }
   return kind;
@@ -129,6 +187,8 @@ interface Token {
   readonly end: number;
   /** A string literal's value, escapes read. */
   readonly value: string;
+  /** Whether the token ends an operand (endsOperand): a `(` or `[` after it calls or indexes. */
+  readonly operand: boolean;
 }
 
 /** Every token of `source`, trivia included. */
@@ -136,12 +196,13 @@ function tokensOf(source: string): Token[] {
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, source);
   const braces: string[] = [];
   const tokens: Token[] = [];
-  let previous: ts.SyntaxKind = K.Unknown;
-  for (let kind = nextToken(scanner, braces, previous); kind !== K.EndOfFileToken;) {
+  let [previous, operand] = [K.Unknown as ts.SyntaxKind, false];
+  for (let kind = nextToken(scanner, braces, operand); kind !== K.EndOfFileToken;) {
     const value = scanner.getTokenValue();
-    tokens.push({ kind, start: scanner.getTokenStart(), end: scanner.getTokenEnd(), value });
-    if (!TRIVIA.has(kind)) previous = kind;
-    kind = nextToken(scanner, braces, previous);
+    const trivia = TRIVIA.has(kind);
+    if (!trivia) [previous, operand] = [kind, endsOperand(kind, previous, operand)];
+    tokens.push({ kind, start: scanner.getTokenStart(), end: scanner.getTokenEnd(), value, operand });
+    kind = nextToken(scanner, braces, operand);
   }
   return tokens;
 }
@@ -164,11 +225,79 @@ function rewriteKeys(out: string[], code: readonly Token[]): void {
   code.forEach((open, i) => {
     const [before, key, close] = [code[i - 1], code[i + 1], code[i + 2]];
     if (open.kind !== K.OpenBracketToken || key === undefined || close?.kind !== K.CloseBracketToken) return;
-    const member =
-      before !== undefined && (ENDS_OPERAND.has(before.kind) || before.kind === K.QuestionDotToken);
+    const member = before !== undefined && (before.operand || before.kind === K.QuestionDotToken);
     if (member && STRING_KEY.has(key.kind) && IDENTIFIER_NAME.test(key.value))
       overwrite(out, open.start, close.end, `.${key.value}`);
   });
+}
+
+/** The globals the scan names by their own patterns: a wrapper around one is read through (FR3-5). */
+const UNWRAPPED: ReadonlySet<string> = new Set(['Date', 'Math', 'Reflect', 'globalThis', 'self']);
+
+/** The kinds a single operand in `(0, X)` may be. */
+const SIMPLE: ReadonlySet<ts.SyntaxKind> = new Set([
+  K.NumericLiteral,
+  K.Identifier,
+  K.StringLiteral,
+  K.NullKeyword,
+  K.TrueKeyword,
+  K.FalseKeyword,
+  K.ThisKeyword,
+]);
+
+const isUnwrapped = (token: Token | undefined): boolean =>
+  token?.kind === K.Identifier && UNWRAPPED.has(token.value);
+
+/**
+ * How many tokens from `at` make up `X` or `X.name.name…` with X one of UNWRAPPED, ending where `close` is; 0 if
+ * they do not.
+ */
+function guardedChain(code: readonly Token[], at: number, close: ts.SyntaxKind): number {
+  if (!isUnwrapped(code[at])) return 0;
+  let length = 1;
+  while (code[at + length]?.kind === K.DotToken && isWord(code[at + length + 1]?.kind ?? K.Unknown))
+    length += 2;
+  return code[at + length]?.kind === close ? length : 0;
+}
+
+/**
+ * The wrapper tokens around a guarded global at `i` (a `(` or `[` that neither calls nor indexes), as indexes to
+ * drop: `(X)`, `(X.get)`, `(0, X)`, `[X][0]`; and the `!` of `X!`. Empty when there is none.
+ */
+function wrapperAt(code: readonly Token[], i: number): number[] {
+  const token = code[i];
+  if (token === undefined) return [];
+  if (token.kind === K.ExclamationToken && isUnwrapped(code[i - 1])) return [i];
+  if (code[i - 1]?.operand === true) return [];
+  if (token.kind === K.OpenParenToken) {
+    const chain = guardedChain(code, i + 1, K.CloseParenToken);
+    if (chain > 0) return [i, i + chain + 1];
+    const comma = SIMPLE.has(code[i + 1]?.kind ?? K.Unknown) && code[i + 2]?.kind === K.CommaToken;
+    if (comma && guardedChain(code, i + 3, K.CloseParenToken) === 1) return [i, i + 1, i + 2, i + 4];
+  }
+  const index = [K.CloseBracketToken, K.OpenBracketToken, K.NumericLiteral, K.CloseBracketToken];
+  const element = index.every((kind, k) => code[i + 2 + k]?.kind === kind) && code[i + 4]?.value === '0';
+  if (token.kind === K.OpenBracketToken && isUnwrapped(code[i + 1]) && element)
+    return [i, i + 2, i + 3, i + 4, i + 5];
+  return [];
+}
+
+/**
+ * A guarded global read through a wrapper, rewritten as the global itself (FR3-5): `(Date).now()`, `(0, Date).now()`,
+ * `[Date][0].now()`, `new (Date)()`, `(Reflect.get)(Date, 'now')` and `Date!.now()` meet the same patterns as
+ * `Date.now()`. Repeats until nothing changes, so `((Date)).now()` is read through too.
+ */
+function unwrapGlobals(out: string[], tokens: readonly Token[]): void {
+  const code = [...tokens];
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < code.length && !changed; i += 1) {
+      const drop = wrapperAt(code, i);
+      for (const at of drop) overwrite(out, code[at]?.start ?? 0, code[at]?.end ?? 0);
+      for (const at of [...drop].reverse()) code.splice(at, 1);
+      changed = drop.length > 0;
+    }
+  }
 }
 
 /** `source` with every comment, string, template text and regex literal replaced by spaces (lines kept). */
@@ -194,6 +323,7 @@ export function codeOnly(source: string): string {
     );
   });
   rewriteKeys(out, code);
+  unwrapGlobals(out, code);
   return out.join('');
 }
 

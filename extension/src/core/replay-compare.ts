@@ -7,7 +7,7 @@
  * changes (state.ts: only `regrade` writes a computed field), so a stored receipt whose evidence (`observationIds`),
  * confidence, signals, reasons, agent, policy, or times were edited is not reproduced either. The lifecycle part is
  * set aside first, because it records user and background events, not grading (§8): an overridden receipt is
- * compared on its `previousState`, and `override`, `supersededBy` and the lifecycle reasons they imply
+ * compared on its `previousState`, and `override`, `reverted`, `supersededBy` and the lifecycle reasons they imply
  * (`override.user`, `superseded`) are not compared.
  *
  * `contentHashOf(observation)`: the §10 content hash recomputed from the observation's own fields, as `project`

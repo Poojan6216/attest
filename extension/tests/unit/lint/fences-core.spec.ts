@@ -6,9 +6,11 @@
  * clock, randomness, the host or the garbage collector (WeakRef, FinalizationRegistry) fail. Each probe must
  * fail lint; each control (what src/core legitimately does today) must not. The last blocks hold the bypasses found
  * after the Sprint 1 close (PI-1 to PI-4): a spread or multi-field `new Date`, an ambient declaration that hides a
- * global, the Date constructor reached through `.constructor`, and `Symbol.toPrimitive`.
+ * global, the Date constructor reached through `.constructor`, and `Symbol.toPrimitive`; then the forms the third
+ * verification found: the constructor reached by destructuring (UNI-R3-3), error stacks, the stack API and
+ * `import.meta` (FR3-3), and reflection or mutation of built-ins (FR3-2). Each control is what src/core does today.
  * tests/unit/core/core-purity.spec.ts checks the real files for the same things without lint, and
- * tests/unit/core/core-poison.spec.ts runs the core with every impure global poisoned.
+ * tests/unit/core/core-poison.spec.ts (and `pnpm test:poison`) runs the core with every impure global poisoned.
  */
 import path from 'node:path';
 
@@ -140,6 +142,10 @@ describe('src/core globals and syntax (Hard Rule 4)', () => {
       ['export const r = new FinalizationRegistry(() => undefined);\n', 'no-restricted-globals'],
       ['export const W = globalThis.WeakRef;\n', 'no-restricted-properties'],
       ['export const F = self.FinalizationRegistry;\n', 'no-restricted-properties'],
+      [
+        'export const w = Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);\n',
+        'no-restricted-globals',
+      ],
     ];
     for (const [code, rule] of cases) expect(await ruleIds(code), code).toContain(rule);
   });
@@ -267,5 +273,87 @@ describe('no constructor reached from a value, no Symbol.toPrimitive (PI-3, PI-4
       ["export const p = (ms: number): string => new Date(ms)[Symbol.toPrimitive]('string');\n", [SYNTAX]],
       ['export const K = Symbol.toPrimitive;\n', [SYNTAX]],
     ]);
+  });
+});
+
+const CONSTRUCTOR = 'src/core is pure: no `.constructor`';
+
+describe('no constructor reached by destructuring (UNI-R3-3)', () => {
+  it.each([
+    'const { constructor } = /a/;\nexport const kind = typeof constructor;\n',
+    'const { constructor: found }: { constructor: unknown } = /a/;\nexport const f = found;\n',
+    'const { constructor: found }: { constructor: unknown } = new Date(0);\nexport const f = found;\n',
+    "const { ['constructor']: found }: { constructor: unknown } = new Date(0);\nexport const f = found;\n",
+  ])('%s fails with the constructor message', async (code) => {
+    const found = await messages(code);
+    expect(found.map((m) => m.message).join('\n')).toContain(CONSTRUCTOR);
+  });
+});
+
+describe('no error stacks, stack API or import.meta (FR3-3)', () => {
+  it('each spelling fails', async () => {
+    await expectCaught([
+      ["export const q05 = (): string => new Error('probe').stack ?? '';\n", [SYNTAX]],
+      ['export const { stack } = new Error();\n', [SYNTAX]],
+      ["export const s = (e: Error): unknown => e['stack'];\n", [SYNTAX]],
+      ["export const r = (): unknown => Reflect.get(Error, 'stackTraceLimit');\n", [SYNTAX]],
+      ['export const c = (): unknown => Error.captureStackTrace;\n', [SYNTAX]],
+      ['export const p = (): unknown => Error.prepareStackTrace;\n', [SYNTAX]],
+      ["export const u = (): unknown => Reflect.get(import.meta, 'url');\n", [SYNTAX]],
+    ]);
+  });
+});
+
+describe('no reflection or mutation of built-ins (FR3-2)', () => {
+  it('reflective and mutating Reflect and Object members, aliasing and computed keys fail', async () => {
+    await expectCaught([
+      ['export const f = (g: () => number): unknown => Reflect.apply(g, undefined, []);\n', [DETERMINISM]],
+      ["Reflect.set(Error, 'stackTraceLimit', 0);\n", [DETERMINISM, SYNTAX]],
+      ['export const k = (o: object): unknown => Reflect.ownKeys(o);\n', [DETERMINISM]],
+      ['export const p = (o: object): unknown => Reflect.getPrototypeOf(o);\n', [DETERMINISM]],
+      ['const R = Reflect;\nexport const g = (o: object): unknown => R.get(o, "k");\n', [DETERMINISM]],
+      ['const { apply } = Reflect;\nexport const g = apply;\n', [DETERMINISM, SYNTAX]],
+      ["export const g = (o: object): unknown => Reflect['apply'];\n", [DETERMINISM, SYNTAX]],
+      ['export const n = (o: object): string[] => Object.getOwnPropertyNames(o);\n', [DETERMINISM]],
+      ["Object.defineProperty(Array.prototype, 'probe', { value: 1 });\n", [DETERMINISM, SYNTAX]],
+      ['export const a = (o: object): object => Object.assign(o, { a: 1 });\n', [DETERMINISM]],
+      ['export const s = (o: object): object => Object.setPrototypeOf(o, null);\n', [DETERMINISM]],
+      ['const O = Object;\nexport const d = O;\n', [DETERMINISM]],
+      ['export const c = (g: (x: number) => number): number => g.call(undefined, 1);\n', [SYNTAX]],
+      ['export const b = (g: (x: number) => number): unknown => g.bind(undefined);\n', [SYNTAX]],
+      ['export const p = (): unknown => Number.prototype;\n', [SYNTAX]],
+      ["export const p = (o: object): unknown => Reflect.get(o, '__proto__');\n", [SYNTAX]],
+    ]);
+  });
+
+  it('Reflect.get and Object.getOwnPropertyDescriptor take a written key, and it is read like a member', async () => {
+    await expectCaught([
+      ["export const q03 = Reflect.get(Math, 'toLocale' + 'String');\n", [DETERMINISM]],
+      ['export const g = (o: object, k: () => string): unknown => Reflect.get(o, k());\n', [DETERMINISM]],
+      ['export const g = (o: object, k: string): unknown => Reflect.get(o, `${k}x`);\n', [DETERMINISM]],
+      [
+        "export const d = (o: object): unknown => Object.getOwnPropertyDescriptor(o, 'a' + 'b');\n",
+        [DETERMINISM],
+      ],
+      ["export const z = (o: object): unknown => Reflect.get(o, 'getTimezoneOffset');\n", [DETERMINISM]],
+      ["export const z = (o: object): unknown => Reflect.get(o, 'toLocaleString');\n", [DETERMINISM]],
+    ]);
+  });
+
+  it('control: what src/core does with Reflect and Object today passes', async () => {
+    const code = [
+      "export const a = (o: object): unknown => Reflect.get(o, 'code');",
+      'export const b = (o: object, name: string): unknown => Reflect.get(o, name);',
+      'export const c = (o: object, key: string): unknown => Object.getOwnPropertyDescriptor(o, key);',
+      'export const d = (v: object): boolean => Object.getPrototypeOf(v) === Object.prototype;',
+      'export const e = (v: Record<string, number>) => [Object.keys(v), Object.entries(v), Object.values(v)];',
+      'export const f = Object.freeze({ a: 1 });',
+      "export const g = (v: object): boolean => Object.is(v, -0) || Object.hasOwn(v, 'k');",
+      "export const h = Object.fromEntries([['a', 1]]);",
+      'export const i = (v: unknown): boolean => v instanceof Object;',
+      "export const j = (o: object): boolean => Reflect.has(o, 'k');",
+      '',
+    ].join('\n');
+    expect(await ruleIds(code)).toEqual([]);
   });
 });

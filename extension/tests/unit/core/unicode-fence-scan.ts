@@ -23,10 +23,13 @@ export type Rule =
   | 'lowercase';
 
 export interface Finding {
+  /** The file, as a `/`-separated path relative to src/core. */
   readonly file: string;
   readonly line: number;
   readonly rule: Rule;
   readonly text: string;
+  /** The function declaration the finding is in, else the name its top-level statement declares, else ''. */
+  readonly within: string;
 }
 
 /** The generated Unicode 15.0 tables (scripts/gen-unicode-baseline.ts): the only src/core files the scan skips. */
@@ -34,10 +37,11 @@ export const TABLE_SOURCES: ReadonlySet<string> = new Set(
   Object.values(TABLE_FILES).map((file) => path.basename(file)),
 );
 export const BASELINE_FILE = 'unicode-baseline.ts';
+/** The modules, as paths relative to src/core, that a relative import must name for the scan to trust it. */
 const TABLE_MODULES: ReadonlySet<string> = new Set(
-  [...TABLE_SOURCES].map((file) => `./${path.basename(file, '.ts')}`),
+  [...TABLE_SOURCES].map((file) => path.basename(file, '.ts')),
 );
-const BASELINE_MODULE = './unicode-baseline';
+const BASELINE_MODULE = path.basename(BASELINE_FILE, '.ts');
 
 /** `\p{…}` (but ASCII and Cc) or `\s` behind an odd run of backslashes: a class escape, not a literal backslash. */
 const PROPERTY = /(?<!\\)(?:\\\\)*\\[pP]\{(?!ASCII\}|Cc\})/;
@@ -45,6 +49,13 @@ const SPACE_CLASS = /(?<!\\)(?:\\\\)*\\[sS]/;
 const UNICODE_FLAG = /[uv]/;
 /** Pattern text an `i` expression without `u` or `v` folds by the engine's case tables: anything not plain ASCII. */
 const NOT_PLAIN_ASCII = /\\[ux]|[^\x20-\x7E]/;
+/**
+ * A backreference (`\1`–`\9…`, `\k<name>`) or, without `u`, a legacy octal escape (`\1`–`\377`): with `i`, the
+ * engine compares the text a group captured, which may be any character, by its own case tables.
+ */
+const BACKREFERENCE = /(?<!\\)(?:\\\\)*\\(?:[1-9]|k<)/;
+/** An inline modifier group (`(?i:…)`, `(?-i:…)`, `(?i-m:…)`): it switches `i` on or off whatever the flags say. */
+const MODIFIER = /(?<!\\)(?:\\\\)*\(\?[A-Za-z-]+:/;
 /** What a Unicode 15.0 class contributes to composed text: non-ASCII characters, and no class escape. */
 const CLASS = '\\x80';
 const asRule =
@@ -99,11 +110,20 @@ function constInitializer(node: ts.Node | undefined): ts.Expression | undefined 
   return (node.parent.flags & ts.NodeFlags.Const) === 0 ? undefined : node.initializer;
 }
 
-/** `import { name } from '<module>'` (not renamed) for a module `trusted` accepts. */
-function importedFrom(node: ts.Node | undefined, trusted: (module: string) => boolean): boolean {
+/**
+ * `import { name } from '<module>'` (not renamed), where the relative specifier, read from the importing file's
+ * directory, names a src/core module `trusted` accepts: `./unicode-baseline` at the top, `../unicode-baseline` one
+ * directory down (`./unicode-baseline` there is another module).
+ */
+function importedFrom(
+  source: Source,
+  node: ts.Node | undefined,
+  trusted: (module: string) => boolean,
+): boolean {
   if (node === undefined || !ts.isImportSpecifier(node) || node.propertyName !== undefined) return false;
   const specifier = node.parent.parent.parent.moduleSpecifier;
-  return ts.isStringLiteral(specifier) && trusted(specifier.text);
+  if (!ts.isStringLiteral(specifier) || !/^\.\.?\//.test(specifier.text)) return false;
+  return trusted(path.posix.join(path.posix.dirname(source.name), specifier.text));
 }
 
 function unwrap(node: ts.Expression): ts.Expression {
@@ -121,7 +141,7 @@ function isBaselineMember(node: ts.Expression, source: Source): boolean {
   const declaration = declarationOf(source, 'BASELINE_CLASS');
   if (source.name === BASELINE_FILE)
     return declaration !== undefined && ts.isVariableDeclaration(declaration);
-  return importedFrom(declaration, (module) => module === BASELINE_MODULE);
+  return importedFrom(source, declaration, (module) => module === BASELINE_MODULE);
 }
 
 const isConcatenation = (node: ts.Node): node is ts.BinaryExpression =>
@@ -156,7 +176,7 @@ function staticText(
   if (isBaselineMember(bare, source)) return CLASS;
   if (!ts.isIdentifier(bare) || seen.has(bare.text)) return null;
   const declaration = declarationOf(source, bare.text);
-  if (importedFrom(declaration, (module) => TABLE_MODULES.has(module))) return CLASS;
+  if (importedFrom(source, declaration, (module) => TABLE_MODULES.has(module))) return CLASS;
   const initializer = constInitializer(declaration);
   return initializer === undefined
     ? null
@@ -170,10 +190,18 @@ function patternRules(text: string): Rule[] {
   return rules;
 }
 
-/** Unicode case folding: `i` with `u` or `v`, or `i` on a pattern that is not plain ASCII (or not known). */
+/**
+ * Unicode case folding: a modifier group, whatever the flags; or `i` with `u` or `v`, or `i` on a pattern that is
+ * not plain ASCII (or not known) or holds a backreference.
+ */
 function caseRules(flags: string, pattern: string | null): Rule[] {
+  if (pattern !== null && MODIFIER.test(pattern)) return ['unicode-ignore-case'];
   if (!flags.includes('i')) return [];
-  const folds = UNICODE_FLAG.test(flags) || pattern === null || NOT_PLAIN_ASCII.test(pattern);
+  const folds =
+    UNICODE_FLAG.test(flags) ||
+    pattern === null ||
+    NOT_PLAIN_ASCII.test(pattern) ||
+    BACKREFERENCE.test(pattern);
   return folds ? ['unicode-ignore-case'] : [];
 }
 
@@ -327,7 +355,21 @@ function nodeRules(node: ts.Node, source: Source): Rule[] {
   return [...writtenRules(node, source.file), ...spelledRules(node, source)];
 }
 
-/** Every finding in `text`, read as the TypeScript file `fileName`, once per rule and node. */
+/** The function declaration `node` is in, else the first name its top-level statement declares, else ''. */
+function enclosingName(node: ts.Node): string {
+  let statement = node;
+  for (let at = node; !ts.isSourceFile(at); at = at.parent) {
+    if (ts.isFunctionDeclaration(at) && at.name !== undefined) return at.name.text;
+    statement = at;
+  }
+  const [first] = ts.isVariableStatement(statement) ? statement.declarationList.declarations : [];
+  return first !== undefined && ts.isIdentifier(first.name) ? first.name.text : '';
+}
+
+/**
+ * Every finding in `text`, read as the TypeScript file `fileName` (a `/`-separated path relative to src/core, which
+ * relative imports are resolved from), once per rule and node.
+ */
 export function findings(fileName: string, text: string): Finding[] {
   const file = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const source: Source = { file, name: fileName, declarations: declarationsOf(file) };
@@ -336,8 +378,9 @@ export function findings(fileName: string, text: string): Finding[] {
   const visit = (node: ts.Node): void => {
     const at = ts.isPropertyAccessExpression(node) ? node.name : node;
     const { line } = file.getLineAndCharacterOfPosition(at.getStart(file));
+    const lineText = (lines[line] ?? '').trim();
     for (const rule of new Set(nodeRules(node, source)))
-      found.push({ file: fileName, line: line + 1, rule, text: (lines[line] ?? '').trim() });
+      found.push({ file: fileName, line: line + 1, rule, text: lineText, within: enclosingName(node) });
     ts.forEachChild(node, visit);
   };
   visit(file);

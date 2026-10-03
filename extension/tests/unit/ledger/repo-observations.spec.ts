@@ -9,6 +9,7 @@ import { idFromHash } from '../../../src/core/hash';
 import { project } from '../../../src/core/redact';
 import { Claim } from '../../../src/core/schema';
 import type { LedgerDb } from '../../../src/ledger/db';
+import { LedgerError } from '../../../src/ledger/errors';
 import { INDEX_FIELDS, timeBucketOf } from '../../../src/ledger/index-fields';
 import { openLedger } from '../../../src/ledger/migrations';
 import {
@@ -24,6 +25,8 @@ import {
   makeObservation,
   makeReceiptObservation,
   observationId,
+  pinClock,
+  releaseClock,
   sha,
   ulid,
   uniqueDbName,
@@ -36,11 +39,13 @@ const upsert = (target: LedgerDb, input: ObservationInput) =>
 let db: LedgerDb;
 
 beforeEach(async () => {
+  pinClock();
   db = await openLedger(uniqueDbName('observations'));
 });
 
 afterEach(() => {
   db.close();
+  releaseClock();
 });
 
 describe('upsertObservation', () => {
@@ -64,14 +69,26 @@ describe('upsertObservation', () => {
   });
 
   it('concurrent upserts of one contentHash insert exactly once (no ConstraintError leaks)', async () => {
+    const minutes = [4, 2, 5, 1, 4];
     const seen = (minute: number) =>
       makeObservation({ observedAt: `2026-10-01T10:2${String(minute)}:00-04:00` });
-    const results = await Promise.all([4, 2, 3, 1].map((n) => upsert(db, seen(n))));
-    expect(results.filter((result) => result.inserted)).toHaveLength(1);
-    expect(new Set(results.map((result) => result.id)).size).toBe(1);
+    const settled = await Promise.allSettled(minutes.map((n) => upsert(db, seen(n))));
     expect(await db.observations.count()).toBe(1);
-    // OBS-2: whichever lands first, the earliest sighting is the one stored (§4.1).
-    expect(await getObservation(db, observationId(1))).toEqual(seen(1));
+    const stored = await getObservation(db, observationId(1));
+    const storedMs = Date.parse(stored?.observedAt ?? '');
+    // The first write is kept; a later sighting is a no-op and an earlier one is refused (R3-LEDGER-1).
+    const outcomes = settled.map((outcome, i) => {
+      const sightedMs = Date.parse(seen(minutes[i] ?? 0).observedAt);
+      if (outcome.status === 'rejected') {
+        const code: unknown = outcome.reason instanceof LedgerError ? outcome.reason.code : outcome.reason;
+        return code === 'late_sighting' && sightedMs < storedMs ? 'refused earlier' : 'bad rejection';
+      }
+      if (outcome.value.id !== observationId(1)) return 'other id';
+      if (outcome.value.inserted) return sightedMs === storedMs ? 'inserted' : 'bad insert';
+      return sightedMs >= storedMs ? 'kept' : 'earlier kept silently';
+    });
+    expect(outcomes.filter((outcome) => outcome === 'inserted')).toHaveLength(1);
+    expect(outcomes.every((o) => ['inserted', 'kept', 'refused earlier'].includes(o))).toBe(true);
   });
 
   it('rejects invalid input with invalid_input and writes nothing', async () => {
@@ -112,35 +129,46 @@ describe('upsertObservation: one content, one id (§10 v1.3)', () => {
   });
 });
 
-describe('upsertObservation keeps the earliest observedAt (§4.1, OBS-2)', () => {
-  it('a sighting that lands late, then an earlier one: the earlier observedAt is stored', async () => {
+describe('a stored observation never moves (§3, R3-LEDGER-1, RP3-3)', () => {
+  it('a sighting earlier than the stored one is refused with late_sighting and changes nothing', async () => {
     const late = makeObservation({ observedAt: '2026-10-01T15:00:00-04:00' });
     const early = makeObservation({ observedAt: '2026-10-01T10:20:00-04:00' });
     expect(await upsert(db, late)).toEqual({ id: late.id, inserted: true });
-    expect(await upsert(db, early)).toEqual({ id: late.id, inserted: false });
-    expect(await getObservation(db, late.id)).toEqual(early);
+    const error = await expectLedgerError(upsert(db, early), 'late_sighting');
+    expect(error.context).toStrictEqual({ table: 'observations', id: late.id });
+    expect(await getObservation(db, late.id)).toEqual(late);
     expect(await upsert(db, late)).toEqual({ id: late.id, inserted: false });
-    expect(await getObservation(db, late.id)).toEqual(early);
+    expect(await getObservation(db, late.id)).toEqual(late);
     expect(await db.observations.count()).toBe(1);
   });
 
-  it('the same instant in another offset is not earlier: the stored row is left as it is', async () => {
+  it('a later sighting, or the same instant in another offset, is a no-op', async () => {
     const stored = makeObservation({ observedAt: '2026-10-01T10:20:00-04:00' });
     await upsert(db, stored);
-    await upsert(db, makeObservation({ observedAt: '2026-10-01T14:20:00Z' }));
+    for (const observedAt of [
+      '2026-10-01T14:20:00Z',
+      '2026-10-01T10:20:00.001-04:00',
+      '2026-10-02T09:00:00Z',
+    ]) {
+      expect(await upsert(db, makeObservation({ observedAt }))).toEqual({ id: stored.id, inserted: false });
+    }
     expect(await getObservation(db, stored.id)).toEqual(stored);
   });
 
-  it('compares instants, not strings: an earlier sighting written in another offset is kept', async () => {
+  it('compares instants, not strings: an earlier sighting written in another offset is refused', async () => {
     const late = makeObservation({ observedAt: '2026-10-01T15:00:00-04:00' });
     // 18:00Z is 14:00-04:00: earlier, though it sorts after the stored string.
-    const early = makeObservation({ observedAt: '2026-10-01T18:00:00Z' });
     await upsert(db, late);
-    await upsert(db, early);
-    expect(await getObservation(db, late.id)).toEqual(early);
+    await expectLedgerError(
+      upsert(db, makeObservation({ observedAt: '2026-10-01T18:00:00Z' })),
+      'late_sighting',
+    );
+    expect(await getObservation(db, late.id)).toEqual(late);
   });
+});
 
-  it('probe p5: an event already on the calendar cannot verify "created" from ledger rows', async () => {
+describe('probe p5: calendar.created and the first sighting (§4.1, OBS-2)', () => {
+  it('an event already on the calendar cannot verify "created" from rows written in order', async () => {
     const raw = {
       counterparty: 'priya@company.com',
       subjectHint: 'Q3 sync',
@@ -148,8 +176,8 @@ describe('upsertObservation keeps the earliest observedAt (§4.1, OBS-2)', () =>
     };
     const pass = (observedAt: string) =>
       project('gcal.event', raw, { type: 'calendar.created', observedAt, rowKey: 'evt-1' }, DEFAULT_POLICY);
-    await upsert(db, pass('2026-10-06T15:00:00-04:00')); // pass B's message lands first
-    await upsert(db, pass('2026-10-06T09:05:00-04:00')); // pass A, which saw it first, lands second
+    await upsert(db, pass('2026-10-06T09:05:00-04:00')); // pass A saw it first, and its write lands first
+    expect(await upsert(db, pass('2026-10-06T15:00:00-04:00'))).toMatchObject({ inserted: false });
     const stored = await observationsByTypeAndBuckets(db, 'calendar.created', -1e9, 1e9);
     expect(stored.map((o) => o.observedAt)).toEqual(['2026-10-06T09:05:00-04:00']);
     const rawHash = 'cd'.repeat(32);
@@ -169,6 +197,16 @@ describe('upsertObservation keeps the earliest observedAt (§4.1, OBS-2)', () =>
     });
     const index = createMemoryIndex(stored, LEDGER_TIME_BUCKET_MINUTES);
     expect(await candidates(claim, index, DEFAULT_POLICY)).toEqual([]);
+  });
+
+  it('out of order: the earlier pass that lands second is refused loud, never merged', async () => {
+    const raw = { counterparty: 'priya@company.com', occurredAt: '2026-10-07T10:00:00-04:00' };
+    const pass = (observedAt: string) =>
+      project('gcal.event', raw, { type: 'calendar.created', observedAt, rowKey: 'evt-1' }, DEFAULT_POLICY);
+    await upsert(db, pass('2026-10-06T15:00:00-04:00')); // pass B's message lands first
+    await expectLedgerError(upsert(db, pass('2026-10-06T09:05:00-04:00')), 'late_sighting');
+    const stored = await observationsByTypeAndBuckets(db, 'calendar.created', -1e9, 1e9);
+    expect(stored.map((o) => o.observedAt)).toEqual(['2026-10-06T15:00:00-04:00']);
   });
 });
 

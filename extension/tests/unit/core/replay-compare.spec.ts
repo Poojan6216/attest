@@ -1,8 +1,8 @@
 /**
  * What replay compares (src/core/replay-compare.ts; docs/grading.md §8, §9, §10): the recomputed content hash
  * agrees with redact.ts `project` (so replay's evidence check is the §10 definition, not a copy of it that could
- * drift), and `compareReceipts` sees every computed field while setting the lifecycle part (override,
- * supersession, their reasons) aside.
+ * drift), and `compareReceipts` sees every computed field while setting the lifecycle part (override, reverted
+ * overrides, supersession, their reasons) aside.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -84,7 +84,7 @@ describe('compareReceipts', () => {
 
   it('compares the subject, the four fields of §9, then every other field grading computed', () => {
     expect(COMPARED_FIELDS.slice(0, 5)).toEqual(['id', 'inputsHash', 'grade', 'ruleId', 'state']);
-    const lifecycle = new Set(['override', 'supersededBy']);
+    const lifecycle = new Set(['override', 'reverted', 'supersededBy']);
     const computed = Receipt.keyof().options.filter((key) => !lifecycle.has(key));
     expect([...COMPARED_FIELDS].sort()).toEqual([...computed].sort());
   });
@@ -99,6 +99,13 @@ describe('compareReceipts', () => {
     expect(overridden.reasons.map((r) => r.code)).toContain('override.user');
     expect(compareReceipts(overridden, BASE)).toEqual([]);
     expect(compareReceipts(overridden, { ...BASE, state: 'PENDING' })).toEqual([
+      { field: 'state', stored: 'FINAL', replayed: 'PENDING' },
+    ]);
+    // A reverted override is lifecycle too: the receipt that keeps it compares as the receipt grading wrote.
+    const reverted = transition(overridden, { event: 'revert', at: '2026-09-02T12:00:00+00:00' });
+    expect(reverted.reverted).toHaveLength(1);
+    expect(compareReceipts(reverted, BASE)).toEqual([]);
+    expect(compareReceipts(reverted, { ...BASE, state: 'PENDING' })).toEqual([
       { field: 'state', stored: 'FINAL', replayed: 'PENDING' },
     ]);
   });

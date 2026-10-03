@@ -79,6 +79,8 @@ export const LOG_VALUES = [
   'invalid_result',
   'invalid_input',
   'id_conflict',
+  'late_sighting',
+  'batch_out_of_order',
   'invalid_migrations',
   'open_failed',
   'read_failed',

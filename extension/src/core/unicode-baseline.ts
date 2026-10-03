@@ -48,8 +48,12 @@ import {
 
 export { UNICODE_BASELINE_VERSION };
 
-/** Character class bodies (for the `u` flag) of the Unicode 15.0 properties the readers use. */
-export const BASELINE_CLASS = {
+/**
+ * Character class bodies (for the `u` flag) of the Unicode 15.0 properties the readers use. Frozen, and every
+ * member is a string, so no module can rewrite a class at load time: the unicode fence trusts these members as the
+ * 15.0 classes (tests/unit/core/unicode-baseline.spec.ts checks it).
+ */
+export const BASELINE_CLASS = Object.freeze({
   /** Letters, digits and marks: General_Category L, N or M (what a §11 token is made of). */
   token: `${LETTER_OR_DIGIT}${MARK}`,
   /** Letters and digits: General_Category L or N. */
@@ -70,7 +74,7 @@ export const BASELINE_CLASS = {
   cased: CASED,
   /** Case_Ignorable: what that context skips. */
   caseIgnorable: CASE_IGNORABLE,
-} as const;
+} as const);
 
 const NON_ASCII = /\P{ASCII}/u;
 const BMP_HOLE = '\uFDD0';

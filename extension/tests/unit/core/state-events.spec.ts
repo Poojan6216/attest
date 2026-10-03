@@ -1,7 +1,7 @@
 /**
  * Task 1.6 and contract v1.4: each event's payload rules and edges (docs/grading.md §8, §15). Override needs a
  * grade of VERIFIED or NOT_FOUND, a visible reason and a timestamp no earlier than the receipt's computedAt;
- * override then revert restores the exact prior receipt; regrade replaces only its own subject's PENDING row
+ * override then revert restores the prior receipt (state-revert.spec.ts pins what it keeps); regrade replaces only its own subject's PENDING row
  * with a receipt computed no earlier, and an UNASKED receipt only with an UNASKED one; supersede touches UNASKED
  * receipts only, replaces an earlier claim and keeps the lifecycle reasons last and in table order; a stored
  * receipt that breaks the schema or whose lifecycle reasons disagree with its fields is refused. Every refusal
@@ -73,7 +73,8 @@ const UNASKED_FINAL = Receipt.parse({
 const override = (receipt: Receipt, grade: 'VERIFIED' | 'NOT_FOUND' = 'VERIFIED', reason = REASON) =>
   transition(receipt, { event: 'override', grade, reason, at: T1 });
 const supersede = (receipt: Receipt, claimId: string) => transition(receipt, { event: 'supersede', claimId });
-const revert = (receipt: Receipt) => transition(receipt, { event: 'revert' });
+const revert = (receipt: Receipt) =>
+  transition(receipt, { event: 'revert', at: '2026-10-06T16:00:00-04:00' });
 const codes = (receipt: Receipt) => receipt.reasons.map((reason) => reason.code);
 
 /** Assert `fn` throws IllegalTransitionError with `code` (and `from`, when given), and return the error. */
@@ -142,30 +143,12 @@ describe('override: payload rules', () => {
   });
 });
 
-describe('override then revert: the exact prior receipt', () => {
-  it.each([
-    ['PENDING claim receipt', CLAIM_PENDING],
-    ['FINAL claim receipt', CLAIM_FINAL],
-    ['FINAL UNASKED receipt', UNASKED_FINAL],
-    ['superseded UNASKED receipt', supersede(UNASKED_FINAL, C1)],
-  ])('%s', (_label, receipt) => {
-    for (const grade of ['VERIFIED', 'NOT_FOUND'] as const) {
-      const result = revert(override(receipt, grade));
-      expect(result).toStrictEqual(receipt);
-    }
-  });
-
-  it('an override sits beside the computed grade and is the last reason (golden 56)', () => {
+describe('an override sits beside the computed grade', () => {
+  it('and is the last reason (golden 56)', () => {
     const result = override(CLAIM_FINAL);
     expect(result.grade).toBe('NOT_FOUND');
     expect(codes(result)).toEqual(['coverage.account_unbound', 'match.none', 'override.user']);
     expect(result.reasons.at(-1)?.params).toEqual({ grade: 'VERIFIED' });
-  });
-
-  it('a reverted receipt can be overridden again, and a FINAL one still never regraded', () => {
-    const again = override(revert(override(CLAIM_FINAL, 'VERIFIED')), 'NOT_FOUND');
-    expect(again.override?.grade).toBe('NOT_FOUND');
-    expectRefusal(() => transition(revert(again), { event: 'regrade', next: CLAIM_FINAL }), 'regrade_final');
   });
 });
 
@@ -330,7 +313,8 @@ describe('supersede: UNASKED only, lifecycle reasons last', () => {
     expect(overrideFirst).toStrictEqual(supersedeFirst);
     expect(codes(overrideFirst)).toEqual(['unasked.session', 'override.user', 'superseded']);
     const reverted = revert(overrideFirst);
-    expect(reverted).toStrictEqual(supersede(UNASKED_FINAL, C1));
+    expect(reverted).toStrictEqual({ ...supersede(UNASKED_FINAL, C1), reverted: reverted.reverted });
+    expect(reverted.reverted).toHaveLength(1);
     expect(codes(reverted)).toEqual(['unasked.session', 'superseded']);
   });
 
@@ -366,7 +350,10 @@ describe('stored receipts the machine refuses', () => {
       { ...overriddenFinal, reasons: [overrideUser, ...CLAIM_FINAL.reasons] },
     ],
   ])('%s: invalid_receipt, with no state', (_label, receipt) => {
-    for (const event of [{ event: 'revert' }, { event: 'supersede', claimId: C1 }] as const) {
+    for (const event of [
+      { event: 'revert', at: T1 },
+      { event: 'supersede', claimId: C1 },
+    ] as const) {
       const error = expectRefusal(() => transition(receipt, event), 'invalid_receipt');
       expect(error.from).toBeUndefined();
       expect(error.message).toBe('state: invalid_receipt');
