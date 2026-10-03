@@ -30,6 +30,8 @@ const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ['eval(', /\beval\s*\(/],
   ['importScripts', /\bimportScripts\b/],
   ['Function constructor', /\bFunction\s*\(/],
+  ['new Image (beacon)', /\bnew\s+Image\s*\(/],
+  ['new Audio (beacon)', /\bnew\s+Audio\s*\(/],
 ];
 
 function scripts(dir: string): string[] {

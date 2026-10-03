@@ -11,7 +11,13 @@ import defaultPolicyJson from '../../../../policy/default.json';
 import { type FinalityInput, isFinalizable } from '../../../src/core/conditions';
 import { GradeError } from '../../../src/core/grade';
 import { DEFAULT_POLICY, type PolicyRule, type RuleOutcome } from '../../../src/core/policy';
-import { Attribution, type Claim, type Coverage, type GradeContext } from '../../../src/core/schema';
+import {
+  Attribution,
+  type Claim,
+  type Coverage,
+  type GradeContext,
+  Observation,
+} from '../../../src/core/schema';
 import { buildClaim, buildCoverage, buildGrant, buildObservation, PolicyView } from '../../golden/build';
 
 const at = (hhmm: string, day = '06'): string => `2026-10-${day}T${hhmm}:00-04:00`;
@@ -214,6 +220,20 @@ describe('isFinalizable: the anchor and the coverage a wait reads (§7, §8)', (
     expect(unasked(context('2026-10-06T14:41:59.999-04:00'), at('15:00'))).toBe(false);
     expect(unasked(context(), at('14:10', '07'))).toBe(true);
     expect(unasked(context(), '2026-10-07T14:09:59.999-04:00')).toBe(false);
+    // Stored at 14:40 by the ledger (a write after a batch, §3), first seen at 14:10 (SIM-2): the same anchor.
+    const stored = Observation.parse({ ...created, observedAt: at('14:40'), sightedAt: at('14:10') });
+    const storedLate = (c: GradeContext, evaluatedAt: string) =>
+      final({
+        outcome: 'UNASKED',
+        claim: null,
+        orphan: stored,
+        context: c,
+        coverage: coverageAt(at('14:10'), evaluatedAt),
+      });
+    expect(storedLate(context(at('14:42')), at('15:00'))).toBe(true);
+    expect(storedLate(context('2026-10-06T14:41:59.999-04:00'), at('15:00'))).toBe(false);
+    expect(storedLate(context(), at('14:10', '07'))).toBe(true);
+    expect(storedLate(context(), '2026-10-07T14:09:59.999-04:00')).toBe(false);
   });
 
   it('a claim whose window was seen counts only what the account binding admits', () => {

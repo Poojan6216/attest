@@ -8,8 +8,9 @@
  * row is refused with `RedactError('invalid_field')`, so the observer reports DEGRADED (Hard Rule 6) instead of
  * storing a row that silently lacks a fact, which could lower a match toward NOT_FOUND (Hard Rule 5).
  *
- * `project` never copies `id`, `source`, `type`, `observedAt`, `rowKeyHash` or `contentHash` from the raw row,
- * so a row cannot choose its own identity:
+ * `project` never copies `id`, `source`, `type`, `observedAt`, `sightedAt`, `rowKeyHash` or `contentHash` from the
+ * raw row, so a row cannot choose its own identity or its own first sighting (`sightedAt` is set by the ledger alone,
+ * §3, and never by `project`):
  *  - `source`, `type`, `observedAt` come from the arguments;
  *  - `rowKeyHash` = `sha256Hex(canonicalJson(ctx.rowKey))` when the observer has the vendor's own row id;
  *    canonical JSON escapes a lone surrogate, which plain UTF-8 turns into U+FFFD, so two distinct row ids
@@ -18,7 +19,7 @@
  *    canonical JSON, where the content fields are only `counterparty`, `merchant`, `amountCents`, `currency`,
  *    `subjectHint` and `occurredAt` (§10 v1.3): no derived field ever enters it;
  *  - `id` = `idFromHash(contentHash)`.
- * So the same row seen twice is one observation (observedAt is not hashed), a created and a deleted event
+ * So the same row seen twice is one observation (observedAt and sightedAt are not hashed), a created and a deleted event
  * differ (type is hashed), and two identical sends with different row ids stay two (rowKeyHash is hashed).
  *
  * Only own data properties of `raw` are read. An allowlisted field held anywhere else (a getter, or a property
@@ -32,7 +33,7 @@
  *
  * `observationIntegrityProblems(observation, policy)` is the same rule seen from the other side: whether an
  * observation that arrives already built (over the bus, into the ledger) is one `project` could have returned.
- * Only its source's allowlisted content fields, and a `contentHash` that is `contentHashOf` its content. The
+ * Only its source's allowlisted content fields, no `sightedAt`, and a `contentHash` that is `contentHashOf` its content. The
  * ledger refuses any other before it writes (Hard Rule 2; SEC-V1). `contentHashOf` is the one definition of the
  * §10 content hash: `project`, this check and replay all call it.
  *
@@ -79,12 +80,13 @@ export interface ProjectContext {
 
 type ObservationField = keyof ObservationInput;
 
-/** Fields `project` computes itself and never reads from a raw row (§10). */
+/** Fields `project` never reads from a raw row (§10): it computes them, or (`sightedAt`) only the ledger sets them. */
 export const DERIVED_FIELDS = Object.freeze([
   'id',
   'source',
   'type',
   'observedAt',
+  'sightedAt',
   'rowKeyHash',
   'contentHash',
 ] as const satisfies readonly ObservationField[]);
@@ -180,21 +182,28 @@ function allowlistedContent(
 }
 
 /**
- * The §10 content hash: SHA-256 of the canonical JSON of every field of `observation` but `id`, `observedAt`
- * and `contentHash`. For what `project` hashes, `{source, type, ...content, rowKeyHash?}`, that is all of it.
- * The one definition: `project`, `observationIntegrityProblems` and replay (replay-compare.ts) all call it.
+ * The §10 content hash: SHA-256 of the canonical JSON of every field of `observation` but `id`, `observedAt`,
+ * `sightedAt` and `contentHash`. For what `project` hashes, `{source, type, ...content, rowKeyHash?}`, that is all
+ * of it. The one definition: `project`, `observationIntegrityProblems` and replay (replay-compare.ts) all call it.
  */
 export function contentHashOf(observation: Readonly<Record<string, unknown>>): Sha256 {
-  const hashed = { ...observation, id: undefined, observedAt: undefined, contentHash: undefined };
+  const hashed = {
+    ...observation,
+    id: undefined,
+    observedAt: undefined,
+    sightedAt: undefined,
+    contentHash: undefined,
+  };
   return Sha256.parse(sha256Hex(canonicalJson(hashed)));
 }
 
 /**
  * Why `observation` is not one `project` could have returned under `policy` (SEC-V1, Hard Rule 2): each content
- * field its source's allowlist does not name, and a `contentHash` that is not `contentHashOf` its content (so a
- * row cannot choose its own identity, §10). Empty when it is. `rowKeyHash` is not checked against the allowlist,
- * because `project` keeps it whenever the observer has a row id. Problems name fields only, never values (Hard
- * Rule 10). The schema has already checked every field's shape (`Observation`).
+ * field its source's allowlist does not name, a `sightedAt` (the ledger's record of a sighting it stored later, §3:
+ * an observer never sets it, so it cannot choose its own first sighting, §4.1, §7), and a `contentHash` that is not
+ * `contentHashOf` its content (so a row cannot choose its own identity, §10). Empty when it is. `rowKeyHash` is not
+ * checked against the allowlist, because `project` keeps it whenever the observer has a row id. Problems name
+ * fields only, never values (Hard Rule 10). The schema has already checked every field's shape (`Observation`).
  */
 export function observationIntegrityProblems(
   observation: Observation,
@@ -204,6 +213,7 @@ export function observationIntegrityProblems(
   const problems: Problem[] = CONTENT_FIELDS.filter(
     (field) => observation[field] !== undefined && !allowlist.includes(field),
   ).map((field): Problem => [field, `not allowlisted for ${observation.source}`]);
+  if (observation.sightedAt !== undefined) problems.push(['sightedAt', 'is set by the ledger only']);
   if (contentHashOf(observation) !== observation.contentHash) {
     problems.push(['contentHash', 'is not the §10 hash of the content']);
   }

@@ -27,10 +27,11 @@ import {
 } from './conditions-coverage';
 import { GradeError } from './grade-error';
 import { instantMs } from './normalize';
+import { anchorAt } from './order';
 import type { PolicyRule, RuleOutcome } from './policy';
 import type { Claim, Coverage, GradeContext, Grant, IsoTs, Observation } from './schema';
 import { MS_PER_HOUR, MS_PER_MINUTE } from './units';
-import { precisionBounds, isCalendarType } from './window';
+import { precisionBounds } from './window';
 
 export interface FinalityInput {
   readonly outcome: RuleOutcome;
@@ -82,8 +83,9 @@ function claimIntrinsic(rule: PolicyRule | null): boolean {
 function unaskedFinal(input: FinalityInput): boolean {
   const { orphan, policy } = input;
   if (orphan === null) throw new GradeError('claimless_subject');
-  // The same anchor attribution measures from (§7): when a calendar change was first seen, not the event start.
-  const anchorMs = instantMs(isCalendarType(orphan.type) ? orphan.observedAt : orphan.occurredAt);
+  // The same anchor attribution measures from (§7, order.ts `anchorAt`): when a calendar change was first seen
+  // (`sightedAt` when the ledger stored it later, else `observedAt`), not the event start.
+  const anchorMs = instantMs(anchorAt(orphan));
   const syncAt = input.context.attribution?.adapterLastSyncAt;
   const waitMs = (policy.windows.beforeClaimMin + policy.windows.graceMin) * MS_PER_MINUTE;
   if (syncAt !== undefined && instantMs(syncAt) >= anchorMs + waitMs) return true;

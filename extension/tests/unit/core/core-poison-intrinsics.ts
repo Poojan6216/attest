@@ -33,6 +33,7 @@ const COPIES = {
   freeze: Object.freeze,
   captureStackTrace: copyOf(Error, 'captureStackTrace') as (target: object, constructor?: unknown) => void,
   startsWith: copyOf(String.prototype, 'startsWith') as (this: string, prefix: string) => boolean,
+  endsWith: copyOf(String.prototype, 'endsWith') as (this: string, suffix: string) => boolean,
   includes: copyOf(String.prototype, 'includes') as (this: string, part: string) => boolean,
   slice: copyOf(String.prototype, 'slice') as (this: string, from: number) => string,
   decodeURIComponent,
@@ -77,6 +78,9 @@ export function call<T>(fn: (...args: never[]) => T, self: unknown, ...args: unk
 
 export const SAFE = COPIES;
 
+/** The global object, held from when this module loaded: the guard never reads it by name (FS-1 poisons that). */
+export const GLOBAL: typeof globalThis = globalThis;
+
 /** `items` with `item` appended, by the copied Array.prototype.push. */
 export function append<T>(items: T[], item: T): void {
   call(COPIES.push, items, item);
@@ -95,6 +99,7 @@ export function setAdd<T>(set: Set<T>, item: T): void {
 /** Text functions over the copies: src/core cannot change what the guard compares file names with. */
 export const text = {
   startsWith: (value: string, prefix: string): boolean => call(COPIES.startsWith, value, prefix),
+  endsWith: (value: string, suffix: string): boolean => call(COPIES.endsWith, value, suffix),
   includes: (value: string, part: string): boolean => call(COPIES.includes, value, part),
   slice: (value: string, from: number): string => call(COPIES.slice, value, from),
   of: (value: unknown): string => COPIES.String(value),
@@ -204,27 +209,35 @@ async function ASYNC(): Promise<number> {
   return Promise.resolve(0);
 }
 
+const NAMESPACES = ['Math', 'JSON', 'Reflect', 'Atomics'] as const;
+const CONSTRUCTORS = [
+  'Object', 'Function', 'Array', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Date', 'RegExp',
+  'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError',
+  'AggregateError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'Proxy', 'ArrayBuffer', 'SharedArrayBuffer',
+  'DataView', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array',
+  'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array', 'Iterator', 'TextEncoder',
+  'TextDecoder', 'URL', 'URLSearchParams',
+] as const; // prettier-ignore
+
+/**
+ * Each of those globals as it was when this module loaded, before src/core and before the guard: the guard makes
+ * some of them (Atomics, SharedArrayBuffer) accessors, which would read as no value at all (FS-1).
+ */
+const LOADED: readonly (readonly [string, unknown])[] = [...NAMESPACES, ...CONSTRUCTORS].map(
+  (name) => [name, COPIES.getOwnPropertyDescriptor(GLOBAL, name)?.value] as const,
+);
+
 /** Every built-in object a module can reach, by label (globalThis is added by snapshotIntrinsics). */
 function builtIns(): (readonly [string, object])[] {
-  const namespaces = ['Math', 'JSON', 'Reflect', 'Atomics'] as const;
-  const constructors = [
-    'Object', 'Function', 'Array', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Date', 'RegExp',
-    'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError',
-    'AggregateError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'Proxy', 'ArrayBuffer', 'SharedArrayBuffer',
-    'DataView', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array',
-    'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array', 'Iterator', 'TextEncoder',
-    'TextDecoder', 'URL', 'URLSearchParams',
-  ] as const; // prettier-ignore
   const out: (readonly [string, object])[] = [];
   const add = (label: string, value: unknown): void => {
     if (isObject(value)) append(out, [label, value] as const);
   };
-  for (const name of namespaces) add(name, COPIES.getOwnPropertyDescriptor(globalThis, name)?.value);
-  for (const name of constructors) {
-    const value: unknown = COPIES.getOwnPropertyDescriptor(globalThis, name)?.value;
+  each(LOADED, ([name, value], index) => {
     add(name, value);
-    if (isObject(value)) add(`${name}.prototype`, COPIES.getOwnPropertyDescriptor(value, 'prototype')?.value);
-  }
+    if (index >= NAMESPACES.length && isObject(value))
+      add(`${name}.prototype`, COPIES.getOwnPropertyDescriptor(value, 'prototype')?.value);
+  });
   const typedArray: unknown = COPIES.getPrototypeOf(Uint8Array);
   add('%TypedArray%', typedArray);
   if (isObject(typedArray))
@@ -268,7 +281,7 @@ export function standingOf(
  * src/core loads; compare with intrinsicChanges).
  */
 export function snapshotIntrinsics(globals: readonly string[] = []): readonly Standing[] {
-  const out: Standing[] = [standingOf('globalThis', globalThis, [...ECMASCRIPT_GLOBALS, ...globals])];
+  const out: Standing[] = [standingOf('globalThis', GLOBAL, [...ECMASCRIPT_GLOBALS, ...globals])];
   each(builtIns(), ([label, target]) => {
     append(out, standingOf(label, target));
   });

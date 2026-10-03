@@ -16,6 +16,9 @@
  *  - Methods whose answer depends on the host's time zone or locale are reported on any object: local-time
  *    getters and setters, `getTimezoneOffset`, `toLocale*`, `localeCompare`, `toDateString`, `toTimeString`; so is
  *    the same name given as the written key of `Reflect.get(o, '…')` or `Object.getOwnPropertyDescriptor`.
+ *  - `RegExp` may only be read as `new RegExp(…)` or `x instanceof RegExp`: `RegExp.lastMatch`, `RegExp.$1` and the
+ *    other legacy statics hold the last match any code in the realm made, so aliasing, passing, a member or a
+ *    destructuring of it is reported.
  *  - `Reflect` may only be read as `Reflect.get`, `Reflect.has` or `Reflect.isExtensible`, and `Object` only as a
  *    member with a written name other than those that list, define or re-parent properties
  *    (`getOwnPropertyNames`, `getOwnPropertyDescriptors`, `getOwnPropertySymbols`, `defineProperty`,
@@ -140,6 +143,19 @@ function writtenKey(key) {
   return { written: key?.type === 'Identifier', text: null };
 }
 
+/**
+ * RegExp only as `new RegExp(…)` or `x instanceof RegExp`: its legacy statics (`RegExp.lastMatch`, `RegExp.$1`,
+ * `RegExp.input`, `RegExp.leftContext`, …) hold the last match any code in the realm made, the caller's included.
+ * @param {NodeWithParent} identifier
+ */
+function regExpUseAllowed(identifier) {
+  const parent = identifier.parent;
+  if (parent?.type === 'NewExpression') return parent.callee === identifier;
+  return (
+    parent?.type === 'BinaryExpression' && parent.operator === 'instanceof' && parent.right === identifier
+  );
+}
+
 /** @param {NodeWithParent} identifier */
 function mathUseAllowed(identifier) {
   const parent = identifier.parent;
@@ -170,7 +186,7 @@ function merge(first, second) {
 }
 
 /** The globals whose every use is checked, by scope analysis (aliasing and passing as a value included). */
-const GUARDED_GLOBALS = new Set(['Date', 'Math', 'Reflect', 'Object']);
+const GUARDED_GLOBALS = new Set(['Date', 'Math', 'Reflect', 'Object', 'RegExp']);
 
 /**
  * Reports a member name (written, or a written key of `Reflect.get`) whose answer depends on the host.
@@ -199,6 +215,8 @@ const rule = {
       dateKey:
         'src/core is deterministic: no computed member of a Date whose key is not written (`date[key]`, `date[Symbol.toPrimitive]`) (Hard Rule 4).',
       math: "src/core is pure: no randomness, and no aliasing or computed access of 'Math' (Hard Rule 4).",
+      regexp:
+        'src/core is deterministic: use RegExp only as `new RegExp(…)` or `x instanceof RegExp`. Its legacy statics (`RegExp.lastMatch`, `RegExp.$1`, `RegExp.input`) hold the last match any code made (Hard Rule 4).',
       localTime:
         "src/core is deterministic: '{{name}}' depends on the host time zone. Use the UTC methods (Hard Rule 4).",
       locale: "src/core is deterministic: '{{name}}' depends on the host locale (Hard Rule 4).",
@@ -246,6 +264,10 @@ const rule = {
         const globalDate = new Set();
         forEachGlobalReference(context, program, GUARDED_GLOBALS, (identifier, name) => {
           if (name === 'Date') globalDate.add(identifier);
+          if (name === 'RegExp') {
+            if (!regExpUseAllowed(identifier)) context.report({ node: identifier, messageId: 'regexp' });
+            return;
+          }
           if (name === 'Reflect' || name === 'Object') {
             if (!reflectionUseAllowed(identifier, name))
               context.report({ node: identifier, messageId: 'reflect', data: { name } });

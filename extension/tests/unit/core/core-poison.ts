@@ -20,7 +20,9 @@
  *    `Date.prototype[Symbol.toPrimitive]` for any hint but 'number' (`String(date)`, `${date}`, `date + ''`);
  *    the Date constructor reached from an instance (`.constructor`) is the twin too;
  *  - `Math.random`, and `localeCompare` and every `toLocale*` of strings, numbers, bigints, arrays and typed arrays;
- *  - any read of the globals in POISONED_GLOBALS (`Intl`, `Temporal`, `performance`, `crypto`, `fetch`, timers, …).
+ *  - any read of the globals in POISONED_GLOBALS: every name lint bans in src/core (./core-poison-globals.ts, FS-1),
+ *    `navigator`, `location`, `Intl`, `Temporal`, `performance`, `crypto`, `fetch`, the timers and the rest. zod's
+ *    own reads of `globalThis` and `navigator` are let through (core-poison-globals.ts says why).
  * Two pure uses src/core makes all the time, `Date.UTC` and `new Date(value)`, are only witnessed: the first one seen
  * from src/core is noted, which proves the poison was live while src/core ran. A negative control can `forbid`
  * them, to show a real src/core call path is caught. `restore()` puts every original property back exactly.
@@ -35,10 +37,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isOwnReader, ownReaders, POISONED_GLOBALS } from './core-poison-globals';
 import {
   append,
   call,
   each,
+  GLOBAL,
   pathOf,
   SAFE,
   setAdd,
@@ -48,6 +52,8 @@ import {
   text,
 } from './core-poison-intrinsics';
 
+export { POISONED_GLOBALS, RUN_SPARED_GLOBALS, RUNNER_GLOBALS } from './core-poison-globals';
+
 /** The directory whose files count as src/core. */
 export const CORE_DIR = path.resolve(import.meta.dirname, '../../../src/core');
 const CORE_PREFIX = `${CORE_DIR}${path.sep}`;
@@ -55,6 +61,7 @@ const CORE_PREFIX = `${CORE_DIR}${path.sep}`;
 const GUARD_FILES: ReadonlySet<string> = new Set([
   fileURLToPath(import.meta.url),
   path.join(import.meta.dirname, 'core-poison-intrinsics.ts'),
+  path.join(import.meta.dirname, 'core-poison-globals.ts'),
 ]);
 const DEPENDENCY = `${path.sep}node_modules${path.sep}`;
 /**
@@ -64,50 +71,13 @@ const DEPENDENCY = `${path.sep}node_modules${path.sep}`;
  */
 const RUNNER = ['vitest', '@vitest', 'vite'].map((name) => `${DEPENDENCY}${name}${path.sep}`);
 
-/** Globals src/core must never even read. Absent ones (Temporal in Node 22) are poisoned all the same. */
-export const POISONED_GLOBALS = [
-  'Intl',
-  'Temporal',
-  'performance',
-  'crypto',
-  'fetch',
-  'XMLHttpRequest',
-  'WebSocket',
-  'EventSource',
-  'setTimeout',
-  'setInterval',
-  'setImmediate',
-  'WeakRef',
-  'FinalizationRegistry',
-] as const;
-
 /** Date methods that read or write local time, or render text by the host's time zone or locale. */
 const LOCAL_TIME_METHODS = [
-  'getFullYear',
-  'getYear',
-  'getMonth',
-  'getDate',
-  'getDay',
-  'getHours',
-  'getMinutes',
-  'getSeconds',
-  'getMilliseconds',
-  'getTimezoneOffset',
-  'setFullYear',
-  'setYear',
-  'setMonth',
-  'setDate',
-  'setHours',
-  'setMinutes',
-  'setSeconds',
-  'setMilliseconds',
-  'toString',
-  'toDateString',
-  'toTimeString',
-  'toLocaleString',
-  'toLocaleDateString',
-  'toLocaleTimeString',
-] as const;
+  'getFullYear', 'getYear', 'getMonth', 'getDate', 'getDay', 'getHours', 'getMinutes', 'getSeconds',
+  'getMilliseconds', 'getTimezoneOffset', 'setFullYear', 'setYear', 'setMonth', 'setDate', 'setHours', 'setMinutes',
+  'setSeconds', 'setMilliseconds', 'toString', 'toDateString', 'toTimeString', 'toLocaleString',
+  'toLocaleDateString', 'toLocaleTimeString',
+] as const; // prettier-ignore
 
 /** An ISO 8601 timestamp with an explicit offset: the one text `new Date` reads the same way in every time zone. */
 const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -138,13 +108,16 @@ export function originOf(files: readonly string[], isCore: (file: string) => boo
   return decide(files, isCore) ?? 'harness';
 }
 
+/** Whether a frame in `file` decides nothing: the guard's own, a Node internal, or native or eval'd code (''). */
+const passive = (file: string): boolean =>
+  file === '' || setHas(GUARD_FILES, file) || text.startsWith(file, 'node:');
+
 /** The origin the innermost deciding frame of `files` gives, or undefined when no frame decides. */
 function decide(files: readonly string[], isCore: (file: string) => boolean): Origin | undefined {
   let origin: Origin | undefined;
   each(files, (name) => {
     const file = pathOf(name);
-    const skip = file === '' || setHas(GUARD_FILES, file) || text.startsWith(file, 'node:');
-    if (origin !== undefined || skip) return;
+    if (origin !== undefined || passive(file)) return;
     if (some(RUNNER, (prefix) => text.includes(file, prefix))) origin = 'harness';
     else if (!text.includes(file, DEPENDENCY)) origin = isCore(file) ? 'core' : 'harness';
   });
@@ -157,10 +130,27 @@ function decide(files: readonly string[], isCore: (file: string) => boolean): Or
  */
 const SHALLOW_FRAMES = 16;
 
-/** Who called, from the stack: the first SHALLOW_FRAMES frames, then the whole stack if they did not decide. */
-function callerOf(isCore: (file: string) => boolean): Origin {
-  return decide(stackFiles(SHALLOW_FRAMES), isCore) ?? originOf(stackFiles(), isCore);
+/** The file whose own code made the call: the innermost frame of `files` that is not passive. */
+function readerOf(files: readonly string[]): string {
+  let reader = '';
+  each(files, (name) => {
+    const file = pathOf(name);
+    if (reader === '' && !passive(file)) reader = file;
+  });
+  return reader;
 }
+
+/**
+ * Who called, from the stack: the first SHALLOW_FRAMES frames, then the whole stack if they did not decide. A read
+ * whose own code is in one of `readers` (a dependency's own read, core-poison-globals.ts) is the harness's.
+ */
+function callerOf(isCore: (file: string) => boolean, readers: readonly string[]): Origin {
+  const files = stackFiles(SHALLOW_FRAMES);
+  if (readers.length > 0 && isOwnReader(readerOf(files), readers)) return 'harness';
+  return decide(files, isCore) ?? originOf(stackFiles(), isCore);
+}
+
+const NO_READERS: readonly string[] = [];
 
 export interface PoisonOptions {
   /** Which files count as src/core (default: every file under src/core). */
@@ -179,6 +169,10 @@ export interface PoisonOptions {
    * timestamps, and reading the stack for each would take hours.
    */
   readonly offsetParse?: boolean;
+  /** Which globals to poison (default POISONED_GLOBALS: every name lint bans in src/core). */
+  readonly globals?: readonly string[];
+  /** Whether to poison Date, Math.random and the locale methods too (default true); false poisons globals only. */
+  readonly builtIns?: boolean;
 }
 
 /** A property as it was before the poison: restored exactly (deleted when it did not exist). */
@@ -200,12 +194,14 @@ export interface Poison {
 
 interface Context {
   readonly saved: Saved[];
-  /** Records and throws when src/core is the caller; otherwise does nothing. */
-  readonly check: (use: string) => void;
+  /** Records and throws when src/core is the caller (a read whose own code is in `readers` is not); else nothing. */
+  readonly check: (use: string, readers?: readonly string[]) => void;
   /** Notes the first use from src/core (or checks it, when forbidden). */
   readonly witness: (use: string) => void;
   /** PoisonOptions.offsetParse. */
   readonly offsetParse: boolean;
+  /** PoisonOptions.globals. */
+  readonly globals: readonly string[];
 }
 
 function patch(saved: Saved[], target: object, key: PropertyKey, descriptor: PropertyDescriptor): void {
@@ -256,7 +252,7 @@ function poisonDate({ saved, check, witness, offsetParse }: Context): void {
       return made;
     },
   });
-  patch(saved, globalThis, 'Date', { value: twin, writable: true, enumerable: false });
+  patch(saved, GLOBAL, 'Date', { value: twin, writable: true, enumerable: false });
   patch(saved, RealDate.prototype, 'constructor', { value: twin, writable: true, enumerable: false });
   wrapMethod(saved, RealDate, 'now', () => {
     check('Date.now');
@@ -300,22 +296,34 @@ function poisonLocales({ saved, check }: Context): void {
   }
 }
 
-function poisonGlobals({ saved, check }: Context): void {
-  for (const name of POISONED_GLOBALS) {
-    const before = SAFE.getOwnPropertyDescriptor(globalThis, name);
+/** Every getter poisonGlobals has installed, in any guard: what `isPoisonedGlobal` recognises. */
+const TWINS: unknown[] = [];
+
+/** Whether the global `name` is now a guard's twin (a poisoned run's test can see its guard is in place). */
+export function isPoisonedGlobal(name: string): boolean {
+  const getter = SAFE.getOwnPropertyDescriptor(GLOBAL, name)?.get;
+  return getter !== undefined && some(TWINS, (twin) => twin === getter);
+}
+
+function poisonGlobals({ saved, check, globals }: Context): void {
+  for (const name of globals) {
+    const before = SAFE.getOwnPropertyDescriptor(GLOBAL, name);
+    const readers = ownReaders(name);
     const getter = before?.get;
     // An assignment (Vitest swaps its own timers in and out around each RPC) is kept here, so the twin stays.
     let assigned: { readonly value: unknown } | null = null;
     const read = (): unknown => {
       if (assigned !== null) return assigned.value;
-      return getter === undefined ? before?.value : call(getter, globalThis);
+      return getter === undefined ? before?.value : call(getter, GLOBAL);
     };
-    patch(saved, globalThis, name, {
+    const get = (): unknown => {
+      check(name, readers);
+      return read();
+    };
+    append(TWINS, get);
+    patch(saved, GLOBAL, name, {
       enumerable: before?.enumerable ?? false,
-      get: (): unknown => {
-        check(name);
-        return read();
-      },
+      get,
       set: (next: unknown): void => {
         assigned = { value: next };
       },
@@ -331,21 +339,24 @@ export function installPoison(options: PoisonOptions = {}): Poison {
   const witnessed = new Set<string>();
   const saved: Saved[] = [];
   let armed = true;
-  const fromCore = (): boolean => armed && callerOf(isCore) === 'core';
-  const check = (use: string): void => {
-    if (!fromCore()) return;
+  const fromCore = (readers: readonly string[]): boolean => armed && callerOf(isCore, readers) === 'core';
+  const check = (use: string, readers: readonly string[] = NO_READERS): void => {
+    if (!fromCore(readers)) return;
     append(violations, use);
     throw new PoisonError(use);
   };
   const noting = options.witness ?? true;
   const witness = (use: string): void => {
     if (setHas(forbid, use)) check(use);
-    else if (noting && !setHas(witnessed, use) && fromCore()) setAdd(witnessed, use);
+    else if (noting && !setHas(witnessed, use) && fromCore(NO_READERS)) setAdd(witnessed, use);
   };
   let restored = false;
   try {
-    const context = { saved, check, witness, offsetParse: options.offsetParse ?? false };
-    for (const install of [poisonDate, poisonLocales, poisonGlobals]) install(context);
+    const globals = options.globals ?? POISONED_GLOBALS;
+    const context = { saved, check, witness, offsetParse: options.offsetParse ?? false, globals };
+    const installs =
+      options.builtIns === false ? [poisonGlobals] : [poisonDate, poisonLocales, poisonGlobals];
+    for (const install of installs) install(context);
   } catch (error) {
     restoreAll(saved);
     throw error;

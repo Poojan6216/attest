@@ -74,26 +74,35 @@ describe('upsertClaim', () => {
   });
 });
 
-describe('upsertClaim: a stored claim never moves (§3, R3-LEDGER-1, RP3-3)', () => {
-  it('a sighting earlier than the stored one is refused with late_sighting and changes nothing', async () => {
+describe('upsertClaim: a stored claim never moves (§3, R3-LEDGER-1, RP3-3, R4-LEDGER-CLAIM-LATE)', () => {
+  // A claim's sighting grades nothing (§3, §10), so an earlier re-read is a no-op, never late_sighting.
+  it('a sighting earlier than the stored one is a no-op and changes nothing', async () => {
     const late = makeClaim({ observedAt: '2026-10-01T11:00:00-04:00' });
     const early = makeClaim({ observedAt: '2026-10-01T10:20:00-04:00' });
     await upsertClaim(db, late);
-    const error = await expectLedgerError(upsertClaim(db, early), 'late_sighting');
-    expect(error.context).toStrictEqual({ table: 'claims', id: late.id });
+    expect(await upsertClaim(db, early)).toEqual({ id: late.id, inserted: false });
     expect(await getClaim(db, late.id)).toEqual(late);
     expect(await upsertClaim(db, late)).toEqual({ id: late.id, inserted: false });
+    expect(await db.claims.count()).toBe(1);
     expect(await claimsByAgentAndDate(db, 'muse', '2026-10-01')).toEqual([late]);
   });
 
-  it('a newer extractor that reads the claim with an earlier sighting is still refused', async () => {
+  it('a newer extractor that reads the claim with an earlier sighting is a no-op; the stored one is kept', async () => {
     const stored = makeClaim();
     await upsertClaim(db, stored);
     const reread = makeClaim({
       observedAt: '2026-10-01T10:29:00-04:00',
       extractor: { id: 'muse.activity', version: '1.0.1', confidence: 0.9 },
     });
-    await expectLedgerError(upsertClaim(db, reread), 'late_sighting');
+    expect(await upsertClaim(db, reread)).toEqual({ id: stored.id, inserted: false });
+    expect(await getClaim(db, stored.id)).toEqual(stored);
+  });
+
+  it('an earlier sighting that differs in a field is still an id_conflict', async () => {
+    const stored = makeClaim();
+    await upsertClaim(db, stored);
+    const other = makeClaim({ observedAt: '2026-10-01T10:20:00-04:00', counterparty: 'bob@example.com' });
+    await expectLedgerError(upsertClaim(db, other), 'id_conflict');
     expect(await getClaim(db, stored.id)).toEqual(stored);
   });
 });

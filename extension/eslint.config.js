@@ -113,6 +113,22 @@ export const GENERATED_FILES = [
   'src/core/unicode-table-case.ts',
 ];
 
+/**
+ * src/core/tsconfig.json loads only the ES2023 lib, so a host name (`Image`, `clientInformation`, `document`) in
+ * src/core fails to typecheck. These keep that check on (R4-FENCE-1, Hard Rules 1 and 4): no `@ts-expect-error`,
+ * `@ts-ignore` or `@ts-nocheck`, which switch it off for a line or a file (elsewhere strictTypeChecked still allows a
+ * described `@ts-expect-error`), and no triple-slash reference, which could load another lib (`lib="dom"`).
+ * The grep test bans the same in src/core's comments (tests/unit/core/core-scan.ts).
+ * @type {import('eslint').Linter.RulesRecord}
+ */
+export const CORE_TYPE_CHECK_RULES = {
+  '@typescript-eslint/ban-ts-comment': [
+    'error',
+    { 'ts-expect-error': true, 'ts-ignore': true, 'ts-nocheck': true, 'ts-check': false },
+  ],
+  '@typescript-eslint/triple-slash-reference': ['error', { lib: 'never', path: 'never', types: 'never' }],
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -265,6 +281,9 @@ export default tseslint.config(
       ),
       'no-restricted-syntax': ['error', ...CORE_RESTRICTED_SYNTAX, ...DOUBLE_ASSERTION_SYNTAX],
       'attest/core-determinism': 'error',
+      // Every other global read in src/core must be an ES2023 built-in on the allowlist (R4-FENCE-1, R4-FENCE-2).
+      'attest/core-globals': 'error',
+      ...CORE_TYPE_CHECK_RULES,
     },
   },
   {

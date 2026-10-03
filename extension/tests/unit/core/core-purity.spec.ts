@@ -14,11 +14,13 @@
  * and a `/` after any property name as division (FR3-5). It needs no lint and no types: computed keys, `globalThis`
  * and `Reflect` reads, a spread or multi-field `new Date`, ambient declarations, `.constructor` (destructured too),
  * `Symbol.toPrimitive`, local-time and locale methods, error stacks, `import.meta`, and reflection or mutation of
- * built-ins are all its own patterns (PI-1 to PI-4, PI-6, FR3-2, FR3-3, UNI-R3-3). Imports are read with ts.preProcessFile
- * (static, type-only, re-exports, dynamic import(), require) and checked against the allowlist: a sibling module
- * that exists in src/core, `zod`, and policy/default.json. Negative controls prove every pattern and the allowlist
- * catch what they claim, and that comments and strings are not hits. tests/unit/core/core-poison.spec.ts is the
- * third check: it runs the core with every impure global poisoned, whatever the syntax that reaches it (and
+ * built-ins are all its own patterns (PI-1 to PI-4, PI-6, FR3-2, FR3-3, UNI-R3-3). The globals it allows are lint's
+ * own allowlist of ES2023 built-ins (./core-scan-globals.ts, FS-1, R4-FENCE-1), proven in core-purity-globals.spec.ts
+ * and core-purity-allowlist.spec.ts, with the comments that switch the typecheck off. Imports are read with
+ * ts.preProcessFile (static, type-only, re-exports, dynamic import(), require) and checked against the allowlist: a
+ * sibling module that exists in src/core, `zod`, and policy/default.json. Negative controls prove every pattern and
+ * the allowlist catch what they claim, and that comments and strings are not hits. tests/unit/core/core-poison.spec.ts
+ * is the third check: it runs the core with every impure global poisoned, whatever the syntax that reaches it (and
  * `pnpm test:poison` runs every core, golden and property test that way). Deliberately evasive code (a name built
  * from fragments, a reflection chain built to dodge the patterns) is a review matter: docs/grading.md §14 lists it.
  */
@@ -124,9 +126,9 @@ describe('core purity scan: negative controls (each pattern is caught)', GATE, (
     ['export const x = new XMLHttpRequest();', 'XMLHttpRequest'],
     ["export const w = new WebSocket('wss://x');", 'WebSocket'],
     ['export const t = performance.now();', 'performance'],
-    ['setTimeout(() => undefined, 1);', 'setTimeout / setInterval / setImmediate'],
-    ['setInterval(() => undefined, 1);', 'setTimeout / setInterval / setImmediate'],
-    ['export const e = process.env.TZ;', 'process.'],
+    ['setTimeout(() => undefined, 1);', 'setTimeout'],
+    ['setInterval(() => undefined, 1);', 'setInterval'],
+    ['export const e = process.env.TZ;', 'process'],
     ['export const z = Intl.DateTimeFormat().resolvedOptions().timeZone;', 'Intl'],
     ['export const w = new WeakRef({});', 'WeakRef'],
     ['export const f = new FinalizationRegistry(() => undefined);', 'FinalizationRegistry'],
@@ -160,11 +162,11 @@ const BYPASSES: readonly (readonly [string, readonly string[]])[] = [
   ['export const t = Date[`now`]();', ['Date.now']],
   ["export const t = Date?.['now']();", ['Date.now']],
   ["const k = 'random' as const; export const r = Math[k]();", ['computed member of Date, Math or crypto']],
-  ["export const p = globalThis['fetch']('https://x.example');", ['fetch', 'globalThis / self']],
-  ["export const p = Reflect.get(globalThis, 'performance');", ['globalThis / self', 'Reflect on a global']],
+  ["export const p = globalThis['fetch']('https://x.example');", ['fetch', 'globalThis']],
+  ["export const p = Reflect.get(globalThis, 'performance');", ['globalThis', 'Reflect on a global']],
   ["export const n = (Reflect.get(Date, 'now') as () => number)();", ['Reflect on a global']],
-  ['export const t = self.performance.now();', ['performance', 'globalThis / self']],
-  ['const g = globalThis;\nexport const i = g.Intl;', ['globalThis / self', 'Intl']],
+  ['export const t = self.performance.now();', ['performance', 'self']],
+  ['const g = globalThis;\nexport const i = g.Intl;', ['globalThis', 'Intl']],
   ['export const t = Date\n  .now();', ['Date.now']],
   ['export const r = Math\n  .random();', ['Math.random']],
   ['export const t = new\n  Date();', ['new Date() with no argument']],
@@ -198,7 +200,7 @@ describe('core purity scan: the bypasses lint alone used to stop (PI-1 to PI-4, 
     expect(bannedUses('const a = 1;\nexport const t = Date\n  .now();\n')).toEqual(['line 2: Date.now']);
     expect(
       bannedUses("const a = 1;\n\nexport const p = Reflect.get(\n  globalThis,\n  'fetch',\n);"),
-    ).toEqual(['line 3: Reflect on a global', 'line 4: globalThis / self']);
+    ).toEqual(['line 3: Reflect on a global', 'line 4: globalThis']);
   });
 
   it('control: one value in new Date, a class constructor, Date.UTC fields and look-alike names pass', () => {
@@ -294,7 +296,7 @@ const ROUND_THREE: readonly (readonly [string, readonly string[]])[] = [
   ['export const f = (o: { __proto__: unknown }) => o.__proto__;', ['built-in .prototype or __proto__']],
   [
     'export const w = Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);',
-    ['Atomics / SharedArrayBuffer'],
+    ['Atomics', 'SharedArrayBuffer'],
   ],
 ];
 

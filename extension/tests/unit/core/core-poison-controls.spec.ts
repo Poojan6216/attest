@@ -13,6 +13,7 @@ import vm from 'node:vm';
 
 import { describe, expect, it } from 'vitest';
 
+import { CORE_RESTRICTED_GLOBAL_NAMES, NETWORK_GLOBALS } from '../../../eslint-rules/core-names.js';
 import { civilDateAt, instantMs } from '../../../src/core/normalize-time';
 import { ObserverCoverage } from '../../../src/core/schema';
 import { CORE_DIR, installPoison, originOf, PoisonError, POISONED_GLOBALS } from './core-poison';
@@ -24,6 +25,9 @@ const FIXTURE_FILE = path.join(import.meta.dirname, 'core-poison-fixture.ts');
 const GATE = { tags: ['gate'] };
 
 const NONE: [] = [];
+
+/** The global object, held before any guard is installed: reading `globalThis` by name is itself poisoned (FS-1). */
+const GLOBAL = globalThis;
 
 /** One impure use each, made from this file, and the name the poison records it by. */
 const IMPURE: readonly (readonly [string, () => unknown])[] = [
@@ -54,7 +58,7 @@ const IMPURE: readonly (readonly [string, () => unknown])[] = [
   [
     'Temporal',
     (): unknown => {
-      const temporal: unknown = Reflect.get(globalThis, 'Temporal');
+      const temporal: unknown = Reflect.get(GLOBAL, 'Temporal');
       return temporal;
     },
   ],
@@ -64,6 +68,18 @@ const IMPURE: readonly (readonly [string, () => unknown])[] = [
   ['WebSocket', () => WebSocket],
   ['setTimeout', () => setTimeout],
   ['WeakRef', () => new WeakRef({})],
+  // The fence-sanity forms (FS-1): a beacon, the host's language, and the other ways out or in, read as written.
+  ['navigator', () => Reflect.get(navigator, 'sendBeacon')],
+  ['navigator', () => navigator.language],
+  ['location', () => location],
+  ['EventSource', () => EventSource],
+  ['WebTransport', () => WebTransport],
+  ['RTCPeerConnection', () => RTCPeerConnection],
+  ['requestAnimationFrame', () => requestAnimationFrame],
+  ['requestIdleCallback', () => requestIdleCallback],
+  ['globalThis', () => globalThis],
+  // Every global lint bans in src/core, by name.
+  ...POISONED_GLOBALS.map((name) => [name, (): unknown => Reflect.get(GLOBAL, name)] as const),
 ];
 
 /** Runs every IMPURE use under a poison made with `isCore`; the names of the uses that threw a PoisonError. */
@@ -270,6 +286,72 @@ describe('negative controls: the caller deep under frames that decide nothing', 
   });
 });
 
+/** A function compiled as if it sat in `file`: its frame names that file, as zod's own code does. */
+const readerIn = (file: string, name: string): (() => unknown) =>
+  vm.runInThisContext(`(function read() { return typeof ${name}; })`, { filename: file }) as () => unknown;
+
+const ZOD_CORE = '/repo/node_modules/.pnpm/zod@4/node_modules/zod/v4/core';
+
+describe(
+  "negative controls: the poisoned globals are lint's, and a dependency's own reads (FS-1)",
+  GATE,
+  () => {
+    it('every global lint bans in src/core is poisoned, the fence-sanity names among them', () => {
+      const lint = [...CORE_RESTRICTED_GLOBAL_NAMES, ...NETWORK_GLOBALS];
+      expect(lint.filter((name) => !POISONED_GLOBALS.includes(name))).toEqual([]);
+      for (const name of [
+        'navigator',
+        'location',
+        'EventSource',
+        'importScripts',
+        'requestIdleCallback',
+        'chrome',
+      ])
+        expect(POISONED_GLOBALS, name).toContain(name);
+    });
+
+    it("zod's own reads of navigator and globalThis pass; the same read from any other file is src/core's", () => {
+      const reads: readonly (readonly [string, string, boolean])[] = [
+        [`${ZOD_CORE}/util.js`, 'navigator', false],
+        [`${ZOD_CORE}/core.js`, 'globalThis', false],
+        [`${ZOD_CORE}/util.js`, 'globalThis', true],
+        [`${ZOD_CORE}/core.js`, 'navigator', true],
+        ['/repo/node_modules/other/util.js', 'navigator', true],
+        ['/repo/node_modules/zod/v4/core/util.js', 'location', true],
+      ];
+      const poison = installPoison({ isCore: (file) => file === SPEC_FILE });
+      const thrown: unknown[] = [];
+      try {
+        for (const [file, name] of reads) thrown.push(thrownBy(readerIn(file, name)));
+      } finally {
+        poison.restore();
+      }
+      reads.forEach(([file, name, caught], i) => {
+        if (caught) expect(thrown[i], `${name} from ${file}`).toBeInstanceOf(PoisonError);
+        else expect(thrown[i], `${name} from ${file}`).toBeUndefined();
+      });
+      expect(poison.violations).toEqual(['globalThis', 'navigator', 'navigator', 'location']);
+    });
+
+    it('a guard of globals only (the poisoned run poisons chrome and browser that way) leaves Date alone', () => {
+      const poison = installPoison({
+        isCore: (file) => file === SPEC_FILE,
+        globals: ['chrome'],
+        builtIns: false,
+      });
+      let thrown: unknown;
+      try {
+        expect(typeof Date.now()).toBe('number');
+        thrown = thrownBy(() => Reflect.get(GLOBAL, 'chrome'));
+      } finally {
+        poison.restore();
+      }
+      expect(thrown).toBeInstanceOf(PoisonError);
+      expect(poison.violations).toEqual(['chrome']);
+    });
+  },
+);
+
 describe('negative controls: the snapshot of the built-ins (FR3-3)', GATE, () => {
   it('control: the snapshot sees no change when nothing changed, and each kind of change when one is made', () => {
     const before = snapshotIntrinsics(POISONED_GLOBALS);
@@ -298,5 +380,21 @@ describe('negative controls: the snapshot of the built-ins (FR3-3)', GATE, () =>
     } finally {
       Reflect.deleteProperty(globalThis, 'probeGlobal');
     }
+  });
+
+  it('a snapshot taken under the guard still covers the built-ins it poisons as globals (Atomics, SharedArrayBuffer)', () => {
+    const poison = installPoison({ isCore: (file) => file === FIXTURE_FILE });
+    const changes: string[] = [];
+    try {
+      const before = snapshotIntrinsics(POISONED_GLOBALS);
+      Reflect.defineProperty(Atomics, 'probe', { value: 1, configurable: true });
+      Reflect.defineProperty(SharedArrayBuffer.prototype, 'probe', { value: 1, configurable: true });
+      changes.push(...intrinsicChanges(before));
+    } finally {
+      Reflect.deleteProperty(Atomics, 'probe');
+      Reflect.deleteProperty(SharedArrayBuffer.prototype, 'probe');
+      poison.restore();
+    }
+    expect(changes.sort()).toEqual(['Atomics.probe added', 'SharedArrayBuffer.prototype.probe added']);
   });
 });

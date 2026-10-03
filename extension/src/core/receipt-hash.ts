@@ -5,8 +5,9 @@
  *   inputsHash = sha256(canonicalJson({claim, candidatesHash, grantHash, policyHash, coverageHash, context}))
  *
  * `candidatesHash` is Merkle-style: each candidate's `refHash` is the SHA-256 of `canonicalJson({id, contentHash,
- * observedAt})` (its content is pinned by `contentHash`, and its id derives from it, §10), computed once per
- * observation object, and `candidatesHash` is the SHA-256 of the concatenated 32-byte `refHash` digests of the
+ * observedAt, sightedAt?})` (its content is pinned by `contentHash`, and its id derives from it, §10; `sightedAt`,
+ * the first sighting §4.1 and §7 read, is bound when the row has one, and canonical JSON drops it when it has none,
+ * so a row without it hashes as it did before contract v1.8), computed once per observation object, and `candidatesHash` is the SHA-256 of the concatenated 32-byte `refHash` digests of the
  * candidates de-duplicated by id and sorted by id (among rows sharing an id, the one whose canonical JSON sorts
  * first is named, which `grade()` also grades); the empty list hashes the empty byte string. It binds exactly
  * the facts listing the refs would, without re-encoding them for every receipt.
@@ -156,28 +157,41 @@ export function coverageHash(coverage: Coverage): Sha256 {
   return memoHash(COVERAGE_HASHES, coverage, canonicalCoverage, asSha256);
 }
 
-/** How §3 names a candidate: its content is pinned by `contentHash`, and its id derives from it. */
-function candidateRef(candidate: Observation): Pick<Observation, 'id' | 'contentHash' | 'observedAt'> {
-  return { id: candidate.id, contentHash: candidate.contentHash, observedAt: candidate.observedAt };
+/**
+ * How §3 names a candidate: its content is pinned by `contentHash`, and its id derives from it; when it was stored
+ * (`observedAt`) and, when the ledger stored it later, when it was first seen (`sightedAt`, §4.1, §7).
+ */
+function candidateRef(
+  candidate: Observation,
+): Pick<Observation, 'id' | 'contentHash' | 'observedAt' | 'sightedAt'> {
+  const { id, contentHash, observedAt, sightedAt } = candidate;
+  return { id, contentHash, observedAt, sightedAt };
 }
 
 /** The writer of `refHash`, reset for each ref (synchronous: no ref ever sees another's state). */
 const REF_WRITER = new Sha256Writer();
 
 /**
- * SHA-256 of `canonicalJson({id, contentHash, observedAt})`, as digest words: written piece by piece in canonical key
- * order (contentHash < id < observedAt), each value as `JSON.stringify` writes it, when all three are strings, as a
- * parsed Observation's are (the bytes are exactly the canonical JSON's, without building it as one string);
- * anything else goes through `canonicalJson`, which also throws for what it cannot write.
+ * SHA-256 of `canonicalJson({id, contentHash, observedAt, sightedAt?})`, as digest words: written piece by piece in
+ * canonical key order (contentHash < id < observedAt < sightedAt; an absent `sightedAt` is left out, as canonical
+ * JSON drops it), each value as `JSON.stringify` writes it, when each is a string, as a parsed Observation's are (the
+ * bytes are exactly the canonical JSON's, without building it as one string); anything else goes through
+ * `canonicalJson`, which also throws for what it cannot write.
  */
 function writeRef(candidate: Observation): Sha256Writer {
-  const { id, contentHash, observedAt } = candidate;
+  const { id, contentHash, observedAt, sightedAt } = candidate;
   const writer = REF_WRITER.reset();
-  if (typeof id !== 'string' || typeof contentHash !== 'string' || typeof observedAt !== 'string') {
+  if (
+    typeof id !== 'string' ||
+    typeof contentHash !== 'string' ||
+    typeof observedAt !== 'string' ||
+    (sightedAt !== undefined && typeof sightedAt !== 'string')
+  ) {
     writer.write(canonicalJson(candidateRef(candidate)));
     return writer;
   }
-  if (plainJson(contentHash) && plainJson(id) && plainJson(observedAt)) {
+  const plain = plainJson(contentHash) && plainJson(id) && plainJson(observedAt);
+  if (plain && (sightedAt === undefined || plainJson(sightedAt))) {
     // Each value is its JSON text between quotes (hash.ts `plainJson`), so the quotes join the fixed pieces.
     writer.write('{"contentHash":"');
     writer.write(contentHash);
@@ -185,6 +199,10 @@ function writeRef(candidate: Observation): Sha256Writer {
     writer.write(id);
     writer.write('","observedAt":"');
     writer.write(observedAt);
+    if (sightedAt !== undefined) {
+      writer.write('","sightedAt":"');
+      writer.write(sightedAt);
+    }
     writer.write('"}');
     return writer;
   }
@@ -194,6 +212,10 @@ function writeRef(candidate: Observation): Sha256Writer {
   writer.write(JSON.stringify(id));
   writer.write(',"observedAt":');
   writer.write(JSON.stringify(observedAt));
+  if (sightedAt !== undefined) {
+    writer.write(',"sightedAt":');
+    writer.write(JSON.stringify(sightedAt));
+  }
   writer.write('}');
   return writer;
 }
@@ -210,26 +232,35 @@ interface HeldRef {
   readonly id: string;
   readonly contentHash: string;
   readonly observedAt: string;
+  readonly sightedAt: string | undefined;
   readonly hash: Int32Array;
 }
 
 /**
  * Each observation's `refHash`, per object: an index hands one observation to every claim whose window holds it,
  * and its ref is hashed into each of their receipts (§3: "computed once per observation"). Used only while the
- * three fields it was computed from are unchanged, so an observation edited in place is hashed again, never stale.
+ * fields it was computed from are unchanged, so an observation edited in place is hashed again, never stale.
  */
 const REF_HASHES = new WeakMap<Observation, HeldRef>();
 
 /**
- * §3 v1.5 `refHash`: SHA-256 of `canonicalJson({id, contentHash, observedAt})`, as its 32 raw bytes held in
- * DIGEST_WORDS big-endian words. Remembered per observation object (see above); callers never modify it.
+ * §3 `refHash` (v1.5; `sightedAt` bound since v1.8): SHA-256 of `canonicalJson({id, contentHash, observedAt,
+ * sightedAt?})`, as its 32 raw bytes held in DIGEST_WORDS big-endian words. Remembered per observation object (see
+ * above); callers never modify it.
  */
 export function refHash(candidate: Observation): Int32Array {
-  const { id, contentHash, observedAt } = candidate;
+  const { id, contentHash, observedAt, sightedAt } = candidate;
   const held = REF_HASHES.get(candidate);
-  if (held?.id === id && held.contentHash === contentHash && held.observedAt === observedAt) return held.hash;
+  if (
+    held?.id === id &&
+    held.contentHash === contentHash &&
+    held.observedAt === observedAt &&
+    held.sightedAt === sightedAt
+  ) {
+    return held.hash;
+  }
   const hash = writeRef(candidate).words();
-  REF_HASHES.set(candidate, { id, contentHash, observedAt, hash });
+  REF_HASHES.set(candidate, { id, contentHash, observedAt, sightedAt, hash });
   return hash;
 }
 

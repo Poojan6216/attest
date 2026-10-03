@@ -94,6 +94,8 @@ export const CORE_RESTRICTED_GLOBAL_NAMES = [
   'setTimeout',
   'setInterval',
   'requestAnimationFrame',
+  // A callback timed by when the host is idle (FS-1).
+  'requestIdleCallback',
   'performance',
   'crypto',
   'process',
@@ -109,6 +111,25 @@ export const CORE_RESTRICTED_GLOBAL_NAMES = [
   // A blocking wait with a timeout, and memory other threads write (FR3-3).
   'Atomics',
   'SharedArrayBuffer',
+  // Chrome's other name for navigator: the host's language, userAgent and onLine (R4-FENCE-2).
+  'clientInformation',
+  // A window's ways to load a URL, start code elsewhere or reach another window or context (R4-FENCE-1). The
+  // allowlist (attest/core-globals, eslint-rules/core-names.js) refuses every other host name too; these are named so
+  // the runtime guard poisons them as well.
+  'Image',
+  'Audio',
+  'FontFace',
+  'Worker',
+  'SharedWorker',
+  'Notification',
+  'BroadcastChannel',
+  'open',
+  'opener',
+  'parent',
+  'top',
+  'frames',
+  'postMessage',
+  'navigation',
   ...NODE_GLOBALS,
 ];
 

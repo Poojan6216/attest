@@ -21,7 +21,8 @@
  *
  * A revert never erases what a batch saw (Hard Rule 4): batches graded other receipts while the override was in
  * force, so `revert` keeps it in `reverted` with the instant it was reverted (`at`, stamped by the caller inside
- * the transaction that writes it, like an override's `at`) and the computed part it sat beside, and every later
+ * the transaction that writes it and after the last batch, like an override's `at`: src/ledger/batch-instant.ts
+ * `writeUserEvent`) and the computed part it sat beside, and every later
  * event keeps that list. batch-fixed.ts reads it: the override stays in force for the batches evaluated up to its
  * revert, both for what it fixed or released and for leaving its claim out (`heldOutAt`), so `regrade` refuses a
  * receipt computed by a batch that should have left the subject out (`regrade_held`).

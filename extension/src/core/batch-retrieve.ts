@@ -10,8 +10,8 @@
  * the groups whose `occurredAt` lies in its window, in the same order, with the same first-seen rule. This is
  * `candidates()` exactly because equal content hashes mean equal `occurredAt` (it is hashed, §10): every
  * sighting of an event is in or out of a window together, so grouping within each window and grouping once give
- * the same groups, the same representative (lowest id, then earliest sighting, then the smaller `observedAt`
- * text: a total order) and the same first sighting. If the rows of a type ever break that (one content hash at
+ * the same groups, the same representative (order.ts `representative`: a total order) and the same first sighting
+ * (order.ts `firstSeenAt`). If the rows of a type ever break that (one content hash at
  * two instants, which only a corrupt ledger can hold), that type's claims are read claim by claim with
  * `candidates()` itself. A property test pins the two together. The representative, the candidate order, the
  * interval merge, the first-seen bound and its comparison (`passesFirstSeen`) are order.ts's: the very functions
@@ -29,6 +29,7 @@ import { occurredMs } from './candidates-time';
 import { instantMs } from './normalize';
 import {
   compareCandidates,
+  firstSeenAt,
   firstSeenFromMs,
   fromRelevantSource,
   hasFirstSeenRule,
@@ -47,6 +48,7 @@ const instantMsLocal = instantMs;
 const representativeLocal = representative;
 const fromRelevantSourceLocal = fromRelevantSource;
 const hasFirstSeenRuleLocal = hasFirstSeenRule;
+const firstSeenAtLocal = firstSeenAt;
 const passesFirstSeenLocal = passesFirstSeen;
 
 /** One claim's window and, for `calendar.created`, its first-seen bound (order.ts `firstSeenFromMs`). */
@@ -61,15 +63,16 @@ interface Wanted {
 interface Group {
   observation: Observation;
   readonly atMs: number;
-  firstSeenMs: number;
+  seenMs: number;
 }
 
 /**
- * A row's sighting, read only for a type with the first-seen rule (§4.1, order.ts `hasFirstSeenRule`). Instants are
- * read from the text, here and in `addRows`, not through the per-object memo (batch-orphans.ts `seenBy`).
+ * A row's first sighting (order.ts `firstSeenAt`), read only for a type with the first-seen rule (§4.1, order.ts
+ * `hasFirstSeenRule`). Instants are read from the text, here and in `addRows`, not through the per-object memo
+ * (batch-orphans.ts `seenBy`).
  */
-function sightedAt(type: ActionType, observation: Observation): number {
-  return hasFirstSeenRuleLocal(type) ? instantMsLocal(observation.observedAt) : 0;
+function firstSeenOf(type: ActionType, observation: Observation): number {
+  return hasFirstSeenRuleLocal(type) ? instantMsLocal(firstSeenAtLocal(observation)) : 0;
 }
 
 /** Each claim's window as an interval, merged where they overlap or touch (order.ts `mergeIntervals`). */
@@ -94,11 +97,11 @@ function addRows(
     if (atMs < startMs || atMs > endMs) continue;
     const held = groups.get(observation.contentHash);
     if (held === undefined) {
-      groups.set(observation.contentHash, { observation, atMs, firstSeenMs: sightedAt(type, observation) });
+      groups.set(observation.contentHash, { observation, atMs, seenMs: firstSeenOf(type, observation) });
       continue;
     }
     if (held.atMs !== atMs) return false;
-    held.firstSeenMs = Math.min(held.firstSeenMs, sightedAt(type, observation));
+    held.seenMs = Math.min(held.seenMs, firstSeenOf(type, observation));
     held.observation = representativeLocal(held.observation, observation);
   }
   return true;
@@ -146,7 +149,7 @@ function slice(groups: readonly Group[], wanted: Wanted): number[] {
   for (let i = firstAtOrAfter(groups, wanted.fromMs); i < groups.length; i += 1) {
     const group = groups[i];
     if (group === undefined || group.atMs > wanted.toMs) break;
-    if (passesFirstSeenLocal(group.firstSeenMs, wanted.firstSeenFrom)) rows.push(i);
+    if (passesFirstSeenLocal(group.seenMs, wanted.firstSeenFrom)) rows.push(i);
   }
   return rows;
 }

@@ -2,7 +2,8 @@
  * The §3/§4.1 rules written once in src/core/order.ts, and the paths that share them (Sprint 1 tech review TECH-C4),
  * each against a reference (1,000 runs each, qa_tester rule 4):
  *  - `mergeIntervals` against a fixpoint merge written from scratch; `representative` against "the first by (id,
- *    observedAt instant, observedAt text)", whatever order the rows are folded in;
+ *    first sighting instant, observedAt instant, observedAt text, sightedAt text)", whatever order the rows are folded
+ *    in (some rows stored later than sighted, carrying `sightedAt`, SIM-2);
  *  - the batch's retrieval (batch-retrieve.ts `candidatesOfAll`) against `candidates()` claim by claim, the path
  *    replay rebuilds batches with (re-sightings, twin ids, rows read by a source not listed for their type, rows
  *    first seen exactly at a calendar.created claim's first-seen bound, and a corrupt content hash at two instants,
@@ -45,7 +46,9 @@ const compareText = (a: string, b: string) => (a === b ? 0 : a < b ? -1 : 1);
 const minutesAt = (minutes: number, offset = 0) => isoAt(BASE_MS + minutes * MS_PER_MINUTE, offset);
 
 /** How often the runs reached each case: asserted after each property so it can never pass vacuously. */
-const tally = { candidates: 0, corrupt: 0, atBound: 0, orphans: 0, strayExcluded: 0 };
+const tally = { candidates: 0, corrupt: 0, atBound: 0, stamped: 0, orphans: 0, strayExcluded: 0 };
+/** §4.1, §7: when a row was first seen, written out (its `sightedAt` when the ledger stored it later). */
+const firstSeenMs = (o: Observation) => Date.parse(o.sightedAt ?? o.observedAt);
 
 // ── order.ts against definitions written from scratch ──────────────────────────────────────────
 
@@ -71,7 +74,13 @@ const intervalArb = fc
 
 /** Rows sharing one content hash: ids from three, sightings in three offsets, so instants tie with other text. */
 const sharedArb = fc.array(
-  fc.record({ id: fc.nat({ max: 2 }), seenMinutes: fc.nat({ max: 2 }), offset: offsetArb }),
+  fc.record({
+    id: fc.nat({ max: 2 }),
+    seenMinutes: fc.nat({ max: 2 }),
+    offset: offsetArb,
+    /** Sometimes stored 1–2 minutes after the sighting (SIM-2): `sightedAt` keeps the sighting. */
+    laterMinutes: fc.nat({ max: 2 }),
+  }),
   { minLength: 1, maxLength: 6 },
 );
 
@@ -85,23 +94,26 @@ function row(k: number, twin: number, fields: Record<string, unknown>): Observat
 }
 
 function sharedRows(rows: Generated<typeof sharedArb>): Observation[] {
-  return rows.map(({ id, seenMinutes, offset }) =>
+  return rows.map(({ id, seenMinutes, offset, laterMinutes }) =>
     row(0, id, {
       source: 'gmail.sent',
       type: 'email.sent',
       occurredAt: minutesAt(0),
-      observedAt: minutesAt(seenMinutes, offset),
+      observedAt: minutesAt(seenMinutes + laterMinutes, offset),
+      ...(laterMinutes === 0 ? {} : { sightedAt: minutesAt(seenMinutes, offset) }),
     }),
   );
 }
 
-/** §4.1 written out: the lowest id, then the earliest sighting, then the smaller `observedAt` text. */
+/** §4.1 written out: the lowest id, the earliest first sighting, the earliest observedAt, then the smaller texts. */
 function firstBySpec(rows: readonly Observation[]): Observation | undefined {
   return [...rows].sort(
     (a, b) =>
       compareText(a.id, b.id) ||
+      firstSeenMs(a) - firstSeenMs(b) ||
       Date.parse(a.observedAt) - Date.parse(b.observedAt) ||
-      compareText(a.observedAt, b.observedAt),
+      compareText(a.observedAt, b.observedAt) ||
+      compareText(a.sightedAt ?? '', b.sightedAt ?? ''),
   )[0];
 }
 
@@ -115,7 +127,7 @@ describe('order.ts against definitions written from scratch', () => {
     );
   });
 
-  it('representative keeps the first by (id, observedAt instant, observedAt text) in any fold order', () => {
+  it('representative keeps the first by (id, first sighting, observedAt, texts) in any fold order', () => {
     fc.assert(
       fc.property(sharedArb, fc.nat(), (generated, rotate) => {
         const rows = sharedRows(generated);
@@ -158,6 +170,8 @@ const sightingArb = fc.record({
   shifted: fc.boolean(),
   /** Sometimes: seen exactly at the first-seen bound of a claim that has one (and of that claim's content). */
   atBound: rarely(fc.nat({ max: 7 }), 2),
+  /** Sometimes: stored this many minutes after the sighting, which it keeps as `sightedAt` (§3, SIM-2). */
+  storedLater: rarely(fc.integer({ min: 1, max: 90 }), 2),
 });
 const rowsArb = fc.record({
   contents: fc.array(contentArb, { minLength: 1, maxLength: 10 }),
@@ -187,12 +201,15 @@ function buildRows(
     if (c === undefined) return [];
     const shift = s.shifted && c.shiftMinutes !== null ? c.shiftMinutes : 0;
     if (shift !== 0) tally.corrupt += 1;
+    const sightedMs = boundMs ?? BASE_MS + s.seenMinutes * MS_PER_MINUTE;
+    const stamp = s.storedLater === null ? {} : { sightedAt: isoAt(sightedMs, s.offset) };
     return [
       row(k, s.twin, {
         source: c.source ?? OWN_SOURCE[c.type] ?? 'gmail.sent',
         type: c.type,
         occurredAt: minutesAt(c.atMinutes + shift, c.offset),
-        observedAt: boundMs === null ? minutesAt(s.seenMinutes, s.offset) : isoAt(boundMs, s.offset),
+        observedAt: isoAt(sightedMs + (s.storedLater ?? 0) * MS_PER_MINUTE, s.offset),
+        ...stamp,
       }),
     ];
   });
@@ -233,7 +250,7 @@ function firstSeenAtBound(
   if (boundMs === null) return false;
   return found.some((candidate) => {
     const seen = observations.filter((o) => o.contentHash === candidate.contentHash);
-    return Math.min(...seen.map((o) => Date.parse(o.observedAt))) === boundMs;
+    return Math.min(...seen.map(firstSeenMs)) === boundMs;
   });
 }
 
@@ -278,6 +295,7 @@ describe('the batch paths against the reference paths', () => {
             expect(own?.rows.map((row) => own.table.rows[row])).toEqual(expected);
             if (expected.length > 0) tally.candidates += 1;
             if (firstSeenAtBound(claim, expected, observations)) tally.atBound += 1;
+            if (expected.some((o) => o.sightedAt !== undefined)) tally.stamped += 1;
           }
         },
       ),
@@ -286,6 +304,7 @@ describe('the batch paths against the reference paths', () => {
     expect(tally.candidates).toBeGreaterThan(RUNS / 2);
     expect(tally.corrupt).toBeGreaterThan(RUNS / 10);
     expect(tally.atBound).toBeGreaterThan(RUNS / 20);
+    expect(tally.stamped).toBeGreaterThan(RUNS / 5);
   }, 120_000);
 });
 

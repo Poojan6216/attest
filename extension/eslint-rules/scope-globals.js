@@ -64,10 +64,11 @@ function isAmbient(definition) {
  * globals appear in the global scope's `through`; typescript-eslint also declares DOM lib globals (fetch,
  * WebSocket, …) as global-scope variables without definitions, so their references count too. A variable whose
  * every definition is ambient (`declare const Date: DateConstructor`, in any scope) is the real global at run
- * time, so its references count as well (PI-2). Type-only references (`let d: Date`) are skipped.
+ * time, so its references count as well (PI-2). Type-only references (`let d: Date`) are skipped. `names` is a set,
+ * or any test of a name (`{ has: (name) => !allowed.has(name) }` for an allowlist, attest/core-globals).
  * @param {import('eslint').Rule.RuleContext} context
  * @param {import('estree').Node} program
- * @param {ReadonlySet<string>} names
+ * @param {{ has(name: string): boolean }} names
  * @param {(identifier: import('estree').Identifier, name: string) => void} report
  */
 export function forEachGlobalReference(context, program, names, report) {

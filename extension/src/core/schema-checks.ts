@@ -147,12 +147,26 @@ export function claimProblems(claim: {
   return [...derivedIdProblems(claim.id, claim.rawHash, 'rawHash'), ...claimedAtEndProblems(claim)];
 }
 
-/** §10: an observation's id is `idFromHash(contentHash)`, so one content has exactly one id. */
+/**
+ * An observation's cross-field invariants: `id = idFromHash(contentHash)` (§10), so one content has exactly one id;
+ * and a `sightedAt` strictly before `observedAt` (§3, §4.1): the ledger keeps the sighting only when it stored the
+ * row later, and an absent `sightedAt` means the same instant as `observedAt`, so one fact has one spelling.
+ */
 export function observationProblems(observation: {
   readonly id: string;
   readonly contentHash: string;
+  readonly observedAt: string;
+  readonly sightedAt?: string | undefined;
 }): Problem[] {
-  return derivedIdProblems(observation.id, observation.contentHash, 'contentHash');
+  const problems = derivedIdProblems(observation.id, observation.contentHash, 'contentHash');
+  if (observation.sightedAt === undefined) return problems;
+  const sightedMs = instantMs(observation.sightedAt);
+  const observedMs = instantMs(observation.observedAt);
+  // NaN: a field that is not an IsoTs, already reported at its own path; there is nothing to compare.
+  if (!Number.isNaN(sightedMs) && !Number.isNaN(observedMs) && sightedMs >= observedMs) {
+    problems.push(['sightedAt', 'must be before observedAt']);
+  }
+  return problems;
 }
 
 // ── Receipt signals (§5.1, §8) ──────────────────────────────────────────────────────────────────

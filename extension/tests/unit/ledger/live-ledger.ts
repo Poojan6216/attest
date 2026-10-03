@@ -7,18 +7,22 @@
  * grades exactly those rows with a `LedgerSim` (tests/tools) holding the receipts stored so far. `snapshot()` is
  * what an export holds: the ledger's rows as they are at the end, the receipts and their inputs. Replay rebuilds
  * each batch from those final rows, so it reproduces every receipt only if no stored row moved after a batch could
- * read it and no row was stored at or before the instant of a batch that did not read it.
+ * read it and no row was stored at or before the instant of a batch that did not read it. The user's overrides and
+ * reverts are stamped as the background stamps them, by `writeUserEvent` with the clock pinned where they happen
+ * (§3: never before a batch that did not read them, SIM-1, nor before the receipt's own last event, R4-EVENT-ORDER).
  */
 import type { Policy } from '../../../src/core/policy';
 import type { LedgerSnapshot, ReceiptInputs } from '../../../src/core/replay';
-import type { OverrideGrade, Receipt, Ulid } from '../../../src/core/schema';
+import type { IsoTs, OverrideGrade, Receipt, Ulid } from '../../../src/core/schema';
 import { transition } from '../../../src/core/state';
 import { readRows, type LedgerDb } from '../../../src/ledger/db';
 import {
+  lastEventAt,
   recordBatchInstant,
   upsertClaim,
   upsertObservation,
   type UpsertResult,
+  writeUserEvent,
 } from '../../../src/ledger/repo';
 import { Claim, Observation, type ClaimInput, type ObservationInput } from '../../../src/ledger/types';
 import { LedgerSim } from '../../tools/attest-ledger';
@@ -73,11 +77,31 @@ export class LiveLedger {
     for (const [hash, policy] of graded.policies) this.#policies.set(hash, policy);
   }
 
-  /** The user overrides one stored receipt (§8). */
-  override(id: Ulid, grade: OverrideGrade, at: string): void {
+  /** The user overrides one stored receipt with the clock reading `clock` (§8); returns the stamped `at`. */
+  async override(id: Ulid, grade: OverrideGrade, clock: string): Promise<IsoTs> {
+    return this.#userEvent(id, clock, (held, at) =>
+      transition(held, { event: 'override', grade, reason: 'synthetic override', at }),
+    );
+  }
+
+  /** The user reverts the override of one stored receipt with the clock reading `clock` (§8); returns its instant. */
+  async revert(id: Ulid, clock: string): Promise<IsoTs> {
+    return this.#userEvent(id, clock, (held, at) => transition(held, { event: 'revert', at }));
+  }
+
+  /**
+   * One user event, stamped and applied inside `writeUserEvent`'s transaction, as the background writes it: bounded
+   * below by the receipt's own last event (`lastEventAt`, R4-EVENT-ORDER) as well as by the last batch.
+   */
+  async #userEvent(id: Ulid, clock: string, apply: (held: Receipt, at: IsoTs) => Receipt): Promise<IsoTs> {
+    pinClock(clock);
     const held = this.receipts.get(id);
     if (held === undefined) throw new Error(`no receipt ${id}`);
-    this.receipts.set(id, transition(held, { event: 'override', grade, reason: 'synthetic override', at }));
+    const write = (at: IsoTs): Promise<IsoTs> => {
+      this.receipts.set(id, apply(held, at));
+      return Promise.resolve(at);
+    };
+    return writeUserEvent(this.db, write, { notBefore: lastEventAt(held) });
   }
 
   /** What an export holds: the ledger's rows now, the receipts and the inputs they reference. */
@@ -92,11 +116,12 @@ export class LiveLedger {
   }
 }
 
-/** One step of a timeline: a write, a batch, or a user override, at an instant. */
+/** One step of a timeline: a write, a batch, or a user override or revert, at an instant (the clock's reading). */
 export type Step =
   | { readonly at: string; readonly kind: 'write'; readonly row: Claim | Observation }
   | { readonly at: string; readonly kind: 'batch'; readonly policy?: number }
-  | { readonly at: string; readonly kind: 'override'; readonly id: Ulid; readonly grade: OverrideGrade };
+  | { readonly at: string; readonly kind: 'override'; readonly id: Ulid; readonly grade: OverrideGrade }
+  | { readonly at: string; readonly kind: 'revert'; readonly id: Ulid };
 
 /** Runs the steps in time order (a stable sort: steps at one instant keep their listed order). */
 export async function play(live: LiveLedger, steps: readonly Step[]): Promise<void> {
@@ -104,7 +129,8 @@ export async function play(live: LiveLedger, steps: readonly Step[]): Promise<vo
   for (const step of ordered) {
     if (step.kind === 'write') await live.write(step.row, step.at);
     else if (step.kind === 'batch') await live.batch(step.at, step.policy);
-    else live.override(step.id, step.grade, step.at);
+    else if (step.kind === 'override') await live.override(step.id, step.grade, step.at);
+    else await live.revert(step.id, step.at);
   }
 }
 

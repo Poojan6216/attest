@@ -14,9 +14,10 @@ export const LEDGER_ERROR_CODES = [
    */
   'id_conflict',
   /**
-   * A sighting of a stored content/raw hash that is earlier than the stored row's `observedAt`. The stored row
-   * is kept as it is, because a batch may already have graded with it (docs/grading.md §3; Hard Rule 4).
-   * Nothing is written; the caller reports the pass DEGRADED (Hard Rule 6).
+   * A sighting of a stored contentHash that is earlier than the stored observation's first sighting (its
+   * `sightedAt`, else its `observedAt`). The stored row is kept as it is, because a batch may already have graded
+   * with it (docs/grading.md §3; Hard Rule 4). Nothing is written; the caller reports the pass DEGRADED (Hard Rule 6).
+   * Never raised for a claim: its sighting grades nothing, so any re-read of a stored rawHash is a no-op (§10).
    */
   'late_sighting',
   /** `recordBatchInstant` got an instant at or before the last recorded batch's. Nothing is written. */

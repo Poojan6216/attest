@@ -13,12 +13,16 @@
  *  - Observations and claims are idempotent: keyed on contentHash / rawHash inside one rw transaction.
  *    A repeat returns the stored id and never leaks a ConstraintError. A stored row is never rewritten, because
  *    a batch may have graded with it (docs/grading.md §3, Hard Rule 4). A repeat must be the same fact: one that
- *    differs in anything but `observedAt` (and a claim's `extractor`) throws `LedgerError('id_conflict')`, and
- *    one sighted earlier than the stored row throws `LedgerError('late_sighting')`; both change nothing (Hard
- *    Rule 6). A new row is stored with the `observedAt` `stampObservedAt` gives (./batch-instant.ts): never at or
- *    before the instant of a batch that did not read it. A stored row no read can return (it fails its schema)
- *    is replaced, not kept as a ghost.
- *  - A grading batch records its instant with `recordBatchInstant` before it reads (./batch-instant.ts).
+ *    differs in anything but `observedAt` (and a claim's `extractor`) throws `LedgerError('id_conflict')`, and an
+ *    observation sighted earlier than the stored row's first sighting throws `LedgerError('late_sighting')`; both
+ *    change nothing (Hard Rule 6). A claim's sighting grades nothing, so a claim seen again is a no-op however
+ *    early it was sighted. A new row is stored with the `observedAt` `stampObservedAt` gives (./batch-instant.ts):
+ *    never at or before the instant of a batch that did not read it. A new observation stored later than it was
+ *    sighted keeps the sighting as `sightedAt`, which only the ledger sets (an incoming one is `invalid_input`).
+ *    A stored row no read can return (it fails its schema) is replaced, not kept as a ghost.
+ *  - A grading batch records its instant with `recordBatchInstant` before it reads, and a user event (override,
+ *    revert) is written through `writeUserEvent`, which stamps it after the last batch and after the receipt's own
+ *    last event (`lastEventAt`, passed as `notBefore`; ./batch-instant.ts).
  *  - Adapter health and coverage keep the latest report: an older timestamp never replaces a newer one.
  *  - Reads strip derived index fields and Zod-parse; an invalid row is skipped and logged by id only.
  */
@@ -67,7 +71,7 @@ import {
 } from './upsert';
 
 export type { UpsertResult } from './upsert';
-export { recordBatchInstant } from './batch-instant';
+export { lastEventAt, recordBatchInstant, type UserEventBound, writeUserEvent } from './batch-instant';
 
 export interface WriteResult {
   /** False when the incoming report was older than the stored one and was ignored. */
@@ -102,9 +106,10 @@ function assertProjected(observation: Observation, policy: Policy): void {
 }
 
 /**
- * Inserts an observation (its `observedAt` stamped, ./batch-instant.ts), or returns the existing id when its
- * contentHash is already stored and the stored row is the same fact sighted no later (`id_conflict` for another
- * fact, `late_sighting` for an earlier sighting; the stored row never changes).
+ * Inserts an observation (its `observedAt` stamped, ./batch-instant.ts, and its sighting kept as `sightedAt` when
+ * the stamp is later), or returns the existing id when its contentHash is already stored and the stored row is the
+ * same fact first seen no later (`id_conflict` for another fact, `late_sighting` for an earlier sighting; the stored
+ * row never changes). An observation carrying `sightedAt` is `invalid_input`: only the ledger sets it.
  * `policy` is the loaded policy whose allowlist the observation was projected under; a row it could not have
  * produced is refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a
  * widened allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
@@ -163,10 +168,11 @@ export async function observationsByCounterpartyToken(db: LedgerDb, token: strin
 
 /**
  * Inserts a claim (its `observedAt` stamped, ./batch-instant.ts), or returns the existing id when its rawHash
- * is already stored and the stored claim is the same one sighted no later. The raw text is never stored, so the
- * rawHash cannot be checked against it: a claim that differs from the stored one in anything but `observedAt` and
- * `extractor` throws `LedgerError('id_conflict')` instead, and an earlier sighting `late_sighting`. A newer
- * extractor that reads the claim the same way changes nothing (the stored extractor is kept).
+ * is already stored and the stored claim is the same one, whenever this read sighted it: a claim's sighting grades
+ * nothing (docs/grading.md §3, §10), so an earlier re-read is no news and never `late_sighting`. The raw text is
+ * never stored, so the rawHash cannot be checked against it: a claim that differs from the stored one in anything
+ * but `observedAt` and `extractor` throws `LedgerError('id_conflict')` instead. A newer extractor that reads the
+ * claim the same way changes nothing (the stored extractor is kept).
  */
 export async function upsertClaim(db: LedgerDb, input: ClaimInput): Promise<UpsertResult> {
   const claim = parseInput('claims', Claim, input);

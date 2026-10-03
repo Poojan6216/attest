@@ -5,17 +5,22 @@
  *
  * A stored row is never rewritten: a batch may already have graded with it, and replay rebuilds that batch from
  * the stored row (docs/grading.md §3, §9; Hard Rule 4). So a hash seen again must be the same fact: only
- * `observedAt` may differ (and, for a claim, the `extractor` that read it). A later sighting changes nothing; an
- * earlier one throws `LedgerError('late_sighting')` and changes nothing; a fact that differs in anything else
- * throws `LedgerError('id_conflict')` and changes nothing (Hard Rule 6). A new row is stored with the
- * `observedAt` `stampObservedAt` gives, read inside the transaction that writes it. A stored row no read can
- * return is replaced, never treated as already stored.
+ * `observedAt` may differ (and, for a claim, the `extractor` that read it). A fact that differs in anything else
+ * throws `LedgerError('id_conflict')` and changes nothing (Hard Rule 6). An observation sighted at or after the
+ * stored first sighting changes nothing; one sighted earlier throws `LedgerError('late_sighting')` and changes
+ * nothing. A claim seen again changes nothing whenever it was sighted: nothing grades a claim's sighting (its
+ * `observedAt` only decides which batches read it, §3), so an earlier one is no news. A new row is stored with the
+ * `observedAt` `stampObservedAt` gives, read inside the transaction that writes it. When that is later than the
+ * sighting, a new observation also keeps the sighting as `sightedAt` (§3, §4.1, §7: when it was first seen, which
+ * `observedAt` no longer says); a claim does not. A stored row no read can return is replaced, never treated as
+ * already stored.
  */
 import type { Table } from 'dexie';
 import type { z } from 'zod';
 
 import { nowIso } from '../clock';
 import { canonicalJson } from '../core/hash';
+import { firstSeenAt } from '../core/order';
 import { log } from '../log';
 import { lastBatchMs, stampObservedAt } from './batch-instant';
 import { loggableId, logTableId, readRow, type LedgerDb } from './db';
@@ -45,6 +50,15 @@ export interface HashedTable<Row, Fact extends Sighted> {
   readonly toRow: (fact: Fact) => Row;
   /** What two sightings of one fact share: the fact without the sighting (and without its provenance). */
   readonly identity: (fact: Fact) => string;
+  /**
+   * When a stored fact was first seen (an incoming one's sighting is its `observedAt`), for a table whose first
+   * sighting grades (an observation: §4.1's `calendar.created` rule and the §7 anchor read it), so an earlier
+   * sighting is refused. `undefined` for a table whose sighting grades nothing (a claim: its `observedAt` only
+   * decides which batches read it, §3), so every sighting of a stored fact is a no-op.
+   */
+  readonly firstSeen: ((fact: Fact) => string) | undefined;
+  /** The fact as stored when `stampObservedAt` gave `observedAt`, later than its sighting. */
+  readonly stamped: (fact: Fact, observedAt: IsoTs) => Fact;
 }
 
 /** One write: the parsed fact and its unique hash. */
@@ -66,9 +80,10 @@ async function dropUnreadable<Row, Fact extends Sighted>(
  * The same hash seen again, inside the upsert's transaction; the stored row is left exactly as it is. A fact that
  * differs in anything `identity` keeps throws `id_conflict` (a re-read whose extractor reads the claim
  * differently, a planted row: OBS-4), so the caller reports DEGRADED instead of losing the difference (Hard Rule
- * 6). A sighting earlier than the stored one throws `late_sighting`: the ledger cannot move the stored instant,
- * because a batch may have graded with it (Hard Rule 4), and must not hide that it is later than an observer saw
- * the fact (Hard Rules 5, 6).
+ * 6). Where the first sighting grades (`firstSeen`), a sighting earlier than the stored one throws
+ * `late_sighting`: the ledger cannot move the stored instants, because a batch may have graded with them (Hard
+ * Rule 4), and must not hide that they are later than an observer saw the fact (Hard Rules 5, 6). One at or after
+ * it, and any sighting of a fact whose sighting grades nothing, tells the ledger nothing new.
  */
 function assertSameSighting<Row, Fact extends Sighted>(
   target: HashedTable<Row, Fact>,
@@ -79,7 +94,8 @@ function assertSameSighting<Row, Fact extends Sighted>(
   if (target.identity(stored) !== target.identity(incoming)) {
     throw new LedgerError('id_conflict', 'A different fact is already stored under this hash', context);
   }
-  if (isOlder(incoming.observedAt, stored.observedAt)) {
+  const { firstSeen } = target;
+  if (firstSeen !== undefined && isOlder(incoming.observedAt, firstSeen(stored))) {
     throw new LedgerError(
       'late_sighting',
       'A sighting earlier than the stored one arrived after it',
@@ -130,7 +146,7 @@ export async function insertUnlessHashExists<Row, Fact extends Sighted>(
     }
     await freeId(target, fact.id);
     const observedAt = stampObservedAt(fact.observedAt, IsoTs.parse(nowIso()), await lastBatchMs(db));
-    await store.add(target.toRow({ ...fact, observedAt }));
+    await store.add(target.toRow(observedAt === fact.observedAt ? fact : target.stamped(fact, observedAt)));
     return { id: fact.id, inserted: true };
   });
 }
@@ -142,14 +158,20 @@ export function observationsByHash(db: LedgerDb): HashedTable<ObservationRow, Ob
     schema: Observation,
     hashIndex: 'contentHash',
     toRow: toObservationRow,
-    identity: (observation) => canonicalJson({ ...observation, observedAt: undefined }),
+    identity: (observation) => canonicalJson({ ...observation, observedAt: undefined, sightedAt: undefined }),
+    firstSeen: firstSeenAt,
+    stamped: (observation, observedAt) => ({ ...observation, observedAt, sightedAt: observation.observedAt }),
   };
 }
 
 /**
  * A claim's `extractor` is provenance, not content: a newer extractor version that reads a claim the same way
  * (same rawHash, same fields) re-reads the same claim. The stored row, its extractor included, is kept: a batch
- * may have graded with it, and the claim's hash in `inputsHash` covers the extractor (Hard Rule 4).
+ * may have graded with it, and the claim's hash in `inputsHash` covers the extractor (Hard Rule 4). A claim's
+ * sighting grades nothing (§3: its `observedAt` only decides which batches read it; its own time is `claimedAt`),
+ * so a re-read sighted before the stored `observedAt` is a no-op like any other (no `firstSeen`): refusing it
+ * would turn the adapter DEGRADED for nothing (Hard Rule 6). A claim read before a batch but stored after it is
+ * graded by the next batch, whichever read was stored first.
  */
 export function claimsByHash(db: LedgerDb): HashedTable<ClaimRow, Claim> {
   return {
@@ -159,6 +181,8 @@ export function claimsByHash(db: LedgerDb): HashedTable<ClaimRow, Claim> {
     hashIndex: 'rawHash',
     toRow: toClaimRow,
     identity: (claim) => canonicalJson({ ...claim, observedAt: undefined, extractor: undefined }),
+    firstSeen: undefined,
+    stamped: (claim, observedAt) => ({ ...claim, observedAt }),
   };
 }
 

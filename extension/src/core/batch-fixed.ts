@@ -34,7 +34,8 @@
  * batch's very `evaluatedAt`, or after it but before that batch read its pre-assignments, does nothing in that
  * batch, on both sides. The caller's duty (§3): read the claims and the pre-assignments of a batch, grade them and
  * write the result in one transaction begun after stamping `evaluatedAt`, stamp each batch strictly after the last,
- * and stamp each override's `at` and each revert's instant inside the transaction that writes it, so that every
+ * and stamp each override's `at` and each revert's instant inside the transaction that writes it, after the last
+ * recorded batch instant even when the clock went back (src/ledger/batch-instant.ts `writeUserEvent`), so that every
  * event stamped before `evaluatedAt` is in what the batch read.
  *
  * Nothing here reads a stored `grade` or `ruleId`, so a tampered grade changes no other receipt's pre-assignments.

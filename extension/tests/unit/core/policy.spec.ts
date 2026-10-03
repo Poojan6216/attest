@@ -289,11 +289,12 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
 });
 
 describe('policy vocabularies come from the core schema', () => {
-  it('ObservationFieldName is the Observation keys minus the four redact.ts computes (§12 v1.3)', () => {
-    const computed = ['id', 'source', 'type', 'observedAt'];
+  it('ObservationFieldName is the Observation keys minus the four redact.ts computes and sightedAt (§12 v1.3)', () => {
+    const computed = ['id', 'source', 'type', 'observedAt', 'sightedAt'];
     const keys = Object.keys(Observation.shape).filter((key) => !computed.includes(key));
     expect([...ObservationFieldName.options].sort()).toEqual(keys.sort());
     expect(ObservationFieldName.options).toContain('rowKeyHash');
+    expect(ObservationFieldName.options).not.toContain('sightedAt');
   });
 
   it('per-type and per-agent maps have exactly one key per ActionType / AgentId / source', () => {

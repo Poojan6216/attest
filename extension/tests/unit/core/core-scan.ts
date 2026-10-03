@@ -12,11 +12,19 @@
  * spelling of a member meets the same pattern. Banned patterns are matched over the whole file, not line by line, so
  * a call split across lines (`Date\n.now()`) is still found; a hit names the line it starts on. Text alone cannot
  * tell types: `String(date)`, a template of a Date and a key built from fragments are lint's and the runtime
- * guard's (docs/grading.md §14 lists what is left to review).
+ * guard's (docs/grading.md §14 lists what is left to review). The globals come from lint's own lists
+ * (./core-scan-globals.ts, FS-1, R4-FENCE-1): every name attest/no-network bans, as a word anywhere, and every global
+ * read that is not an ES2023 built-in on src/core's allowlist. A comment that switches the type check off
+ * (`@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, a triple-slash reference) is a hit too.
  */
 import ts from 'typescript';
 
-/** Clock, randomness, timers, network, host and garbage-collector APIs, matched on code only, over the whole file. */
+import { globalReads, NETWORK_PATTERNS } from './core-scan-globals';
+
+/**
+ * Clock, randomness, timers, network, host and garbage-collector APIs, matched on code only, over the whole file. A
+ * pattern named after a global is that name's text form, beside the read of it as the global (globalReads).
+ */
 export const BANNED: readonly (readonly [string, RegExp])[] = [
   ['Date.now', /\bDate\s*\.\s*now\b/g],
   ['Date member other than UTC', /\bDate\s*\.\s*(?!(?:UTC|now)\b)[\w$]/g],
@@ -29,19 +37,21 @@ export const BANNED: readonly (readonly [string, RegExp])[] = [
   ['computed member of Date, Math or crypto', /\b(?:Date|Math|crypto)\s*\[(?!\s*\])/g],
   ['getRandomValues', /\bgetRandomValues\b/g],
   ['randomUUID', /\brandomUUID\b/g],
-  ['fetch', /\bfetch\b/g],
-  ['XMLHttpRequest', /\bXMLHttpRequest\b/g],
-  ['WebSocket', /\bWebSocket\b/g],
+  // attest/no-network's names (fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, …), from lint (FS-1).
+  ...NETWORK_PATTERNS,
   ['performance', /\bperformance\b/g],
-  ['setTimeout / setInterval / setImmediate', /\bset(?:Timeout|Interval|Immediate)\b/g],
-  ['process.', /(?<![\w$.])process\s*\./g],
+  ['setTimeout', /\bsetTimeout\b/g],
+  ['setInterval', /\bsetInterval\b/g],
+  ['setImmediate', /\bsetImmediate\b/g],
+  ['process', /(?<![\w$.])process\s*\./g],
   ['Intl', /\bIntl\b/g],
   ['Temporal', /\bTemporal\b/g],
   ['WeakRef', /\bWeakRef\b/g],
   ['FinalizationRegistry', /\bFinalizationRegistry\b/g],
   ['crypto', /(?<![\w$.])crypto\s*\./g],
   ['chrome', /(?<![\w$.])chrome\s*\./g],
-  ['globalThis / self', /(?<![\w$.])(?:globalThis|self)\b/g],
+  ['globalThis', /(?<![\w$.])globalThis\b/g],
+  ['self', /(?<![\w$.])self\b/g],
   [
     'Reflect on a global',
     /\bReflect\s*\.\s*\w+\s*\(\s*(?:globalThis|self|window|Date|Math|crypto|performance|Intl|Temporal)\b/g,
@@ -72,12 +82,24 @@ export const BANNED: readonly (readonly [string, RegExp])[] = [
   ],
   ['.call / .apply / .bind', /\.\s*(?:call|apply|bind)\b/g],
   ['built-in .prototype or __proto__', /(?<!\bObject\s*)\.\s*prototype\b|\b__proto__\b/g],
-  ['Atomics / SharedArrayBuffer', /\b(?:Atomics|SharedArrayBuffer)\b/g],
+  ['Atomics', /\bAtomics\b/g],
+  ['SharedArrayBuffer', /\bSharedArrayBuffer\b/g],
   [
     'ambient declaration',
     /\bdeclare\s+(?:const|let|var|function|class|enum|global|namespace|module|abstract\s+class)\b/g,
   ],
 ];
+
+/**
+ * A comment that switches TypeScript's check off (`@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`; TypeScript reads a
+ * pragma's name in any letter case) or loads another lib or file (`/// <reference lib="dom" />`): either lets a host
+ * name (`Image`) typecheck under src/core's ES2023-only lib (R4-FENCE-1). Matched in comments, anywhere.
+ */
+const DIRECTIVE = /@ts-(?:expect-error|ignore|nocheck)\b|^\/\/\/\s*<reference\b/i;
+const COMMENTS: ReadonlySet<ts.SyntaxKind> = new Set([
+  ts.SyntaxKind.SingleLineCommentTrivia,
+  ts.SyntaxKind.MultiLineCommentTrivia,
+]);
 
 /** String values that are banned as code even when written as text: `Reflect.get(d, 'constructor')`. */
 const BANNED_STRINGS: ReadonlySet<string> = new Set([
@@ -353,9 +375,12 @@ export function bannedUses(source: string): string[] {
   );
   for (const index of multiFieldDates(code))
     hits.push([lineOf(code, index), BANNED.length, 'new Date with fields']);
+  for (const [line, name] of globalReads(source)) hits.push([line, BANNED.length + 2, name]);
   for (const token of tokensOf(source)) {
     if (STRING_KEY.has(token.kind) && BANNED_STRINGS.has(token.value))
       hits.push([lineOf(source, token.start), BANNED.length + 1, `'${token.value}' as a string`]);
+    if (COMMENTS.has(token.kind) && DIRECTIVE.test(source.slice(token.start, token.end)))
+      hits.push([lineOf(source, token.start), BANNED.length + 3, 'type-check directive']);
   }
   hits.sort(([lineA, orderA], [lineB, orderB]) => lineA - lineB || orderA - orderB);
   return [...new Set(hits.map(([line, , name]) => `line ${String(line)}: ${name}`))];

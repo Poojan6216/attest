@@ -4,9 +4,9 @@
  * `attribute(orphan, activity, policy)` asks which agent LIKELY performed an observed action that no claim
  * explains. It reads allowlisted activity only (session pings, recorded idle periods, activity-log entries,
  * adapter syncs, claims) and the observation's subject hint, never content. Every window is measured from the
- * orphan's ANCHOR: for a `calendar.*` observation its earliest `observedAt` (when the change was first seen; the
- * caller passes the representative sighting, as gradeBatch does), for every other type its `occurredAt`. Each
- * agent is scored on its own:
+ * orphan's ANCHOR (order.ts `anchorAt`): for a `calendar.*` observation its first sighting (when the change was first
+ * seen, `firstSeenAt`; the caller passes the representative, as gradeBatch does), for every other type its
+ * `occurredAt`. Each agent is scored on its own:
  *
  *  - `agentSessionActive`: a session ping of the agent within ±`unasked.windows.sessionMin` of the anchor;
  *  - `userIdle` (agent-independent): ONE recorded idle interval covers `[anchor − idleMin, anchor]` (inclusive;
@@ -42,6 +42,7 @@ import {
 } from './attribution-index';
 import { type FeatureClaim, type FeaturePolicy, isAssignable } from './features';
 import { asciiLower, instantMs } from './normalize';
+import { anchorAt } from './order';
 import { assertLoadedPolicy, type Policy } from './policy';
 import {
   type ActionType,
@@ -53,18 +54,19 @@ import {
   UnaskedSignal,
 } from './schema';
 import { BASIS_POINTS, MS_PER_MINUTE } from './units';
-import { type Interval, isCalendarType, precisionBounds } from './window';
+import { type Interval, precisionBounds } from './window';
 
 export { AttributionError, type AttributionErrorCode } from './attribution-index';
 
 /**
- * The observation fields attribution reads. A parsed `Observation` satisfies it. `observedAt` anchors a
- * `calendar.*` observation (§7); pass the earliest sighting of its `contentHash`, as gradeBatch does.
+ * The observation fields attribution reads. A parsed `Observation` satisfies it. Its first sighting (`sightedAt`,
+ * else `observedAt`) anchors a `calendar.*` observation (§7); pass the representative of its `contentHash`.
  */
 export interface AttributionOrphan {
   readonly type: ActionType;
   readonly occurredAt: string;
   readonly observedAt: string;
+  readonly sightedAt?: string | undefined;
   readonly subjectHint?: string | undefined;
 }
 
@@ -105,7 +107,7 @@ export type AttributionPolicy = FeaturePolicy & Pick<Policy, 'unasked'>;
 /**
  * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller
  * already has it, is `instantMs(orphan.occurredAt)` (a batch has every orphan's instant from its index); a
- * `calendar.*` orphan is anchored on its `observedAt` instead (§7), whatever `occurredMs` says. `wanted`, when
+ * `calendar.*` orphan is anchored on its first sighting instead (§7), whatever `occurredMs` says. `wanted`, when
  * given, is asked about the likely agent and its score first, and false gives null without building the attribution
  * (a batch builds one only for an orphan that becomes an UNASKED receipt).
  */
@@ -279,7 +281,7 @@ interface Weighing {
   readonly policy: AttributionPolicy;
   readonly best: Best;
   type: ActionType;
-  /** The orphan's anchor instant (§7): earliest `observedAt` for `calendar.*`, else `occurredAt`. */
+  /** The orphan's anchor instant (§7, order.ts `anchorAt`): first sighting for `calendar.*`, else `occurredAt`. */
   anchorMs: number;
   /** The subject hint, ASCII-lowercased ('' without one, or when no agent has a signature). */
   subject: string;
@@ -335,8 +337,8 @@ function attributionOf(best: Best, agent: AgentIndex, idle: boolean): Attributio
 
 /** §7: the instant every window of `orphan` is measured from. `occurredMs`, when given, is its occurredAt's. */
 function anchorOf(orphan: AttributionOrphan, occurredMs: number | undefined): number {
-  if (isCalendarType(orphan.type)) return instantMs(orphan.observedAt);
-  return occurredMs ?? instantMs(orphan.occurredAt);
+  const anchor = anchorAt(orphan);
+  return anchor === orphan.occurredAt && occurredMs !== undefined ? occurredMs : instantMs(anchor);
 }
 
 /**

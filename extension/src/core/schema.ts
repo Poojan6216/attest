@@ -183,6 +183,7 @@ export const Observation = z
     subjectHint: oneLineText(L.SUBJECT_HINT).optional(),
     occurredAt: IsoTs,
     observedAt: IsoTs,
+    sightedAt: IsoTs.optional(), // the ledger's: the sighting, when it stored the row later (§3, §4.1)
     /** SHA-256 of the vendor's own row id, so two identical rows stay two observations (§10). */
     rowKeyHash: Sha256.optional(),
     contentHash: Sha256,

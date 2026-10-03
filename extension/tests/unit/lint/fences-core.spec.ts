@@ -132,6 +132,11 @@ describe('src/core globals and syntax (Hard Rule 4)', () => {
       ['export const id = chrome.runtime.id;\n', 'no-restricted-globals'],
       ['export const t = document.title;\n', 'no-restricted-globals'],
       ["export const p = fetch('x');\n", 'no-restricted-globals'],
+      // The host's language and location, a beacon, and a host-timed callback (FS-1).
+      ['export const l = navigator.language;\n', 'no-restricted-globals'],
+      ["navigator.sendBeacon('https://x.example', '');\n", 'attest/no-network'],
+      ['export const h = location.href;\n', 'no-restricted-globals'],
+      ['requestIdleCallback(() => undefined);\n', 'no-restricted-globals'],
     ];
     for (const [code, rule] of cases) expect(await ruleIds(code), code).toContain(rule);
   });

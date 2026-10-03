@@ -3,7 +3,8 @@
  * row's `observedAt` never changes after a batch could have read it, and no row is stored with an `observedAt` at
  * or before the instant of a batch that did not read it. Each test drives the background's write path and its
  * batches over a real ledger (./live-ledger.ts, LedgerSim per batch) and replays the export: the verifier's probes
- * r3, r7, r9, late-sighting, late-write and late-calendar, each expecting the refusal or 0 mismatches.
+ * r3, r7, r9, late-sighting, late-write and late-calendar, each expecting the refusal (an observation), the no-op
+ * (a claim, whose sighting grades nothing) or 0 mismatches.
  */
 import 'fake-indexeddb/auto';
 
@@ -15,8 +16,10 @@ import {
   Activity,
   type Claim,
   type ClaimInput,
+  IsoTs,
   type Observation,
   type ObservationInput,
+  type Receipt,
 } from '../../../src/core/schema';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
@@ -90,11 +93,28 @@ function earlier(row: Claim | Observation, ms: number): ClaimInput | Observation
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : 1);
 const AFTER_T2 = isoAt(T2_MS + MS_PER_HOUR, 0);
 
+/**
+ * `receipt` with its override instant written in UTC. The live ledger stamps an override where it writes it, with
+ * the host's offset (src/clock.ts); the scenario's LedgerSim is handed OVERRIDE_AT in UTC. Same instant, so the
+ * receipts must then be equal field for field.
+ */
+function overrideInUtc(receipt: Receipt): Receipt {
+  const { override } = receipt;
+  if (override === undefined) return receipt;
+  return { ...receipt, override: { ...override, at: IsoTs.parse(new Date(override.at).toISOString()) } };
+}
+
 describe('the scenario through the ledger', () => {
   it('rows written as they are sighted: the batches grade what the scenario grades; replay holds', async () => {
     const live = await scenario();
     const { snapshot } = await scenarioLedger();
-    expect([...live.receipts.values()].sort(byId)).toEqual([...snapshot.receipts].sort(byId));
+    const overridden = [...live.receipts.values()].filter((receipt) => receipt.override !== undefined);
+    expect(overridden.map((receipt) => Date.parse(receipt.override?.at ?? ''))).toEqual(
+      [0, 1, 2].map(() => Date.parse(OVERRIDE_AT)),
+    );
+    expect([...live.receipts.values()].map(overrideInUtc).sort(byId)).toEqual(
+      [...snapshot.receipts].map(overrideInUtc).sort(byId),
+    );
     const rows = await live.rows();
     expect(rows.observations.sort(byId)).toEqual([...snapshot.observations].sort(byId));
     expect(rows.claims.sort(byId)).toEqual([...snapshot.claims].sort(byId));
@@ -124,17 +144,20 @@ describe('a late sighting never moves a stored row (R3-LEDGER-1: probes r3, r7, 
     expect(await mismatches(live)).toEqual([]);
   });
 
+  // A claim's sighting grades nothing (§3, §10): an earlier re-read is a no-op, never late_sighting.
   it.each(['c1', 'c2', 'c6', 'c8', 'c10'] as const)(
-    'an earlier sighting of %s, landing after T2, is refused and replay holds',
+    'an earlier sighting of %s, landing after T2, is a no-op and replay holds',
     async (ref) => {
       const live = await scenario();
       const claim = CLAIMS[ref];
+      const before = await live.rows();
       // c1 re-read 30 s before its stored sighting (r3); the others read an hour before T1 (r7).
       const sighting =
         ref === 'c1' ? earlier(claim, 30_000) : { ...claim, observedAt: isoAt(T1_MS - MS_PER_HOUR) };
-      await expectLedgerError(live.write(sighting, AFTER_T2), 'late_sighting');
-      const { claims } = await live.rows();
-      expect(claims.find((row) => row.id === claim.id)).toEqual(claim);
+      expect(await live.write(sighting, AFTER_T2)).toEqual({ id: claim.id, inserted: false });
+      const after = await live.rows();
+      expect(after.claims.find((row) => row.id === claim.id)).toEqual(claim);
+      expect(after).toEqual(before);
       expect(await mismatches(live)).toEqual([]);
     },
   );
@@ -224,6 +247,7 @@ describe('calendar.created and the earliest sighting (probe late-calendar, OBS-2
   const claimReceipt = (live: LiveLedger) =>
     live.receipts.get(receiptId({ k: 'claim', claimId: CALENDAR_CLAIM.id }));
 
+  // The known limit (Decisions.md, SIM-2): the stored row says first seen 14:30, so the claim still verifies.
   it('out of order: the earlier pass that lands after the batch is refused loud; replay holds', async () => {
     const live = new LiveLedger(db, calendarWorld());
     await play(live, [
@@ -250,5 +274,57 @@ describe('calendar.created and the earliest sighting (probe late-calendar, OBS-2
     expect(receipt?.grade).not.toBe('VERIFIED');
     expect(receipt?.observationIds).toEqual([]);
     expect(await mismatches(live)).toEqual([]);
+  });
+});
+
+describe('the stamp never makes an event look first seen later than it was (SIM-2, probe repro-created)', () => {
+  const WRITTEN_LATE = isoAt(DAY_MS + 14 * MS_PER_HOUR + 5 * MS_PER_MINUTE + 500);
+
+  /** Batches at 14:05 and 16:00; the event, on the calendar since 13:50, written at `writeAt`. */
+  async function created(writeAt: string): Promise<LiveLedger> {
+    const live = new LiveLedger(await openLedger(uniqueDbName('created')), calendarWorld());
+    await play(live, [
+      { at: at(14, 5), kind: 'batch' },
+      { at: writeAt, kind: 'write', row: EVENT(at(13, 50)) },
+      { at: at(14, 10), kind: 'write', row: CALENDAR_CLAIM },
+      { at: at(16), kind: 'batch' },
+    ]);
+    return live;
+  }
+
+  const graded = (live: LiveLedger) => {
+    const receipt = live.receipts.get(receiptId({ k: 'claim', claimId: CALENDAR_CLAIM.id }));
+    return [receipt?.grade, receipt?.ruleId, receipt?.state, receipt?.observationIds];
+  };
+
+  it('written 0.5 s after the 14:05 batch: stored with its sighting, graded as if written on time', async () => {
+    const onTime = await created(at(13, 50));
+    const late = await created(WRITTEN_LATE);
+    try {
+      expect((await onTime.rows()).observations).toEqual([EVENT(at(13, 50))]);
+      const [stored] = (await late.rows()).observations;
+      expect(Date.parse(stored?.observedAt ?? '')).toBe(Date.parse(WRITTEN_LATE));
+      expect(stored).toEqual({ ...EVENT(at(13, 50)), observedAt: stored?.observedAt, sightedAt: at(13, 50) });
+      expect(graded(late)).toEqual(graded(onTime));
+      expect(graded(late)[3]).toEqual([]);
+      expect(await mismatches(late)).toEqual([]);
+      expect(await mismatches(onTime)).toEqual([]);
+    } finally {
+      onTime.db.close();
+      late.db.close();
+    }
+  });
+
+  it('a second sighting between the stored sighting and the stamp changes nothing; an earlier one is refused', async () => {
+    const live = await created(WRITTEN_LATE);
+    try {
+      const before = await live.rows();
+      expect(await live.write(EVENT(at(14)), at(16, 30))).toEqual({ id: EVENT(at(14)).id, inserted: false });
+      await expectLedgerError(live.write(EVENT(at(13, 40)), at(16, 30)), 'late_sighting');
+      expect(await live.rows()).toEqual(before);
+      expect(await mismatches(live)).toEqual([]);
+    } finally {
+      live.db.close();
+    }
   });
 });

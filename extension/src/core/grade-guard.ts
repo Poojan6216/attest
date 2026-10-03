@@ -11,9 +11,9 @@
  *
  * Checked: the type is the claim's; the source is one the policy lists for that type (§6.1 relevant sources:
  * evidence the claim's coverage never reads cannot verify it); `occurredAt` lies in the claim window (a calendar
- * claim without `targetAt` has none, so any candidate is foreign); for `calendar.created`, the row's own
- * `observedAt` is at or after the first-seen bound (its first sighting can only be earlier, so a row that fails this
- * was never a candidate). Not refused: a candidate first seen after `evaluatedAt`, which §3 has `grade` ignore, so
+ * claim without `targetAt` has none, so any candidate is foreign); for `calendar.created`, the row's own first
+ * sighting (order.ts `firstSeenMs`) is at or after the first-seen bound (the first sighting of its `contentHash` can
+ * only be earlier, so a row that fails this was never a candidate). Not refused: a candidate first seen after `evaluatedAt`, which §3 has `grade` ignore, so
  * replay at an earlier instant sees what grading saw.
  *
  * Throwing rather than filtering keeps `inputsHash` and `candidatesHash` meaning exactly the candidates given.
@@ -23,9 +23,9 @@
  * PURE: no I/O, no clock, no logging (Hard Rule 4). Each instant is read through the per-object memos of
  * candidates-time.ts, and the window once per call (its precision unit is memoised per claim, window.ts).
  */
-import { observedMs, occurredMs } from './candidates-time';
+import { occurredMs } from './candidates-time';
 import { GradeError } from './grade-error';
-import { firstSeenFromMs, fromRelevantSource, passesFirstSeen } from './order';
+import { firstSeenFromMs, firstSeenMs, fromRelevantSource, passesFirstSeen } from './order';
 import type { Policy } from './policy';
 import type { Claim, Observation } from './schema';
 import { claimWindow, inClaimWindow } from './window';
@@ -47,7 +47,7 @@ export function checkCandidates(claim: Claim, candidates: readonly Observation[]
       candidate.type !== claim.type ||
       !fromRelevantSource(candidate, claim.type, policy) ||
       !inClaimWindow(window, occurredMs(candidate)) ||
-      !passesFirstSeen(observedMs(candidate), firstSeenFrom);
+      !passesFirstSeen(firstSeenMs(candidate), firstSeenFrom);
     if (foreign) throw new GradeError('foreign_candidate');
   }
 }

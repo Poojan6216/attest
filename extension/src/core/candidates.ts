@@ -6,9 +6,9 @@
  * (§6.1 relevant sources: evidence the claim's coverage never reads cannot verify it; grade refuses any other, and
  * such a row is never an orphan either, §3), whose `occurredAt` instant lies in the claim window
  * (inclusive at both ends, window.ts). For `calendar.created` it must also have been first seen
- * (the earliest `observedAt` of every observation sharing its `contentHash`) no earlier than
- * `start(p,t) − beforeClaimMin`: an event already on the calendar before the claim cannot verify "created".
- * Observations with the same `contentHash` count once (lowest id, then earliest `observedAt`, kept). Results are
+ * (the earliest first sighting, order.ts `firstSeenAt`, of every observation sharing its `contentHash`) no earlier
+ * than `start(p,t) − beforeClaimMin`: an event already on the calendar before the claim cannot verify "created".
+ * Observations with the same `contentHash` count once (order.ts `representative` keeps one). Results are
  * ordered by (`occurredAt` instant, id, `contentHash`), and never depend on the order the index returned them in.
  *
  * Split for size: candidates-index.ts (ObservationIndex, the memory index), candidates-assign.ts (§4.3
@@ -17,10 +17,11 @@
  * retrieval (batch-retrieve.ts), orphan discovery (batch-orphans.ts) and grade's own check (grade-guard.ts).
  */
 import type { ObservationIndex } from './candidates-index';
-import { observedMs, occurredMs } from './candidates-time';
+import { occurredMs } from './candidates-time';
 import {
   compareCandidates,
   firstSeenFromMs,
+  firstSeenMs,
   fromRelevantSource,
   passesFirstSeen,
   type Placed,
@@ -45,15 +46,15 @@ export type CandidatesPolicy = Pick<Policy, 'windows' | 'sourcesByType'>;
 
 /** One observation per `contentHash`: the kept representative and its first sighting. */
 interface Sighting extends Placed {
-  /** The earliest `observedAt` instant among every observation sharing this `contentHash`. */
-  readonly firstSeenMs: number;
+  /** The earliest first sighting (order.ts `firstSeenMs`) among every observation sharing this `contentHash`. */
+  readonly seenMs: number;
 }
 
 /** Two sightings of one `contentHash`: §4.1's representative (order.ts) and the earliest sighting of both. */
 function merge(held: Sighting, next: Sighting): Sighting {
-  const firstSeenMs = Math.min(held.firstSeenMs, next.firstSeenMs);
+  const seenMs = Math.min(held.seenMs, next.seenMs);
   const kept = representative(held.observation, next.observation) === held.observation ? held : next;
-  return { observation: kept.observation, atMs: kept.atMs, firstSeenMs };
+  return { observation: kept.observation, atMs: kept.atMs, seenMs };
 }
 
 /**
@@ -78,12 +79,12 @@ export async function candidates(
     if (observation.type !== claim.type || !fromRelevantSource(observation, claim.type, policy)) continue;
     const ms = occurredMs(observation);
     if (!inClaimWindow(window, ms)) continue;
-    const sighting: Sighting = { observation, atMs: ms, firstSeenMs: observedMs(observation) };
+    const sighting: Sighting = { observation, atMs: ms, seenMs: firstSeenMs(observation) };
     const held = sightings.get(observation.contentHash);
     sightings.set(observation.contentHash, held === undefined ? sighting : merge(held, sighting));
   }
   return [...sightings.values()]
-    .filter((s) => passesFirstSeen(s.firstSeenMs, firstSeenFrom))
+    .filter((s) => passesFirstSeen(s.seenMs, firstSeenFrom))
     .sort(compareCandidates)
     .map((s) => s.observation);
 }
