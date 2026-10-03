@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-02 with `pnpm bench`.
+Measured 2026-10-03 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,20 +12,20 @@ Measured 2026-10-02 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 308 |
-| lookupMinMs | 288.3 |
-| lookupMaxMs | 336.9 |
-| lookupCpuMedianMs | 330.6 |
+| lookupMedianMs | 375 |
+| lookupMinMs | 331.5 |
+| lookupMaxMs | 494.2 |
+| lookupCpuMedianMs | 407.8 |
 | indexBuildMedianMs | 150.1 |
-| buildPlusLookupMedianMs | 458.1 |
+| buildPlusLookupMedianMs | 525.2 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 887.9 |
-| gradingMinMs | 868.3 |
-| gradingMaxMs | 1136.1 |
-| gradingCpuMedianMs | 1132.9 |
+| gradingMedianMs | 909.4 |
+| gradingMinMs | 893.3 |
+| gradingMaxMs | 1116.4 |
+| gradingCpuMedianMs | 1184.1 |
 | gradingReceipts | 5845 |
 | gradingVerified | 1883 |
 | gradingNotFound | 1073 |
@@ -33,6 +33,6 @@ Measured 2026-10-02 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 0067c80750260fb3f986c36b9cf48c40144059ce |
-| commitDirty | true |
+| commit | c1f50468a08a5c862a0b6bdb091d25620788de83 |
+| commitDirty | false |
 | node | v22.14.0 |
