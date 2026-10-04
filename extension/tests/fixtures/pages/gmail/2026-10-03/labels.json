@@ -65,7 +65,7 @@
   },
   "synthetic-receipt-amazon.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_2",
       "street_address",
@@ -115,7 +115,7 @@
   },
   "synthetic-receipt-generic-bakery.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_2",
       "passphrase",
@@ -166,7 +166,7 @@
   },
   "synthetic-receipt-generic-booking-cad.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -217,7 +217,7 @@
   },
   "synthetic-receipt-generic-order-confirmation.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "token_lowercase",
       "street_address",
@@ -268,7 +268,7 @@
   },
   "synthetic-receipt-generic-order-eur.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "card_shape",
       "person_name_1",
@@ -319,7 +319,7 @@
   },
   "synthetic-receipt-instacart.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "street_address",
       "passphrase_hyphenated",
@@ -369,7 +369,7 @@
   },
   "synthetic-receipt-marketplace-listing.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -419,7 +419,7 @@
   },
   "synthetic-receipt-negative-newsletter.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "email_local_part",
       "base64_blob",
@@ -457,7 +457,7 @@
   },
   "synthetic-receipt-negative-no-currency.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "ssn_shape",
       "person_name_1",
@@ -495,7 +495,7 @@
   },
   "synthetic-receipt-negative-promo-order.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "token_lowercase",
       "email_local_part",
@@ -529,11 +529,11 @@
         "reasons": []
       }
     ],
-    "notes": "Negative: a promotion whose subject says \"order\" and whose body shows prices. Nothing was bought: no observation. The rule as written in sprint 2.3 (subject matches /order/ and an amount is present) would accept this message; see README."
+    "notes": "Negative: a promotion whose subject says \"order\" and whose body shows prices. Nothing was bought: no observation. The rule as written in sprint 2.3 (subject matches /order/ and an amount is present) would accept this message; the generic parser refuses it twice (src/observers/gmail/receipts/generic.ts): its subject carries promotion markers (\"Order now\", \"40% off\", \"ends tonight\"), and its body has no total line (the prices sit in a sentence)."
   },
   "synthetic-receipt-negative-shipping.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -571,7 +571,7 @@
   },
   "synthetic-receipt-opentable.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_2",
       "phone_number",
@@ -621,7 +621,7 @@
   },
   "synthetic-receipt-shopify.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "email_body_2",
       "person_name_2",
@@ -671,7 +671,7 @@
   },
   "synthetic-receipt-stripe-subscription.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_2",
       "api_key_aws_shape",
@@ -721,7 +721,7 @@
   },
   "synthetic-receipt-stripe.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -771,7 +771,7 @@
   },
   "synthetic-receipt-uber.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.0.1",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -1405,7 +1405,8 @@
         "observer": "gmail.sent",
         "status": "DEGRADED",
         "reasons": [
-          "row.time_unresolved"
+          "redact.missing_occurred_at",
+          "window.unknown"
         ]
       },
       {
@@ -1427,6 +1428,6 @@
         "rowKey": "1a0f42bb4208dd51"
       }
     ],
-    "notes": "Row 2 has no time title and its text \"Oct 1\" names a whole day, not a minute, so it cannot become an observation. The pass emits rows 1 and 3, reports DEGRADED (row.time_unresolved) and writes no coverage: a row Attest could not read is not evidence that nothing was sent that day (Hard Rule 5)."
+    "notes": "Row 2 has no time title and its text \"Oct 1\" names a whole day, not a minute, so it cannot become an observation. The pass emits rows 1 and 3, reports DEGRADED and writes no coverage: a row Attest could not read is not evidence that nothing was sent that day (Hard Rule 5). The reasons are the Sprint 2.0 pass contract's (src/observers/plan.ts): the observer hands the untimed row to redact.project without an occurredAt, which refuses it (redact.missing_occurred_at), and its visible window is unknown because an unread row could be the oldest or newest (window.unknown)."
   }
 }

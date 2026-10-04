@@ -115,7 +115,7 @@ describe('Gmail Sent facts match their rows (2.2 truth)', () => {
         const time = at(f, row.timeTitle ?? row.timeText);
         if (facts.length === 0) {
           expect(time?.precision, `${f.file}: unlabelled row ${row.key}`).not.toBe('minute');
-          expect(degraded, `${f.file}: unlabelled row ${row.key}`).toContain('row.time_unresolved');
+          expect(degraded, `${f.file}: unlabelled row ${row.key}`).toContain('redact.missing_occurred_at');
           continue;
         }
         const counterparties = facts.map((o) => o.counterparty ?? '').sort();
@@ -221,16 +221,24 @@ describe('Calendar facts match the grid (2.5 truth)', () => {
   });
 });
 
-/** The reference diff: by event id, within calendars checked in both snapshots, one observation per guest. */
+/**
+ * The reference diff: by event id, within calendars checked in both snapshots, one observation per event, naming its
+ * first guest in ASCII-lowercase order or none (Decisions [2.5]).
+ */
 function referenceDiff(before: LabelledFixture, after: LabelledFixture): string[] {
   const shownIn = (f: LabelledFixture) => calendarList(docOf(f)).flatMap((c) => (c.checked ? [c.name] : []));
   const both = shownIn(after).filter((name) => shownIn(before).includes(name));
   const was = before.events.filter((e) => both.includes(e.calendar));
   const now = after.events.filter((e) => both.includes(e.calendar));
-  const rows = (type: string, e: EventFact) =>
-    (e.attendees.length > 0 ? e.attendees : ['']).map(
-      (guest) => `${type} ${e.rowKey} ${guest} ${e.occurredAt} ${e.subjectHint}`,
-    );
+  const firstGuest = (e: EventFact) =>
+    [...e.attendees].sort((a, b) => {
+      const x = a.toLowerCase();
+      const y = b.toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
+    })[0] ?? '';
+  const rows = (type: string, e: EventFact) => [
+    `${type} ${e.rowKey} ${firstGuest(e)} ${e.occurredAt} ${e.subjectHint}`,
+  ];
   const same = (a: EventFact, b: EventFact) =>
     a.occurredAt === b.occurredAt &&
     a.subjectHint === b.subjectHint &&

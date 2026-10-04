@@ -12,6 +12,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { runCoreBench } from './core';
+import { runGcalBench } from './observers/gcal';
+import { runGmailBench } from './observers/gmail';
+import { runReceiptsBench } from './observers/receipts';
 import { gitIn, provenance } from './provenance';
 import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
 
@@ -36,7 +39,12 @@ export interface BenchRunOptions {
 }
 
 /** Benches register here as later sprints add them (core perf, observers, adapters, intel, red team). */
-export const BENCHES: readonly Bench[] = [{ name: 'core', run: runCoreBench }];
+export const BENCHES: readonly Bench[] = [
+  { name: 'core', run: runCoreBench },
+  { name: 'gmail-sent', run: runGmailBench },
+  { name: 'receipts', run: runReceiptsBench },
+  { name: 'gcal', run: runGcalBench },
+];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
 export function localDate(now: Date): string {
