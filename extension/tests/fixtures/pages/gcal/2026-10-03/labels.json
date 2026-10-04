@@ -1,0 +1,927 @@
+{
+  "synthetic-gcal-month-november.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_1",
+      "email_body_3",
+      "base64_blob"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.month",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T13:00:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/month/2026/11/1"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "YzBzcmRhYzYwcTdwYm5odTZldnMyNDZ0bzQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Red-eye arrives",
+        "occurredAt": "2026-11-01T00:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "YzEzNW0zYnQ0ODYydWo5bWJsNjlpanFwODEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Long run",
+        "occurredAt": "2026-11-01T09:00:00-05:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "YzhlYTZhY2hibXZ0c241YXBzM21taDFhY3IgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Volunteer shift",
+        "occurredAt": "2026-11-03T07:00:00-05:00",
+        "allDay": false,
+        "attendees": [
+          "chris.ortiz@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a2J1OTNlY3MxaGtzZ2E1aXRpMGQ1aTBnaDAgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Standup",
+        "occurredAt": "2026-11-12T08:00:00-05:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZG51YzIxbm9ob25iZDZhdnJjdmc2ZHB1MGogYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Hiring panel",
+        "occurredAt": "2026-11-12T11:00:00-05:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "YzQ0MzZuNzQ1ZG5qOTBoNHJkZG5jZnJiZzEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Lunch with Sam",
+        "occurredAt": "2026-11-12T13:00:00-05:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "YWI3Z21ldGVrM2c0cWU2bnZ0dW9sb3JlZG4gYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Quarterly planning",
+        "occurredAt": "2026-11-16T09:30:00-05:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com",
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cW5za2FuaG9ocTdnNjZyaWJyMWhmajdmNHYgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Family Thanksgiving",
+        "occurredAt": "2026-11-26T00:00:00-05:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWE0M3ZvNG9hcnN0ZXFlOWFvODhmaGpxbmggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Flight to Denver",
+        "occurredAt": "2026-12-04T06:05:00-05:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-11-01T00:00:00-04:00",
+        "windowEnd": "2026-11-12T00:00:00-05:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-11-13T00:00:00-05:00",
+        "windowEnd": "2026-12-06T00:00:00-05:00",
+        "allCalendars": false
+      }
+    ],
+    "notes": "Month view, November 2026 (Sun 1 Nov - Sat 5 Dec), America/New_York. DST edge: US clocks go back at 2am on Sun 1 Nov, so \"Red-eye arrives\" at 12:30am is -04:00 and \"Long run\" at 9am the same day is -05:00. Thu 12 Nov shows 3 events and a \"2 more\" button whose events are not on the page, so coverage skips that day (two intervals): Attest did not see the whole day. An event-details dialog is open over the grid; it holds the three seeds and is not a chip. The Family calendar is hidden: allCalendars false."
+  },
+  "synthetic-gcal-week-after-create.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T11:20:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZnB2ZW5ic2MzMDc1bTVnNzNxZ25sdmwxZnIgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Investor call",
+        "occurredAt": "2026-10-07T14:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "morgan.patel@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T13:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-before.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.created",
+            "counterparty": "priya.raman@example.org",
+            "subjectHint": "Design review with Priya",
+            "occurredAt": "2026-10-08T13:00:00-04:00",
+            "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ"
+          }
+        ]
+      }
+    ],
+    "notes": "The same week after \"Design review with Priya\" (Thu 8 Oct 1-2pm, one guest) was created: exactly one calendar.created against the week before. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-after-delete.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T12:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T15:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-after-edit.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.deleted",
+            "counterparty": "morgan.patel@example.com",
+            "subjectHint": "Investor call",
+            "occurredAt": "2026-10-07T14:00:00-04:00",
+            "rowKey": "ZnB2ZW5ic2MzMDc1bTVnNzNxZ25sdmwxZnIgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ"
+          }
+        ]
+      }
+    ],
+    "notes": "\"Investor call\" (Wed 7 Oct 2pm) was deleted: one calendar.deleted carrying the removed event's fields. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-after-edit.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T12:10:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZnB2ZW5ic2MzMDc1bTVnNzNxZ25sdmwxZnIgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Investor call",
+        "occurredAt": "2026-10-07T14:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "morgan.patel@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T15:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-unchanged.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.updated",
+            "counterparty": "priya.raman@example.org",
+            "subjectHint": "Design review with Priya",
+            "occurredAt": "2026-10-08T15:00:00-04:00",
+            "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ"
+          }
+        ]
+      }
+    ],
+    "notes": "The design review moved from 1pm to 3pm (same event id): one calendar.updated with the new start. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-before.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T11:00:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZnB2ZW5ic2MzMDc1bTVnNzNxZ25sdmwxZnIgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Investor call",
+        "occurredAt": "2026-10-07T14:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "morgan.patel@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      }
+    ],
+    "notes": "The week before an event is created. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-family-hidden.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T13:00:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T15:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-two-calendars.html",
+        "observations": []
+      }
+    ],
+    "notes": "The Family calendar was switched off again: its events disappear but were not deleted; zero observations. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-two-calendars.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T12:45:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T15:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "YmdmMTJqaHJrYjNsOHJmdGljOG42NTkwbWwgcTdoMm00djljMWs4ZDNmNnQwYjVuMng3YTRAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ",
+        "calendar": "Family",
+        "subjectHint": "Soccer practice",
+        "occurredAt": "2026-10-06T17:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZWl0Yms0aGs4amszY25tcmN1OWJkcDhjYmEgcTdoMm00djljMWs4ZDNmNnQwYjVuMng3YTRAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ",
+        "calendar": "Family",
+        "subjectHint": "Grandma's birthday dinner",
+        "occurredAt": "2026-10-10T18:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "june.founder@example.org",
+          "lee.founder@example.net"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": true
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-after-delete.html",
+        "observations": []
+      }
+    ],
+    "notes": "The Family calendar was switched on: its two events become visible but were not created; zero observations. Every calendar is visible, so coverage has allCalendars true. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  },
+  "synthetic-gcal-week-unchanged.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "street_address",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T11:45:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/4"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZjJzZmxjMmxyYzgzOG9qajd1ajd2cDgyc2NfMjAyNjEwMDVUMTQwMDAwWiBhdmVyeS5mb3VuZGVyQGV4YW1wbGUuY29t",
+        "calendar": "Avery Founder",
+        "subjectHint": "Weekly sync",
+        "occurredAt": "2026-10-05T10:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "alex.rivera@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "a25nb3I3YWpuMzNycjk1MWMxMWo2NTN2YTMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Coffee, then site visit",
+        "occurredAt": "2026-10-06T08:30:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "ZnB2ZW5ic2MzMDc1bTVnNzNxZ25sdmwxZnIgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Investor call",
+        "occurredAt": "2026-10-07T14:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "morgan.patel@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "amdoN3Zsc3BtZm85aDJoN2M3cHZzbzN1c2ggYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-08T16:15:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "bWY2YTdtNmlpbW9mb3ZjOTVna2drMTdqamMgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Founder offsite",
+        "occurredAt": "2026-10-09T00:00:00-04:00",
+        "allDay": true,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "eGlpNmU5YnRzZXVocDdidTdkdGQ1a3FqNTEgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Late deploy window",
+        "occurredAt": "2026-10-07T23:30:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "sam.chen@example.net",
+          "jordan.lee@example.com"
+        ]
+      },
+      {
+        "kind": "event",
+        "rowKey": "cDdidmdvdnFqcGQ3cHQ2bGNsdm1yc29wMHQgYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ",
+        "calendar": "Avery Founder",
+        "subjectHint": "Design review with Priya",
+        "occurredAt": "2026-10-08T13:00:00-04:00",
+        "allDay": false,
+        "attendees": [
+          "priya.raman@example.org"
+        ]
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "synthetic-gcal-week-after-create.html",
+        "observations": []
+      }
+    ],
+    "notes": "The same week, nothing changed (class names differ: a different page load): zero observations. Week of Sun 4 - Sat 10 Oct 2026, America/New_York (GMT-04). The deploy window crosses midnight and is drawn as two chips with one data-eventid: one event. Seeds sit in event locations (the chip label and the chip's visible location line), never in titles."
+  }
+}

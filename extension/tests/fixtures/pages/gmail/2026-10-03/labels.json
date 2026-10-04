@@ -1,0 +1,1432 @@
+{
+  "synthetic-drafts.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "card_shape",
+      "base64_blob",
+      "token_lowercase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.drafts",
+        "folder": "drafts",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:20:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#drafts",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      }
+    ],
+    "notes": "Negative: the Drafts folder. Rows look like Sent rows (To: with email attributes, subject, time title) plus the red Draft marker. Nothing here was sent: zero observations, DEGRADED (not_sent_folder), no coverage, so Attest reports \"Gmail Sent not checked\" instead of pretending it looked."
+  },
+  "synthetic-inbox.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "email_local_part",
+      "base64_blob",
+      "api_key_anthropic_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.inbox",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:25:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      }
+    ],
+    "notes": "Negative: the Inbox. One thread lists the account itself (\"Alex, me (2)\"), so an address of the account is on a row; a Stripe receipt row shows an amount in its snippet. Neither is a sent email, and a receipt is parsed only from an opened message: zero observations, gmail.sent DEGRADED (not_sent_folder), no coverage. gmail.receipt has no health entry on a list page (see README)."
+  },
+  "synthetic-receipt-amazon.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_2",
+      "street_address",
+      "phone_number"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzZGxrXxHGLCpWxRpfXgzvWhpWHb",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Amazon",
+        "amountCents": 6427,
+        "currency": "USD",
+        "subjectHint": "Your Amazon.com order #112-4567890-1234567",
+        "occurredAt": "2026-10-02T20:41:00-04:00",
+        "rowKey": "1a0ff35056028ec5",
+        "parser": "amazon"
+      }
+    ],
+    "notes": "Amazon order confirmation. The total is the Order Total line, not the item price or subtotal ($59.99) or the tax. Merchant is the canonical \"Amazon\"."
+  },
+  "synthetic-receipt-generic-bakery.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_2",
+      "passphrase",
+      "phone_number"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzUcCRwcPdFJfSbHdmPPfvPQBFHx",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Pinecone Bakery",
+        "amountCents": 1875,
+        "currency": "USD",
+        "subjectHint": "Your receipt from Pinecone Bakery",
+        "occurredAt": "2026-10-03T08:14:00-04:00",
+        "rowKey": "1a101af7b40e2410",
+        "parser": "generic",
+        "confidence": 0.6
+      }
+    ],
+    "notes": "Generic positive: the sender has no \"order\" but the subject says receipt and an amount is present."
+  },
+  "synthetic-receipt-generic-booking-cad.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "street_address",
+      "phone_number",
+      "email_body_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzaKpKPlFxgNHbpDxsHDqzJRDlhZ",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Harbor Kayak Rentals",
+        "amountCents": 9500,
+        "currency": "CAD",
+        "subjectHint": "Booking confirmation – Harbor Kayak Rentals",
+        "occurredAt": "2026-09-30T09:20:00-04:00",
+        "rowKey": "1a0f278d4009300a",
+        "parser": "generic",
+        "confidence": 0.6
+      }
+    ],
+    "notes": "Generic positive in another currency: CA$ is CAD, never USD. The subject uses an en dash."
+  },
+  "synthetic-receipt-generic-order-confirmation.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "token_lowercase",
+      "street_address",
+      "email_body_3"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzsVpBGNvZRMlrrZDBQDgfnRGRvt",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Northwind Outfitters",
+        "amountCents": 12900,
+        "currency": "USD",
+        "subjectHint": "Order confirmation #A-20931",
+        "occurredAt": "2026-09-27T13:02:00-04:00",
+        "rowKey": "1a0e3d0ff40aa50b",
+        "parser": "generic",
+        "confidence": 0.6
+      }
+    ],
+    "notes": "Generic positive: sender contains \"order\", subject says confirmation, and an amount is on a total line. Merchant is the sender display name."
+  },
+  "synthetic-receipt-generic-order-eur.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "card_shape",
+      "person_name_1",
+      "api_key_openai_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzMWRmqnpSswNcVHLQsglbcDQwRZ",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Kestrel Books",
+        "amountCents": 4250,
+        "currency": "EUR",
+        "subjectHint": "Order confirmation KB-30512",
+        "occurredAt": "2026-09-26T15:45:00-04:00",
+        "rowKey": "1a0df3fde60b0471",
+        "parser": "generic",
+        "confidence": 0.6
+      }
+    ],
+    "notes": "Generic positive with a decimal comma: €42,50 is 4250 EUR cents."
+  },
+  "synthetic-receipt-instacart.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "street_address",
+      "passphrase_hyphenated",
+      "phone_number"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzjMMVhvZpMxbCzgwKpMgtBlpncz",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Instacart",
+        "amountCents": 8953,
+        "currency": "USD",
+        "subjectHint": "Your Instacart order receipt",
+        "occurredAt": "2026-09-29T18:05:00-04:00",
+        "rowKey": "1a0ef331ee040121",
+        "parser": "instacart"
+      }
+    ],
+    "notes": "Instacart receipt; the total includes fees, tip and tax. Two fees share the same $3.99."
+  },
+  "synthetic-receipt-marketplace-listing.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "street_address",
+      "phone_number",
+      "person_name_1"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzCFCQwZXnGpzXTSQJlTnZKcKwgs",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "listing.posted",
+        "merchant": "Facebook Marketplace",
+        "amountCents": 25000,
+        "currency": "USD",
+        "subjectHint": "Your listing is live: Trek FX 2 hybrid bike",
+        "occurredAt": "2026-10-01T14:22:00-04:00",
+        "rowKey": "1a0f8b3ad40c6399",
+        "parser": "marketplace"
+      }
+    ],
+    "notes": "\"Your listing is live\" → listing.posted with the listing price. The $5.00 boost upsell is not the listing price and not a purchase."
+  },
+  "synthetic-receipt-negative-newsletter.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "email_local_part",
+      "base64_blob",
+      "passphrase_hyphenated"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzBRpcfJcknqWphmKDZsKWfzZjwH",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a newsletter showing prices (and a price in the subject). No order or receipt words: no observation."
+  },
+  "synthetic-receipt-negative-no-currency.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "ssn_shape",
+      "person_name_1",
+      "email_body_3"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzyGgHvMmBCXfchqrmpJJFfrFsDH",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a receipt-looking subject with numbers but no currency anywhere: no observation."
+  },
+  "synthetic-receipt-negative-promo-order.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "token_lowercase",
+      "email_local_part",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzFKqRlqnvrddLrTmjPRlQdJbbwJ",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a promotion whose subject says \"order\" and whose body shows prices. Nothing was bought: no observation. The rule as written in sprint 2.3 (subject matches /order/ and an amount is present) would accept this message; see README."
+  },
+  "synthetic-receipt-negative-shipping.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "street_address",
+      "phone_number",
+      "api_key_anthropic_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzwtFXbMtVrrlnZVXqvhlmtWXpnv",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a shipping notice for the order in synthetic-receipt-generic-order-confirmation.html. Sender and subject say \"order\" but no amount is shown: no observation (and no second purchase)."
+  },
+  "synthetic-receipt-opentable.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_2",
+      "phone_number",
+      "email_body_1"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzwfnQbZDsDzdMDwGFbsKbFjqNjT",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Lantern & Ash",
+        "amountCents": 18640,
+        "currency": "USD",
+        "subjectHint": "Your prepaid reservation at Lantern & Ash is confirmed",
+        "occurredAt": "2026-09-30T12:48:00-04:00",
+        "rowKey": "1a0f33742001efd2",
+        "parser": "opentable"
+      }
+    ],
+    "notes": "OpenTable prepaid experience. The merchant is the restaurant. occurredAt is when the receipt was sent (the message date), never the reservation time (Sat 10 Oct 7:30 PM)."
+  },
+  "synthetic-receipt-shopify.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "email_body_2",
+      "person_name_2",
+      "card_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzJcHqTwTfjKtrFSmzMMqSLhrHvp",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Larkspur Tea Co.",
+        "amountCents": 5245,
+        "currency": "USD",
+        "subjectHint": "Order #1047 confirmed",
+        "occurredAt": "2026-09-28T10:30:00-04:00",
+        "rowKey": "1a0e86c3240d1f47",
+        "parser": "shopify"
+      }
+    ],
+    "notes": "Shopify store order confirmation sent through Shopify (t.shopifyemail.com). The merchant is the store. The total carries an explicit \"USD\"."
+  },
+  "synthetic-receipt-stripe-subscription.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_2",
+      "api_key_aws_shape",
+      "token_lowercase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzwKjSfQgsGgFWKKlmzxcwCVCGfT",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "subscription.changed",
+        "merchant": "Lumen Notes",
+        "amountCents": 2000,
+        "currency": "USD",
+        "subjectHint": "Your Lumen Notes subscription has been updated",
+        "occurredAt": "2026-10-01T11:05:00-04:00",
+        "rowKey": "1a0f7ff516003aa7",
+        "parser": "stripe"
+      }
+    ],
+    "notes": "Stripe subscription change (plan switch) → subscription.changed, not purchase.made. Amount paid and the renewal price are the same $20.00, so the amount is unambiguous."
+  },
+  "synthetic-receipt-stripe.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_1",
+      "street_address",
+      "card_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzpDnsZKNpFCcxgqKrwsWkvwZgfd",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Acme Analytics, Inc.",
+        "amountCents": 4900,
+        "currency": "USD",
+        "subjectHint": "Your receipt from Acme Analytics, Inc. #1849-2210",
+        "occurredAt": "2026-10-02T16:17:00-04:00",
+        "rowKey": "1a0fe435260eb853",
+        "parser": "stripe"
+      }
+    ],
+    "notes": "Stripe-hosted receipt for a one-off charge. The merchant is the business that charged (the sender name and the \"Receipt from\" line), not Stripe. The amount appears four times; the card digits and a full card-shaped seed sit near it."
+  },
+  "synthetic-receipt-uber.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_1",
+      "street_address",
+      "card_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "inbox",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:30:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzIPKLtxBMMStljBqprtTgdpBDhR",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Uber",
+        "amountCents": 2384,
+        "currency": "USD",
+        "subjectHint": "Your Thursday evening trip with Uber",
+        "occurredAt": "2026-10-01T21:14:00-04:00",
+        "rowKey": "1a0fa2cdfc00dbb6",
+        "parser": "uber"
+      }
+    ],
+    "notes": "Uber trip receipt: Total first, then the breakdown. Merchant is the canonical \"Uber\"."
+  },
+  "synthetic-sent-account-2.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "person_name_2",
+      "passphrase",
+      "email_body_1"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:50:00-04:00",
+        "account": "avery.consulting@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/1/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "bo.ferris@example.net",
+        "subjectHint": "Statement of work v3",
+        "occurredAt": "2026-10-03T10:02:00-04:00",
+        "rowKey": "1a102125bc076023"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "kai.mendes@example.com",
+        "subjectHint": "Re: Kickoff agenda",
+        "occurredAt": "2026-10-02T15:30:00-04:00",
+        "rowKey": "1a0fe184ac00b964"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "lee.ortega@example.org",
+        "subjectHint": "Invoice 2026-031",
+        "occurredAt": "2026-10-01T11:00:00-04:00",
+        "rowKey": "1a0f7fabd80c968e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "max.ruiz@example.net",
+        "subjectHint": "Invoice 2026-031",
+        "occurredAt": "2026-10-01T11:00:00-04:00",
+        "rowKey": "1a0f7fabd80c968e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "noor.haddad@example.com",
+        "subjectHint": "Intro: design partner",
+        "occurredAt": "2026-09-29T09:15:00-04:00",
+        "rowKey": "1a0ed4de4204f623"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "avery.consulting@example.org",
+        "windowStart": "2026-09-29T09:15:00-04:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "The second signed-in account (/mail/u/1/), Sent, head of the list. Coverage belongs to this account (its hash), not to the account of synthetic-sent-page-1.html. Recipient spans carry the address only in title and data-hovercard-id (no email attribute), to exercise the title fallback."
+  },
+  "synthetic-sent-dst-auckland.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "card_shape",
+      "email_body_3",
+      "token_lowercase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "Pacific/Auckland",
+        "readAt": "2026-10-03T09:00:00+13:00",
+        "account": "avery.travel@example.net",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "mere.tane@example.net",
+        "subjectHint": "Ferry times",
+        "occurredAt": "2026-10-03T08:12:00+13:00",
+        "rowKey": "1a0fe07d000f5cb1"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "hemi.walker@example.com",
+        "subjectHint": "Re: Lunch Thursday",
+        "occurredAt": "2026-10-01T18:30:00+13:00",
+        "rowKey": "1a0f5f0e3c01a434"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "aroha.smith@example.org",
+        "subjectHint": "Clocks went forward",
+        "occurredAt": "2026-09-27T03:10:00+13:00",
+        "rowKey": "1a0de0d2ac0a699b"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "tama.brown@example.net",
+        "subjectHint": "Late night notes",
+        "occurredAt": "2026-09-27T01:45:00+12:00",
+        "rowKey": "1a0ddf647602239c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "kiri.jones@example.com",
+        "subjectHint": "Saturday wrap-up",
+        "occurredAt": "2026-09-26T23:59:00+12:00",
+        "rowKey": "1a0dd953ba0ed2db"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "avery.travel@example.net",
+        "windowStart": "2026-09-26T23:59:00+12:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "DST edge. Browser time zone Pacific/Auckland: clocks went from 02:00 NZST (+12:00) to 03:00 NZDT (+13:00) on Sun 27 Sep 2026. \"Sun, Sep 27, 2026, 3:10 AM\" is +13:00 and \"1:45 AM\" the same day is +12:00, 25 minutes earlier in real time. A parser that applies one fixed offset to every row gets one of them an hour wrong."
+  },
+  "synthetic-sent-midnight.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "ssn_shape",
+      "phone_number",
+      "passphrase_hyphenated"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T00:30:00-04:00",
+        "account": "avery.late@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ines.duarte@example.org",
+        "subjectHint": "Re: Tomorrow's pickup",
+        "occurredAt": "2026-10-03T00:21:00-04:00",
+        "rowKey": "1a0fffe6fe0d70a0"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "owen.price@example.com",
+        "subjectHint": "Late reply",
+        "occurredAt": "2026-10-02T23:59:00-04:00",
+        "rowKey": "1a0ffea4ba06abb3"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "lena.brooks@example.net",
+        "subjectHint": "Draft agenda",
+        "occurredAt": "2026-10-02T23:58:00-04:00",
+        "rowKey": "1a0ffe9614014e26"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "theo.grant@example.org",
+        "subjectHint": "Night shift handoff",
+        "occurredAt": "2026-10-02T23:47:00-04:00",
+        "rowKey": "1a0ffdf4f206f046"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "uma.reyes@example.com",
+        "subjectHint": "Midnight launch checklist",
+        "occurredAt": "2026-10-02T00:00:00-04:00",
+        "rowKey": "1a0fac4da0066d29"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "avery.late@example.org",
+        "windowStart": "2026-10-02T00:00:00-04:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "Read at 00:30 on Sat 3 Oct (America/New_York). Rows 3 and 4 have no time title (a synthetic stress case, not how Gmail renders a list) so their time comes from the relative text: \"11:58 PM\" read at 00:30 is last night, and \"Yesterday, 11:47 PM\" is Fri 2 Oct 23:47; both resolve to the minute. Row 2 shows \"Oct 2\" but its title gives 23:59, and row 5 is exactly midnight at the start of Fri 2 Oct."
+  },
+  "synthetic-sent-page-1.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "phone_number",
+      "email_body_2",
+      "person_name_1"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:15:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "alex.rivera@example.com",
+        "subjectHint": "Q3 deck for Thursday",
+        "occurredAt": "2026-10-03T09:41:00-04:00",
+        "rowKey": "1a101ff21e04e756"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya.raman@example.org",
+        "subjectHint": "Re: Lease renewal terms",
+        "occurredAt": "2026-10-03T08:05:00-04:00",
+        "rowKey": "1a101a73de01269a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "sam.chen@example.net",
+        "subjectHint": "Re: Lease renewal terms",
+        "occurredAt": "2026-10-03T08:05:00-04:00",
+        "rowKey": "1a101a73de01269a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "Dana.Whitfield@Example.org",
+        "subjectHint": "Invoice #2291",
+        "occurredAt": "2026-10-02T18:12:00-04:00",
+        "rowKey": "1a0feac9b805dcb0"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "jordan.lee@example.com",
+        "occurredAt": "2026-10-02T14:02:00-04:00",
+        "rowKey": "1a0fdc7b9c0344a7"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "morgan.patel@example.com",
+        "subjectHint": "Following up on the partnership proposal we discussed at the conference last wee",
+        "occurredAt": "2026-10-02T11:20:00-04:00",
+        "rowKey": "1a0fd336900184d8"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "casey.nguyen@example.net",
+        "subjectHint": "Dinner Saturday? 🍝",
+        "occurredAt": "2026-10-01T19:45:00-04:00",
+        "rowKey": "1a0f9db64606ed0e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "riley.brooks@example.org",
+        "subjectHint": "Signed NDA attached",
+        "occurredAt": "2026-10-01T09:05:00-04:00",
+        "rowKey": "1a0f7917460138e6"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "taylor.kim@example.com",
+        "subjectHint": "Re: Offsite agenda",
+        "occurredAt": "2026-09-30T16:30:00-04:00",
+        "rowKey": "1a0f40281404efb0"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "jamie.fox@example.net",
+        "subjectHint": "Contractor intro",
+        "occurredAt": "2026-09-30T10:00:00-04:00",
+        "rowKey": "1a0f29d7300f380f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "robin.ellis@example.org",
+        "subjectHint": "Weekly update",
+        "occurredAt": "2026-09-29T17:55:00-04:00",
+        "rowKey": "1a0ef29f72060ffb"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-29T17:55:00-04:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "Sent list, first page (Newer is disabled: the head of the list), 10 rows, 11 observations (row 2 has two recipients). Edge rows: a U+202F before AM/PM in two time titles; a subject with a double space (collapsed in subjectHint); a recipient address in mixed case (kept exactly as read); \"(no subject)\" (no subjectHint); a subject over 80 code points (subjectHint is the first 80); an emoji subject (one code point, never split). Seeds sit in snippets and in the screen-reader row summary, never in the subject span. Rows 9 and 10 reappear on page 2."
+  },
+  "synthetic-sent-page-2.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "email_body_3",
+      "ssn_shape",
+      "api_key_aws_shape"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:41:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/p2",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "jamie.fox@example.net",
+        "subjectHint": "Contractor intro",
+        "occurredAt": "2026-09-30T10:00:00-04:00",
+        "rowKey": "1a0f29d7300f380f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "robin.ellis@example.org",
+        "subjectHint": "Weekly update",
+        "occurredAt": "2026-09-29T17:55:00-04:00",
+        "rowKey": "1a0ef29f72060ffb"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "logan.price@example.com",
+        "subjectHint": "Quote request: office chairs",
+        "occurredAt": "2026-09-29T13:14:00-04:00",
+        "rowKey": "1a0ee28b3c058760"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "sky.morales@example.net",
+        "subjectHint": "Re: Venue options",
+        "occurredAt": "2026-09-28T20:40:00-04:00",
+        "rowKey": "1a0ea9aab00f219b"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "drew.carter@example.org",
+        "subjectHint": "Photos from Saturday",
+        "occurredAt": "2026-09-27T15:03:00-04:00",
+        "rowKey": "1a0e43fc6a0a1661"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "emerson.hale@example.com",
+        "subjectHint": "Tax documents",
+        "occurredAt": "2026-09-26T11:11:00-04:00",
+        "rowKey": "1a0de4503a0f1213"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "parker.quinn@example.net",
+        "subjectHint": "Board deck v2",
+        "occurredAt": "2026-09-25T16:45:00-04:00",
+        "rowKey": "1a0da5070e0dadc2"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "reese.lin@example.org",
+        "subjectHint": "Board deck v2",
+        "occurredAt": "2026-09-25T16:45:00-04:00",
+        "rowKey": "1a0da5070e0dadc2"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "frankie.moss@example.com",
+        "subjectHint": "Thank you!",
+        "occurredAt": "2026-09-24T19:02:00-04:00",
+        "rowKey": "1a0d5a78240bab91"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "hayden.cole@example.net",
+        "subjectHint": "Re: Reference check",
+        "occurredAt": "2026-09-23T09:30:00-04:00",
+        "rowKey": "1a0ce7577c09f237"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "rowan.blake@example.org",
+        "subjectHint": "Flight details",
+        "occurredAt": "2026-09-22T06:00:00-04:00",
+        "rowKey": "1a0c88ed9002b15e"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-22T06:00:00-04:00",
+        "windowEnd": "2026-09-30T10:00:00-04:00"
+      },
+      {
+        "kind": "dedup",
+        "with": "synthetic-sent-page-1.html",
+        "shared": 2
+      }
+    ],
+    "notes": "Sent list, second page (rows 11-20 of 26). Two messages were sent between the two reads, so the first two rows here are rows 9 and 10 of page 1, with the same row ids and fields: they must project to the same contentHash (the dedup fact). Not the head of the list, so the coverage window ends at the newest visible row, not lastSyncAt."
+  },
+  "synthetic-sent-thread.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "email_body_1",
+      "api_key_openai_shape",
+      "passphrase_hyphenated"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T10:20:00-04:00",
+        "account": "avery.founder@example.com",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/FMfcgzyNHSFDkgvkGGMFNfmCjmCmdklW",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_list"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "The Sent row 1 of page 1, opened. The Sent folder is selected but no thread list is on the page, so the Sent observer reads nothing and reports DEGRADED (not_sent_list) with no coverage: an opened thread is not the list. The receipt observer sees an opened message from the account itself, which no parser claims: zero observations. The body holds three seeds."
+  },
+  "synthetic-sent-time-unresolved.html": {
+    "capturedAt": "2026-10-03",
+    "selectorsVersion": null,
+    "seededSecrets": [
+      "api_key_openai_shape",
+      "street_address",
+      "person_name_1"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-03T09:00:00-04:00",
+        "account": "avery.lists@example.net",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "row.time_unresolved"
+        ]
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "pat.morales@example.net",
+        "subjectHint": "Volunteer roster",
+        "occurredAt": "2026-10-03T08:40:00-04:00",
+        "rowKey": "1a101c74900a82ba"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "bea.lund@example.org",
+        "subjectHint": "Book club pick",
+        "occurredAt": "2026-09-30T17:15:00-04:00",
+        "rowKey": "1a0f42bb4208dd51"
+      }
+    ],
+    "notes": "Row 2 has no time title and its text \"Oct 1\" names a whole day, not a minute, so it cannot become an observation. The pass emits rows 1 and 3, reports DEGRADED (row.time_unresolved) and writes no coverage: a row Attest could not read is not evidence that nothing was sent that day (Hard Rule 5)."
+  }
+}
