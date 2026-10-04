@@ -1,0 +1,46 @@
+{
+  "$comment": "Google Calendar observer (gcal.event) selectors and label words. role, aria-*, data-* and structure only, never a class name. Bump `version` on any change and record it with the fixture folder date in Decisions.md (agents/adapter_engineer.md rule 3). Parsed by ./selectors.ts.",
+  "observer": "gcal.event",
+  "version": "1.1.0",
+  "fixtures": ["tests/fixtures/pages/gcal/2026-10-03"],
+  "selectors": {
+    "main": "[role=\"main\"]",
+    "grid": "[role=\"grid\"]",
+    "day": "[data-datekey]",
+    "chip": "[role=\"button\"][data-eventid]",
+    "dayButton": "[role=\"button\"], button, [role=\"link\"], a",
+    "calendar": "[role=\"complementary\"] [role=\"list\"] [role=\"checkbox\"]",
+    "account": "[role=\"banner\"] a[aria-label]"
+  },
+  "attributes": {
+    "eventId": "data-eventid",
+    "dayKey": "data-datekey",
+    "hidden": "aria-hidden",
+    "checked": "aria-checked",
+    "label": "aria-label"
+  },
+  "text": {
+    "accountPrefix": "Google Account:",
+    "allDay": "All day",
+    "to": " to ",
+    "at": " at ",
+    "guests": ", Guests: ",
+    "noTitle": ["(No title)"],
+    "more": "^\\+?\\d+ more\\b",
+    "zone": "^GMT(?:([+\\u2212-])(\\d{1,2})(?::?(\\d{2}))?)?$",
+    "months": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ]
+  }
+}
