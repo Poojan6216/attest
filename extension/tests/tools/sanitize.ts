@@ -15,8 +15,16 @@
  *     money, street addresses, names, redacted literals;
  *  5. inject three seeded secrets into the main landmark for the no-leak test.
  * Roles, aria-*, data-*, ids, classes and structure are kept: adapters anchor on them.
+ *
+ * Receipt senders stay parseable (`keepSenders`, default: the receipt-parser registry): an address at a registry
+ * domain keeps its domain, with a fake local part (the parsers read only the domain; people work at these domains
+ * too). A display name at a `nameDomains` domain is kept when it is a business's (capture-pii.ts `isKeptName`: a
+ * machine `+tag` sender, the merchant a parser reads, or a name holding a registry brand). Every other address and
+ * name is faked.
  */
 import type { Document, Element, Text } from 'happy-dom';
+
+import { RECEIPT_SENDER_DOMAINS, RECEIPT_SENDER_NAME_DOMAINS } from '../../src/observers/gmail/receipts';
 
 import { neutraliseCssUrls, sanitizeCss } from './capture-css';
 import {
@@ -32,13 +40,36 @@ import { CaptureError } from './capture-error';
 import { Faker } from './capture-fakes';
 import { stripForeignRawText } from './capture-html-guard';
 import { learnNames, localNamesFor, type NameBook } from './capture-names';
-import { findForeignAts, Scrubber, type ScrubStats } from './capture-pii';
+import {
+  EMAIL_SOURCE,
+  EMAIL_VALUE,
+  emptyScrubStats,
+  findForeignAts,
+  isKeptName,
+  NAME_BEFORE_EMAIL,
+  nameTokens,
+  Scrubber,
+  type ScrubStats,
+} from './capture-pii';
+import { stripQueryParts } from './capture-url';
 
 export interface SeedSecret {
   readonly id: string;
   readonly value: string;
   readonly canaries: readonly string[];
 }
+
+/** Which receipt senders a capture keeps: addresses at `domains`, and display names at `nameDomains` too. */
+export interface KeptSenders {
+  readonly domains: readonly string[];
+  readonly nameDomains: readonly string[];
+}
+
+/** The receipt-parser registry (src/observers/gmail/receipts/selectors.json): the default `keepSenders`. */
+export const RECEIPT_SENDERS: KeptSenders = Object.freeze({
+  domains: RECEIPT_SENDER_DOMAINS,
+  nameDomains: RECEIPT_SENDER_NAME_DOMAINS,
+});
 
 export interface SanitizeOptions {
   /** Seed for every fake and for the choice of injected secrets. */
@@ -49,6 +80,8 @@ export interface SanitizeOptions {
   readonly names?: readonly string[];
   /** CSS selectors whose text and labels become fake phrases (--redact-selector). */
   readonly redactSelectors?: readonly string[];
+  /** Receipt senders to keep (default RECEIPT_SENDERS; `{ domains: [], nameDomains: [] }` keeps none). */
+  readonly keepSenders?: KeptSenders;
 }
 
 export interface SanitizeStats extends ScrubStats {
@@ -69,15 +102,7 @@ export interface SanitizeResult {
 
 export const SEEDS_PER_FIXTURE = 3;
 const MIN_LITERAL_LENGTH = 4;
-const REDACTED_ATTRIBUTES = [
-  'title',
-  'aria-label',
-  'aria-description',
-  'alt',
-  'data-tooltip',
-  'placeholder',
-  'value',
-];
+const REDACTED_ATTRIBUTES = 'title aria-label aria-description alt data-tooltip placeholder value'.split(' ');
 
 interface Redactions {
   readonly literals: Map<string, string>;
@@ -93,15 +118,7 @@ function emptyStats(): SanitizeStats {
     neutralisedResources: 0,
     trimmedUrls: 0,
     redactedTexts: 0,
-    literal: 0,
-    email: 0,
-    address: 0,
-    amount: 0,
-    phone: 0,
-    card: 0,
-    name: 0,
-    query: 0,
-    strayAt: 0,
+    ...emptyScrubStats(),
   };
 }
 
@@ -226,17 +243,26 @@ function scrubDocument(
   }
 }
 
+/**
+ * A seed a fixture may carry: not blank, no '@', and no URL query or parameter fragment (`url_with_token`): the
+ * scrubber strips those from pages, and a committed fixture holds no token query (SECURITY-2).
+ */
+function injectable(candidate: SeedSecret): boolean {
+  const value = candidate.value;
+  return value.trim() !== '' && !value.includes('@') && stripQueryParts(value).removed === 0;
+}
+
 /** Three seeds chosen by the seed alone, so a re-capture with the same seed injects the same three. */
 export function pickSeeds(seeds: readonly SeedSecret[], seed: string): SeedSecret[] {
   const faker = new Faker(seed);
   const byId = new Map<string, SeedSecret>();
   for (const candidate of seeds) {
-    if (candidate.value.trim() !== '' && !candidate.value.includes('@')) byId.set(candidate.id, candidate);
+    if (injectable(candidate)) byId.set(candidate.id, candidate);
   }
   if (byId.size < SEEDS_PER_FIXTURE) {
     throw new CaptureError(
       'too_few_seeds',
-      `Need at least ${SEEDS_PER_FIXTURE} seeds without '@'; got ${byId.size}.`,
+      `Need at least ${SEEDS_PER_FIXTURE} seeds without '@' or a URL query; got ${byId.size}.`,
     );
   }
   return [...byId.values()]
@@ -244,6 +270,65 @@ export function pickSeeds(seeds: readonly SeedSecret[], seed: string): SeedSecre
     .sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
     .slice(0, SEEDS_PER_FIXTURE)
     .map(({ candidate }) => candidate);
+}
+
+/** The attributes capture-names.ts learns a display name from, beside an email attribute. */
+const NAME_ATTRIBUTES = ['name', 'title', 'aria-label', 'data-name'];
+const EMAIL_ANYWHERE = new RegExp(EMAIL_SOURCE, 'gu');
+
+/** A display name as capture-names.ts files it: addresses and brackets out, white space collapsed. */
+function bookName(raw: string): string {
+  return raw
+    .replace(EMAIL_ANYWHERE, ' ')
+    .replace(/[<>()[\]"\s]+/g, ' ')
+    .trim();
+}
+
+/** Display names of kept-name senders (capture-pii.ts `isKeptName`): `Name <address>` in text and attributes. */
+function keptSenderNames(doc: Document, book: NameBook, nameDomains: readonly string[]): Set<string> {
+  const names = new Set<string>();
+  const fromText = (text: string): void => {
+    if (!text.includes('@')) return;
+    NAME_BEFORE_EMAIL.lastIndex = 0;
+    for (let match = NAME_BEFORE_EMAIL.exec(text); match !== null; match = NAME_BEFORE_EMAIL.exec(text)) {
+      const name = match[1] ?? match[2] ?? match[3];
+      if (name !== undefined && isKeptName(name, match[4] ?? match[5] ?? '', nameDomains))
+        names.add(bookName(name));
+    }
+  };
+  for (const element of Array.from(doc.querySelectorAll('*'))) {
+    const attributes = Array.from(element.attributes);
+    const addresses = attributes
+      .filter((a) => !NAME_ATTRIBUTES.includes(a.name) && EMAIL_VALUE.test(a.value ?? ''))
+      .map((a) => (a.value ?? '').trim().replace(/^mailto:/i, ''));
+    const shown = NAME_ATTRIBUTES.map((a) => bookName(element.getAttribute(a) ?? '')).filter((n) => n !== '');
+    const kept = shown.filter((name) => addresses.some((address) => isKeptName(name, address, nameDomains)));
+    // The element's own name tokens stay replaceable inside it unless every name it shows is kept.
+    if (kept.length > 0 && kept.length === shown.length) book.local.delete(element);
+    for (const name of kept) names.add(name);
+    for (const attribute of attributes) fromText(attribute.value ?? '');
+  }
+  for (const node of textNodes(doc)) fromText(node.data);
+  names.delete('');
+  return names;
+}
+
+/**
+ * Unlearns the display names of kept-name receipt senders (a business, the merchant a parser reads), so they
+ * survive. A token another learned name still uses, or a --names token, stays replaceable everywhere.
+ */
+function keepSenderNames(doc: Document, book: NameBook, kept: KeptSenders, founder: readonly string[]): void {
+  if (kept.nameDomains.length === 0) return;
+  const names = keptSenderNames(doc, book, kept.nameDomains);
+  const founderNames = new Set(founder.map((name) => name.trim()));
+  for (const name of names) if (!founderNames.has(name)) book.global.delete(name);
+  const lower = (token: string): string => token.toLowerCase();
+  const needed = new Set(founder.flatMap((name) => nameTokens(name, true)).map(lower));
+  for (const name of book.global) for (const token of nameTokens(name)) needed.add(lower(token));
+  for (const local of book.local.values()) for (const token of local) needed.add(lower(token));
+  for (const name of names) {
+    for (const token of nameTokens(name).map(lower)) if (!needed.has(token)) book.tokens.delete(token);
+  }
 }
 
 function injectSeeds(doc: Document, chosen: readonly SeedSecret[]): void {
@@ -275,19 +360,23 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
     const doc = new window.DOMParser().parseFromString(guarded.html, 'text/html');
     stats.removedComments += removeComments(doc);
     stats.removedElements += removeDangerousElements(doc);
+    const kept = options.keepSenders ?? RECEIPT_SENDERS;
     const book = learnNames(doc, options.names ?? []);
+    keepSenderNames(doc, book, kept, options.names ?? []);
     faker.reserve(book.tokens);
     const redactions = redactSelected(doc, options.redactSelectors ?? [], faker, stats);
     const scrubber = new Scrubber(faker, {
       globalNames: book.global,
       nameTokens: book.tokens,
       literals: redactions.literals,
+      keptDomains: kept.domains,
+      keptNameDomains: kept.nameDomains,
     });
     scrubDocument(doc, scrubber, book, redactions, stats);
     ensureCharset(doc);
     injectSeeds(doc, chosen);
     const output = `<!DOCTYPE html>\n${doc.documentElement.outerHTML}\n`;
-    const foreign = findForeignAts(output);
+    const foreign = findForeignAts(output, kept.domains);
     if (foreign.length > 0) {
       throw new CaptureError(
         'foreign_at',

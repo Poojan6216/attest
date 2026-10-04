@@ -1,0 +1,164 @@
+{
+  "$comment": "Gmail receipt parsers (sprint 2.3). Bump version on any change; record it with the fixture folder date in Decisions.md. Landmarks are role, aria-*, data-* and structure only, never class names. Regexes are read case-insensitively ('iu'). Sender lists are domains: an address matches its own domain and any subdomain of it. See ./index.ts.",
+  "version": "1.0.1",
+  "landmarks": {
+    "main": "[role=\"main\"]",
+    "subject": "h2[data-legacy-thread-id]",
+    "message": "[role=\"listitem\"][data-legacy-message-id]",
+    "messageKey": "data-legacy-message-id",
+    "expanded": "aria-expanded",
+    "sender": "h3 [email]",
+    "senderAddress": "email",
+    "senderName": "name",
+    "date": "[role=\"gridcell\"]",
+    "account": "[role=\"banner\"] a[aria-label^=\"Google Account:\"]",
+    "header": "[email], [role=\"gridcell\"], [role=\"button\"]",
+    "blocks": "tr, p, li, div, h1, h2, h3, h4, h5, h6, blockquote, pre",
+    "cells": "td, th"
+  },
+  "threadUrl": "^(?:(?:label|search|category|advanced-search)/[^/#?]+|(?!(?:label|search|category|advanced-search)/)[^/#?]+)/(?:[0-9a-f]{16}|[a-z0-9]{24,})$",
+  "platforms": {
+    "stripe": {
+      "senderDomains": ["stripe.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "from": "senderName" },
+      "kinds": [
+        {
+          "subject": "^your .+ subscription (?:has been |was )?(?:updated|changed|upgraded|downgraded|renewed|started)\\b",
+          "type": "subscription.changed",
+          "labels": ["Amount paid", "Amount charged", "Total"],
+          "amount": "required"
+        },
+        {
+          "subject": "^your .+ subscription (?:has been |was )?(?:canceled|cancelled|ended)\\b",
+          "type": "subscription.changed",
+          "labels": ["Amount paid", "Amount charged", "Total"],
+          "amount": "optional"
+        },
+        {
+          "subject": "^your (?:receipt from .+|.+ receipt \\[#[0-9-]+\\])",
+          "type": "purchase.made",
+          "labels": ["Amount paid", "Amount charged", "Total"],
+          "amount": "required"
+        }
+      ]
+    },
+    "amazon": {
+      "senderDomains": ["amazon.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "canonical": "Amazon" },
+      "kinds": [
+        {
+          "subject": "^(?:your amazon\\.com order\\b|ordered: )",
+          "exclude": "\\b(?:shipped|delivered|out for delivery|arriving|cancel(?:l)?ed|refund(?:ed)?|return(?:ed)?|delay(?:ed)?|updated?|declined|problem|issue|action required|unable|cannot|could not)\\b",
+          "type": "purchase.made",
+          "labels": ["Order Total", "Grand Total"],
+          "amount": "required"
+        }
+      ]
+    },
+    "marketplace": {
+      "senderDomains": ["facebookmail.com"],
+      "keepSenderName": false,
+      "defaultDollar": "USD",
+      "merchant": { "canonical": "Facebook Marketplace" },
+      "kinds": [
+        {
+          "subject": "^your listing is (?:now )?live: (?<item>.+)$",
+          "type": "listing.posted",
+          "labels": [],
+          "amount": "required"
+        }
+      ]
+    },
+    "opentable": {
+      "senderDomains": ["opentable.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "from": "subject" },
+      "kinds": [
+        {
+          "subject": "^your prepaid reservation at (?<merchant>.+?) is confirmed$",
+          "type": "purchase.made",
+          "labels": ["Total charged", "Amount charged", "Total"],
+          "amount": "required"
+        },
+        {
+          "subject": "^your receipt from (?<merchant>.+)$",
+          "type": "purchase.made",
+          "labels": ["Total charged", "Amount charged", "Total"],
+          "amount": "required"
+        }
+      ]
+    },
+    "instacart": {
+      "senderDomains": ["instacart.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "canonical": "Instacart" },
+      "kinds": [
+        {
+          "subject": "\\breceipt\\b",
+          "exclude": "\\brefund(?:ed)?\\b",
+          "type": "purchase.made",
+          "labels": ["Order total", "Total"],
+          "amount": "required"
+        }
+      ]
+    },
+    "uber": {
+      "senderDomains": ["uber.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "canonical": "Uber" },
+      "kinds": [
+        {
+          "subject": "\\btrip with uber\\b",
+          "type": "purchase.made",
+          "labels": ["Total"],
+          "amount": "required"
+        }
+      ]
+    },
+    "shopify": {
+      "senderDomains": ["shopifyemail.com"],
+      "keepSenderName": true,
+      "defaultDollar": "USD",
+      "merchant": { "from": "senderName" },
+      "kinds": [
+        {
+          "subject": "^(?:order #?[a-z0-9-]+ (?:is )?confirmed\\b|order confirmation\\b|thank you for your (?:order|purchase)\\b)",
+          "type": "purchase.made",
+          "labels": ["Total"],
+          "amount": "required"
+        }
+      ]
+    }
+  },
+  "generic": {
+    "defaultDollar": "USD",
+    "confidence": 0.6,
+    "senderTrigger": "order",
+    "subjectTrigger": "\\b(?:order|receipt|confirmation)\\b",
+    "refuseSubject": [
+      "^(?:re|fwd?|fw)\\s*:",
+      "\\d+\\s*%\\s*off\\b|\\b(?:sale|deals?|save|shop now|order now|order today|ends (?:today|tonight|soon)|last (?:chance|call)|limited time|free shipping|coupons?|promo(?:tion)?s?|newsletter|picks|back in stock|price drop|new arrivals|re-?order|expir(?:es?|ed|ing))\\b",
+      "\\b(?:cart|reminder|complete your|finish your|(?:is|are) waiting|still (?:want|thinking|available|interested)|forg[eo]t|left (?:behind|something)|come back|almost (?:complete|done|yours|there)|confirm your|please confirm|verify your)\\b",
+      "\\b(?:fail(?:ed|ure)?|declined|unsuccessful|could ?n[o'’]t|unable|on hold|pending|awaiting|problem|issue|action required|due|overdue|statement|invoice|quote|estimate)\\b",
+      "\\b(?:shipped|shipping|shipment|dispatched|on its way|in transit|arriving|arrives|out for delivery|delivered|ready for pickup|picked up|tracking)\\b",
+      "\\b(?:refund(?:ed)?|return(?:ed)?|cancel(?:l)?ed|updated?|changed|modified|rate|review|feedback|how was|survey)\\b"
+    ],
+    "labels": [
+      "Amount paid",
+      "Amount charged",
+      "Total charged",
+      "Total paid",
+      "Order total",
+      "Grand total",
+      "Total"
+    ],
+    "impersonationTokens": ["amazon", "uber", "instacart", "opentable", "stripe", "shopify", "facebook"]
+  }
+}

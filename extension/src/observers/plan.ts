@@ -16,6 +16,9 @@
  *    is `lastSyncAt` or the newest visible row); a window that claims more would let a later ping's sync time
  *    finalise a claim nobody looked at as NOT_FOUND (§6.1, Hard Rule 5). Only a calendar sees ahead.
  *  - otherwise OK, with the coverage facts. A coverage entry exists only for a clean pass whose health was OK.
+ *  - an observer that asserts no coverage by design (`Observer.coverage: 'none'`): the same steps up to
+ *    `project()`, then `OK_NO_COVERAGE` (health OK, rows, never coverage) or DEGRADED for a refused row. Its
+ *    account and window are never read: nothing it reports is a window (Hard Rule 5).
  *
  * Every observation carries `observedAt = ctx.observedAt`, the instant the pass read the page (§3, §10): never the
  * instant the background writes it. Observations with one `contentHash` are reported once (§10: the same row read
@@ -83,6 +86,11 @@ export type PassPlan =
       readonly status: 'OK';
       readonly observations: readonly Observation[];
       readonly coverage: CoverageFacts;
+    }
+  | {
+      /** A clean pass of an observer that asserts no coverage by design: health OK, the rows, no coverage. */
+      readonly status: 'OK_NO_COVERAGE';
+      readonly observations: readonly Observation[];
     }
   | {
       readonly status: 'DEGRADED';
@@ -225,6 +233,14 @@ function coverageFacts(input: PassInput): Step<CoverageFacts> {
   return ok(account.value === undefined ? span.value : { ...span.value, accountHash: account.value });
 }
 
+/** The plan of an observer that asserts no coverage: OK_NO_COVERAGE, or DEGRADED when `project()` refused a row. */
+function uncoveredPlan(observations: readonly Observation[], reasons: readonly PassReason[]): PassPlan {
+  const [first, ...rest] = reasons;
+  return first === undefined
+    ? { status: 'OK_NO_COVERAGE', observations }
+    : { status: 'DEGRADED', reasons: [first, ...rest], observations };
+}
+
 /** Decides one pass over `input.doc`. Never throws. */
 export function planPass(input: PassInput): PassPlan {
   const health = checkHealth(input.observer, input.doc);
@@ -232,6 +248,7 @@ export function planPass(input: PassInput): PassPlan {
   const rows = extractRows(input);
   if (!rows.ok) return { status: 'DEGRADED', reasons: [rows.reason], observations: [] };
   const { observations, reasons } = projectRows(input, rows.value);
+  if (input.observer.coverage === 'none') return uncoveredPlan(observations, reasons);
   const coverage = coverageFacts(input);
   const [first, ...rest] = coverage.ok ? reasons : [...reasons, coverage.reason];
   if (first !== undefined) return { status: 'DEGRADED', reasons: [first, ...rest], observations };

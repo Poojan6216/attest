@@ -1,0 +1,188 @@
+/**
+ * The Gmail receipt observer as an observer (sprint_2 2.3; build_spec §7 adapter contract; docs/grading.md §3):
+ *
+ *  - it asserts no coverage, by design: a pass posts its health and observations and never a coverage.ping, and
+ *    never reads an account or a window (an opened message says nothing about the other mail in its span);
+ *  - health is neutral where there is nothing to read (a list view), and DEGRADED, naming the landmark, where a
+ *    conversation is open but a landmark the parsers need is missing (Hard Rule 6);
+ *  - it is read-only: a pass leaves the page byte for byte as it found it (Hard Rule 3);
+ *  - its selectors file is versioned and checked when it loads, and anchors on no class name.
+ */
+import { describe, expect, it, vi } from 'vitest';
+
+import type { BusMessage } from '../../../../src/bus/messages';
+import { DEFAULT_POLICY } from '../../../../src/core/policy';
+import { ComponentId, IsoTs } from '../../../../src/core/schema';
+import { assertObserver, runPass } from '../../../../src/observers/base';
+import { ObserverError } from '../../../../src/observers/errors';
+import { ReceiptError } from '../../../../src/observers/gmail/receipts/errors';
+import { loadReceiptSelectors } from '../../../../src/observers/gmail/receipts/selectors';
+import rawSelectors from '../../../../src/observers/gmail/receipts/selectors.json';
+import { RECEIPT_SELECTORS, receiptObserver } from '../../../../src/observers/gmail/receipts';
+import type { Observer } from '../../../../src/observers/types';
+import { LIST_URL, type MessageSpec, onPage, type PageSpec, rows, THREAD_URL } from './message-page';
+import { withPage } from './receipt-fixtures';
+
+const NOW = '2026-10-03T10:30:00.000-04:00';
+const RECEIPT: MessageSpec = { from: 'noreply@uber.com', body: rows([['Total', '$23.84']]) };
+const SUBJECT = 'Your Thursday evening trip with Uber';
+const UBER: PageSpec = { subject: SUBJECT, messages: [RECEIPT] };
+
+async function pass(observer: Observer, spec: PageSpec, url = THREAD_URL): Promise<BusMessage[]> {
+  const messages: BusMessage[] = [];
+  const post = (message: BusMessage): Promise<unknown> => {
+    messages.push(message);
+    return Promise.resolve(undefined);
+  };
+  await onPage(
+    spec,
+    (doc) =>
+      runPass(observer, {
+        doc,
+        post,
+        now: () => NOW,
+        offsetAt: () => -240,
+        policy: DEFAULT_POLICY,
+        userActive: () => true,
+      }),
+    url,
+  );
+  return messages;
+}
+
+describe('no coverage, by design (docs/grading.md §3; Hard Rule 5)', () => {
+  it('a clean pass posts health OK and its observations, and never a coverage.ping', async () => {
+    const messages = await pass(receiptObserver, UBER);
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations']);
+    const [health] = messages;
+    expect(health?.type === 'adapter.health' ? health.health : null).toMatchObject({
+      adapterId: 'gmail.receipt',
+      version: RECEIPT_SELECTORS.version,
+      status: 'OK',
+      reasons: [],
+    });
+  });
+
+  it('a pass with nothing to read (a list view) posts only its health, OK', async () => {
+    const messages = await pass(receiptObserver, { subject: null, messages: [] }, LIST_URL);
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health']);
+  });
+
+  it('never calls account() or visibleWindow(): it reports no window', async () => {
+    const account = vi.fn(() => 'avery.founder@example.com');
+    const visibleWindow = vi.fn(() => ({ windowStart: NOW, windowEnd: NOW }));
+    const spied: Observer = { ...receiptObserver, account, visibleWindow };
+    expect((await pass(spied, UBER)).map((m) => m.type)).not.toContain('coverage.ping');
+    expect(account).not.toHaveBeenCalled();
+    expect(visibleWindow).not.toHaveBeenCalled();
+  });
+
+  it('is a valid observer, and an unknown coverage mode is a developer error', () => {
+    expect(() => {
+      assertObserver(receiptObserver);
+    }).not.toThrow();
+    expect(receiptObserver.coverage).toBe('none');
+    const bogus = { ...receiptObserver, coverage: 'window' } as unknown;
+    expect(() => {
+      assertObserver(bogus as Observer);
+    }).toThrow(new ObserverError('invalid_observer'));
+  });
+
+  it('a row project() refuses (a merchant over 120 characters) makes the pass DEGRADED, still with no coverage', async () => {
+    const shopify = {
+      from: 'store+1@t.shopifyemail.com',
+      name: 'S'.repeat(121),
+      body: rows([['Total', '$5.00']]),
+    };
+    const messages = await pass(receiptObserver, { subject: 'Order #1 confirmed', messages: [shopify] });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ health: { status: 'DEGRADED', reasons: ['redact.invalid_field'] } });
+  });
+});
+
+describe('health: neutral with nothing to read, loud when a landmark is missing (Hard Rule 6)', () => {
+  const health = (spec: PageSpec, url = THREAD_URL) =>
+    onPage(spec, (doc) => receiptObserver.health(doc), url);
+
+  it('a list view with no conversation open is OK', () => {
+    expect(health({ subject: null, messages: [] }, LIST_URL)).toEqual({ status: 'OK' });
+  });
+
+  it('an address naming a thread with no message on the page names what is missing', () => {
+    expect(health({ subject: null, messages: [] })).toEqual({
+      status: 'DEGRADED',
+      reasons: ['selector.missing.subject', 'selector.missing.message'],
+    });
+  });
+
+  it.each([
+    ['no sender', { ...RECEIPT, noSender: true }, ['selector.missing.sender']],
+    ['no date', { ...RECEIPT, noDate: true }, ['selector.missing.date']],
+  ])('an opened message with %s', (_case, message, reasons) => {
+    expect(health({ subject: SUBJECT, messages: [message] }, LIST_URL)).toEqual({
+      status: 'DEGRADED',
+      reasons,
+    });
+  });
+
+  it('a page with no main landmark is DEGRADED where the address names a thread, and neutral elsewhere', () => {
+    const html = '<html><body><p>Loading</p></body></html>';
+    expect(withPage(html, THREAD_URL, (doc) => receiptObserver.health(doc))).toEqual({
+      status: 'DEGRADED',
+      reasons: ['selector.missing.main'],
+    });
+    expect(withPage(html, LIST_URL, (doc) => receiptObserver.health(doc))).toEqual({ status: 'OK' });
+  });
+});
+
+describe('read-only (Hard Rule 3)', () => {
+  it('a pass leaves the page byte for byte as it found it', () => {
+    onPage(UBER, (doc) => {
+      const before = doc.documentElement.outerHTML;
+      const ctx = { observedAt: IsoTs.parse(NOW), offsetAt: () => -240 };
+      receiptObserver.health(doc);
+      receiptObserver.extract(doc, ctx);
+      expect(doc.documentElement.outerHTML).toBe(before);
+    });
+  });
+});
+
+const UBER_KIND = rawSelectors.platforms.uber.kinds[0];
+
+/** The selectors file with one platform's entry patched. */
+function withPlatform(id: keyof typeof rawSelectors.platforms, patch: object): object {
+  const platforms = { ...rawSelectors.platforms, [id]: { ...rawSelectors.platforms[id], ...patch } };
+  return { ...rawSelectors, platforms };
+}
+
+describe('selectors.json (agents/adapter_engineer.md rule 3)', () => {
+  it('is versioned, and its version is the observer version', () => {
+    expect(ComponentId.safeParse(RECEIPT_SELECTORS.version).success).toBe(true);
+    expect(receiptObserver.version).toBe(rawSelectors.version);
+  });
+
+  it('anchors on no class name: no landmark selector holds a .class', () => {
+    for (const selector of Object.values(rawSelectors.landmarks)) {
+      expect(selector.replace(/\[[^\]]*\]/gu, '').replace(/"[^"]*"/gu, ''), selector).not.toMatch(
+        /\.[A-Za-z_-]/u,
+      );
+    }
+  });
+
+  it.each([
+    ['an unknown key', { ...rawSelectors, extra: 1 }],
+    ['a regex that does not compile', { ...rawSelectors, threadUrl: '(' }],
+    [
+      'a currency that is not ISO 4217',
+      { ...rawSelectors, generic: { ...rawSelectors.generic, defaultDollar: 'XYZ' } },
+    ],
+    ['two platforms claiming one domain', withPlatform('uber', { senderDomains: ['stripe.com'] })],
+    ['a subject merchant rule with no merchant group', withPlatform('opentable', { kinds: [UBER_KIND] })],
+    [
+      'a kind with no labels and no item group',
+      withPlatform('uber', { kinds: [{ ...UBER_KIND, labels: [] }] }),
+    ],
+  ])('refuses %s, whole (never half-loaded)', (_case, broken) => {
+    expect(() => loadReceiptSelectors(broken)).toThrow(new ReceiptError('invalid_selectors'));
+  });
+});

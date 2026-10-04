@@ -76,6 +76,14 @@ export interface VisibleWindow {
 export interface Observer extends Adapter<RawRow> {
   readonly source: ObservationSource;
   /**
+   * Coverage by design. Absent: a clean pass asserts its `visibleWindow()` as seen (§3). `'none'`: the observer
+   * never asserts coverage, because what it reads cannot say that everything in a span was read (an opened Gmail
+   * message is one message; a `gmail.receipt` interval would assert that every message from a registry sender in
+   * it was parsed, docs/grading.md §3). Its clean passes post their health and observations and never a
+   * `coverage.ping`; `account()` and `visibleWindow()` are never called (Hard Rule 5).
+   */
+  readonly coverage?: 'none';
+  /**
    * The signed-in account's address as the page shows it (the account switcher's email), or null when the page
    * shows none. Only its SHA-256 leaves the content script (./account.ts). A value that is not an address makes
    * the pass DEGRADED (`account.invalid`); null sends coverage without an account (graded as capped coverage).

@@ -13,7 +13,8 @@
  *  3. `coverage.ping`: only for a clean pass whose health was OK. A DEGRADED health, a row `project()` refused
  *     (`RedactError`), an unreadable account or window, or a message that failed its schema posts no coverage for
  *     that pass (Hard Rule 5; Sprint 1 close, SEC-3). The account's address never leaves, only its hash
- *     (./account.ts).
+ *     (./account.ts). An observer that asserts no coverage by design (`coverage: 'none'`, the Gmail receipt
+ *     parsers) never posts one: its clean pass is health OK and its rows.
  * If a post rejects, the rest of the pass is not sent, so coverage never follows observations that were not
  * delivered. Known gap until Sprint 2.7: src/bus `send()` resolves `undefined` both when the service worker answered
  * and when the transport failed (it logs the failure), so only a rejected post is seen here (Decisions.md [2.0]).
@@ -85,10 +86,16 @@ function hostsAreOurs(hosts: unknown): boolean {
   return hosts.every((host: unknown) => typeof host === 'string' && OBSERVER_HOST_SET.has(host));
 }
 
+/** Absent (the observer asserts its visible window) or `'none'` (it asserts no coverage by design). */
+function coverageIsKnown(coverage: unknown): boolean {
+  return coverage === undefined || coverage === 'none';
+}
+
 /**
  * Throws `ObserverError('invalid_observer')` unless the observer's id, vendor and version are ComponentId tokens,
- * its source is an ObservationSource, its hosts are a non-empty subset of OBSERVER_HOSTS (Hard Rule 8), and its four
- * functions exist. A bad definition is a developer error and fails loud at start, before any page is read.
+ * its source is an ObservationSource, its hosts are a non-empty subset of OBSERVER_HOSTS (Hard Rule 8), its
+ * `coverage` is absent or `'none'`, and its four functions exist. A bad definition is a developer error and fails
+ * loud at start, before any page is read.
  */
 export function assertObserver(observer: Observer): void {
   const tokens = [observer.id, observer.vendor, observer.version];
@@ -96,6 +103,7 @@ export function assertObserver(observer: Observer): void {
     tokens.every((token) => ComponentId.safeParse(token).success) &&
     ObservationSource.safeParse(observer.source).success &&
     hostsAreOurs(observer.hosts) &&
+    coverageIsKnown(observer.coverage) &&
     [observer.health, observer.extract, observer.account, observer.visibleWindow].every(
       (fn) => typeof fn === 'function',
     );
@@ -108,8 +116,8 @@ function healthMessage(observer: Observer, plan: PassPlan, checkedAt: IsoTs): Bu
     health: {
       adapterId: observer.id,
       version: observer.version,
-      status: plan.status,
-      reasons: plan.status === 'OK' ? [] : plan.reasons,
+      status: plan.status === 'DEGRADED' ? 'DEGRADED' : 'OK',
+      reasons: plan.status === 'DEGRADED' ? plan.reasons : [],
       checkedAt,
     },
   });
