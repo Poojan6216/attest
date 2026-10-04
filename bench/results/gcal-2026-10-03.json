@@ -1,0 +1,32 @@
+{
+  "bench": "gcal",
+  "date": "2026-10-03",
+  "command": "pnpm bench",
+  "metrics": {
+    "gcalSelectorsVersion": "1.1.0",
+    "gcalFixtures": 8,
+    "gcalSyntheticFixtures": 8,
+    "gcalEventsLabelled": 56,
+    "gcalEventsFound": 56,
+    "gcalEventsSpurious": 0,
+    "gcalEventFieldsChecked": 280,
+    "gcalEventFieldsCorrect": 280,
+    "gcalStartAccuracy": 1,
+    "gcalAllDayAccuracy": 1,
+    "gcalSubjectAccuracy": 1,
+    "gcalGuestsAccuracy": 1,
+    "gcalCalendarAccuracy": 1,
+    "gcalHealthCorrect": "8/8",
+    "gcalCoverageWindowsCorrect": "9/9",
+    "gcalAllCalendarsCorrect": "9/9",
+    "gcalDiffsExact": "6/6",
+    "gcalDiffRowsCorrect": "3/3",
+    "gcalDiffRowsSpurious": 0,
+    "gcalAccuracy": 1,
+    "gcalAccuracyThreshold": 0.95,
+    "gcalAccuracyGatePassed": true,
+    "commit": "127f1d5bfa2f62b0f122363449ec569cc47f250c",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}

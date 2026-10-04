@@ -12,20 +12,20 @@ Measured 2026-10-03 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 375 |
-| lookupMinMs | 331.5 |
-| lookupMaxMs | 494.2 |
-| lookupCpuMedianMs | 407.8 |
-| indexBuildMedianMs | 150.1 |
-| buildPlusLookupMedianMs | 525.2 |
+| lookupMedianMs | 379.4 |
+| lookupMinMs | 339.6 |
+| lookupMaxMs | 464.8 |
+| lookupCpuMedianMs | 397.2 |
+| indexBuildMedianMs | 166.6 |
+| buildPlusLookupMedianMs | 535.8 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 909.4 |
-| gradingMinMs | 893.3 |
-| gradingMaxMs | 1116.4 |
-| gradingCpuMedianMs | 1184.1 |
+| gradingMedianMs | 1038.1 |
+| gradingMinMs | 945.9 |
+| gradingMaxMs | 1172.1 |
+| gradingCpuMedianMs | 1307.5 |
 | gradingReceipts | 5845 |
 | gradingVerified | 1883 |
 | gradingNotFound | 1073 |
@@ -33,6 +33,114 @@ Measured 2026-10-03 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | c1f50468a08a5c862a0b6bdb091d25620788de83 |
+| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## gcal
+
+Measured 2026-10-03 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| gcalSelectorsVersion | 1.1.0 |
+| gcalFixtures | 8 |
+| gcalSyntheticFixtures | 8 |
+| gcalEventsLabelled | 56 |
+| gcalEventsFound | 56 |
+| gcalEventsSpurious | 0 |
+| gcalEventFieldsChecked | 280 |
+| gcalEventFieldsCorrect | 280 |
+| gcalStartAccuracy | 1 |
+| gcalAllDayAccuracy | 1 |
+| gcalSubjectAccuracy | 1 |
+| gcalGuestsAccuracy | 1 |
+| gcalCalendarAccuracy | 1 |
+| gcalHealthCorrect | 8/8 |
+| gcalCoverageWindowsCorrect | 9/9 |
+| gcalAllCalendarsCorrect | 9/9 |
+| gcalDiffsExact | 6/6 |
+| gcalDiffRowsCorrect | 3/3 |
+| gcalDiffRowsSpurious | 0 |
+| gcalAccuracy | 1 |
+| gcalAccuracyThreshold | 0.95 |
+| gcalAccuracyGatePassed | true |
+| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## gmail-sent
+
+Measured 2026-10-03 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| gmailSentSelectorsVersion | 1.0.0 |
+| gmailFixtureFolders | 2026-10-03 |
+| gmailFixtures | 25 |
+| gmailSentListFixtures | 6 |
+| gmailSentRealFixtures | 0 |
+| gmailSentLabelledObservations | 39 |
+| gmailSentProducedObservations | 39 |
+| gmailSentFieldsCompared | 117 |
+| gmailSentFieldsCorrect | 117 |
+| gmailSentRecipientAccuracy | 1 |
+| gmailSentSubjectHintAccuracy | 1 |
+| gmailSentOccurredAtAccuracy | 1 |
+| gmailSentAccuracy | 1 |
+| gmailSentAccuracyGate | 0.95 |
+| gmailSentAccuracyGatePassed | true |
+| gmailSentHealthGatePassed | true |
+| gmailSentNegativesGatePassed | true |
+| gmailSentCoverageGatePassed | true |
+| gmailSentDedupGatePassed | true |
+| gmailSentSubjectHintMaxCodePoints | 80 |
+| gmailSentSubjectHintGatePassed | true |
+| gmailSentSeedsGatePassed | true |
+| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## receipts
+
+Measured 2026-10-03 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| gmailFixtures | 25 |
+| stripeFixtures | 2 |
+| stripeExact | 2 |
+| stripeFieldAccuracy | 1 |
+| amazonFixtures | 1 |
+| amazonExact | 1 |
+| amazonFieldAccuracy | 1 |
+| marketplaceFixtures | 1 |
+| marketplaceExact | 1 |
+| marketplaceFieldAccuracy | 1 |
+| opentableFixtures | 1 |
+| opentableExact | 1 |
+| opentableFieldAccuracy | 1 |
+| instacartFixtures | 1 |
+| instacartExact | 1 |
+| instacartFieldAccuracy | 1 |
+| uberFixtures | 1 |
+| uberExact | 1 |
+| uberFieldAccuracy | 1 |
+| shopifyFixtures | 1 |
+| shopifyExact | 1 |
+| shopifyFieldAccuracy | 1 |
+| genericFixtures | 4 |
+| genericExact | 4 |
+| genericFieldAccuracy | 1 |
+| receiptFieldAccuracy | 1 |
+| negatives | 4 |
+| negativesUnparsed | 4 |
+| listViews | 8 |
+| listViewsNeutral | 8 |
+| coverageAsserted | 0 |
+| healthLabelled | 17 |
+| healthMatched | 17 |
+| receiptParsersGatePassed | true |
+| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
 | commitDirty | false |
 | node | v22.14.0 |
