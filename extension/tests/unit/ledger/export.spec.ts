@@ -83,7 +83,7 @@ describe('exportLedger', () => {
     expect(LedgerExport.parse(exported)).toEqual(exported);
     expect(exported).toMatchObject({
       format: LEDGER_EXPORT_FORMAT,
-      schemaVersion: 1,
+      schemaVersion: MIGRATIONS.at(-1)?.version,
       exportedAt: EXPORTED_AT,
     });
     expect(Object.keys(exported.tables).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
@@ -167,9 +167,10 @@ describe('exportLedger: record fields export in a fixed order', () => {
 
 describe('exportLedger: an empty ledger and a bad exportedAt', () => {
   it('exports an empty ledger and reports the migrated schema version', async () => {
-    const db = await open('export-v2', [...MIGRATIONS, { version: 2, stores: {} }]);
+    const next = (MIGRATIONS.at(-1)?.version ?? 0) + 1;
+    const db = await open('export-next', [...MIGRATIONS, { version: next, stores: {} }]);
     const exported = await exportLedger(db, { exportedAt: EXPORTED_AT });
-    expect(exported.schemaVersion).toBe(2);
+    expect(exported.schemaVersion).toBe(next);
     for (const table of LEDGER_TABLE_NAMES) expect(exported.tables[table]).toEqual([]);
   });
 

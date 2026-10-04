@@ -22,7 +22,14 @@ import {
   type ReceiptRow,
   type RequestRow,
 } from './index-fields';
-import { AgentId, Ulid, type AdapterHealth, type Grant, type MetaEntry } from './types';
+import {
+  AgentId,
+  Ulid,
+  type AdapterHealth,
+  type Grant,
+  type MetaEntry,
+  type ObserverCoverage,
+} from './types';
 
 /**
  * Schema v1 (tech_reviewer index requirements). First entry of each spec is the primary key.
@@ -43,6 +50,33 @@ export const STORES_V1 = {
 } as const satisfies Readonly<Record<LedgerTableName, string>>;
 
 export type CoverageKey = [observerId: string, accountKey: string];
+
+/** The coverage interval store (./coverage.ts). Not in LEDGER_TABLE_NAMES yet: see STORES_V2. */
+export const COVERAGE_INTERVALS = 'coverageIntervals';
+
+/**
+ * Schema v2 (Sprint 2.6, Decisions [2.6]). Only the tables that change:
+ *  - receipts gain `*observationIds` (multiEntry) and `supersededBy`, so the retention purge (./retention.ts) finds
+ *    the receipts that name an observation, or that a purged claim superseded (`supersededBy` holds a claim id,
+ *    docs/grading.md §8), through an index, never a scan.
+ *  - `coverageIntervals` holds every coverage interval an observer pass reported (core `ObserverCoverage`, docs/
+ *    grading.md §3), several per source within retention, keyed by an outbound auto-increment key. Its derived
+ *    fields (`accountKey`, `startMs`, `endMs`, `syncMs`: epoch ms read by core `instantMs`) answer `coverageFor` and
+ *    the purge by range. It is read only through ./coverage.ts. Until src/ledger/index-fields.ts, the bus
+ *    `LedgerTable` enum and the export register it, it is not one of LEDGER_TABLE_NAMES (it holds no content).
+ */
+export const STORES_V2 = {
+  receipts: 'id, claimId, [agent+date], state, grade, *observationIds, supersededBy',
+  [COVERAGE_INTERVALS]: '++, [source+endMs], [source+accountKey], [source+accountKey+syncMs]',
+} as const;
+
+/** A stored coverage interval: the core `ObserverCoverage` plus the derived fields ./coverage.ts strips on read. */
+export type CoverageIntervalRow = ObserverCoverage & {
+  readonly accountKey: string;
+  readonly startMs: number;
+  readonly endMs: number;
+  readonly syncMs: number;
+};
 
 /** Developer-chosen keys (adapter ids, observer ids, meta keys); the logger prints one only if it is in LOG_VALUES. */
 const PLAIN_KEY = z.string().min(1);
@@ -94,6 +128,11 @@ export class LedgerDb extends Dexie {
 
   get meta(): Table<MetaEntry, string> {
     return this.table<MetaEntry, string>('meta');
+  }
+
+  /** Schema v2. Read and written only through ./coverage.ts. */
+  get coverageIntervals(): Table<CoverageIntervalRow, number> {
+    return this.table<CoverageIntervalRow, number>(COVERAGE_INTERVALS);
   }
 }
 

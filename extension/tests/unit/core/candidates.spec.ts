@@ -8,11 +8,12 @@ import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../../policy/default.json';
 
-import { candidates, createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
+import { candidates, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import { type ActionType, IsoTs, Observation, type ObservationSource, Ulid } from '../../../src/core/schema';
 import type { WindowClaim } from '../../../src/core/window';
+import { type IndexImplementation, INDEX_IMPLEMENTATIONS } from '../ledger/index-implementations';
 
 interface ObservationSpec {
   readonly type?: ActionType;
@@ -67,12 +68,19 @@ const everything = (observations: readonly Observation[]): ObservationIndex => (
   byCounterpartyToken: () => Promise.resolve(observations),
 });
 
-const run = (claim: WindowClaim, observations: readonly Observation[], bucketMinutes = 60) =>
-  candidates(claim, createMemoryIndex(observations, bucketMinutes), DEFAULT_POLICY);
+/** `run` over one index implementation: the memory index, then the ledger's Dexie index (Sprint 2.6). */
+const runner =
+  ({ createIndex }: IndexImplementation) =>
+  (claim: WindowClaim, observations: readonly Observation[], bucketMinutes = 60) =>
+    candidates(claim, createIndex(observations, bucketMinutes), DEFAULT_POLICY);
+
+/** Each block runs once per implementation (tests/unit/ledger/index-implementations.ts). */
+const eachIndex = describe.each(INDEX_IMPLEMENTATIONS);
 
 const subjects = (list: readonly Observation[]) => list.map((o) => o.subjectHint);
 
-describe('candidates: the window is inclusive at both ends, to the millisecond', () => {
+eachIndex('candidates: the window is inclusive at both ends, to the millisecond ($name index)', (impl) => {
+  const run = runner(impl);
   // Claim 14:02 → unit [14:02, 14:03] → window [14:00:00.000, 14:48:00.000].
   const rows = [
     obs({ occurredAt: '2026-10-06T13:59:59.999-04:00', subjectHint: 'just before' }),
@@ -104,7 +112,8 @@ describe('candidates: the window is inclusive at both ends, to the millisecond',
   });
 });
 
-describe('candidates: same ActionType only', () => {
+eachIndex('candidates: same ActionType only ($name index)', (impl) => {
+  const run = runner(impl);
   const at = '2026-10-06T14:02:00-04:00';
   const email = obs({ occurredAt: at, subjectHint: 'email' });
   const receipt = obs({ type: 'purchase.made', occurredAt: at, subjectHint: 'receipt' });
@@ -120,7 +129,8 @@ describe('candidates: same ActionType only', () => {
   });
 });
 
-describe('candidates: duplicates by contentHash count once, lowest id kept', () => {
+eachIndex('candidates: duplicates by contentHash count once, lowest id kept ($name index)', (impl) => {
+  const run = runner(impl);
   const occurredAt = '2026-10-06T14:02:00-04:00';
   const first = obs({ occurredAt, observedAt: '2026-10-06T14:10:00-04:00' });
   const resighted = obs({ occurredAt, observedAt: '2026-10-06T14:40:00-04:00' });
@@ -133,11 +143,14 @@ describe('candidates: duplicates by contentHash count once, lowest id kept', () 
     expect(await run(emailClaim(occurredAt), [first, resighted])).toEqual([first]);
   });
 
-  it('two ids with one contentHash keep the lowest id, whatever the index order', async () => {
-    expect(twins[0]?.contentHash).toBe(twins[1]?.contentHash);
-    expect(await run(emailClaim(occurredAt), twins)).toEqual([lowest]);
-    expect(await run(emailClaim(occurredAt), [...twins].reverse())).toEqual([lowest]);
-  });
+  it.runIf(impl.returnsUnparsedRows)(
+    'two ids with one contentHash keep the lowest id, whatever the index order',
+    async () => {
+      expect(twins[0]?.contentHash).toBe(twins[1]?.contentHash);
+      expect(await run(emailClaim(occurredAt), twins)).toEqual([lowest]);
+      expect(await run(emailClaim(occurredAt), [...twins].reverse())).toEqual([lowest]);
+    },
+  );
 
   it('the same object returned twice by an index counts once', async () => {
     const found = await candidates(emailClaim(occurredAt), everything([first, first]), DEFAULT_POLICY);
@@ -145,7 +158,8 @@ describe('candidates: duplicates by contentHash count once, lowest id kept', () 
   });
 });
 
-describe('candidates: memoised instants never go stale', () => {
+eachIndex('candidates: memoised instants never go stale ($name index)', (impl) => {
+  const run = runner(impl);
   // The inferred Observation type is mutable; a parse cached per object must follow the field's current text.
   it('an observation edited in place is read at its new occurredAt', async () => {
     const row = obs({ occurredAt: '2026-10-06T14:10:00-04:00' });
@@ -174,7 +188,8 @@ describe('candidates: memoised instants never go stale', () => {
   });
 });
 
-describe('candidates: ordered by (occurredAt instant, id), never by ISO text', () => {
+eachIndex('candidates: ordered by (occurredAt instant, id), never by ISO text ($name index)', (impl) => {
+  const run = runner(impl);
   it('an instant written in a later-looking offset sorts by its instant', async () => {
     const a = obs({ occurredAt: '2026-10-06T14:10:00-04:00', subjectHint: 'a 18:10Z' });
     const b = obs({ occurredAt: '2026-10-06T19:05:00+01:00', subjectHint: 'b 18:05Z' });
@@ -190,22 +205,26 @@ describe('candidates: ordered by (occurredAt instant, id), never by ISO text', (
     expect(await run(emailClaim('2026-10-06T14:02:00-04:00'), [y, x])).toEqual(byId);
   });
 
-  it('one id with two contents at one instant (a corrupt ledger) orders by contentHash, never by index order', async () => {
-    const occurredAt = '2026-10-06T14:10:00-04:00';
-    const p = obs({ occurredAt, subjectHint: 'p', idLabel: 'shared' });
-    const q = obs({ occurredAt, subjectHint: 'q', idLabel: 'shared' });
-    expect(p.id).toBe(q.id);
-    expect(p.contentHash).not.toBe(q.contentHash);
-    const byHash = [p, q].sort((a, b) => (a.contentHash < b.contentHash ? -1 : 1));
-    const claim = emailClaim('2026-10-06T14:02:00-04:00');
-    expect(await run(claim, [p, q])).toEqual(byHash);
-    expect(await run(claim, [q, p])).toEqual(byHash);
-    expect(await candidates(claim, everything([q, p]), DEFAULT_POLICY)).toEqual(byHash);
-    expect(await candidates(claim, everything([p, q]), DEFAULT_POLICY)).toEqual(byHash);
-  });
+  it.runIf(impl.returnsUnparsedRows)(
+    'one id with two contents at one instant (a corrupt ledger) orders by contentHash, never by index order',
+    async () => {
+      const occurredAt = '2026-10-06T14:10:00-04:00';
+      const p = obs({ occurredAt, subjectHint: 'p', idLabel: 'shared' });
+      const q = obs({ occurredAt, subjectHint: 'q', idLabel: 'shared' });
+      expect(p.id).toBe(q.id);
+      expect(p.contentHash).not.toBe(q.contentHash);
+      const byHash = [p, q].sort((a, b) => (a.contentHash < b.contentHash ? -1 : 1));
+      const claim = emailClaim('2026-10-06T14:02:00-04:00');
+      expect(await run(claim, [p, q])).toEqual(byHash);
+      expect(await run(claim, [q, p])).toEqual(byHash);
+      expect(await candidates(claim, everything([q, p]), DEFAULT_POLICY)).toEqual(byHash);
+      expect(await candidates(claim, everything([p, q]), DEFAULT_POLICY)).toEqual(byHash);
+    },
+  );
 });
 
-describe('candidates: from a source the policy lists for the type only (§6.1)', () => {
+eachIndex('candidates: from a source the policy lists for the type only (§6.1) ($name index)', (impl) => {
+  const run = runner(impl);
   const at = '2026-10-06T14:02:00-04:00';
   const own = obs({ occurredAt: at, subjectHint: 'own' });
   // An email.sent row the calendar observer read: email.sent's coverage never reads gcal.event.
@@ -223,7 +242,7 @@ describe('candidates: from a source the policy lists for the type only (§6.1)',
   it('is one when the policy lists its source for the type', async () => {
     const sourcesByType = { ...defaultPolicyJson.sourcesByType, 'email.sent': ['gmail.sent', 'gcal.event'] };
     const both = loadPolicy({ ...defaultPolicyJson, sourcesByType });
-    const found = await candidates(emailClaim(at), createMemoryIndex([stray, own], 60), both);
+    const found = await candidates(emailClaim(at), impl.createIndex([stray, own], 60), both);
     expect(subjects(found).sort()).toEqual(['own', 'stray']);
   });
 });

@@ -4,16 +4,18 @@
  *  - precisionBounds is the unit containing claimedAt in claimedAt's own offset, for any offset and year;
  *  - candidates() equals the oracle for random honest observation sets (re-sightings, twin ids, edge-snapped
  *    times, calendar.created first-seen, rows from a source the policy does not list for their type), for any
- *    bucket width and any index return order.
+ *    bucket width and any index return order, over the memory index and the ledger's Dexie index (Sprint 2.6),
+ *    each given the rows it holds (`held`, tests/unit/ledger/index-implementations.ts).
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { candidates, createMemoryIndex, type ObservationIndex } from '../../src/core/candidates';
+import { candidates, type ObservationIndex } from '../../src/core/candidates';
 import { idFromHash } from '../../src/core/hash';
 import { DEFAULT_POLICY } from '../../src/core/policy';
 import { type ActionType, type ClaimPrecision, Observation, Ulid } from '../../src/core/schema';
 import { precisionBounds, type WindowClaim } from '../../src/core/window';
+import { INDEX_IMPLEMENTATIONS } from '../unit/ledger/index-implementations';
 
 const RUNS = 1_000;
 const MINUTE = 60_000;
@@ -264,7 +266,7 @@ const everything = (observations: readonly Observation[]): ObservationIndex => (
   byCounterpartyToken: () => Promise.resolve(observations),
 });
 
-describe('candidates (property)', () => {
+describe.each(INDEX_IMPLEMENTATIONS)('candidates (property, $name index)', ({ createIndex, held }) => {
   it('equals the oracle for any bucket width and any index return order', async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -276,10 +278,10 @@ describe('candidates (property)', () => {
         async (c, contents, sightings, bucketMinutes, seed) => {
           const { claim, unitStartMs } = buildClaim(c);
           const window = oracleWindow(claim, unitStartMs);
-          const observations = buildObservations(contents, sightings, window);
+          const observations = held(buildObservations(contents, sightings, window));
           const expected = oracle(claim, window, observations);
           const shuffled = shuffle(observations, seed);
-          const index = createMemoryIndex(shuffled, bucketMinutes);
+          const index = createIndex(shuffled, bucketMinutes);
           expect(await candidates(claim, index, DEFAULT_POLICY)).toEqual(expected);
           expect(await candidates(claim, everything(shuffled), DEFAULT_POLICY)).toEqual(expected);
         },

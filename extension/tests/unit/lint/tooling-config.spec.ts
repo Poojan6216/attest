@@ -20,6 +20,8 @@ import perfConfig from '../../../vitest.perf.config';
 import poisonConfig, {
   POISON_EXCLUDE,
   POISON_INCLUDE,
+  POISON_INDEX_ALIAS,
+  POISON_LEDGER_EXCLUDE,
   POISON_SETUP,
   TIMEOUT_SETUP,
 } from '../../../vitest.poison.config';
@@ -95,6 +97,11 @@ describe('the poisoned run (FR3-4): core, golden and property tests under the ru
     expect(POISON_EXCLUDE).toEqual(['tests/unit/core/core-poison*.spec.ts']);
     expect(poisonConfig.test?.include).toEqual(POISON_INCLUDE);
     expect(poisonConfig.test?.exclude).toEqual(expect.arrayContaining(POISON_EXCLUDE));
+    // Only the ledger's own index property leaves the guarded run, and the candidate tests swap to the memory index
+    // there (it does no I/O); the main run keeps both implementations.
+    expect(POISON_LEDGER_EXCLUDE).toEqual(['tests/property/candidates-ledger-index.property.spec.ts']);
+    expect(poisonConfig.test?.exclude).toEqual(expect.arrayContaining(POISON_LEDGER_EXCLUDE));
+    expect(POISON_INDEX_ALIAS).toBe('tests/unit/ledger/index-implementations-memory.ts');
     expect(poisonConfig.test?.setupFiles).toEqual([TIMEOUT_SETUP, POISON_SETUP]);
     expect(poisonConfig.test?.testTimeout).toBe(TEST_TIMEOUT_MS);
     expect(poisonConfig.test?.retry ?? 0).toBe(0);

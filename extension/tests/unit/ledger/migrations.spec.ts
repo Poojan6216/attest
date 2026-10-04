@@ -3,7 +3,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
-import type { LedgerDb } from '../../../src/ledger/db';
+import { COVERAGE_INTERVALS, type LedgerDb } from '../../../src/ledger/db';
 import { LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
 import {
   MIGRATIONS,
@@ -34,6 +34,9 @@ import {
 /** The seeded observation seen again later: same contentHash, so the same id (§10 v1.3). */
 const resighting = () => makeObservation({ observedAt: '2026-10-01T11:00:00-04:00' });
 const OBSERVATIONS_V1 = 'id, &contentHash, [type+timeBucket], *counterpartyTokens, occurredAt';
+/** The shipped schema version, and the next one the framework tests append (v2 shipped in Sprint 2.6). */
+const SHIPPED = MIGRATIONS.at(-1)?.version ?? 0;
+const NEXT = SHIPPED + 1;
 
 const opened: LedgerDb[] = [];
 
@@ -43,7 +46,7 @@ async function open(name: string, migrations: readonly Migration[] = MIGRATIONS)
   return db;
 }
 
-async function seedV1(name: string): Promise<void> {
+async function seedShipped(name: string): Promise<void> {
   const db = await open(name);
   await upsertObservation(db, makeObservation(), DEFAULT_POLICY);
   await upsertClaim(db, makeClaim());
@@ -64,11 +67,15 @@ afterEach(() => {
   releaseClock();
 });
 
-describe('schema v1', () => {
-  it('opens at version 1 with exactly the eight ledger tables', async () => {
+describe('the shipped schema', () => {
+  it('opens at the shipped version with the eight ledger tables and the coverage interval store', async () => {
     const db = await open(uniqueDbName('v1'));
-    expect(db.verno).toBe(1);
-    expect(db.tables.map((table) => table.name).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
+    expect(db.verno).toBe(SHIPPED);
+    expect(SHIPPED).toBe(2);
+    // The coverage interval store (Sprint 2.6) is not one of LEDGER_TABLE_NAMES yet (db.ts STORES_V2).
+    expect(db.tables.map((table) => table.name).sort()).toEqual(
+      [...LEDGER_TABLE_NAMES, COVERAGE_INTERVALS].sort(),
+    );
   });
 
   it('declares the tech_reviewer indexes (unique hashes, compound, multiEntry)', async () => {
@@ -86,23 +93,23 @@ describe('schema v1', () => {
   });
 });
 
-describe('v1 → v2 migrations', () => {
-  it('a no-op v2 preserves every row and bumps verno', async () => {
+describe('shipped → next migrations', () => {
+  it('a no-op next version preserves every row and bumps verno', async () => {
     const name = uniqueDbName('noop');
-    await seedV1(name);
-    const db = await open(name, [...MIGRATIONS, { version: 2, stores: {} }]);
-    expect(db.verno).toBe(2);
+    await seedShipped(name);
+    const db = await open(name, [...MIGRATIONS, { version: NEXT, stores: {} }]);
+    expect(db.verno).toBe(NEXT);
     expect(await getObservation(db, makeObservation().id)).toEqual(makeObservation());
     expect(await getClaim(db, makeClaim().id)).toEqual(makeClaim());
     expect(await getMeta(db, 'lastPurgeAt')).toBe('2026-09-30T00:00:00Z');
   });
 
-  it('a v2 that adds an index builds it over existing rows', async () => {
+  it('a next version that adds an index builds it over existing rows', async () => {
     const name = uniqueDbName('add-index');
-    await seedV1(name);
+    await seedShipped(name);
     const db = await open(name, [
       ...MIGRATIONS,
-      { version: 2, stores: { observations: `${OBSERVATIONS_V1}, source` } },
+      { version: NEXT, stores: { observations: `${OBSERVATIONS_V1}, source` } },
     ]);
     expect(indexOf(db, 'observations', 'source')).toBeDefined();
     const rows = await db.observations.where('source').equals('gmail.sent').toArray();
@@ -112,13 +119,13 @@ describe('v1 → v2 migrations', () => {
   });
 });
 
-describe('v1 → v2 migrations: upgrade functions', () => {
+describe('shipped → next migrations: upgrade functions', () => {
   it('runs an upgrade function exactly once', async () => {
     const name = uniqueDbName('upgrade-once');
-    await seedV1(name);
+    await seedShipped(name);
     let runs = 0;
     const v2: Migration = {
-      version: 2,
+      version: NEXT,
       stores: {},
       upgrade: async (tx) => {
         runs += 1;
@@ -132,13 +139,13 @@ describe('v1 → v2 migrations: upgrade functions', () => {
     expect(runs).toBe(1);
   });
 
-  it('a failing upgrade rejects with open_failed, logs, and leaves v1 data intact', async () => {
+  it('a failing upgrade rejects with open_failed, logs, and leaves the shipped data intact', async () => {
     const name = uniqueDbName('upgrade-fails');
-    await seedV1(name);
+    await seedShipped(name);
     const logs = captureLogs();
     try {
       const failing: Migration = {
-        version: 2,
+        version: NEXT,
         stores: {},
         upgrade: () => Promise.reject(new Error('backfill exploded')),
       };
@@ -148,7 +155,7 @@ describe('v1 → v2 migrations: upgrade functions', () => {
     }
     expect(logs.records.map((record) => record.event)).toContain('ledger.open_failed');
     const db = await open(name);
-    expect(db.verno).toBe(1);
+    expect(db.verno).toBe(SHIPPED);
     expect(Observation.parse(await getObservation(db, makeObservation().id))).toEqual(makeObservation());
   });
 });
@@ -170,7 +177,7 @@ describe('assertValidMigrations', () => {
       [v1, { version: 1.5, stores: {} }],
       [{ version: 0, stores: v1.stores }],
       [{ version: 1, stores: withoutMeta }],
-      [v1, { version: 2, stores: { meta: null } }],
+      [v1, { version: NEXT, stores: { meta: null } }],
     ];
     for (const migrations of invalid) {
       await expectLedgerError(openLedger(uniqueDbName('invalid'), migrations), 'invalid_migrations');
@@ -178,14 +185,14 @@ describe('assertValidMigrations', () => {
   });
 });
 
-describe('v1 → v2 migrations: the unique contentHash index', () => {
+describe('shipped → next migrations: the unique contentHash index', () => {
   it('still refuses a raw row that reuses a contentHash under another id', async () => {
     // §10 v1.3 makes such a row invalid input for upsertObservation; the store's own index refuses it too.
     const name = uniqueDbName('unique-hash');
-    await seedV1(name);
+    await seedShipped(name);
     const db = await open(name, [
       ...MIGRATIONS,
-      { version: 2, stores: { observations: `${OBSERVATIONS_V1}, source` } },
+      { version: NEXT, stores: { observations: `${OBSERVATIONS_V1}, source` } },
     ]);
     const [row] = await db.observations.toArray();
     if (row === undefined) throw new Error('expected the seeded observation');

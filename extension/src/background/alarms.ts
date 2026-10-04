@@ -8,17 +8,26 @@
  */
 import { browser } from 'wxt/browser';
 
+import { nowIso } from '../clock';
 import { ALARM_NAMES, type AlarmName, PURGE_ALARM_PERIOD_MINUTES } from '../config';
+import { getLedger } from '../ledger/repo';
+import { purgeExpired } from '../ledger/retention';
 import { log } from '../log';
 
 export type AlarmHandler = () => Promise<void> | void;
 
-/** One handler per alarm name; later sprints replace the bodies (2.6 purge, 3.6 grace, 4.7 digest). */
+/**
+ * The retention purge (Sprint 2.6): the dated history older than RETENTION_DAYS goes, by the rule in
+ * src/ledger/retention.ts. The clock is read here, at the edge. A failure rejects, and `handleAlarm` logs it with
+ * the alarm name; the next daily alarm tries again (the purge is one transaction: all or nothing).
+ */
+export async function runRetentionPurge(): Promise<void> {
+  await purgeExpired(await getLedger(), { now: nowIso() });
+}
+
+/** One handler per alarm name; later sprints add theirs (3.6 grace, 4.7 digest). */
 const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
-  [ALARM_NAMES.PURGE]: () => {
-    // Sprint 2.6 implements the retention purge. Until then the alarm only proves the scheduler works.
-    log.info('alarm.purge_pending_implementation');
-  },
+  [ALARM_NAMES.PURGE]: runRetentionPurge,
 };
 
 const PERIODS: Readonly<Record<AlarmName, number>> = {

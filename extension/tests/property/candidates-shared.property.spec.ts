@@ -11,6 +11,7 @@
  *  - orphan discovery (batch-orphans.ts `coveredObservations` over `visibleAt`) against §3 written out with
  *    Date.parse: first seen by evaluatedAt, from a source the policy lists for its type, inside a window of a pass of
  *    its own source synced by evaluatedAt, once per content hash (the representative), in candidate order.
+ * The last two run over the memory index and the ledger's Dexie index (Sprint 2.6), each given the rows it holds.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +20,7 @@ import defaultPolicyJson from '../../../policy/default.json';
 
 import { coveredObservations, visibleAt } from '../../src/core/batch-orphans';
 import { candidatesOfAll } from '../../src/core/batch-retrieve';
-import { candidates, createMemoryIndex } from '../../src/core/candidates';
+import { candidates } from '../../src/core/candidates';
 import { TextFacts } from '../../src/core/features';
 import { idFromHash } from '../../src/core/hash';
 import { firstSeenFromMs, mergeIntervals, representative } from '../../src/core/order';
@@ -27,8 +28,10 @@ import { loadPolicy } from '../../src/core/policy';
 import { type ActionType, type Claim, Coverage, Observation, Ulid } from '../../src/core/schema';
 import type { Interval } from '../../src/core/window';
 import { buildClaim, isoAt, MS_PER_MINUTE } from '../tools/attest-world';
+import { INDEX_IMPLEMENTATIONS } from '../unit/ledger/index-implementations';
 
 const RUNS = 1_000;
+const eachIndex = describe.each(INDEX_IMPLEMENTATIONS);
 const POLICY = loadPolicy(defaultPolicyJson);
 const BASE_MS = Date.parse('2026-10-06T00:00:00Z');
 const SPAN_MINUTES = 3 * 24 * 60;
@@ -272,7 +275,7 @@ function buildClaims(generated: readonly Generated<typeof claimArb>[], rows: Gen
   });
 }
 
-describe('the batch paths against the reference paths', () => {
+eachIndex('the batch paths against the reference paths ($name index)', ({ createIndex, held }) => {
   it('candidatesOfAll (batch-retrieve.ts) equals candidates() claim by claim', async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -281,8 +284,8 @@ describe('the batch paths against the reference paths', () => {
         fc.constantFrom(1, 15, 1440),
         async (rows, generated, bucket) => {
           const claims = buildClaims(generated, rows);
-          const observations = buildRows(rows, boundsOf(generated, claims, rows.contents.length));
-          const index = createMemoryIndex(observations, bucket);
+          const observations = held(buildRows(rows, boundsOf(generated, claims, rows.contents.length)));
+          const index = createIndex(observations, bucket);
           const found = await candidatesOfAll(
             claims,
             index,
@@ -363,7 +366,7 @@ function orphanOracle(observations: readonly Observation[], coverage: Coverage) 
   );
 }
 
-describe('orphan discovery against §3 written out', () => {
+eachIndex('orphan discovery against §3 written out ($name index)', ({ createIndex, held }) => {
   it('coveredObservations over visibleAt equals the oracle: rows from unlisted sources are never orphans', async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -371,9 +374,9 @@ describe('orphan discovery against §3 written out', () => {
         fc.array(passArb, { minLength: 1, maxLength: 6 }),
         fc.constantFrom(1, 15, 1440),
         async (rows, passes, bucket) => {
-          const observations = buildRows(rows);
+          const observations = held(buildRows(rows));
           const coverage = buildCoverage(passes);
-          const index = visibleAt(createMemoryIndex(observations, bucket), EVALUATED_MS);
+          const index = visibleAt(createIndex(observations, bucket), EVALUATED_MS);
           const expected = orphanOracle(observations, coverage);
           expect(await coveredObservations(index, coverage, POLICY)).toEqual(expected);
           tally.orphans += expected.length;

@@ -17,7 +17,6 @@ export const LOG_EVENTS = [
   'alarm.ensure_failed',
   'alarm.fired',
   'alarm.handler_failed',
-  'alarm.purge_pending_implementation',
   'alarm.reset_failed',
   'alarm.unknown',
   'background.started',

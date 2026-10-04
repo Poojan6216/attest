@@ -1,10 +1,13 @@
+import 'fake-indexeddb/auto';
+
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { browser } from 'wxt/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureAlarms, handleAlarm, isAttestAlarm, resetAlarms } from '../../../src/background/alarms';
 import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES } from '../../../src/config';
-import { log, type LogRecord, setLogSink } from '../../../src/log';
+import { closeLedger } from '../../../src/ledger/repo';
+import { type LogRecord, setLogSink } from '../../../src/log';
 
 let records: LogRecord[] = [];
 let restore: () => void = () => undefined;
@@ -17,8 +20,9 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
   restore();
+  await closeLedger();
 });
 
 describe('alarm names', () => {
@@ -64,7 +68,8 @@ describe('ensureAlarms (browser startup)', () => {
 describe('handleAlarm', () => {
   it('logs our alarm by name and runs its handler', async () => {
     await handleAlarm({ name: ALARM_NAMES.PURGE });
-    expect(records.map((r) => r.event)).toEqual(['alarm.fired', 'alarm.purge_pending_implementation']);
+    // The handler is the retention purge (Sprint 2.6): on an empty ledger it logs nothing more.
+    expect(records.map((r) => r.event)).toEqual(['alarm.fired']);
     expect(records[0]?.fields).toEqual({ alarm: ALARM_NAMES.PURGE });
   });
 
@@ -75,18 +80,17 @@ describe('handleAlarm', () => {
 
   // Added by the Sprint 0 QA review: the "never throws" contract had no test.
   it('never rejects when a handler throws; logs the failure with the alarm name', async () => {
-    const info = log.info;
-    vi.spyOn(log, 'info').mockImplementation((event, fields) => {
-      if (event === 'alarm.purge_pending_implementation') throw new TypeError('handler blew up');
-      info(event, fields);
+    await closeLedger();
+    vi.spyOn(globalThis.indexedDB, 'open').mockImplementation(() => {
+      throw new TypeError('handler blew up');
     });
     await expect(handleAlarm({ name: ALARM_NAMES.PURGE })).resolves.toBeUndefined();
-    expect(records).toEqual([
-      { level: 'info', event: 'alarm.fired', fields: { alarm: ALARM_NAMES.PURGE } },
+    expect(records[0]).toEqual({ level: 'info', event: 'alarm.fired', fields: { alarm: ALARM_NAMES.PURGE } });
+    expect(records.filter((r) => r.event === 'alarm.handler_failed')).toEqual([
       {
         level: 'error',
         event: 'alarm.handler_failed',
-        fields: { alarm: ALARM_NAMES.PURGE, error: 'TypeError messageLength=15' },
+        fields: { alarm: ALARM_NAMES.PURGE, error: 'LedgerError code=open_failed messageLength=39' },
       },
     ]);
   });

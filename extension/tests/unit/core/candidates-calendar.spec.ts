@@ -6,11 +6,12 @@
 import { describe, expect, it } from 'vitest';
 
 import defaultPolicyJson from '../../../../policy/default.json';
-import { candidates, createMemoryIndex, type ObservationIndex } from '../../../src/core/candidates';
+import { candidates, type ObservationIndex } from '../../../src/core/candidates';
 import { canonicalJson, idFromHash, sha256Hex } from '../../../src/core/hash';
 import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import { type ActionType, Observation } from '../../../src/core/schema';
 import type { WindowClaim } from '../../../src/core/window';
+import { type IndexImplementation, INDEX_IMPLEMENTATIONS } from '../ledger/index-implementations';
 
 const event = (type: ActionType, occurredAt: string, observedAt: string, subjectHint = 'Q3 review') => {
   const content = { source: 'gcal.event', type, subjectHint, occurredAt };
@@ -26,10 +27,17 @@ const calendarClaim = (type: ActionType, extra: Partial<WindowClaim> = {}): Wind
   ...extra,
 });
 
-const run = (claim: WindowClaim, observations: readonly Observation[]) =>
-  candidates(claim, createMemoryIndex(observations, 60), DEFAULT_POLICY);
+/** `run` over one index implementation: the memory index, then the ledger's Dexie index (Sprint 2.6). */
+const runner =
+  ({ createIndex }: IndexImplementation) =>
+  (claim: WindowClaim, observations: readonly Observation[]) =>
+    candidates(claim, createIndex(observations, 60), DEFAULT_POLICY);
 
-describe('calendar windows: targetAt ± calendarDays (3), inclusive', () => {
+/** Each block runs once per implementation (tests/unit/ledger/index-implementations.ts). */
+const eachIndex = describe.each(INDEX_IMPLEMENTATIONS);
+
+eachIndex('calendar windows: targetAt ± calendarDays (3), inclusive ($name index)', (impl) => {
+  const run = runner(impl);
   it.each(['calendar.created', 'calendar.updated', 'calendar.deleted'] as const)('%s', async (type) => {
     const seen = '2026-10-06T14:40:00-04:00';
     const inFrom = event(type, '2026-10-05T14:00:00-04:00', seen, 'from edge');
@@ -62,50 +70,54 @@ describe('calendar windows: targetAt ± calendarDays (3), inclusive', () => {
   });
 });
 
-describe('calendar.created: an event already on the calendar before the claim cannot verify "created"', () => {
-  const occurredAt = '2026-10-08T14:00:00-04:00';
+eachIndex(
+  'calendar.created: an event already on the calendar before the claim cannot verify "created" ($name index)',
+  (impl) => {
+    const run = runner(impl);
+    const occurredAt = '2026-10-08T14:00:00-04:00';
 
-  it('first seen exactly at claimedAt − beforeClaimMin (14:00:00.000) is a candidate', async () => {
-    const fresh = event('calendar.created', occurredAt, '2026-10-06T14:00:00.000-04:00');
-    expect(await run(calendarClaim('calendar.created'), [fresh])).toEqual([fresh]);
-  });
-
-  it('first seen 1 ms earlier is not', async () => {
-    const old = event('calendar.created', occurredAt, '2026-10-06T13:59:59.999-04:00');
-    expect(await run(calendarClaim('calendar.created'), [old])).toEqual([]);
-  });
-
-  it('a later re-sighting of a pre-existing event does not pass, in either index order', async () => {
-    const before = event('calendar.created', occurredAt, '2026-10-06T09:00:00-04:00');
-    const after = event('calendar.created', occurredAt, '2026-10-06T14:40:00-04:00');
-    expect(before.id).toBe(after.id);
-    expect(await run(calendarClaim('calendar.created'), [after, before])).toEqual([]);
-    expect(await run(calendarClaim('calendar.created'), [before, after])).toEqual([]);
-  });
-
-  it.each(['calendar.updated', 'calendar.deleted'] as const)('%s has no first-seen rule', async (type) => {
-    const old = event(type, occurredAt, '2026-10-01T09:00:00-04:00');
-    expect(await run(calendarClaim(type), [old])).toEqual([old]);
-  });
-
-  it('a day-precision claim measures from the start of its day, not from claimedAt', async () => {
-    const morning = event('calendar.created', occurredAt, '2026-10-06T08:00:00-04:00');
-    const dayBefore = event('calendar.created', '2026-10-08T15:00:00-04:00', '2026-10-05T23:57:59-04:00');
-    const claim = calendarClaim('calendar.created', {
-      claimedAt: '2026-10-06T12:00:00-04:00',
-      claimedAtPrecision: 'day',
+    it('first seen exactly at claimedAt − beforeClaimMin (14:00:00.000) is a candidate', async () => {
+      const fresh = event('calendar.created', occurredAt, '2026-10-06T14:00:00.000-04:00');
+      expect(await run(calendarClaim('calendar.created'), [fresh])).toEqual([fresh]);
     });
-    expect(await run(claim, [morning, dayBefore])).toEqual([morning]);
-  });
 
-  it('follows policy.windows.beforeClaimMin', async () => {
-    const early = event('calendar.created', occurredAt, '2026-10-06T13:55:00-04:00');
-    const policy = loadPolicy({
-      ...defaultPolicyJson,
-      windows: { ...defaultPolicyJson.windows, beforeClaimMin: 10 },
+    it('first seen 1 ms earlier is not', async () => {
+      const old = event('calendar.created', occurredAt, '2026-10-06T13:59:59.999-04:00');
+      expect(await run(calendarClaim('calendar.created'), [old])).toEqual([]);
     });
-    const claim = calendarClaim('calendar.created');
-    expect(await candidates(claim, createMemoryIndex([early], 60), DEFAULT_POLICY)).toEqual([]);
-    expect(await candidates(claim, createMemoryIndex([early], 60), policy)).toEqual([early]);
-  });
-});
+
+    it('a later re-sighting of a pre-existing event does not pass, in either index order', async () => {
+      const before = event('calendar.created', occurredAt, '2026-10-06T09:00:00-04:00');
+      const after = event('calendar.created', occurredAt, '2026-10-06T14:40:00-04:00');
+      expect(before.id).toBe(after.id);
+      expect(await run(calendarClaim('calendar.created'), [after, before])).toEqual([]);
+      expect(await run(calendarClaim('calendar.created'), [before, after])).toEqual([]);
+    });
+
+    it.each(['calendar.updated', 'calendar.deleted'] as const)('%s has no first-seen rule', async (type) => {
+      const old = event(type, occurredAt, '2026-10-01T09:00:00-04:00');
+      expect(await run(calendarClaim(type), [old])).toEqual([old]);
+    });
+
+    it('a day-precision claim measures from the start of its day, not from claimedAt', async () => {
+      const morning = event('calendar.created', occurredAt, '2026-10-06T08:00:00-04:00');
+      const dayBefore = event('calendar.created', '2026-10-08T15:00:00-04:00', '2026-10-05T23:57:59-04:00');
+      const claim = calendarClaim('calendar.created', {
+        claimedAt: '2026-10-06T12:00:00-04:00',
+        claimedAtPrecision: 'day',
+      });
+      expect(await run(claim, [morning, dayBefore])).toEqual([morning]);
+    });
+
+    it('follows policy.windows.beforeClaimMin', async () => {
+      const early = event('calendar.created', occurredAt, '2026-10-06T13:55:00-04:00');
+      const policy = loadPolicy({
+        ...defaultPolicyJson,
+        windows: { ...defaultPolicyJson.windows, beforeClaimMin: 10 },
+      });
+      const claim = calendarClaim('calendar.created');
+      expect(await candidates(claim, impl.createIndex([early], 60), DEFAULT_POLICY)).toEqual([]);
+      expect(await candidates(claim, impl.createIndex([early], 60), policy)).toEqual([early]);
+    });
+  },
+);
