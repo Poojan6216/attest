@@ -1,7 +1,9 @@
 /**
  * Audits the build that ships (pnpm e2e rebuilds it first), not the source:
- *  - the manifest says exactly what Decisions.md says (permissions, no host permissions, strict CSP, the
- *    toolbar tooltip from the popup's <title>: TECH-14);
+ *  - the manifest says exactly what Decisions.md says (permissions, exactly the two observer host permissions of
+ *    sprint_2 2.0, strict CSP, the toolbar tooltip from the popup's <title>: TECH-14);
+ *  - no test code ships: no file holds the observer harness marker (tests/e2e/support/observer-harness.ts), and no
+ *    host, content-script match or web-accessible resource reaches the fixture server (sprint_2 2.0);
  *  - no shipped script contains a network call, eval, or a Function constructor (SECURITY-6, Hard Rules 1
  *    and 9), apart from the allowlisted sites below.
  */
@@ -11,6 +13,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { EXTENSION_PATH } from './support/extension';
+import { OBSERVER_HARNESS_MARKER } from './support/observer-harness-marker';
 
 /**
  * The only matches allowed. Each is a whole, exact construct, removed before the scan:
@@ -52,11 +55,38 @@ test('the shipped manifest matches the decisions', () => {
     default_popup: 'popup.html',
   });
   expect(manifest.permissions).toEqual(['storage', 'alarms', 'sidePanel']);
-  expect(manifest.host_permissions).toEqual([]);
+  // sprint_2 2.0 (Hard Rule 8): exactly Gmail and Google Calendar, nothing broader. Sprint 3.0 adds the agent hosts.
+  expect(manifest.host_permissions).toEqual(['https://mail.google.com/*', 'https://calendar.google.com/*']);
   expect(manifest.content_security_policy).toEqual({
     extension_pages: "script-src 'self'; object-src 'none'",
   });
   expect(manifest).not.toHaveProperty('optional_host_permissions');
+});
+
+function files(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    return entry.isDirectory() ? files(full) : [full];
+  });
+}
+
+test('no test code ships: no harness, and nothing reaches the fixture server (sprint_2 2.0)', () => {
+  const shipped = files(EXTENSION_PATH);
+  expect(shipped.length).toBeGreaterThan(3);
+  const marked = shipped.filter((file) => readFileSync(file, 'utf8').includes(OBSERVER_HARNESS_MARKER));
+  expect(marked.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
+  expect(
+    shipped.filter((file) => /harness|[\\/]tests?[\\/]/i.test(path.relative(EXTENSION_PATH, file))),
+  ).toEqual([]);
+  const manifest = readFileSync(path.join(EXTENSION_PATH, 'manifest.json'), 'utf8');
+  for (const local of ['127.0.0.1', 'localhost', 'file://', '<all_urls>', '*://*/*']) {
+    expect(manifest, local).not.toContain(local);
+  }
+  const parsed = JSON.parse(manifest) as Record<string, unknown>;
+  expect(parsed).not.toHaveProperty('web_accessible_resources');
+  const scripts = (parsed.content_scripts ?? []) as { matches?: string[] }[];
+  const hosts = new Set(parsed.host_permissions as string[]);
+  expect(scripts.flatMap((script) => script.matches ?? []).filter((match) => !hosts.has(match))).toEqual([]);
 });
 
 test('no shipped script reaches the network or evaluates code', () => {

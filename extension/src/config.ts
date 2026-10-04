@@ -31,8 +31,8 @@ export const LEDGER_TIME_BUCKET_MINUTES = 60;
 
 /**
  * Host match patterns for the observer pages (Hard Rule 8: exact domains only, never `<all_urls>`).
- * NOT in the manifest yet: `host_permissions` stays empty until Sprint 2, when each observer's `hosts`
- * (build_spec §7 adapter contract) is read from here.
+ * They are the manifest's `host_permissions` (wxt.config.ts, Sprint 2.0) and each observer's `hosts` (build_spec §7
+ * adapter contract; src/observers/base.ts assertObserver refuses any other).
  */
 export const OBSERVER_HOSTS: Readonly<Record<'gmail' | 'gcal', readonly string[]>> = Object.freeze({
   gmail: Object.freeze(['https://mail.google.com/*']),
@@ -84,3 +84,23 @@ export type AlarmName = (typeof ALARM_NAMES)[keyof typeof ALARM_NAMES];
 
 /** How often the retention purge alarm fires (once a day). */
 export const PURGE_ALARM_PERIOD_MINUTES = 24 * 60;
+
+/**
+ * The observer skeleton's pass scheduling (sprint_2 2.0, src/observers/batch.ts). A burst of DOM mutations on a
+ * Gmail or Calendar page runs one pass OBSERVER_DEBOUNCE_MS after the last mutation, and never later than
+ * OBSERVER_MAX_WAIT_MS after the first one, so a page that never stops changing is still read.
+ */
+export const OBSERVER_DEBOUNCE_MS = 500;
+export const OBSERVER_MAX_WAIT_MS = 2_000;
+
+/**
+ * A coverage ping's `userActive` (src/observers/activity.ts): the tab is visible and the user pressed a key,
+ * pointed, scrolled or touched in it within the last USER_ACTIVE_WINDOW_MS. Input is noted at most once per
+ * USER_ACTIVITY_THROTTLE_MS, and only its instant is kept, never the key or the target. `false` is not idle
+ * evidence on its own (docs/grading.md §7: userIdle needs positive evidence; Sprint 3.5 records idle intervals).
+ */
+export const USER_ACTIVE_WINDOW_MS = 60_000;
+export const USER_ACTIVITY_THROTTLE_MS = 1_000;
+
+/** How long dated history is kept: the retention purge (src/ledger/retention.ts, Decisions [2.6]; Hard Rule 2). */
+export const RETENTION_DAYS = 90;

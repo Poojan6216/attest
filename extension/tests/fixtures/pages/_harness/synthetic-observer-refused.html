@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Attest harness: synthetic observer page (a row project() refuses)</title>
+  </head>
+  <body>
+    <!-- Synthetic, hand-written structure for the sprint_2 2.0 skeleton harness. The second row's subject holds a
+         control character (U+0007), which no subject line holds: project() refuses it, so the pass is DEGRADED and
+         writes no coverage (Sprint 1 close, SEC-3). -->
+    <header><span data-account-email="Harness.User@Example.com">Harness User</span></header>
+    <main role="main" aria-label="Sent" data-folder="sent">
+      <h1>Sent</h1>
+      <div role="grid" aria-label="Messages">
+        <div role="row" data-row-key="r-1"><span email="alex@example.com">Alex</span><span data-subject>Q3 deck</span><time datetime="2026-10-01T14:02:00-04:00">2:02 PM</time></div>
+        <div role="row" data-row-key="r-2"><span email="sam@example.org">Sam</span><span data-subject>bell&#7;here</span><time datetime="2026-10-01T13:10:00-04:00">1:10 PM</time></div>
+      </div>
+    </main>
+  </body>
+</html>
