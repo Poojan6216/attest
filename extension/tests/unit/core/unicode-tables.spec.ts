@@ -131,12 +131,16 @@ function categoryTotals(): ReadonlyMap<string, number> {
 }
 
 /**
- * Where the engine running the suite disagrees with Unicode 15.0 about a 15.0 character, by class. Node 22
- * (ICU 76, Unicode 16.0) moved U+1171E AHOM CONSONANT SIGN MEDIAL RA from Mn to Mc, so it is no longer
- * Case_Ignorable either (lowerBaseline decides final sigma from the 15.0 table). A new disagreement fails here: it
- * is a property the tables now pin for us, and it must be listed in Decisions [SEC-1] before it is added.
+ * Where the engine running the suite disagrees with Unicode 15.0 about a 15.0 character, by class, keyed by the
+ * engine's own Unicode version (`process.versions.unicode`). Node 22.14 (ICU 76, Unicode 16.0) moved U+1171E AHOM
+ * CONSONANT SIGN MEDIAL RA from Mn to Mc, so it is no longer Case_Ignorable either. Node 22.23 (ICU 78, Unicode 17.0)
+ * also drops U+0295 LATIN LETTER PHARYNGEAL VOICED FRICATIVE from Cased. The readers decide casing and final sigma
+ * from the 15.0 tables, so neither changes a grade (every reader, property and golden test passes on both engines).
+ * An engine version not listed, or a new disagreement, fails here: it must be reviewed and listed in Decisions
+ * [SEC-1] before it is added.
  */
-const KNOWN_ENGINE_DRIFT: Readonly<Record<keyof typeof BASELINE_CLASS, readonly number[]>> = {
+type Drift = Readonly<Record<keyof typeof BASELINE_CLASS, readonly number[]>>;
+const UNICODE_16_DRIFT: Drift = {
   token: [],
   letterOrDigit: [],
   nonspacingMark: [0x1171e],
@@ -148,6 +152,11 @@ const KNOWN_ENGINE_DRIFT: Readonly<Record<keyof typeof BASELINE_CLASS, readonly 
   cased: [],
   caseIgnorable: [0x1171e],
 };
+const KNOWN_ENGINE_DRIFT: Readonly<Record<string, Drift>> = {
+  '16.0': UNICODE_16_DRIFT,
+  '17.0': { ...UNICODE_16_DRIFT, cased: [0x295] },
+};
+const ENGINE_UNICODE = process.versions.unicode ?? 'unknown';
 const ENGINE_CLASS: Readonly<Record<keyof typeof BASELINE_CLASS, RegExp>> = {
   token: /^[\p{L}\p{N}\p{M}]$/u,
   letterOrDigit: /^[\p{L}\p{N}]$/u,
@@ -170,7 +179,9 @@ describe('the engine running the suite, on Unicode 15.0 characters', () => {
         const character = String.fromCodePoint(c);
         return table.test(character) !== ENGINE_CLASS[key].test(character);
       });
-      expect(drift).toEqual(KNOWN_ENGINE_DRIFT[key]);
+      const known = KNOWN_ENGINE_DRIFT[ENGINE_UNICODE];
+      expect(known, `engine Unicode ${ENGINE_UNICODE}: review its drift and list it`).toBeDefined();
+      expect(drift).toEqual(known?.[key]);
     },
   );
 
