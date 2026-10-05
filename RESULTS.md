@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-03 with `pnpm bench`.
+Measured 2026-10-04 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,38 +12,38 @@ Measured 2026-10-03 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 379.4 |
-| lookupMinMs | 339.6 |
-| lookupMaxMs | 464.8 |
-| lookupCpuMedianMs | 397.2 |
-| indexBuildMedianMs | 166.6 |
-| buildPlusLookupMedianMs | 535.8 |
+| lookupMedianMs | 387.9 |
+| lookupMinMs | 352.3 |
+| lookupMaxMs | 472.9 |
+| lookupCpuMedianMs | 408.7 |
+| indexBuildMedianMs | 154.8 |
+| buildPlusLookupMedianMs | 534.3 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1038.1 |
-| gradingMinMs | 945.9 |
-| gradingMaxMs | 1172.1 |
-| gradingCpuMedianMs | 1307.5 |
-| gradingReceipts | 5845 |
+| gradingMedianMs | 1108.6 |
+| gradingMinMs | 1078 |
+| gradingMaxMs | 1338.8 |
+| gradingCpuMedianMs | 1280.1 |
+| gradingReceipts | 5803 |
 | gradingVerified | 1883 |
-| gradingNotFound | 1073 |
-| gradingUnasked | 844 |
+| gradingNotFound | 910 |
+| gradingUnasked | 802 |
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gcal
 
-Measured 2026-10-03 with `pnpm bench`.
+Measured 2026-10-04 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gcalSelectorsVersion | 1.1.0 |
+| gcalSelectorsVersion | 1.2.0 |
 | gcalFixtures | 8 |
 | gcalSyntheticFixtures | 8 |
 | gcalEventsLabelled | 56 |
@@ -65,13 +65,13 @@ Measured 2026-10-03 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gmail-sent
 
-Measured 2026-10-03 with `pnpm bench`.
+Measured 2026-10-04 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -97,13 +97,13 @@ Measured 2026-10-03 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## receipts
 
-Measured 2026-10-03 with `pnpm bench`.
+Measured 2026-10-04 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -137,10 +137,12 @@ Measured 2026-10-03 with `pnpm bench`.
 | negativesUnparsed | 4 |
 | listViews | 8 |
 | listViewsNeutral | 8 |
-| coverageAsserted | 0 |
+| coveragePages | 25 |
+| coveragePagesExact | 25 |
+| coverageWindows | 12 |
 | healthLabelled | 17 |
 | healthMatched | 17 |
 | receiptParsersGatePassed | true |
-| commit | 127f1d5bfa2f62b0f122363449ec569cc47f250c |
+| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
 | commitDirty | false |
 | node | v22.14.0 |
