@@ -15,6 +15,7 @@ import {
   AdapterHealthMessage,
   type BusMessageOf,
   type BusMessageType,
+  CalendarSnapshotMessage,
   CoveragePingMessage,
   LedgerChangedMessage,
   ObserverObservationsMessage,
@@ -158,7 +159,32 @@ export const OBSERVATION: Observation = Observation.parse({
   contentHash: HASH,
 });
 
-/** One valid message per type. The mapped type makes the compiler demand all seven. */
+/** A Calendar snapshot of one week with one event (src/observers/gcal/snapshot.ts). */
+export const SNAPSHOT = CalendarSnapshotMessage.shape.snapshot.parse({
+  format: 1,
+  observer: 'gcal.event',
+  version: '1.2.0',
+  range: '2026-10-04/2026-10-10',
+  readAt: TS_OFFSET,
+  baselineAt: TS_OFFSET,
+  days: ['04', '05', '06', '07', '08', '09', '10'].map((day) => ({ date: `2026-10-${day}`, complete: true })),
+  calendars: [{ key: HASH, shown: true }],
+  events: [
+    {
+      key: 'ef'.repeat(32),
+      calendar: HASH,
+      subjectHint: 'Design review',
+      occurredAt: '2026-10-08T13:00:00-04:00',
+      endAt: '2026-10-08T14:00:00-04:00',
+      allDay: false,
+      days: ['2026-10-08'],
+      guests: ['priya@example.org'],
+      guestCount: 1,
+    },
+  ],
+});
+
+/** One valid message per type. The mapped type makes the compiler demand all eight. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'adapter.health': AdapterHealthMessage.parse({
     type: 'adapter.health',
@@ -187,12 +213,19 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     type: 'coverage.ping',
     ping: {
       observerId: 'gmail',
+      source: 'gmail.sent',
       accountHash: HASH,
       lastSyncAt: TS,
       windowStart: '2026-10-01T08:00:00Z',
       windowEnd: TS,
       userActive: true,
     },
+  }),
+  'calendar.snapshot': CalendarSnapshotMessage.parse({
+    type: 'calendar.snapshot',
+    observerId: 'gcal.event',
+    snapshot: SNAPSHOT,
+    accountHash: HASH,
   }),
   'ui.query': UiQueryMessage.parse({ type: 'ui.query', query: { kind: 'ledger.export' } }),
   'ui.result': UiResultMessage.parse({
@@ -223,6 +256,10 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
     observations: [{ ...OBSERVATION, body: SECRET }],
   },
   'coverage.ping': { type: 'coverage.ping', ping: { ...VALID['coverage.ping'].ping, account: SECRET } },
+  'calendar.snapshot': {
+    ...VALID['calendar.snapshot'],
+    snapshot: { ...SNAPSHOT, events: [{ ...SNAPSHOT.events[0], location: SECRET }] },
+  },
   'ui.query': { type: 'ui.query', query: { kind: 'ledger.wipe' } },
   'ui.result': { type: 'ui.result', kind: 'health.list', ok: false, error: SECRET },
   'ledger.changed': { type: 'ledger.changed', tables: ['claims'], at: '2026-10-01T09:30:00' },

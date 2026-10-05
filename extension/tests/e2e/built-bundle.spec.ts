@@ -4,6 +4,9 @@
  *    sprint_2 2.0, strict CSP, the toolbar tooltip from the popup's <title>: TECH-14);
  *  - no test code ships: no file holds the observer harness marker (tests/e2e/support/observer-harness.ts), and no
  *    host, content-script match or web-accessible resource reaches the fixture server (sprint_2 2.0);
+ *  - the content scripts are exactly the Gmail and Calendar ones, each matching exactly its observer host, and no
+ *    other (sprint_2 2.7: the E2E tests route fixtures to these hosts; there is no test build), and every shipped
+ *    script is ASCII (Chrome refuses an extension whose content script holds a Unicode noncharacter);
  *  - no shipped script contains a network call, eval, or a Function constructor (SECURITY-6, Hard Rules 1
  *    and 9), apart from the allowlisted sites below.
  */
@@ -87,6 +90,27 @@ test('no test code ships: no harness, and nothing reaches the fixture server (sp
   const scripts = (parsed.content_scripts ?? []) as { matches?: string[] }[];
   const hosts = new Set(parsed.host_permissions as string[]);
   expect(scripts.flatMap((script) => script.matches ?? []).filter((match) => !hosts.has(match))).toEqual([]);
+});
+
+/** How many UTF-16 code units of `text` are outside ASCII. */
+function nonAscii(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i += 1) if (text.charCodeAt(i) > 0x7f) count += 1;
+  return count;
+}
+
+test('the content scripts are exactly Gmail and Calendar, on exactly their hosts (sprint_2 2.7)', () => {
+  const manifest = JSON.parse(readFileSync(path.join(EXTENSION_PATH, 'manifest.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  expect(manifest.content_scripts).toEqual([
+    { matches: ['https://calendar.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gcal.js'] },
+    { matches: ['https://mail.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gmail.js'] },
+  ]);
+  for (const file of scripts(EXTENSION_PATH)) {
+    expect(nonAscii(readFileSync(file, 'utf8')), path.relative(EXTENSION_PATH, file)).toBe(0);
+  }
 });
 
 test('no shipped script reaches the network or evaluates code', () => {

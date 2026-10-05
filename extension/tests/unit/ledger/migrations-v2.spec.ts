@@ -27,6 +27,7 @@ import {
   makePing,
   makeReceipt,
   observationId,
+  openAtVersion,
   pinClock,
   releaseClock,
   ulid,
@@ -57,7 +58,7 @@ const SUPERSEDED = makeReceipt({
 });
 
 async function seedV1(name: string): Promise<void> {
-  const db = await open(name, MIGRATIONS.slice(0, 1));
+  const db = await openAtVersion(name, MIGRATIONS.slice(0, 1));
   expect(db.verno).toBe(1);
   await upsertObservation(db, makeObservation(), DEFAULT_POLICY);
   await upsertClaim(db, makeClaim());
@@ -77,8 +78,8 @@ afterEach(() => {
 });
 
 describe('v1 → v2', () => {
-  it('declares v2 as the shipped version: the receipt indexes and the coverage interval store', async () => {
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2]);
+  it('declares v2: the receipt indexes and the coverage interval store', async () => {
+    expect(MIGRATIONS.map((migration) => migration.version).slice(0, 2)).toEqual([1, 2]);
     expect(MIGRATIONS[1]?.stores).toBe(STORES_V2);
     const db = await open(uniqueDbName('v2'));
     expect(indexOf(db, 'receipts', 'observationIds')?.multi).toBe(true);
@@ -94,7 +95,8 @@ describe('v1 → v2', () => {
   it('upgrades a v1 ledger in place: rows intact, new indexes built over them, an empty interval store', async () => {
     const name = uniqueDbName('v1-to-v2');
     await seedV1(name);
-    const db = await open(name);
+    const db = await openAtVersion(name, MIGRATIONS.slice(0, 2));
+    opened.push(db);
     expect(db.verno).toBe(2);
     expect(await getObservation(db, makeObservation().id)).toEqual(makeObservation());
     expect(await getClaim(db, makeClaim().id)).toEqual(makeClaim());

@@ -104,3 +104,40 @@ export const USER_ACTIVITY_THROTTLE_MS = 1_000;
 
 /** How long dated history is kept: the retention purge (src/ledger/retention.ts, Decisions [2.6]; Hard Rule 2). */
 export const RETENTION_DAYS = 90;
+
+/**
+ * The observers the service worker accepts messages from, each with the one ObservationSource it reads (sprint_2
+ * 2.7; Decisions [2.0]: one observer, one source, one coverage stream). A message naming any other observer, or a
+ * row or ping of another source, is refused (`invalid_input`) and nothing of it is stored (Hard Rules 2, 6).
+ */
+export const OBSERVER_SOURCES = Object.freeze({
+  'gmail.sent': 'gmail.sent',
+  'gmail.receipt': 'gmail.receipt',
+  'gcal.event': 'gcal.event',
+} as const);
+
+export type ObserverId = keyof typeof OBSERVER_SOURCES;
+
+/**
+ * How long the service worker holds a Calendar pass's coverage pings while it waits for the pass's
+ * `calendar.snapshot` (src/background/observer-state.ts). A pass posts both within a few milliseconds; a held ping
+ * older than this was never followed by its snapshot, so its window is never recorded (Hard Rule 5).
+ */
+export const CALENDAR_PASS_HOLD_MS = 5 * 60_000;
+
+/**
+ * When Chrome dropped the purge alarm across a restart, `runtime.onStartup` recreates it to fire this many minutes
+ * after start, not a whole period later, so a browser restarted every day still purges (Decisions [2.7]).
+ */
+export const PURGE_STARTUP_DELAY_MINUTES = 1;
+
+/**
+ * How often a visible Calendar tab is read again when nothing on it changed (src/observers/base.ts `heartbeatMs`).
+ * The service worker blames a Calendar change only when it compared it with a snapshot read at most
+ * `staleChangeMs(policy)` before (2 minutes in the shipped policy; docs/grading.md §3, §7): a change compared with an
+ * older snapshot could have been made at any time since, so it is stored as a first sighting and never UNASKED. A quiet
+ * tab is otherwise read only when its DOM changes, so its snapshot ages and almost no change could be attributed. A
+ * read once a minute while the tab is visible keeps the snapshot inside that bound. Hard Rule 11: only a tab the user
+ * has open and visible is read; a hidden tab is read again when it becomes visible.
+ */
+export const OBSERVER_HEARTBEAT_MS = 60_000;

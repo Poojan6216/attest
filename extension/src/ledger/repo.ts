@@ -113,19 +113,25 @@ function assertProjected(observation: Observation, policy: Policy): void {
  * `policy` is the loaded policy whose allowlist the observation was projected under; a row it could not have
  * produced is refused before anything is written. A policy `loadPolicy` did not return (a copy, possibly with a
  * widened allowlist) throws `PolicyError('policy_not_loaded')`, as grading does, and writes nothing.
+ * `options.clockMs` is the writer's clock (the service worker's): a stored first sighting after it is from before
+ * the clock went back, and an earlier sighting of it is then a no-op, not `late_sighting` (./upsert.ts).
  */
 export async function upsertObservation(
   db: LedgerDb,
   input: ObservationInput,
   policy: Policy,
+  options: WriterClock = {},
 ): Promise<UpsertResult> {
   assertLoadedPolicy(policy);
   const observation = parseInput('observations', Observation, input);
   assertProjected(observation, policy);
-  return insertUnlessHashExists(db, observationsByHash(db), {
-    hash: observation.contentHash,
-    fact: observation,
-  });
+  const sighting = { hash: observation.contentHash, fact: observation };
+  return insertUnlessHashExists(db, observationsByHash(db), sighting, options.clockMs);
+}
+
+/** The writer's own clock, in epoch ms (src/background passes the service worker's). */
+export interface WriterClock {
+  readonly clockMs?: number;
 }
 
 export async function getObservation(db: LedgerDb, id: string): Promise<Observation | undefined> {

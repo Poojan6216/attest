@@ -245,7 +245,8 @@ export function makePass(source: Source, syncMs: number, windowMs = PASS_WINDOW_
     windowStart: isoAt(syncMs - windowMs, 0),
     windowEnd: isoAt(syncMs, 0),
     accountHash: ACCOUNT,
-    ...(source === 'gcal.event' ? { allCalendars: true } : {}),
+    // A followed Calendar view from before the world starts (docs/grading.md §3, §7), so calendar rows can be orphans.
+    ...(source === 'gcal.event' ? { allCalendars: true, changesSince: isoAt(START_MS - MS_PER_DAY, 0) } : {}),
   });
 }
 

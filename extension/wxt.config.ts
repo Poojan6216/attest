@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
+
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
 
@@ -10,7 +13,30 @@ import { OBSERVER_HOSTS } from './src/config';
 // Sprint 2.0: host_permissions is exactly the two observer hosts (Gmail, Google Calendar), read from src/config.ts
 // OBSERVER_HOSTS; Sprint 3.0 adds the agent hosts. Pinned by tests/unit/manifest-hosts.spec.ts and the built
 // manifest check in tests/e2e/built-bundle.spec.ts (Decisions.md [2.0]).
+//
+// Content scripts (sprint_2 2.7) live in entrypoints/content/<name>.content.ts, the scope the lint fences hold to
+// the read-only rules (eslint-rules/fences.js ACT_SCOPES: attest/no-act, no ledger imports). WXT only discovers
+// content scripts at the top of entrypoints/, so the hook below adds these, each named by its file. Their `matches`
+// come from src/config.ts OBSERVER_HOSTS: no test build and no other host exists (Decisions.md [2.7]); the E2E
+// tests serve fixtures at the vendors' own addresses through Playwright routing instead.
+const CONTENT_DIR = path.resolve(import.meta.dirname, 'entrypoints/content');
+const CONTENT_SCRIPT = /^([a-z][a-z0-9-]*)\.content\.ts$/;
+
+function contentScripts(): { name: string; inputPath: string; type: 'content-script' }[] {
+  return readdirSync(CONTENT_DIR).flatMap((file) => {
+    const name = CONTENT_SCRIPT.exec(file)?.[1];
+    return name === undefined
+      ? []
+      : [{ name, inputPath: path.join(CONTENT_DIR, file), type: 'content-script' as const }];
+  });
+}
+
 export default defineConfig({
+  hooks: {
+    'entrypoints:found': (_wxt, infos) => {
+      infos.push(...contentScripts());
+    },
+  },
   // Explicit imports everywhere; no magic globals in reviewed code.
   imports: false,
   manifestVersion: 3,
@@ -40,6 +66,12 @@ export default defineConfig({
       // Vite's modulepreload polyfill contains a fetch(); Chrome >= 66 never needs it (we require 120), and the
       // shipped bundle must grep clean for network calls (SECURITY-6, tests/e2e/built-bundle.spec.ts).
       modulePreload: { polyfill: false },
+      // ASCII-only output (sprint_2 2.7, Decisions.md [2.7]): Chrome refuses to load an extension whose content
+      // script holds a Unicode noncharacter, and the minifier otherwise writes the `\uFDD0` and `\u{1FFFE}` escapes of
+      // src/core/unicode-baseline.ts out as raw characters. Every non-ASCII character is written as an escape instead.
+      rolldownOptions: {
+        output: { minify: { compress: true, mangle: true, codegen: { asciiOnly: true } } },
+      },
     },
   }),
 });

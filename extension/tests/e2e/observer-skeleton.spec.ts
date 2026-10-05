@@ -182,6 +182,8 @@ test('what the clean pass posts: allowlisted fields only, the account as a hash,
   ]);
   expect(ping.ping).toEqual({
     observerId: 'harness.sent',
+    // sprint_2 2.7 interface 1: every ping names the one source its observer reads.
+    source: 'gmail.sent',
     accountHash: accountHashOf('harness.user@example.com'),
     lastSyncAt: at,
     windowStart: '2026-10-01T13:10:00-04:00',

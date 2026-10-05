@@ -8,14 +8,21 @@
  * The callback form of `runtime.sendMessage` is used because it is the only form in which Chrome
  * reports errors through `runtime.lastError`, and reading `lastError` inside the callback is what
  * marks it as checked. A synchronous throw (e.g. "Extension context invalidated") is caught too.
+ *
+ * Acknowledged messages (observer health, rows, coverage and snapshots: messages.ts ACKED_TYPES) go through
+ * `sendChecked`, which never resolves `undefined`: it resolves the service worker's `BusAck` and rejects on a
+ * transport failure or a malformed answer, so a content script knows whether what it posted was stored (sprint_2
+ * 2.7 interface 6). `postAcked` is the observer skeleton's `post`: it also rejects on `{ ok: false }`.
  */
 import { browser } from 'wxt/browser';
 
 import { log } from '../log';
 import { BusError, transportErrorCode } from './errors';
 import {
+  BusAck,
   BusMessage,
   type BusMessageType,
+  isAckedType,
   type UiQuery,
   type UiResult,
   UiResultMessage,
@@ -86,4 +93,41 @@ export async function query(query: UiQuery): Promise<UiResult> {
   if (!parsed.success) return unavailable(query, response, 'malformed_result');
   if (parsed.data.kind !== query.kind) return unavailable(query, response, 'kind_mismatch');
   return parsed.data;
+}
+
+/**
+ * Sends one acknowledged message (messages.ts ACKED_TYPES) and resolves the service worker's `BusAck`, whether it
+ * says `ok` or not. Rejects with a `BusError`: `invalid_outgoing` (an invalid or unacknowledged message, never
+ * sent), the transport's code (`no_receiver`, `port_closed`, `context_invalidated`, `send_failed`), or
+ * `invalid_reply` (the answer is not a `BusAck`). Each failure is logged as `bus.send_failed` (warn).
+ */
+export async function sendChecked(message: BusMessage): Promise<BusAck> {
+  const parsed = BusMessage.safeParse(message);
+  if (!parsed.success || !isAckedType(parsed.data.type)) throw new BusError('invalid_outgoing');
+  const { type } = parsed.data;
+  let response: unknown;
+  try {
+    response = await transmit(parsed.data);
+  } catch (error) {
+    log.warn('bus.send_failed', { type, error });
+    throw error;
+  }
+  const ack = BusAck.safeParse(response);
+  if (ack.success) return ack.data;
+  const invalid = new BusError('invalid_reply');
+  log.warn('bus.send_failed', { type, error: invalid });
+  throw invalid;
+}
+
+/**
+ * The `post` a content script gives the observer skeleton (src/observers/base.ts `Post`): resolves once the service
+ * worker stored the message, and rejects with a `BusError` when it refused any of it (`refused`; the refusal's code
+ * is logged at debug as `bus.refused`) or the message never arrived. The skeleton then stops the pass, so no
+ * coverage follows a row that was not stored (Hard Rule 5).
+ */
+export async function postAcked(message: BusMessage): Promise<void> {
+  const ack = await sendChecked(message);
+  if (ack.ok) return;
+  log.debug('bus.refused', { type: message.type, code: ack.code });
+  throw new BusError('refused');
 }

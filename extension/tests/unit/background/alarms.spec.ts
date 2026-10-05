@@ -5,7 +5,7 @@ import { browser } from 'wxt/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureAlarms, handleAlarm, isAttestAlarm, resetAlarms } from '../../../src/background/alarms';
-import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES } from '../../../src/config';
+import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES, PURGE_STARTUP_DELAY_MINUTES } from '../../../src/config';
 import { closeLedger } from '../../../src/ledger/repo';
 import { type LogRecord, setLogSink } from '../../../src/log';
 
@@ -53,6 +53,17 @@ describe('ensureAlarms (browser startup)', () => {
   it('recreates a dropped alarm', async () => {
     await ensureAlarms();
     expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([ALARM_NAMES.PURGE]);
+  });
+
+  it('a dropped purge alarm comes back due shortly after start, then daily (a daily restart still purges)', async () => {
+    const createdAt = Date.now();
+    await ensureAlarms();
+    const alarm = await browser.alarms.get(ALARM_NAMES.PURGE);
+    expect(alarm?.periodInMinutes).toBe(PURGE_ALARM_PERIOD_MINUTES);
+    expect(PURGE_STARTUP_DELAY_MINUTES).toBeLessThan(PURGE_ALARM_PERIOD_MINUTES / 60);
+    const dueInMs = (alarm?.scheduledTime ?? 0) - createdAt;
+    expect(dueInMs).toBeGreaterThanOrEqual(PURGE_STARTUP_DELAY_MINUTES * 60_000 - 1_000);
+    expect(dueInMs).toBeLessThanOrEqual(PURGE_STARTUP_DELAY_MINUTES * 60_000 + 5_000);
   });
 
   it('leaves an existing alarm (and its schedule) untouched', async () => {

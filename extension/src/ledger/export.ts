@@ -6,9 +6,14 @@
  * fail their schema are skipped (and logged by id). It is deterministic: one read transaction (a consistent
  * snapshot), each table in primary-key order, each object's keys in schema order (record keys sorted), and
  * the export time is passed in by the caller (no clock here).
+ *
+ * Every ledger table is exported (LEDGER_TABLE_NAMES), the coverage intervals and Calendar snapshots included
+ * (Sprint 2.7): the user's data is everything the ledger holds. Those two default to empty when an export from
+ * before Sprint 2.7 is read, so older exports still parse for `attest replay`, which never reads them.
  */
 import { z } from 'zod';
 
+import { CalendarRecord } from './calendar-snapshots';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import {
@@ -19,6 +24,7 @@ import {
   IsoTs,
   MetaEntry,
   Observation,
+  ObserverCoverage,
   Receipt,
   Request,
 } from './types';
@@ -39,6 +45,8 @@ export const LedgerExport = z.strictObject({
     adapterHealth: z.array(AdapterHealth),
     coverage: z.array(CoveragePing),
     meta: z.array(MetaEntry),
+    coverageIntervals: z.array(ObserverCoverage).default([]),
+    calendarSnapshots: z.array(CalendarRecord).default([]),
   }),
 });
 
@@ -97,6 +105,12 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       adapterHealth: readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()),
       coverage: readRows('coverage', CoveragePing, await db.coverage.toArray()),
       meta: readRows('meta', MetaEntry, await db.meta.toArray()),
+      coverageIntervals: readRows(
+        'coverageIntervals',
+        ObserverCoverage,
+        await db.coverageIntervals.toArray(),
+      ),
+      calendarSnapshots: readRows('calendarSnapshots', CalendarRecord, await db.calendarSnapshots.toArray()),
     },
   }));
 }

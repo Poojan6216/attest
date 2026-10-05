@@ -43,7 +43,9 @@ describe('answerUiQuery', () => {
 });
 
 describe('createHandlers', () => {
-  it('handles ui.query only in Sprint 0 (observers and adapters add theirs later)', () => {
-    expect(Object.keys(createHandlers(FIXED_CLOCK))).toEqual(['ui.query']);
+  it('handles ui.query and, since Sprint 2.7, the observer messages (adapters add theirs in 3.6)', () => {
+    expect(Object.keys(createHandlers(FIXED_CLOCK)).sort()).toEqual(
+      ['adapter.health', 'calendar.snapshot', 'coverage.ping', 'observer.observations', 'ui.query'].sort(),
+    );
   });
 });

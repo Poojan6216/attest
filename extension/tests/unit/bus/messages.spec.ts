@@ -24,11 +24,12 @@ import { Claim, ComponentId, HealthReport, Observation, Request } from '../../..
 import { CLAIM, HASH, MALFORMED, OBSERVATION, REQUEST, SECRET, TS, VALID } from './harness';
 
 describe('BusMessage', () => {
-  it('has exactly the seven message types of sprint 0.7', () => {
+  it('has exactly the seven message types of sprint 0.7 and the Calendar snapshot of 2.7', () => {
     expect([...BUS_MESSAGE_TYPES].sort()).toEqual(
       [
         'adapter.claims',
         'adapter.health',
+        'calendar.snapshot',
         'coverage.ping',
         'ledger.changed',
         'observer.observations',
@@ -43,7 +44,7 @@ describe('BusMessage', () => {
   it('BUS_MESSAGE_TYPES is frozen, so no consumer can reorder or extend it', () => {
     expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
     expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.wipe'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(7);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(8);
   });
 
   it.each(BUS_MESSAGE_TYPES)('accepts a valid %s', (type) => {
@@ -228,12 +229,14 @@ describe("a vendor's conversation id is a token, never page text (R3-LEDGER-2, p
 });
 
 describe('ledger.changed', () => {
-  it('names only the eight ledger tables', () => {
+  it('names only the ledger tables', () => {
     expect([...LedgerTable.options].sort()).toEqual(
       [
         'adapterHealth',
+        'calendarSnapshots',
         'claims',
         'coverage',
+        'coverageIntervals',
         'grants',
         'meta',
         'observations',

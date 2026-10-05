@@ -18,6 +18,10 @@ export const BUS_ERROR_CODES = [
   'send_failed',
   /** A `ui.query` handler answered with something that is not a `ui.result` for that kind. */
   'invalid_result',
+  /** An acknowledged message (src/bus/messages.ts ACKED_TYPES) was answered with something that is not a BusAck. */
+  'invalid_reply',
+  /** The service worker answered an acknowledged message with `{ ok: false }`: it refused (part of) it. */
+  'refused',
 ] as const;
 
 export type BusErrorCode = (typeof BUS_ERROR_CODES)[number];

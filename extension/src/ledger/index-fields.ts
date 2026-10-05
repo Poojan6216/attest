@@ -15,6 +15,11 @@ import { LEDGER_TIME_BUCKET_MINUTES } from '../config';
 import { LedgerError } from './errors';
 import type { Claim, CoveragePing, Observation, Receipt, Request } from './types';
 
+/**
+ * Every ledger table (build_spec §6): the eight of Sprint 0, the coverage intervals of 2.6 (./coverage.ts) and the
+ * Calendar snapshots of 2.7 (./calendar-snapshots.ts). The bus `LedgerTable` enum, the export, the migrations and
+ * the logger's table names list exactly these.
+ */
 export const LEDGER_TABLE_NAMES = [
   'requests',
   'claims',
@@ -24,6 +29,8 @@ export const LEDGER_TABLE_NAMES = [
   'adapterHealth',
   'coverage',
   'meta',
+  'coverageIntervals',
+  'calendarSnapshots',
 ] as const;
 
 export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
@@ -39,6 +46,10 @@ export const INDEX_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> 
   adapterHealth: [],
   coverage: ['accountKey'],
   meta: [],
+  // Epoch ms read by core `instantMs` (./coverage.ts), so IndexedDB answers range queries by instant.
+  coverageIntervals: ['accountKey', 'startMs', 'endMs', 'syncMs'],
+  // The snapshot's `readAt` in epoch ms, for the retention purge (./calendar-snapshots.ts).
+  calendarSnapshots: ['readMs'],
 };
 
 export type RequestRow = Request & { readonly date: string };

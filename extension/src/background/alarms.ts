@@ -3,13 +3,20 @@
  *
  * Alarm names are constants. On install/update every alarm that is not ours is cleared and ours are
  * (re)created, so duplicates cannot accumulate; on browser startup missing alarms are recreated
- * (Chrome may drop alarms across restarts). The onAlarm listener itself is registered synchronously
- * in `entrypoints/background.ts`; this module only holds the logic.
+ * (Chrome may drop alarms across restarts), due PURGE_STARTUP_DELAY_MINUTES after start rather than a whole
+ * period later, so a browser restarted every day still purges (sprint_2 2.7 carry-forward, Decisions [2.7]).
+ * The onAlarm listener itself is registered synchronously in `entrypoints/background.ts`; this module only
+ * holds the logic.
  */
 import { browser } from 'wxt/browser';
 
 import { nowIso } from '../clock';
-import { ALARM_NAMES, type AlarmName, PURGE_ALARM_PERIOD_MINUTES } from '../config';
+import {
+  ALARM_NAMES,
+  type AlarmName,
+  PURGE_ALARM_PERIOD_MINUTES,
+  PURGE_STARTUP_DELAY_MINUTES,
+} from '../config';
 import { getLedger } from '../ledger/repo';
 import { purgeExpired } from '../ledger/retention';
 import { log } from '../log';
@@ -34,6 +41,11 @@ const PERIODS: Readonly<Record<AlarmName, number>> = {
   [ALARM_NAMES.PURGE]: PURGE_ALARM_PERIOD_MINUTES,
 };
 
+/** How soon a recreated alarm first fires after a browser start (the period follows). */
+const STARTUP_DELAYS: Readonly<Record<AlarmName, number>> = {
+  [ALARM_NAMES.PURGE]: PURGE_STARTUP_DELAY_MINUTES,
+};
+
 export function isAttestAlarm(name: string): name is AlarmName {
   return Object.values<string>(ALARM_NAMES).includes(name);
 }
@@ -48,12 +60,19 @@ export async function resetAlarms(): Promise<void> {
   }
 }
 
-/** On browser startup: recreate any of our alarms that Chrome dropped; never touch existing ones. */
+/**
+ * On browser startup: recreate any of our alarms that Chrome dropped, due a short delay after start (a dropped daily
+ * purge recreated a whole day out would never fire for a user who restarts Chrome every day); never touch existing
+ * ones.
+ */
 export async function ensureAlarms(): Promise<void> {
   const existing = new Set((await browser.alarms.getAll()).map((alarm) => alarm.name));
   for (const name of Object.values(ALARM_NAMES)) {
     if (!existing.has(name)) {
-      await browser.alarms.create(name, { delayInMinutes: PERIODS[name], periodInMinutes: PERIODS[name] });
+      await browser.alarms.create(name, {
+        delayInMinutes: STARTUP_DELAYS[name],
+        periodInMinutes: PERIODS[name],
+      });
     }
   }
 }

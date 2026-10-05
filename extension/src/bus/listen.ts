@@ -18,18 +18,23 @@
  *
  * A handled message is always answered (classic protocol: return true, call `sendResponse` once the
  * handler settles), so the sender never sees a closed port for a message that was processed.
- * `ui.query` handlers answer with a `ui.result`, which is validated before it leaves; every other
- * handler is acknowledged with `undefined`, because only `ui.result` has a response schema.
- * The listener never throws.
+ * `ui.query` handlers answer with a `ui.result`, and the handlers of acknowledged messages (observer health, rows,
+ * coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is validated before it leaves, and
+ * a handler that throws or answers badly is answered `handler_failed` / `{ ok: false, code: 'failed' }` and logged
+ * at error (fail loud). Every other handler is acknowledged with `undefined`. The listener never throws.
  */
 import { type Browser, browser } from 'wxt/browser';
 
 import { log } from '../log';
 import { BusError } from './errors';
 import {
+  type AckedType,
+  ackRefused,
+  BusAck,
   BusMessage,
   type BusMessageOf,
   type BusMessageType,
+  isAckedType,
   isBusMessageType,
   type UiQueryMessage,
   type UiResult,
@@ -40,13 +45,16 @@ import {
 export type MessageSender = Browser.runtime.MessageSender;
 
 /**
- * What a handler for `T` returns. A `ui.query` handler answers with a `ui.result` (validated before it
- * is sent). Any other handler may be sync or async; its promise is awaited so a rejection is logged,
- * but its value is never forwarded: the sender only receives an acknowledgement (`undefined`).
+ * What a handler for `T` returns. A `ui.query` handler answers with a `ui.result`, and the handler of an
+ * acknowledged message with a `BusAck` (each validated before it is sent). Any other handler may be sync or async;
+ * its promise is awaited so a rejection is logged, but its value is never forwarded: the sender only receives an
+ * acknowledgement (`undefined`).
  */
 export type BusHandlerResult<T extends BusMessageType> = T extends 'ui.query'
   ? UiResult | Promise<UiResult>
-  : unknown;
+  : T extends AckedType
+    ? BusAck | Promise<BusAck>
+    : unknown;
 
 export type BusHandler<T extends BusMessageType> = (
   message: BusMessageOf<T>,
@@ -106,15 +114,34 @@ function checkedResult(message: UiQueryMessage, value: unknown): UiResult {
   return uiFailure(message.query.kind, 'handler_failed');
 }
 
+/** The validated acknowledgement, or `{ ok: false, code: 'failed' }` if the handler answered badly. */
+function checkedAck(message: BusMessage, value: unknown): BusAck {
+  const parsed = BusAck.safeParse(value);
+  if (parsed.success) return parsed.data;
+  log.error('bus.handler_failed', { type: message.type, error: new BusError('invalid_reply') });
+  return ackRefused('failed');
+}
+
+/** The answer to a message whose handler settled with `value`. */
+function answerOf(message: BusMessage, value: unknown): unknown {
+  if (message.type === 'ui.query') return checkedResult(message, value);
+  return isAckedType(message.type) ? checkedAck(message, value) : undefined;
+}
+
+/** The answer to a message whose handler threw. */
+function failureOf(message: BusMessage): unknown {
+  if (message.type === 'ui.query') return uiFailure(message.query.kind, 'handler_failed');
+  return isAckedType(message.type) ? ackRefused('failed') : undefined;
+}
+
 /** Runs the handler, then answers exactly once. Never rejects. */
 async function deliver(message: BusMessage, run: () => unknown, sendResponse: SendResponse): Promise<void> {
   let response: unknown;
   try {
-    const value: unknown = await run();
-    response = message.type === 'ui.query' ? checkedResult(message, value) : undefined;
+    response = answerOf(message, await run());
   } catch (error) {
     log.error('bus.handler_failed', { type: message.type, error });
-    response = message.type === 'ui.query' ? uiFailure(message.query.kind, 'handler_failed') : undefined;
+    response = failureOf(message);
   }
   try {
     sendResponse(response);

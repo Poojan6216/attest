@@ -7,8 +7,9 @@
  * world shares the DOM). After the extension has had the pages open, every count must be zero and no page
  * may have navigated. The negative control proves the recorder sees synthetic and trusted events.
  *
- * Sprint 0 ships no content scripts, so today this guards the harness pages only. Sprint 2 (observers)
- * and Sprint 3 (adapters) must add their vendor fixture pages to FIXTURE_PAGES.
+ * Sprint 2.7 adds the Gmail and Calendar fixtures (VENDOR_PAGES), opened at the vendors' own addresses through
+ * routing (./support/vendor-pages.ts), so the shipped content scripts run their observers on them; the test checks
+ * that every observer reported from them before it counts. Sprint 3 (adapters) adds its vendor pages the same way.
  * Not detectable here, and left to the `attest/no-act` lint rule: `.value =` writes and `.focus()`
  * (Playwright's own focus emulation produces focus events, so they are not counted).
  */
@@ -16,9 +17,25 @@ import type { BrowserContext, Page } from '@playwright/test';
 
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { type LaunchedExtension, launchExtension } from './support/extension';
+import { installRouteGuard } from './support/network-guard';
 import { expect, test } from './support/test';
+import {
+  FIXTURE_TIME_ZONE,
+  fixtureUrl,
+  routesFor,
+  vendorFixture,
+  waitForLedger,
+} from './support/vendor-pages';
 
 const FIXTURE_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
+/** The Gmail Sent list, an opened receipt, a Calendar week and a month, each with its content script running. */
+const VENDOR_PAGES = [
+  vendorFixture('gmail', 'synthetic-sent-page-1.html'),
+  vendorFixture('gmail', 'synthetic-receipt-stripe.html'),
+  vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+  vendorFixture('gcal', 'synthetic-gcal-month-november.html'),
+];
+const OBSERVERS = ['gmail.sent', 'gmail.receipt', 'gcal.event'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
 const SETTLE_MS = 3_000;
 
@@ -96,16 +113,33 @@ interface Session {
 
 async function openFixtures(): Promise<Session> {
   const server = await startFixtureServer();
-  const extension = await launchExtension();
+  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
   await installRecorder(extension.context);
+  await installRouteGuard(extension.context, {
+    fixtureOrigin: server.origin,
+    routedFixtures: routesFor(VENDOR_PAGES),
+  });
+  const urls = [
+    ...FIXTURE_PAGES.map((fixture) => server.url(fixture)),
+    ...VENDOR_PAGES.map((fixture) => fixtureUrl(fixture)),
+  ];
   const pages: { url: string; page: Page }[] = [];
-  for (const fixture of FIXTURE_PAGES) {
+  for (const url of urls) {
     const page = await extension.context.newPage();
-    const url = server.url(fixture);
     await page.goto(url);
     pages.push({ url, page });
   }
   return { server, extension, pages };
+}
+
+/** Every observer has reported from the vendor pages: their content scripts ran there. */
+async function observersRan(extension: LaunchedExtension): Promise<void> {
+  const options = await extension.openExtensionPage('options.html');
+  await waitForLedger(options, (ledger) =>
+    OBSERVERS.every((observer) =>
+      ledger.tables.adapterHealth.some((report) => report.adapterId === observer),
+    ),
+  );
 }
 
 async function close(session: Session): Promise<void> {
@@ -115,9 +149,11 @@ async function close(session: Session): Promise<void> {
 
 test.describe('the extension dispatches no input events on pages', () => {
   test('fixture pages see zero input events and no navigation while the extension runs', async () => {
+    test.setTimeout(2 * 60_000);
     const session = await openFixtures();
     try {
       for (const name of EXTENSION_PAGES) await session.extension.openExtensionPage(name);
+      await observersRan(session.extension);
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
       // Reload each page so anything that runs at document load (content scripts, later) runs again.
       for (const { page } of session.pages) await page.reload();

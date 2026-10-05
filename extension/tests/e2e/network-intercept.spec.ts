@@ -1,8 +1,9 @@
 /**
  * @mandatory — Hard Rule 1: nothing leaves the browser.
  *
- * Runs the real build through a 5-minute scripted session (three fixture pages, popup, options,
- * side panel, an alarm firing) with Chromium's NetLog on, then asserts that every request the
+ * Runs the real build through a 5-minute scripted session (three fixture pages, the Gmail and Calendar
+ * fixtures with their content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing)
+ * with Chromium's NetLog on, then asserts that every request the
  * extension or a page initiated went to an allowlisted host. In this sprint the allowlist is empty.
  * The negative control proves on every run that the guard sees a canary request from the service
  * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened. (If
@@ -19,6 +20,7 @@ import type { WxtBrowser } from 'wxt/browser';
 import { NETWORK_ALLOWLIST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
+import { FIXTURE_TIME_ZONE, fixtureUrl, routesFor, vendorFixture } from './support/vendor-pages';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import {
@@ -34,9 +36,20 @@ declare const chrome: WxtBrowser;
 /** Sprint 0: empty. Sprint 5 adds exactly the telemetry host, and only while telemetry is on. */
 const ALLOWLIST: readonly string[] = [];
 const SESSION_MS = 5 * 60_000;
-const STEP_MS = 15_000;
+// One reload every STEP_MS: with the observer fixtures (sprint_2 2.7) nine pages, each reloaded at least twice.
+const STEP_MS = 8_000;
 const FIXTURE_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
+/**
+ * Sprint 2.7: the Gmail and Calendar fixtures at the vendors' own addresses (./support/vendor-pages.ts, routed, never
+ * fetched), so the observers' content scripts run, post and store through the whole session.
+ */
+const VENDOR_PAGES = [
+  vendorFixture('gmail', 'synthetic-sent-page-1.html'),
+  vendorFixture('gmail', 'synthetic-receipt-stripe.html'),
+  vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+];
+const VENDOR_ROUTES = routesFor(VENDOR_PAGES);
 
 interface GuardedSession {
   readonly server: FixtureServer;
@@ -52,8 +65,14 @@ async function startGuardedSession(): Promise<GuardedSession> {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-netlog-'));
   let extension: LaunchedExtension | undefined;
   try {
-    extension = await launchExtension({ extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)) });
-    const routeRecords = await installRouteGuard(extension.context, { fixtureOrigin: server.origin });
+    extension = await launchExtension({
+      extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)),
+      timezoneId: FIXTURE_TIME_ZONE,
+    });
+    const routeRecords = await installRouteGuard(extension.context, {
+      fixtureOrigin: server.origin,
+      routedFixtures: VENDOR_ROUTES,
+    });
     const consoleLines: string[] = [];
     recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
     return { server, extension, routeRecords, consoleLines, dir };
@@ -73,6 +92,7 @@ async function finishGuardedSession(session: GuardedSession): Promise<NetworkRep
   const report = analyse(readNetLogRequests(session.dir), session.routeRecords, {
     fixtureOrigin: session.server.origin,
     allowlist: ALLOWLIST,
+    routedFixtureUrls: new Set(VENDOR_ROUTES.keys()),
   });
   rmSync(session.dir, { recursive: true, force: true });
   return report;
@@ -100,6 +120,12 @@ async function openAll(session: GuardedSession): Promise<Page[]> {
     const page = await session.extension.context.newPage();
     recordConsole(page, fixture, session.consoleLines);
     await page.goto(session.server.url(fixture));
+    pages.push(page);
+  }
+  for (const fixture of VENDOR_PAGES) {
+    const page = await session.extension.context.newPage();
+    recordConsole(page, fixture.file, session.consoleLines);
+    await page.goto(fixtureUrl(fixture));
     pages.push(page);
   }
   for (const extensionPage of EXTENSION_PAGES) {
@@ -173,6 +199,8 @@ test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
   });
 
   test('negative control: the guard catches a request from the worker, an extension page, and a page', async () => {
+    // Room for the launcher to replace a hung Chromium start-up (3 × 15 s, ./support/extension.ts) on a busy machine.
+    test.setTimeout(3 * 60_000);
     const session = await startGuardedSession();
     let report: NetworkReport;
     try {

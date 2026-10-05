@@ -13,7 +13,12 @@
  * `observedAt` `stampObservedAt` gives, read inside the transaction that writes it. When that is later than the
  * sighting, a new observation also keeps the sighting as `sightedAt` (§3, §4.1, §7: when it was first seen, which
  * `observedAt` no longer says); a claim does not. A stored row no read can return is replaced, never treated as
- * already stored.
+ * already stored. A new row's sighting raises the clock's high water (./clock-guard.ts `noteStoredInstant`).
+ *
+ * A writer that knows its clock passes it (`clockMs`, the service worker's): a stored first sighting after that
+ * clock was stamped by a clock that has since gone back, so a sighting earlier than it is no news, and is not
+ * refused `late_sighting` (Decisions [2.7] wave E): otherwise a row first seen during a forward jump would refuse
+ * every re-sighting until real time caught up. Nothing stored changes.
  */
 import type { Table } from 'dexie';
 import type { z } from 'zod';
@@ -23,6 +28,7 @@ import { canonicalJson } from '../core/hash';
 import { firstSeenAt } from '../core/order';
 import { log } from '../log';
 import { lastBatchMs, stampObservedAt } from './batch-instant';
+import { noteStoredInstant } from './clock-high-water';
 import { loggableId, logTableId, readRow, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { epochMs, toClaimRow, toObservationRow, type ClaimRow, type ObservationRow } from './index-fields';
@@ -89,13 +95,18 @@ function assertSameSighting<Row, Fact extends Sighted>(
   target: HashedTable<Row, Fact>,
   stored: Fact,
   incoming: Fact,
+  clockMs: number | undefined,
 ): void {
   const context = { table: target.table, id: stored.id };
   if (target.identity(stored) !== target.identity(incoming)) {
     throw new LedgerError('id_conflict', 'A different fact is already stored under this hash', context);
   }
   const { firstSeen } = target;
-  if (firstSeen !== undefined && isOlder(incoming.observedAt, firstSeen(stored))) {
+  if (firstSeen === undefined) return;
+  const storedFirst = firstSeen(stored);
+  // A first sighting after the writer's clock was stamped before the clock went back: an earlier one is no news.
+  if (clockMs !== undefined && epochMs(storedFirst) > clockMs) return;
+  if (isOlder(incoming.observedAt, storedFirst)) {
     throw new LedgerError(
       'late_sighting',
       'A sighting earlier than the stored one arrived after it',
@@ -131,6 +142,7 @@ export async function insertUnlessHashExists<Row, Fact extends Sighted>(
   db: LedgerDb,
   target: HashedTable<Row, Fact>,
   incoming: Sighting<Fact>,
+  clockMs?: number,
 ): Promise<UpsertResult> {
   const { table, store, schema, hashIndex } = target;
   const { hash, fact } = incoming;
@@ -139,7 +151,7 @@ export async function insertUnlessHashExists<Row, Fact extends Sighted>(
     if (existingId !== undefined) {
       const stored = readRow(table, schema, await store.get(existingId));
       if (stored !== undefined) {
-        assertSameSighting(target, stored, fact);
+        assertSameSighting(target, stored, fact, clockMs);
         return { id: existingId, inserted: false };
       }
       await dropUnreadable(target, existingId);
@@ -147,6 +159,7 @@ export async function insertUnlessHashExists<Row, Fact extends Sighted>(
     await freeId(target, fact.id);
     const observedAt = stampObservedAt(fact.observedAt, IsoTs.parse(nowIso()), await lastBatchMs(db));
     await store.add(target.toRow(observedAt === fact.observedAt ? fact : target.stamped(fact, observedAt)));
+    await noteStoredInstant(db, fact.observedAt);
     return { id: fact.id, inserted: true };
   });
 }

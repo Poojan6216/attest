@@ -12,7 +12,9 @@ import { expect, vi } from 'vitest';
 
 import { idFromHash } from '../../../src/core/hash';
 import { contentHashOf } from '../../../src/core/redact';
+import { LedgerDb } from '../../../src/ledger/db';
 import { LedgerError, type LedgerErrorCode } from '../../../src/ledger/errors';
+import type { Migration } from '../../../src/ledger/migrations';
 import type {
   AdapterHealthInput,
   ClaimInput,
@@ -71,6 +73,18 @@ export function claimId(n: number): string {
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
 
 let dbCounter = 0;
+
+/**
+ * A ledger opened at an older schema: the first versions of the migration list only, declared on a raw LedgerDb.
+ * `openLedger` refuses such a list (a table the shipped ledger has would be missing: `invalid_migrations`), so
+ * migration tests build the old ledger they upgrade from with this.
+ */
+export async function openAtVersion(name: string, migrations: readonly Migration[]): Promise<LedgerDb> {
+  const db = new LedgerDb(name);
+  for (const migration of migrations) db.version(migration.version).stores(migration.stores);
+  await db.open();
+  return db;
+}
 
 /** A database name no other test in the file uses. */
 export function uniqueDbName(prefix: string): string {
@@ -212,6 +226,7 @@ export function makeHealth(overrides: Partial<AdapterHealthInput> = {}): Adapter
 export function makePing(overrides: Partial<CoveragePingInput> = {}): CoveragePingInput {
   return {
     observerId: 'gmail',
+    source: 'gmail.sent',
     accountHash: sha(900),
     lastSyncAt: '2026-10-01T10:00:00Z',
     windowStart: '2026-10-01T09:00:00Z',

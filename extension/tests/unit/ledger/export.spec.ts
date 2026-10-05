@@ -94,7 +94,8 @@ describe('exportLedger', () => {
     expect(tables.grants.map((g) => g.agent)).toEqual(['chatgpt', 'muse']);
     expect(tables.adapterHealth.map((h) => h.adapterId)).toEqual(['gmail', 'muse']);
     expect(tables.coverage.map((p) => p.observerId)).toEqual(['gcal', 'gmail']);
-    expect(tables.meta.map((m) => m.key)).toEqual(['eventsSeen', 'retentionDays']);
+    // The rows and claims stored raise the clock's high water (src/ledger/clock-guard.ts).
+    expect(tables.meta.map((m) => m.key)).toEqual(['clockHighWater', 'eventsSeen', 'retentionDays']);
     for (const table of LEDGER_TABLE_NAMES) {
       for (const row of tables[table]) {
         for (const field of INDEX_FIELDS[table]) expect(row, `${table}.${field}`).not.toHaveProperty(field);

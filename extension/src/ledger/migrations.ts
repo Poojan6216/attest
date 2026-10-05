@@ -15,7 +15,7 @@ import { type Transaction } from 'dexie';
 
 import { DB_NAME } from '../config';
 import { log } from '../log';
-import { LedgerDb, STORES_V1, STORES_V2 } from './db';
+import { LedgerDb, STORES_V1, STORES_V2, STORES_V3 } from './db';
 import { LedgerError } from './errors';
 import { LEDGER_TABLE_NAMES } from './index-fields';
 
@@ -31,11 +31,13 @@ export interface Migration {
 /**
  * v1: the eight ledger tables (Sprint 0.6). v2 (Sprint 2.6): receipt indexes for the retention purge and the
  * coverage interval store (db.ts STORES_V2); IndexedDB builds the new receipt indexes over existing rows, and
- * the new table starts empty (no observer wrote coverage before Sprint 2), so v2 needs no data upgrade.
+ * the new table starts empty (no observer wrote coverage before Sprint 2), so v2 needs no data upgrade. v3 (Sprint
+ * 2.7): the Calendar snapshot store (db.ts STORES_V3), new and empty, so no data upgrade either.
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, stores: STORES_V1 },
   { version: 2, stores: STORES_V2 },
+  { version: 3, stores: STORES_V3 },
 ];
 
 /** Throws `invalid_migrations` unless versions ascend and every ledger table survives to the last one. */

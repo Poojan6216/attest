@@ -68,14 +68,12 @@ afterEach(() => {
 });
 
 describe('the shipped schema', () => {
-  it('opens at the shipped version with the eight ledger tables and the coverage interval store', async () => {
+  it('opens at the shipped version with every ledger table (the coverage intervals and Calendar snapshots included)', async () => {
     const db = await open(uniqueDbName('v1'));
     expect(db.verno).toBe(SHIPPED);
-    expect(SHIPPED).toBe(2);
-    // The coverage interval store (Sprint 2.6) is not one of LEDGER_TABLE_NAMES yet (db.ts STORES_V2).
-    expect(db.tables.map((table) => table.name).sort()).toEqual(
-      [...LEDGER_TABLE_NAMES, COVERAGE_INTERVALS].sort(),
-    );
+    expect(SHIPPED).toBe(3);
+    expect(LEDGER_TABLE_NAMES).toContain(COVERAGE_INTERVALS);
+    expect(db.tables.map((table) => table.name).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
   });
 
   it('declares the tech_reviewer indexes (unique hashes, compound, multiEntry)', async () => {

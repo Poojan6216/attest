@@ -22,6 +22,7 @@ import {
   type ReceiptRow,
   type RequestRow,
 } from './index-fields';
+import type { CalendarRecordRow } from './calendar-snapshots';
 import {
   AgentId,
   Ulid,
@@ -47,12 +48,18 @@ export const STORES_V1 = {
   adapterHealth: 'adapterId',
   coverage: '[observerId+accountKey], observerId, lastSyncAt',
   meta: 'key',
-} as const satisfies Readonly<Record<LedgerTableName, string>>;
+} as const satisfies Readonly<
+  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots'>, string>
+>;
 
 export type CoverageKey = [observerId: string, accountKey: string];
+export type CalendarKey = [observerId: string, accountHash: string, range: string];
 
-/** The coverage interval store (./coverage.ts). Not in LEDGER_TABLE_NAMES yet: see STORES_V2. */
+/** The coverage interval store (./coverage.ts). */
 export const COVERAGE_INTERVALS = 'coverageIntervals';
+
+/** The Calendar snapshot store (./calendar-snapshots.ts). */
+export const CALENDAR_SNAPSHOTS = 'calendarSnapshots';
 
 /**
  * Schema v2 (Sprint 2.6, Decisions [2.6]). Only the tables that change:
@@ -62,12 +69,21 @@ export const COVERAGE_INTERVALS = 'coverageIntervals';
  *  - `coverageIntervals` holds every coverage interval an observer pass reported (core `ObserverCoverage`, docs/
  *    grading.md §3), several per source within retention, keyed by an outbound auto-increment key. Its derived
  *    fields (`accountKey`, `startMs`, `endMs`, `syncMs`: epoch ms read by core `instantMs`) answer `coverageFor` and
- *    the purge by range. It is read only through ./coverage.ts. Until src/ledger/index-fields.ts, the bus
- *    `LedgerTable` enum and the export register it, it is not one of LEDGER_TABLE_NAMES (it holds no content).
+ *    the purge by range. It is read only through ./coverage.ts (registered in LEDGER_TABLE_NAMES by Sprint 2.7).
  */
 export const STORES_V2 = {
   receipts: 'id, claimId, [agent+date], state, grade, *observationIds, supersededBy',
   [COVERAGE_INTERVALS]: '++, [source+endMs], [source+accountKey], [source+accountKey+syncMs]',
+} as const;
+
+/**
+ * Schema v3 (Sprint 2.7, Decisions [2.7]): `calendarSnapshots` holds, per Calendar observer, account hash and visible
+ * range, the snapshot the service worker diffs the next pass against (./calendar-snapshots.ts), keyed by
+ * `[observerId+accountHash+range]`, with `readMs` (its `readAt` in epoch ms) for the retention purge. New and empty
+ * on upgrade (no snapshot was stored before 2.7), so v3 needs no data upgrade.
+ */
+export const STORES_V3 = {
+  [CALENDAR_SNAPSHOTS]: '[observerId+accountHash+range], readMs',
 } as const;
 
 /** A stored coverage interval: the core `ObserverCoverage` plus the derived fields ./coverage.ts strips on read. */
@@ -95,6 +111,9 @@ const ROW_ID: Readonly<Record<LedgerTableName, { readonly field: string; readonl
   adapterHealth: { field: 'adapterId', schema: PLAIN_KEY },
   coverage: { field: 'observerId', schema: PLAIN_KEY },
   meta: { field: 'key', schema: PLAIN_KEY },
+  // Outbound auto-increment key: the observer names the row in logs.
+  coverageIntervals: { field: 'observerId', schema: PLAIN_KEY },
+  calendarSnapshots: { field: 'observerId', schema: PLAIN_KEY },
 };
 
 export class LedgerDb extends Dexie {
@@ -133,6 +152,11 @@ export class LedgerDb extends Dexie {
   /** Schema v2. Read and written only through ./coverage.ts. */
   get coverageIntervals(): Table<CoverageIntervalRow, number> {
     return this.table<CoverageIntervalRow, number>(COVERAGE_INTERVALS);
+  }
+
+  /** Schema v3. Read and written only through ./calendar-snapshots.ts. */
+  get calendarSnapshots(): Table<CalendarRecordRow, CalendarKey> {
+    return this.table<CalendarRecordRow, CalendarKey>(CALENDAR_SNAPSHOTS);
   }
 }
 

@@ -2,7 +2,9 @@
  * @mandatory — Hard Rules 2 and 10: derived facts only; never log secrets.
  *
  * Every seeded secret (tests/fixtures/secrets/seeded.json) is injected into the fixture pages the
- * extension sees. After a session, no seed value or canary fragment may appear in: the extension's
+ * extension sees, and the Gmail and Calendar fixtures (VENDOR_PAGES, sprint_2 2.7) are opened as they are, with the
+ * seeds in their own bodies, at the vendors' own addresses (./support/vendor-pages.ts), so the observers really read
+ * them and real rows reach the ledger before the channels are searched. After a session, no seed value or canary fragment may appear in: the extension's
  * own ledger export, any IndexedDB database, any chrome.storage area, the extension origin's web storage
  * and CacheStorage, the web storage, IndexedDB or cookies of the pages it reads, console output from any
  * context, or any network URL or body (telemetry included, from Sprint 5). Later sprints extend the page
@@ -31,12 +33,25 @@ import { findLeaks, type Leak, loadSeeds, type Seed } from './support/leaks';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import { guardArgs, installRouteGuard, type RouteRecord } from './support/network-guard';
 import { injectSeeds } from './support/seed-pages';
+import {
+  FIXTURE_TIME_ZONE,
+  fixtureUrl,
+  requestUrl,
+  vendorFixture,
+  waitForLedger,
+} from './support/vendor-pages';
 
 declare const chrome: WxtBrowser;
 
 const SEEDS = loadSeeds();
 const SEEDED_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
+/** Observer fixtures served as they are: each holds three seeds where real secrets sit (snippets, bodies, places). */
+const VENDOR_PAGES = [
+  vendorFixture('gmail', 'synthetic-sent-page-1.html'),
+  vendorFixture('gmail', 'synthetic-receipt-amazon.html'),
+  vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+];
 const SETTLE_MS = 5_000;
 
 interface Collected {
@@ -88,12 +103,18 @@ async function collectAfter(
       injectSeeds(readFileSync(path.join(import.meta.dirname, '../fixtures/pages', page), 'utf8'), SEEDS),
     );
   }
+  for (const fixture of VENDOR_PAGES) {
+    routedFixtures.set(requestUrl(fixtureUrl(fixture)), readFileSync(fixture.htmlPath, 'utf8'));
+  }
   const consoleLines: string[] = [];
   let storage: StorageChannels;
   let pages: PageChannels;
   let routeRecords: readonly RouteRecord[];
   // One NetLog per browser launch attempt; every one is searched (tests/e2e/support/extension.ts).
-  const extension = await launchExtension({ extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)) });
+  const extension = await launchExtension({
+    extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)),
+    timezoneId: FIXTURE_TIME_ZONE,
+  });
   try {
     // A live array: the guard appends every blocked request until the browser closes.
     routeRecords = await installRouteGuard(extension.context, {
@@ -115,6 +136,25 @@ async function collectAfter(
   const netLogUrls = readNetLogRequests(dir).map((r) => r.url);
   rmSync(dir, { recursive: true, force: true });
   return { storage, pages, consoleLines, routeRecords, netLogUrls };
+}
+
+/**
+ * Opens the Gmail and Calendar fixtures at their live addresses, checks their own seeds are on the page, and waits
+ * until every observer stored rows from them: real data flowed before the channels are read.
+ */
+async function openVendorPages(extension: Awaited<ReturnType<typeof launchExtension>>): Promise<void> {
+  for (const fixture of VENDOR_PAGES) {
+    const tab = await extension.context.newPage();
+    await tab.goto(fixtureUrl(fixture));
+    for (const id of fixture.label.seededSecrets) {
+      await expect(tab.locator(`[data-attest-seeded="${id}"]`).first()).toBeAttached();
+    }
+  }
+  await waitForLedger(await extension.openExtensionPage('options.html'), (ledger) =>
+    ['gmail.sent', 'gmail.receipt', 'gcal.event'].every((source) =>
+      ledger.tables.observations.some((row) => row.source === source),
+    ),
+  );
 }
 
 /** The negative control's plants into the extension origin: chrome.storage, IndexedDB, web storage, caches. */
@@ -228,6 +268,7 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
         // The seeds really are on the page the extension sees.
         await expect(tab.locator('[data-attest-seeded]')).toHaveCount(SEEDS.length);
       }
+      await openVendorPages(extension);
       for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
     });
@@ -241,7 +282,7 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
     expect(Object.keys(collected.storage.indexedDb)).toContain('attest');
     expect(collected.storage.storage).toHaveProperty('local');
     expect(Object.keys(collected.storage.webStorage).length).toBeGreaterThanOrEqual(EXTENSION_PAGES.length);
-    expect(Object.keys(collected.pages.pageStorage)).toHaveLength(SEEDED_PAGES.length);
+    expect(Object.keys(collected.pages.pageStorage)).toHaveLength(SEEDED_PAGES.length + VENDOR_PAGES.length);
     expect(collected.consoleLines.some((line) => line.startsWith('service-worker'))).toBe(true);
 
     const leaks = allLeaks(collected, SEEDS);

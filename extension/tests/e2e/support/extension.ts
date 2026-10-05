@@ -25,6 +25,11 @@ export interface LaunchOptions {
   readonly extraArgs?: readonly string[] | ((attempt: number) => readonly string[]);
   /** Reuse a profile directory (for restart tests); a fresh temp dir by default. */
   readonly userDataDir?: string;
+  /**
+   * The IANA zone the browser's pages run in (sprint_2 2.7: the observer fixtures are written in America/New_York and
+   * the Calendar observer checks the page's zone against the browser's). The machine's zone by default.
+   */
+  readonly timezoneId?: string;
 }
 
 export interface LaunchedExtension {
@@ -71,6 +76,7 @@ async function startBrowser(
         channel: 'chromium',
         headless: true,
         timeout: LAUNCH_TIMEOUT_MS,
+        ...(options.timezoneId === undefined ? {} : { timezoneId: options.timezoneId }),
         args: [
           `--disable-extensions-except=${EXTENSION_PATH}`,
           `--load-extension=${EXTENSION_PATH}`,

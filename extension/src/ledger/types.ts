@@ -7,7 +7,8 @@
  */
 import { z } from 'zod';
 
-import { ComponentId, IsoTs, SCHEMA_LIMITS, Sha256 } from '../core/schema';
+import { ComponentId, IsoTs, ObservationSource, SCHEMA_LIMITS, Sha256 } from '../core/schema';
+import { coverageProblems, refineWith } from '../core/schema-checks';
 
 export * from '../core/schema';
 /** The ledger's name for a HealthReport: the latest health per adapter/observer (Hard Rule 6). */
@@ -17,18 +18,27 @@ export type { HealthReportInput as AdapterHealthInput } from '../core/schema';
 const L = SCHEMA_LIMITS;
 
 /**
- * What an observer could see, and when (Hard Rule 5: no coverage → UNVERIFIABLE). The ledger's storage
- * shape until Sprint 2.6 reworks coverage storage into core `ObserverCoverage` intervals.
+ * What one observer pass could see, and when (Hard Rule 5: no coverage → UNVERIFIABLE): the `coverage.ping` an
+ * observer posts, one per window it saw (sprint_2 2.7 interface 1). The service worker turns an accepted ping into a
+ * core `ObserverCoverage` interval (./coverage.ts `recordCoverage`) and keeps the latest ping per observer and
+ * account in the v1 `coverage` table. `source` names the one source the observer reads; `allCalendars` is a
+ * `gcal.event` fact only, checked as core `coverageProblems` checks it. A ping never carries `changesSince`: only
+ * the ledger sets it, from its stored Calendar snapshots (./calendar-snapshots.ts). `userActive` feeds Sprint 3.5
+ * activity, never coverage.
  */
-export const CoveragePing = z.strictObject({
-  observerId: ComponentId,
-  /** SHA-256 of the account identifier; never the identifier itself. */
-  accountHash: Sha256.optional(),
-  lastSyncAt: IsoTs,
-  windowStart: IsoTs,
-  windowEnd: IsoTs,
-  userActive: z.boolean(),
-});
+export const CoveragePing = z
+  .strictObject({
+    observerId: ComponentId,
+    source: ObservationSource,
+    /** SHA-256 of the account identifier; never the identifier itself. */
+    accountHash: Sha256.optional(),
+    lastSyncAt: IsoTs,
+    windowStart: IsoTs,
+    windowEnd: IsoTs,
+    allCalendars: z.boolean().optional(),
+    userActive: z.boolean(),
+  })
+  .superRefine(refineWith(coverageProblems));
 
 /**
  * Small key/value facts about the ledger itself (schema version, last purge, last batch instant, …). The key is

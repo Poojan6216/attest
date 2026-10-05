@@ -25,7 +25,10 @@
  *     observation a kept receipt still names stays until that receipt goes.
  *  5. A request goes when `ts < C` and no kept claim names it.
  *  6. Coverage: no kept interval spans an instant before C (./retention-coverage.ts, Hard Rule 5); latest-ping rows
- *     go once their last sync is before C.
+ *     go once their last sync is before C, and Calendar snapshots once they were read before C
+ *     (./calendar-snapshots.ts): a range not looked at since is compared with nothing next time, so its events are
+ *     first sightings again, never changes (Hard Rule 5). An interval's `changesSince` is an instant of looking,
+ *     not of the window, and is kept as it is.
  *  7. `receiptInputs` (Sprint 3.6) go with their receipts: that table does not exist yet; when it does, the purge
  *     deletes the rows keyed by the purged receipts' `inputsHash` in this same transaction.
  * Grants, adapter health and meta are not dated history and are kept.
@@ -50,6 +53,7 @@ import { MS_PER_DAY } from '../core/units';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { bucketOfMs } from './index';
+import { purgeCalendarRecords } from './calendar-snapshots';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
 import { ActionType, AgentId, Claim, IsoTs, Observation, Receipt, Request } from './types';
 import { RETENTION_DAYS } from '../config';
@@ -74,6 +78,8 @@ export interface PurgeReport {
   readonly coverageCut: number;
   /** Latest-ping rows deleted. */
   readonly coveragePings: number;
+  /** Calendar snapshot records deleted. */
+  readonly calendarSnapshots: number;
 }
 
 /** What goes, decided before anything is deleted. */
@@ -280,7 +286,15 @@ async function doomedRequests(db: LedgerDb, cutoffMs: number, doomed: Doomed): P
  */
 export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise<PurgeReport> {
   const cutoffMs = cutoffOf(options);
-  const tables = [db.claims, db.receipts, db.observations, db.requests, db.coverage, db.coverageIntervals];
+  const tables = [
+    db.claims,
+    db.receipts,
+    db.observations,
+    db.requests,
+    db.coverage,
+    db.coverageIntervals,
+    db.calendarSnapshots,
+  ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
     const observations = await doomedObservations(db, cutoffMs, doomed);
@@ -302,6 +316,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       coverageDeleted: coverage.deleted,
       coverageCut: coverage.cut,
       coveragePings: await purgeCoveragePings(db, cutoffMs),
+      calendarSnapshots: await purgeCalendarRecords(db, cutoffMs),
     };
   });
 }

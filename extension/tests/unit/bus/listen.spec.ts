@@ -38,7 +38,7 @@ describe('registration (MV3)', () => {
   it('registers exactly one onMessage listener synchronously, at call time', () => {
     const addListener = vi.spyOn(fakeBrowser.runtime.onMessage, 'addListener');
 
-    const unsubscribe = listen({ 'adapter.health': () => undefined });
+    const unsubscribe = listen({ 'adapter.claims': () => undefined });
 
     expect(addListener).toHaveBeenCalledOnce();
     const listener = addListener.mock.calls[0]?.[0];
@@ -201,19 +201,19 @@ describe('handler failures', () => {
   it('a throwing fire-and-forget handler is logged as bus.handler_failed and still acknowledged', async () => {
     connectAs(contentScript());
     listen({
-      'observer.observations': () => {
+      'adapter.claims': () => {
         throw new Error(`could not store ${SECRET}`);
       },
     });
 
-    await expect(send(VALID['observer.observations'])).resolves.toBeUndefined();
+    await expect(send(VALID['adapter.claims'])).resolves.toBeUndefined();
 
     expect(eventsAt(records, 'error')).toEqual([
       {
         level: 'error',
         event: 'bus.handler_failed',
         fields: {
-          type: 'observer.observations',
+          type: 'adapter.claims',
           error: expect.stringMatching(/^Error messageLength=\d+$/) as string,
         },
       },
@@ -291,13 +291,13 @@ describe('handler failures: ui.query answers are checked before they leave', () 
 
 describe('the listener never throws', () => {
   it('survives a sendResponse that throws (port already gone)', async () => {
-    const listener = listenerOf(() => listen({ 'adapter.health': () => undefined }));
+    const listener = listenerOf(() => listen({ 'adapter.claims': () => undefined }));
     const sendResponse = vi.fn(() => {
       throw new Error('Attempting to use a disconnected port object');
     });
 
     expect(() => {
-      listener(VALID['adapter.health'], contentScript(), sendResponse);
+      listener(VALID['adapter.claims'], contentScript(), sendResponse);
     }).not.toThrow();
     await vi.waitFor(() => {
       expect(records.map((record) => record.event)).toContain('bus.respond_failed');
@@ -306,31 +306,31 @@ describe('the listener never throws', () => {
   });
 
   it('returns true only for messages it will answer (classic protocol)', () => {
-    const listener = listenerOf(() => listen({ 'adapter.health': () => undefined }));
+    const listener = listenerOf(() => listen({ 'adapter.claims': () => undefined }));
     const sendResponse = vi.fn();
 
-    expect(listener(VALID['adapter.health'], contentScript(), sendResponse)).toBe(true);
+    expect(listener(VALID['adapter.claims'], contentScript(), sendResponse)).toBe(true);
     expect(listener(VALID['ledger.changed'], contentScript(), sendResponse)).toBe(false);
     expect(listener({ type: 'nope' }, contentScript(), sendResponse)).toBe(false);
-    expect(listener(VALID['adapter.health'], foreignExtension(), sendResponse)).toBe(false);
+    expect(listener(VALID['adapter.claims'], foreignExtension(), sendResponse)).toBe(false);
   });
 
   it('survives a sender getter that throws', () => {
-    const listener = listenerOf(() => listen({ 'adapter.health': () => undefined }));
+    const listener = listenerOf(() => listen({ 'adapter.claims': () => undefined }));
     const hostile = {
       get id(): string {
         throw new Error('hostile');
       },
     };
 
-    expect(listener(VALID['adapter.health'], hostile, vi.fn())).toBe(false);
+    expect(listener(VALID['adapter.claims'], hostile, vi.fn())).toBe(false);
     expect(records).toEqual([
       { level: 'error', event: 'bus.listener_failed', fields: { error: 'Error messageLength=7' } },
     ]);
   });
 
   it('survives a message whose type getter throws', () => {
-    const listener = listenerOf(() => listen({ 'adapter.health': () => undefined }));
+    const listener = listenerOf(() => listen({ 'adapter.claims': () => undefined }));
     const hostile = {
       get type(): string {
         throw new Error('hostile');
@@ -339,5 +339,22 @@ describe('the listener never throws', () => {
 
     expect(listener(hostile, contentScript(), vi.fn())).toBe(false);
     expect(records.map((record) => record.event)).toEqual(['bus.listener_failed']);
+  });
+});
+
+describe('handler failures of acknowledged messages (sprint_2 2.7)', () => {
+  it('a throwing observer handler is logged as bus.handler_failed and answered { ok: false, code: failed }', async () => {
+    connectAs(contentScript());
+    listen({
+      'observer.observations': () => {
+        throw new Error(`could not store ${SECRET}`);
+      },
+    });
+
+    await expect(send(VALID['observer.observations'])).resolves.toEqual({ ok: false, code: 'failed' });
+
+    expect(eventsAt(records, 'error').map((record) => record.event)).toEqual(['bus.handler_failed']);
+    expect(records.some((record) => record.event === 'bus.send_failed')).toBe(false);
+    expect(JSON.stringify(records)).not.toContain(SECRET);
   });
 });

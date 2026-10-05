@@ -8,9 +8,19 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { BUS_ERROR_CODES, BusError, transportErrorCode } from '../../../src/bus/errors';
 import { listen } from '../../../src/bus/listen';
 import { type BusMessage, BUS_MESSAGE_TYPES, type BusMessageType } from '../../../src/bus/messages';
-import { query, send } from '../../../src/bus/send';
+import { postAcked, query, send, sendChecked } from '../../../src/bus/send';
 import type { IsoTs, Sha256 } from '../../../src/core/schema';
-import { CLAIM, captureLogs, connectAs, extensionPage, OBSERVATION, SECRET, TS, VALID } from './harness';
+import {
+  CLAIM,
+  captureLogs,
+  connectAs,
+  extensionPage,
+  MALFORMED,
+  OBSERVATION,
+  SECRET,
+  TS,
+  VALID,
+} from './harness';
 
 const records = captureLogs();
 
@@ -36,6 +46,10 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     'coverage.ping': {
       type: 'coverage.ping',
       ping: { ...VALID['coverage.ping'].ping, accountHash: SECRET as Sha256 },
+    },
+    'calendar.snapshot': {
+      ...VALID['calendar.snapshot'],
+      snapshot: { ...VALID['calendar.snapshot'].snapshot, range: SECRET },
     },
     'ui.query': { type: 'ui.query', query: { kind: 'health.list' }, ...{ extra: SECRET } },
     'ui.result': { type: 'ui.result', kind: 'health.list', ok: true, data: undefined },
@@ -142,11 +156,47 @@ describe('send(): transport failures that still resolve', () => {
 
   it('a handler that rejects still answers, so the sender sees no transport failure', async () => {
     connectAs(extensionPage());
-    listen({ 'adapter.health': () => Promise.reject(new Error('disk full')) });
+    listen({ 'adapter.claims': () => Promise.reject(new Error('disk full')) });
 
-    await expect(send(VALID['adapter.health'])).resolves.toBeUndefined();
+    await expect(send(VALID['adapter.claims'])).resolves.toBeUndefined();
 
     expect(records.map((record) => record.event)).toEqual(['bus.handler_failed']);
+  });
+
+  it('an observer handler that rejects is answered { ok: false, code: failed }', async () => {
+    connectAs(extensionPage());
+    listen({ 'adapter.health': () => Promise.reject(new Error('disk full')) });
+
+    await expect(send(VALID['adapter.health'])).resolves.toEqual({ ok: false, code: 'failed' });
+
+    expect(records.map((record) => record.event)).toEqual(['bus.handler_failed']);
+  });
+});
+
+describe('sendChecked() and postAcked() (sprint_2 2.7 interface 6)', () => {
+  it('reject a transport failure instead of resolving undefined', async () => {
+    // Nobody listens: the fake browser's failure maps to a transport code (src/bus/errors.ts transportErrorCode).
+    await expect(sendChecked(VALID['coverage.ping'])).rejects.toBeInstanceOf(BusError);
+    await expect(postAcked(VALID['coverage.ping'])).rejects.toBeInstanceOf(BusError);
+    expect(records.filter((record) => record.event === 'bus.send_failed')).toHaveLength(2);
+  });
+
+  it('reject an answer that is not a BusAck', async () => {
+    fakeBrowser.runtime.onMessage.addListener((_message, _sender, sendResponse) => {
+      sendResponse({ ok: true, rows: [SECRET] });
+      return true;
+    });
+
+    await expect(sendChecked(VALID['observer.observations'])).rejects.toEqual(new BusError('invalid_reply'));
+    expect(JSON.stringify(records)).not.toContain(SECRET);
+  });
+
+  it('never send a message that is not acknowledged, or not valid', async () => {
+    await expect(sendChecked(VALID['ledger.changed'])).rejects.toEqual(new BusError('invalid_outgoing'));
+    await expect(sendChecked(MALFORMED['coverage.ping'] as BusMessage)).rejects.toEqual(
+      new BusError('invalid_outgoing'),
+    );
+    expect(records).toEqual([]);
   });
 });
 

@@ -4,9 +4,16 @@
  * One Zod discriminated union on `type`; every member is a strict object, so a sender cannot smuggle
  * a field the schema does not name (Hard Rule 2). Adapter and observer ids and versions are `ComponentId`
  * tokens, never text (OBS-1). Payload items are the canonical core schemas (src/core/schema.ts), so the bus,
- * the ledger and grading agree on what a Claim or an Observation is; the coverage ping is the ledger's storage
- * shape until Sprint 2.6 reworks coverage. `send()` validates before sending and `listen()` validates on
- * receive: parse at every boundary.
+ * the ledger and grading agree on what a Claim or an Observation is; the coverage ping is the ledger's
+ * (src/ledger/types.ts) and a Calendar snapshot the Calendar observer's (src/observers/gcal/snapshot.ts), parsed with
+ * that one schema on both ends. `send()` validates before sending and `listen()` validates on receive: parse at
+ * every boundary.
+ *
+ * Observer messages are acknowledged (sprint_2 2.7 interface 6): the service worker answers `adapter.health`,
+ * `observer.observations`, `coverage.ping` and `calendar.snapshot` with a `BusAck`, `{ ok: true }` once it has
+ * stored what the message carries, or `{ ok: false, code }` (a closed `AckCode`) when it refused any of it. An
+ * observer sends its next message only after that answer (src/observers/base.ts), so a pass whose rows were refused
+ * never posts the coverage that would claim its window (Hard Rule 5).
  *
  * The schema cannot know which fields each observer source may store, or whether a contentHash is the hash of
  * its row: that needs the policy. The ledger writer checks both (`upsertObservation` runs
@@ -18,10 +25,23 @@
  */
 import { z } from 'zod';
 
-import { Claim, ComponentId, HealthReport, IsoTs, Observation, Request, SCHEMA_LIMITS } from '../core/schema';
+import {
+  Claim,
+  ComponentId,
+  HealthReport,
+  IsoTs,
+  Observation,
+  Request,
+  SCHEMA_LIMITS,
+  Sha256,
+} from '../core/schema';
 import { CoveragePing } from '../ledger/types';
+import { CalendarSnapshot } from '../observers/gcal/snapshot';
 
-/** The eight ledger tables (build_spec §6, sprint 0.6). `ledger.changed` names which ones moved. */
+/**
+ * The ledger tables (build_spec §6, sprint 0.6; the coverage intervals of 2.6 and the Calendar snapshots of 2.7).
+ * `ledger.changed` names which ones moved. src/ledger/index-fields.ts LEDGER_TABLE_NAMES is the same list.
+ */
 export const LedgerTable = z.enum([
   'requests',
   'claims',
@@ -31,6 +51,8 @@ export const LedgerTable = z.enum([
   'adapterHealth',
   'coverage',
   'meta',
+  'coverageIntervals',
+  'calendarSnapshots',
 ]);
 
 export const BusMessageType = z.enum([
@@ -38,13 +60,14 @@ export const BusMessageType = z.enum([
   'adapter.claims',
   'observer.observations',
   'coverage.ping',
+  'calendar.snapshot',
   'ui.query',
   'ui.result',
   'ledger.changed',
 ]);
 
 /**
- * The seven type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The eight type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -72,11 +95,63 @@ export const ObserverObservationsMessage = z.strictObject({
   observations: z.array(Observation).max(SCHEMA_LIMITS.BATCH),
 });
 
-/** What an observer could see, and when (Hard Rule 5). */
+/** What an observer could see, and when (Hard Rule 5): one message per window a clean pass saw. */
 export const CoveragePingMessage = z.strictObject({
   type: z.literal('coverage.ping'),
   ping: CoveragePing,
 });
+
+/**
+ * The Calendar observer's snapshot of the range one clean pass read, posted after that pass's observations and
+ * coverage, only when the page's account is known (sprint_2 2.7 interface 5). The service worker keeps it as the
+ * range's previous snapshot and derives the Calendar rows from it (src/background/calendar-pass.ts).
+ * `accountHash` (the hash of the page's account as that same pass read it, never the address) is added by the
+ * Calendar content script (entrypoints/content/gcal.content.ts): the store is keyed by account, and a pass may have
+ * no coverage ping to name it (a month whose every day hides events). Without it the snapshot is skipped.
+ */
+export const CalendarSnapshotMessage = z.strictObject({
+  type: z.literal('calendar.snapshot'),
+  observerId: ComponentId,
+  snapshot: CalendarSnapshot,
+  accountHash: Sha256.optional(),
+});
+
+/**
+ * Why the service worker refused (part of) an observer message. Codes, never text (Hard Rule 10):
+ *  - `invalid_input`: a row the ledger refused (fields outside its source's allowlist, a self-chosen contentHash,
+ *    a `sightedAt`, an unknown observer, a source the observer does not read), or a ping or snapshot that cannot be
+ *    what it says (a Gmail window after its sync, a receipt window wider than one instant);
+ *  - `id_conflict`: a different fact under a stored hash;
+ *  - `late_sighting`: a sighting earlier than the stored one, or a snapshot older than the stored one;
+ *  - `refused`: coverage of a pass whose rows were refused (no window is reported as seen past a refused row);
+ *  - `clock_behind`: a row, ping or snapshot read after the service worker's clock now reads (the clock went back
+ *    since): nothing of it is stored, and the observer is not DEGRADED;
+ *  - `failed`: the service worker could not store it (the ledger did not open, a bug); logged at error.
+ */
+export const AckCode = z.enum([
+  'invalid_input',
+  'id_conflict',
+  'late_sighting',
+  'refused',
+  'clock_behind',
+  'failed',
+]);
+
+/** The answer to an acknowledged message (sprint_2 2.7 interface 6). */
+export const BusAck = z.discriminatedUnion('ok', [
+  z.strictObject({ ok: z.literal(true) }),
+  z.strictObject({ ok: z.literal(false), code: AckCode }),
+]);
+
+/** The message types the service worker answers with a `BusAck`. */
+export type AckedType = 'adapter.health' | 'observer.observations' | 'coverage.ping' | 'calendar.snapshot';
+
+export const ACKED_TYPES: ReadonlySet<BusMessageType> = new Set<AckedType>([
+  'adapter.health',
+  'observer.observations',
+  'coverage.ping',
+  'calendar.snapshot',
+]);
 
 /** Questions a UI page asks the service worker. Sprint 4 adds more kinds. */
 export const UiQuery = z.discriminatedUnion('kind', [
@@ -130,6 +205,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   AdapterClaimsMessage,
   ObserverObservationsMessage,
   CoveragePingMessage,
+  CalendarSnapshotMessage,
   UiQueryMessage,
   UiResultMessage,
   LedgerChangedMessage,
@@ -141,6 +217,9 @@ export type AdapterHealthMessage = z.infer<typeof AdapterHealthMessage>;
 export type AdapterClaimsMessage = z.infer<typeof AdapterClaimsMessage>;
 export type ObserverObservationsMessage = z.infer<typeof ObserverObservationsMessage>;
 export type CoveragePingMessage = z.infer<typeof CoveragePingMessage>;
+export type CalendarSnapshotMessage = z.infer<typeof CalendarSnapshotMessage>;
+export type AckCode = z.infer<typeof AckCode>;
+export type BusAck = z.infer<typeof BusAck>;
 export type UiQuery = z.infer<typeof UiQuery>;
 export type UiQueryKind = z.infer<typeof UiQueryKind>;
 export type UiQueryMessage = z.infer<typeof UiQueryMessage>;
@@ -154,6 +233,18 @@ export type BusMessageOf<T extends BusMessageType> = Extract<BusMessage, { type:
 
 export function isBusMessageType(value: unknown): value is BusMessageType {
   return BusMessageType.safeParse(value).success;
+}
+
+/** Whether `type` is answered with a `BusAck`. */
+export function isAckedType(type: BusMessageType): boolean {
+  return ACKED_TYPES.has(type);
+}
+
+export const ACK_OK: BusAck = Object.freeze({ ok: true });
+
+/** The refusal `{ ok: false, code }`. */
+export function ackRefused(code: AckCode): BusAck {
+  return { ok: false, code };
 }
 
 /** The failed answer to a query of `kind`. */

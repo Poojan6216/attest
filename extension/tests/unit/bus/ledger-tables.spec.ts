@@ -6,13 +6,18 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { LedgerTable } from '../../../src/bus/messages';
-import { STORES_V1 } from '../../../src/ledger/db';
+import { STORES_V1, STORES_V2, STORES_V3 } from '../../../src/ledger/db';
 import { LEDGER_TABLE_NAMES, type LedgerTableName } from '../../../src/ledger/index-fields';
 
 describe('LedgerTable parity with the ledger', () => {
-  it('names exactly the tables the Dexie v1 schema creates', () => {
+  it('names exactly the tables the Dexie schema creates (v1, plus the stores v2 and v3 add)', () => {
     const busTables = [...LedgerTable.options].sort();
-    expect(busTables).toEqual(Object.keys(STORES_V1).sort());
+    const created = new Set([
+      ...Object.keys(STORES_V1),
+      ...Object.keys(STORES_V2),
+      ...Object.keys(STORES_V3),
+    ]);
+    expect(busTables).toEqual([...created].sort());
     expect(busTables).toEqual([...LEDGER_TABLE_NAMES].sort());
   });
 

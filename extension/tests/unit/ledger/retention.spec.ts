@@ -230,6 +230,7 @@ describe('purgeExpired removes exactly the old rows', () => {
       coverageDeleted: 1,
       coverageCut: 2,
       coveragePings: 1,
+      calendarSnapshots: 0,
     });
   });
 
