@@ -69,7 +69,7 @@ interface Link {
 export function loadGoldenFiles(): Map<string, GoldenFile> {
   const files = new Map<string, GoldenFile>();
   for (const name of readdirSync(GOLDEN_DIR)
-    .filter((file) => /^\d{2}-.*\.json$/.test(file))
+    .filter((file) => /^\d{2,3}-.*\.json$/.test(file))
     .sort()) {
     files.set(name, GoldenFile.parse(JSON.parse(readFileSync(path.join(GOLDEN_DIR, name), 'utf8'))));
   }

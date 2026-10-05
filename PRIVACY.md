@@ -8,7 +8,7 @@ Nothing leaves your browser. Attest reads only pages you have open, keeps what i
 
 ## Where things stand today
 
-Attest 0.0.1 is a pre-release. It reads no pages and stores no facts. The only thing it stores is a random install id, described below.
+Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. It does not read your AI agents' pages yet, so it stores no requests, claims or receipts and grades nothing.
 
 The rest of this policy describes how later versions will work, so you can judge the design before Attest reads anything. Any version that changes what is read, stored or sent updates this policy first.
 
@@ -44,8 +44,9 @@ It also keeps:
 - the limits you set for each agent, and the names of the apps and accounts each agent's settings page shows as connected
 - when your Gmail and Calendar tabs were open and whether you were active in them, with a fingerprint of the account instead of its address, so a receipt can say UNVERIFIABLE when Attest could not see, and can flag sends made while you were away
 - whether each page reader is working
+- for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, and its guests' email addresses, so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
 
-It never stores email bodies, attachments, chat transcripts or full pages.
+It never stores email bodies, attachments, chat transcripts or full pages. The full list, table by table and field by field, is in docs/privacy-architecture.md.
 
 ## Where it is stored
 
@@ -85,7 +86,7 @@ Attest 0.0.1 asks Chrome for:
 - alarms, to schedule checks
 - side panel, to show receipts beside the page you are on
 
-It asks for access to no websites. Later versions ask for access to exactly the agent, Gmail and Calendar sites listed above, and nothing broader. The exact list is added here before release.
+It asks for access to two websites, to read them in tabs you open: mail.google.com and calendar.google.com. Later versions add exactly the agent sites listed above, and nothing broader.
 
 ## Logs
 

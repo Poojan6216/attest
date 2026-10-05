@@ -183,7 +183,9 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
         f.file,
       ).toContain('gmail.sent');
       const sentOk = f.health.some((h) => h.observer === 'gmail.sent' && h.status === 'OK');
-      expect(sentOk, f.file).toBe(f.page.view === 'gmail.list.sent' && f.coverage.length > 0);
+      // A Sent list past the head is OK with no coverage (sprint_2 2.7); any other view is never OK.
+      if (f.page.view !== 'gmail.list.sent') expect(sentOk, f.file).toBe(false);
+      if (f.coverage.some((c) => c.source === 'gmail.sent')) expect(sentOk, f.file).toBe(true);
       if (f.page.view === 'gmail.message')
         expect(
           f.health.map((h) => h.observer),

@@ -17,13 +17,17 @@
  * 5. no Markdown file in the repository holds an absolute local path such as `/Users/<name>` or a `/private/tmp`
  *    scratch directory (check-docs-paths.ts);
  * 6. no Decisions.md entry from the Sprint 1 close on describes how the work was organised (`fixer`, `brief`,
- *    `ownership`, `this run`, …) instead of the decision (check-docs-decisions.ts).
+ *    `ownership`, `this run`, …) instead of the decision (check-docs-decisions.ts);
+ * 7. every field policy/default.json allowlists for an observation source (`allowlistedFields`) is described in
+ *    docs/privacy-architecture.md, in that source's allowlist section, and nothing else is described as allowlisted
+ *    there (check-docs-allowlist.ts).
  * It prints one line per problem (`file:line: message`) and exits 1 when there is any, 0 otherwise.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { allowlistProblems, PRIVACY_DOC } from './check-docs-allowlist';
 import { splitBlocks } from './check-docs-blocks';
 import { AT_REPO_ROOT, pnpmInvocations, shellAfter, type ShellState } from './check-docs-commands';
 import { scanMarkdown, segments, type MarkdownScan } from './check-docs-markdown';
@@ -52,6 +56,8 @@ export interface DocCheckResult {
   readonly markdownFiles: number;
   /** Decisions.md lines checked for wording about how the work was organised (0 without the file). */
   readonly decisionLines: number;
+  /** Allowlisted fields of policy/default.json checked against docs/privacy-architecture.md (0 without any). */
+  readonly allowlistFields: number;
 }
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -275,6 +281,8 @@ export function checkDocs(root: string): DocCheckResult {
   problems.push(...scenario.problems);
   const markdownFiles = checkLocalPaths(root, report);
   const decisionLines = checkDecisions(readText(root, DECISIONS_FILE), report);
+  const allowlist = allowlistProblems(readText(root, POLICY_FILE), readText(root, PRIVACY_DOC));
+  problems.push(...allowlist.problems);
   problems.sort((a, b) => byCodeUnit(a.file, b.file) || a.line - b.line || byCodeUnit(a.message, b.message));
   return {
     problems,
@@ -285,6 +293,7 @@ export function checkDocs(root: string): DocCheckResult {
     scenarioKeys: scenario.checked,
     markdownFiles,
     decisionLines,
+    allowlistFields: allowlist.checked,
   };
 }
 
@@ -314,6 +323,7 @@ export function runCli(argv: readonly string[], output: CliOutput, defaultRoot: 
     `${String(result.scenarioKeys)} scenario keys`,
     `${String(result.markdownFiles)} Markdown files read for local paths`,
     `${String(result.decisionLines)} Decisions.md lines checked for wording`,
+    `${String(result.allowlistFields)} allowlisted fields checked`,
   ].join(', ');
   if (result.problems.length > 0) {
     output.error(`check-docs: ${String(result.problems.length)} problem(s) (${counts})`);
