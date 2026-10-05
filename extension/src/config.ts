@@ -102,8 +102,31 @@ export const OBSERVER_MAX_WAIT_MS = 2_000;
 export const USER_ACTIVE_WINDOW_MS = 60_000;
 export const USER_ACTIVITY_THROTTLE_MS = 1_000;
 
+/**
+ * When a page can vouch that it shows the present (src/observers/lifecycle.ts `trackPageSync`; Decisions [2.close]
+ * S4, QA-V2; Hard Rule 5). No pass posts coverage while the page reports itself offline. After it comes back (online
+ * again, resumed from frozen, shown again after PAGE_RESYNC_HIDDEN_MS hidden, or its own tick, every PAGE_TICK_MS,
+ * finds a gap of PAGE_SLEEP_GAP_MS: the machine slept), each observer's first pass, and every pass within
+ * PAGE_RESYNC_MS, posts no coverage either. PAGE_RESYNC_HIDDEN_MS is when Chrome starts waking a hidden page's timers
+ * only once a minute (the page's own sync runs on them); PAGE_SLEEP_GAP_MS is three such minutes, so a throttled tab
+ * never looks asleep.
+ */
+export const PAGE_RESYNC_MS = 30_000;
+export const PAGE_RESYNC_HIDDEN_MS = 5 * 60_000;
+export const PAGE_SLEEP_GAP_MS = 3 * 60_000;
+export const PAGE_TICK_MS = 30_000;
+
 /** How long dated history is kept: the retention purge (src/ledger/retention.ts, Decisions [2.6]; Hard Rule 2). */
 export const RETENTION_DAYS = 90;
+
+/**
+ * How far one purge may move past the purge before it when the ledger stored nothing newer (src/ledger/
+ * retention-clock.ts, SEC-5): the purge trusts the wall clock only up to the latest instant the ledger stored, or the
+ * last purge's instant plus this, so a clock that jumped far ahead deletes no current history, while a ledger left
+ * idle still catches up (one day faster than real time per daily run). Also how far ahead of that the clock must be
+ * before the purge logs `ledger.purge_clock_ahead`.
+ */
+export const PURGE_CATCH_UP_DAYS = 2;
 
 /**
  * The observers the service worker accepts messages from, each with the one ObservationSource it reads (sprint_2
@@ -117,6 +140,24 @@ export const OBSERVER_SOURCES = Object.freeze({
 } as const);
 
 export type ObserverId = keyof typeof OBSERVER_SOURCES;
+
+/**
+ * The site whose content script speaks for each observer (SEC-V1, SEC-4): the service worker accepts an observer's
+ * health, rows, pings and snapshots only from a sender whose page is on one of `OBSERVER_HOSTS[site]`, so a Gmail
+ * tab can never write Calendar facts or health, nor a Calendar tab Gmail's (src/background/sender-site.ts).
+ */
+export const OBSERVER_SITES: Readonly<Record<ObserverId, keyof typeof OBSERVER_HOSTS>> = Object.freeze({
+  'gmail.sent': 'gmail',
+  'gmail.receipt': 'gmail',
+  'gcal.event': 'gcal',
+});
+
+/**
+ * An observer's own health report that says what the stored one says (status, reasons, version) is written only once
+ * the stored one is this old (src/ledger/health.ts, TECH-2): a pass runs every few seconds on a busy page, and the
+ * stored `checkedAt` stays at most this old while the observer keeps reporting. A change is written at once.
+ */
+export const OBSERVER_HEALTH_REFRESH_MS = 60_000;
 
 /**
  * How long the service worker holds a Calendar pass's coverage pings while it waits for the pass's
@@ -137,7 +178,9 @@ export const PURGE_STARTUP_DELAY_MINUTES = 1;
  * `staleChangeMs(policy)` before (2 minutes in the shipped policy; docs/grading.md §3, §7): a change compared with an
  * older snapshot could have been made at any time since, so it is stored as a first sighting and never UNASKED. A quiet
  * tab is otherwise read only when its DOM changes, so its snapshot ages and almost no change could be attributed. A
- * read once a minute while the tab is visible keeps the snapshot inside that bound. Hard Rule 11: only a tab the user
- * has open and visible is read; a hidden tab is read again when it becomes visible.
+ * read once a minute while the tab is visible keeps the snapshot inside that bound (since v1.12 no Calendar change is
+ * UNASKED until the live smoke, sprint_2 2.8; the bound is kept for when one can be). Hard Rule 11: the beat reads only
+ * a tab the user has open and visible. Any open tab, hidden or not, is still read when its page changes, and a hidden
+ * tab is read again when it becomes visible, never on a beat.
  */
 export const OBSERVER_HEARTBEAT_MS = 60_000;

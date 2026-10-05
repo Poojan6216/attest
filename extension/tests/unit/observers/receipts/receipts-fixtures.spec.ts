@@ -6,7 +6,8 @@
  *    hint, occurredAt, type, row key), with the generic parser's declared confidence;
  *  - the generic parser has at least 3 positives and 3 negatives, and every negative stays unparsed;
  *  - every page reports the labelled gmail.receipt health; a list view is neutral (OK, nothing read);
- *  - coverage is exactly the labelled one: the single instant of each parsed receipt, and nothing on a page with
+ *  - coverage is exactly the labelled one: the single instant of each receipt a platform parser read, nothing for a
+ *    generic receipt (SEC-6: anyone can send one, so it is evidence, never coverage), and nothing on a page with
  *    no receipt parsed (sprint_2 2.7); nothing a pass reports holds a seeded secret (Hard Rules 2, 5).
  * The same holds with the page at a blank address (DOM landmarks only) as at its live `#inbox/<id>` address.
  */
@@ -19,7 +20,10 @@ import {
   expectedReceipts,
   gmailFixtures,
   planCoverage,
+  receiptFacts,
   receiptHealthLabel,
+  receiptNegatives,
+  receiptPositives,
   type ReceiptRun,
   runReceipts,
 } from './receipt-fixtures';
@@ -32,22 +36,22 @@ const runOf = (f: LabelledFixture): ReceiptRun => {
   return run;
 };
 
-const receiptFacts = (f: LabelledFixture) => f.observations.filter((o) => o.source === 'gmail.receipt');
-const positives = fixtures.filter((f) => receiptFacts(f).length > 0);
-const negatives = fixtures.filter(
-  (f) => f.page.view === 'gmail.message' && f.page.folder === 'inbox' && receiptFacts(f).length === 0,
-);
+const positives = receiptPositives(fixtures);
+const negatives = receiptNegatives(fixtures);
 const lists = fixtures.filter((f) => f.page.view.startsWith('gmail.list.'));
+/** The labelled instants a pass covers: each receipt a platform parser (not the generic one) reads. */
+const platformInstants = (f: LabelledFixture): string[][] =>
+  receiptFacts(f)
+    .filter((o) => o.parser !== 'generic')
+    .map((o) => [o.occurredAt, o.occurredAt]);
 
 describe('each parser passes its labelled fixture', () => {
   it.each(positives.map((f) => [f.file, f] as const))('%s', (_file, f) => {
     const run = runOf(f);
-    expect(run.plan.status).toBe('OK');
+    expect(run.plan.status).toBe(platformInstants(f).length > 0 ? 'OK' : 'OK_NO_COVERAGE');
     expect(run.plan.observations).toEqual(expectedReceipts(f));
     expect(planCoverage(run.plan)).toEqual(expectedReceiptCoverage(f));
-    expect(planCoverage(run.plan).map((c) => [c.windowStart, c.windowEnd])).toEqual(
-      run.plan.observations.map((o) => [o.occurredAt, o.occurredAt]),
-    );
+    expect(planCoverage(run.plan).map((c) => [c.windowStart, c.windowEnd])).toEqual(platformInstants(f));
     const [fact] = receiptFacts(f);
     const claimed = run.verdicts.filter((v) => v.verdict.kind === 'receipt');
     expect(claimed.map((v) => [v.key, v.parser])).toEqual([[fact?.rowKey, fact?.parser]]);
@@ -106,11 +110,21 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
     expect(run.verdicts).toEqual([]);
   });
 
-  it('coverage only where a receipt was parsed: exactly the labelled windows, OK_NO_COVERAGE everywhere else', () => {
+  it('coverage only where a platform receipt was parsed: the labelled windows, OK_NO_COVERAGE elsewhere', () => {
     for (const f of fixtures) {
       const plan = runOf(f).plan;
       expect(planCoverage(plan), f.file).toEqual(expectedReceiptCoverage(f));
-      if (receiptFacts(f).length === 0) expect(plan.status, f.file).toBe('OK_NO_COVERAGE');
+      if (platformInstants(f).length === 0) expect(plan.status, f.file).toBe('OK_NO_COVERAGE');
+    }
+  });
+
+  it('the generic positives are evidence and cover nothing: their labels hold no coverage (SEC-6)', () => {
+    const generic = positives.filter((f) => receiptFacts(f).every((o) => o.parser === 'generic'));
+    expect(generic.length).toBeGreaterThanOrEqual(3);
+    for (const f of generic) {
+      expect(runOf(f).plan.observations.length, f.file).toBeGreaterThan(0);
+      expect(planCoverage(runOf(f).plan), f.file).toEqual([]);
+      expect(f.coverage, f.file).toEqual([]);
     }
   });
 

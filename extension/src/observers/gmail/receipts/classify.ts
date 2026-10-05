@@ -10,13 +10,16 @@
  *    parser only. Its other mail (shipping notices, promotions) is never handed to the generic parser.
  *  - Any other sender: the generic parser (./generic.ts).
  * The display name is never used to choose a parser: it is attacker-controlled.
+ *
+ * `verdictsOf` classifies each message of one page read once: health, the rows, the windows and the bench all ask
+ * for the same verdicts in a pass (TECH-2).
  */
 import { asciiLower } from '../../../core/normalize';
 import { amazon } from './amazon';
 import { generic } from './generic';
 import { instacart } from './instacart';
 import { marketplace } from './marketplace';
-import type { MessageView } from './message';
+import type { MessageView, PageView } from './message';
 import { opentable } from './opentable';
 import { NOT_A_RECEIPT, type ReceiptParser, type Verdict } from './parser';
 import { type ParserId, platformForDomain } from './selectors';
@@ -48,4 +51,16 @@ export function parserFor(message: MessageView, account: string | null): Receipt
 /** What the parser that may read `message` says about it. */
 export function classify(message: MessageView, account: string | null): Verdict {
   return parserFor(message, account)?.parse(message) ?? NOT_A_RECEIPT;
+}
+
+/** Each page read's verdicts, one per message, in order. */
+const VERDICTS = new WeakMap<PageView, readonly Verdict[]>();
+
+/** The verdict on each message of `page`, in order, classified once per page read. */
+export function verdictsOf(page: PageView): readonly Verdict[] {
+  const known = VERDICTS.get(page);
+  if (known !== undefined) return known;
+  const verdicts = page.messages.map((message) => classify(message, page.account));
+  VERDICTS.set(page, verdicts);
+  return verdicts;
 }

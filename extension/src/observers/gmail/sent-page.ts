@@ -8,20 +8,27 @@
  *  2. the folder the nav marks as selected, when it marks one, is Sent, and the document title does not name
  *     another folder (otherwise Gmail is between two views and may still show the previous one);
  *  3. exactly one `role="main"` is shown, and exactly one `role="grid"` is shown inside it: Gmail keeps earlier
- *     views in the DOM, hidden, and a hidden Inbox list must never be read as the Sent list (./shown.ts);
+ *     views in the DOM, hidden, and a hidden Inbox list must never be read as the Sent list (../shown.ts, with one
+ *     shown-check per read);
  *  4. the grid has rows, and every row has the parts the extractor reads: one subject anchor carrying the row ids,
  *     at least one recipient (an `email` or `title` that is an address) in a cell before it, and a time element in
  *     a cell after it. A row missing one is a selector that broke, never a row to skip: skipping it would report
  *     its send as absent (Hard Rule 5). The reason names the landmark (Hard Rule 6).
  *
+ * The page also says where the list stands: whether it is the head (`head`: page 1 with no enabled `Newer`) and
+ * whether it may go on past its oldest row (`mayContinue`: unless it shows an `Older` control and every one is
+ * disabled), which ./extract.ts needs for the window (docs/grading.md §3).
+ *
  * Anchors are role, aria-*, data-* and structure from ./selectors.json, never class names. Pure over the DOM: reads
- * attributes, text and computed style only.
+ * attributes, text and computed style only. `sentPageOf` is the read kept for one pass (../pass-memo.ts): health,
+ * the rows and the window share it, so a pass reads the page once (TECH-2).
  */
 import { email } from '../../core/normalize';
+import { perPass } from '../pass-memo';
+import { type ShownCheck, shownChecker, shownOnly } from '../shown';
 import { oneLine } from '../text';
 import { linkFolder, sentRoute } from './route';
 import { SENT_SELECTORS } from './selectors';
-import { shownOnly } from './shown';
 
 const { selectors: S, attributes: A } = SENT_SELECTORS;
 
@@ -59,9 +66,17 @@ export interface SentRowParts {
   readonly time: Element;
 }
 
-export type SentPage =
-  | { readonly ok: true; readonly rows: readonly SentRowParts[]; readonly head: boolean }
-  | { readonly ok: false; readonly reason: SentPageReason };
+/** The Sent list a page shows, read whole. */
+export interface SentList {
+  readonly ok: true;
+  readonly rows: readonly SentRowParts[];
+  /** The head of the list: page 1 by route, no shown `Newer` control enabled (`isHead`). */
+  readonly head: boolean;
+  /** The list may go on past this page's oldest row (`mayContinue`). */
+  readonly mayContinue: boolean;
+}
+
+export type SentPage = SentList | { readonly ok: false; readonly reason: SentPageReason };
 
 type Step<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: SentPageReason };
@@ -108,12 +123,12 @@ function activeSentPage(doc: Document): Step<number> {
 }
 
 /** Step 3: the one shown grid in the one shown main region. */
-function shownGrid(doc: Document): Step<Element> {
-  const mains = shownOnly(doc.querySelectorAll(S.main));
+function shownGrid(doc: Document, shown: ShownCheck): Step<Element> {
+  const mains = shownOnly(doc.querySelectorAll(S.main), shown);
   const [main, ...otherMains] = mains;
   if (main === undefined) return fail('selector.missing.main');
   if (otherMains.length > 0) return fail('selector.ambiguous.main');
-  const [grid, ...otherGrids] = shownOnly(main.querySelectorAll(S.grid));
+  const [grid, ...otherGrids] = shownOnly(main.querySelectorAll(S.grid), shown);
   if (grid === undefined) return fail('selector.missing.grid');
   if (otherGrids.length > 0) return fail('selector.ambiguous.grid');
   return { ok: true, value: grid };
@@ -182,17 +197,29 @@ function rowParts(row: Element): Step<SentRowParts> {
  * Whether the page is the head of the list (docs/grading.md §3: then the window ends at `lastSyncAt`): the first
  * page by route, and no shown `Newer` control that is enabled. Not seeing the control leaves the route to decide.
  */
-function isHead(doc: Document, page: number): boolean {
+function isHead(doc: Document, page: number, shown: ShownCheck): boolean {
   if (page !== 1) return false;
-  const newer = shownOnly(doc.querySelectorAll(S.newer));
+  const newer = shownOnly(doc.querySelectorAll(S.newer), shown);
   return newer.every((control) => control.getAttribute(A.disabled) === 'true');
+}
+
+/**
+ * Whether the list may go on past this page's oldest row (QA-1; docs/grading.md §3): true unless the page shows an
+ * `Older` control and every shown one is disabled. Not seeing the control proves nothing (a markup change, another
+ * display language), so the list may go on: a send in the oldest row's minute, older than that row, is then on the
+ * next page, where this pass never looked (Hard Rule 5).
+ */
+function mayContinue(doc: Document, shown: ShownCheck): boolean {
+  const older = shownOnly(doc.querySelectorAll(S.older), shown);
+  return older.length === 0 || older.some((control) => control.getAttribute(A.disabled) !== 'true');
 }
 
 /** Reads the Sent list the page shows, or says why it cannot (steps 1 to 4 above). */
 export function readSentPage(doc: Document): SentPage {
   const page = activeSentPage(doc);
   if (!page.ok) return page;
-  const grid = shownGrid(doc);
+  const shown = shownChecker();
+  const grid = shownGrid(doc, shown);
   if (!grid.ok) return grid;
   const rows = Array.from(grid.value.querySelectorAll(S.row));
   if (rows.length === 0) return { ok: false, reason: 'selector.missing.row' };
@@ -202,5 +229,13 @@ export function readSentPage(doc: Document): SentPage {
     if (!read.ok) return read;
     parts.push(read.value);
   }
-  return { ok: true, rows: parts, head: isHead(doc, page.value) };
+  return {
+    ok: true,
+    rows: parts,
+    head: isHead(doc, page.value, shown),
+    mayContinue: mayContinue(doc, shown),
+  };
 }
+
+/** `readSentPage`, read once per pass (../pass-memo.ts): what health, the rows and the window all read. */
+export const sentPageOf: (doc: Document) => SentPage = perPass(readSentPage);

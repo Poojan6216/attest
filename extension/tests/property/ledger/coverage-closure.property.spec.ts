@@ -22,7 +22,7 @@ import { coverageFor, readInterval, recordCoverage } from '../../../src/ledger/c
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { isoAt, MS_PER_MINUTE } from '../../tools/attest-world';
-import { sha, uniqueDbName } from './fixtures';
+import { sha, uniqueDbName } from '../../unit/ledger/fixtures';
 
 const RUNS = 120;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -168,8 +168,8 @@ describe('coverageFor closes gcal.event coverage under overlap (property)', () =
   });
 });
 
-describe('coverageFor reads the Calendar source once per call', () => {
-  it('a chain of touching weeks with markers is closed in one read, not one query per entry', async () => {
+describe('coverageFor closes the Calendar entries without one query per entry (TECH-1)', () => {
+  it('a chain of touching weeks with markers is closed reading each row once, in queries per week, not per entry', async () => {
     for (let week = 0; week < 6; week += 1) {
       const sync = clock(week * 10 + 5);
       await recordCoverage(db, {
@@ -197,6 +197,11 @@ describe('coverageFor reads the Calendar source once per call', () => {
       }
     }
     const where = vi.spyOn(db.coverageIntervals, 'where');
+    const read = { rows: 0 };
+    db.coverageIntervals.hook('reading', (row) => {
+      read.rows += 1;
+      return row;
+    });
     const coverage = await coverageFor(
       db,
       {
@@ -208,8 +213,11 @@ describe('coverageFor reads the Calendar source once per call', () => {
     );
     // Every week and every marker is joined to the first week through touching weeks.
     expect(coverage.observers).toHaveLength(6 * 9);
-    // The window's entries, the accounts, their latest, and one read of the source for the closure.
-    expect(where.mock.calls.length).toBeLessThanOrEqual(5);
+    // The closure widens from the first week one touching week at a time, reading each index range once: at most
+    // two queries per week the chain spans (its points, its spans) and five for the window, the accounts, their
+    // latest and the longest span, never one per marker (48 here); and each stored row is read about once.
+    expect(where.mock.calls.length).toBeLessThanOrEqual(2 * 6 + 5);
+    expect(read.rows).toBeLessThanOrEqual(6 * 9 + 6);
     where.mockRestore();
   });
 });

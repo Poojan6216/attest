@@ -6,9 +6,12 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { diffSnapshots, passRows } from '../../../../src/observers/gcal/diff';
+import { type CalendarDiff, diffSnapshots } from '../../../../src/observers/gcal/diff';
 import { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
 import { event, FAMILY, snapshot, snapshotInput } from './snapshot-builders';
+
+/** Every row a diff reports: the changes, then the first sightings. */
+const passRows = (diff: CalendarDiff) => [...diff.changes, ...diff.sightings];
 
 const ALEX = 'alex.rivera@example.com';
 const PRIYA = 'priya.raman@example.org';

@@ -19,6 +19,13 @@
  * clock was stamped by a clock that has since gone back, so a sighting earlier than it is no news, and is not
  * refused `late_sighting` (Decisions [2.7] wave E): otherwise a row first seen during a forward jump would refuse
  * every re-sighting until real time caught up. Nothing stored changes.
+ *
+ * A refusal is decided before anything is written, and raised only after the upsert's own transaction has settled
+ * (TECH-2). A Dexie transaction nested in a caller's shares the caller's IndexedDB transaction, and a nested scope
+ * that rejects aborts it whole, even when the caller catches the error: the service worker stores every row of a
+ * Gmail message in one transaction and must collect each row's refusal without losing the rows around it. A caller
+ * that wants a refusal to abort everything (a Calendar pass, all or none) still gets that by letting the error
+ * reject its own scope (src/background/calendar-rows.ts).
  */
 import type { Table } from 'dexie';
 import type { z } from 'zod';
@@ -84,53 +91,57 @@ async function dropUnreadable<Row, Fact extends Sighted>(
 
 /**
  * The same hash seen again, inside the upsert's transaction; the stored row is left exactly as it is. A fact that
- * differs in anything `identity` keeps throws `id_conflict` (a re-read whose extractor reads the claim
+ * differs in anything `identity` keeps is refused `id_conflict` (a re-read whose extractor reads the claim
  * differently, a planted row: OBS-4), so the caller reports DEGRADED instead of losing the difference (Hard Rule
- * 6). Where the first sighting grades (`firstSeen`), a sighting earlier than the stored one throws
+ * 6). Where the first sighting grades (`firstSeen`), a sighting earlier than the stored one is refused
  * `late_sighting`: the ledger cannot move the stored instants, because a batch may have graded with them (Hard
  * Rule 4), and must not hide that they are later than an observer saw the fact (Hard Rules 5, 6). One at or after
- * it, and any sighting of a fact whose sighting grades nothing, tells the ledger nothing new.
+ * it, and any sighting of a fact whose sighting grades nothing, tells the ledger nothing new. Returns the refusal
+ * (the caller raises it once its transaction settled), or undefined.
  */
-function assertSameSighting<Row, Fact extends Sighted>(
+function sameSightingRefusal<Row, Fact extends Sighted>(
   target: HashedTable<Row, Fact>,
   stored: Fact,
   incoming: Fact,
   clockMs: number | undefined,
-): void {
+): LedgerError | undefined {
   const context = { table: target.table, id: stored.id };
   if (target.identity(stored) !== target.identity(incoming)) {
-    throw new LedgerError('id_conflict', 'A different fact is already stored under this hash', context);
+    return new LedgerError('id_conflict', 'A different fact is already stored under this hash', context);
   }
   const { firstSeen } = target;
-  if (firstSeen === undefined) return;
+  if (firstSeen === undefined) return undefined;
   const storedFirst = firstSeen(stored);
   // A first sighting after the writer's clock was stamped before the clock went back: an earlier one is no news.
-  if (clockMs !== undefined && epochMs(storedFirst) > clockMs) return;
-  if (isOlder(incoming.observedAt, storedFirst)) {
-    throw new LedgerError(
-      'late_sighting',
-      'A sighting earlier than the stored one arrived after it',
-      context,
-    );
-  }
-}
-
-/** Frees the id for a new row: a readable row under it is a conflict, an unreadable one is dropped. */
-async function freeId<Row, Fact extends Sighted>(target: HashedTable<Row, Fact>, id: string): Promise<void> {
-  const sameId = await target.store.get(id);
-  if (sameId === undefined) return;
-  if (readRow(target.table, target.schema, sameId) !== undefined) {
-    throw new LedgerError('id_conflict', 'A row with this id already exists with a different hash', {
-      table: target.table,
-      id,
-    });
-  }
-  await dropUnreadable(target, id);
+  if (clockMs !== undefined && epochMs(storedFirst) > clockMs) return undefined;
+  if (!isOlder(incoming.observedAt, storedFirst)) return undefined;
+  return new LedgerError('late_sighting', 'A sighting earlier than the stored one arrived after it', context);
 }
 
 /**
+ * Whether the id is free for a new row: a readable row under it is a conflict (returned, nothing written); an
+ * unreadable one is to be dropped (`drop`), which the caller does only once nothing can refuse the write.
+ */
+async function idRefusal<Row, Fact extends Sighted>(
+  target: HashedTable<Row, Fact>,
+  id: string,
+): Promise<{ readonly refusal?: LedgerError; readonly drop: boolean }> {
+  const sameId = await target.store.get(id);
+  if (sameId === undefined) return { drop: false };
+  if (readRow(target.table, target.schema, sameId) === undefined) return { drop: true };
+  const refusal = new LedgerError('id_conflict', 'A row with this id already exists with a different hash', {
+    table: target.table,
+    id,
+  });
+  return { refusal, drop: false };
+}
+
+/** What the transaction of an upsert settled with: its result, or the refusal to raise once it has settled. */
+type Outcome = { readonly result: UpsertResult } | { readonly refusal: LedgerError };
+
+/**
  * Inserts the sighting's fact, stamped (`stampObservedAt`), unless a readable row with the same unique hash
- * exists, which it checks against instead (`assertSameSighting`). One rw transaction over the table and `meta`,
+ * exists, which it checks against instead (`sameSightingRefusal`). One rw transaction over the table and `meta`,
  * so concurrent upserts of the same hash serialise (exactly one inserts; the rest return its id or are refused),
  * and the stamp reads the last batch instant no batch can move until the write commits.
  *
@@ -146,22 +157,27 @@ export async function insertUnlessHashExists<Row, Fact extends Sighted>(
 ): Promise<UpsertResult> {
   const { table, store, schema, hashIndex } = target;
   const { hash, fact } = incoming;
-  return db.transaction('rw', [store, db.meta], async (): Promise<UpsertResult> => {
+  const outcome = await db.transaction('rw', [store, db.meta], async (): Promise<Outcome> => {
     const [existingId] = await store.where(hashIndex).equals(hash).primaryKeys();
     if (existingId !== undefined) {
       const stored = readRow(table, schema, await store.get(existingId));
       if (stored !== undefined) {
-        assertSameSighting(target, stored, fact, clockMs);
-        return { id: existingId, inserted: false };
+        const refusal = sameSightingRefusal(target, stored, fact, clockMs);
+        return refusal === undefined ? { result: { id: existingId, inserted: false } } : { refusal };
       }
-      await dropUnreadable(target, existingId);
     }
-    await freeId(target, fact.id);
+    const freed = existingId === fact.id ? { drop: false } : await idRefusal(target, fact.id);
+    if (freed.refusal !== undefined) return { refusal: freed.refusal };
+    // Nothing can refuse the write now: drop the unreadable rows that held this hash or this id, then insert.
+    if (existingId !== undefined) await dropUnreadable(target, existingId);
+    if (freed.drop) await dropUnreadable(target, fact.id);
     const observedAt = stampObservedAt(fact.observedAt, IsoTs.parse(nowIso()), await lastBatchMs(db));
     await store.add(target.toRow(observedAt === fact.observedAt ? fact : target.stamped(fact, observedAt)));
     await noteStoredInstant(db, fact.observedAt);
-    return { id: fact.id, inserted: true };
+    return { result: { id: fact.id, inserted: true } };
   });
+  if ('refusal' in outcome) throw outcome.refusal;
+  return outcome.result;
 }
 
 export function observationsByHash(db: LedgerDb): HashedTable<ObservationRow, Observation> {

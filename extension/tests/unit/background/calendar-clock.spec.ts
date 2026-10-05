@@ -13,8 +13,9 @@
  */
 import 'fake-indexeddb/auto';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { accountMadeChange } from '../../../src/background/calendar-own';
 import { onCalendarSnapshot } from '../../../src/background/calendar-pass';
 import { onCoveragePing, onObservations } from '../../../src/background/observer-messages';
 import { coveredObservations, visibleAt } from '../../../src/core/batch-orphans';
@@ -35,6 +36,10 @@ import { ACCOUNT, at, RANGE, week } from './calendar-fixtures';
 import { eventOn, markerOf, rowOf, runPass, weekPing } from './calendar-pass-harness';
 import { contextOf, pingOf, rowsOf, snapshotOf, tab, type TestContext } from './observer-harness';
 
+// The shipped predicate (v1.12: no Calendar change is known to be the account's own, src/background/calendar-own.ts),
+// switched on where a case checks the attribution rules a change must also meet once one can be (sprint_2 2.8).
+vi.mock('../../../src/background/calendar-own', () => ({ accountMadeChange: vi.fn(() => false) }));
+
 let db: LedgerDb;
 let ctx: TestContext;
 /** The service worker's clock (`ctx.now()`), moved by each test. */
@@ -50,6 +55,7 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
   releaseClock();
+  vi.mocked(accountMadeChange).mockImplementation(() => false);
 });
 
 const standup = eventOn('e', '2026-10-06', 10, { subjectHint: 'Standup' });
@@ -121,10 +127,9 @@ describe('CAL-SIM-2: a clock that jumped forward, then back', () => {
     const { records, restore } = captureLogs();
     expect(await passAt(at(125), [standup, vendor])).toEqual({ ok: true });
     restore();
-    expect(records.map((each) => [each.event, each.fields])).toContainEqual([
-      'ledger.clock_regressed',
-      { intervals: 1, pings: 1, records: 1, rows: 0 },
-    ]);
+    // The Calendar parts of the repair (the guard also counts the health rows it reset: SEC-4, not this test's).
+    const repair = records.find((each) => each.event === 'ledger.clock_regressed');
+    expect(repair?.fields).toMatchObject({ intervals: 1, pings: 1, records: 1, rows: 0 });
     expect((await stored()).every((entry) => instantMs(entry.lastSyncAt) <= instantMs(at(125)))).toBe(true);
     expect((await record())?.snapshot.readAt).toBe(at(125));
     // 14:10 the agent deletes "Vendor call" and says so; the week is read on, to past the jumped instant.
@@ -159,13 +164,33 @@ describe('CAL-SIM-7: a row first seen while the clock was ahead', () => {
     expect((await stored()).filter(isFirstLookMarker)).toContainEqual(
       markerOf(dentist, at(130), { accountHash: ACCOUNT, allCalendars: false }),
     );
-    // A real change seen later, compared with a fresh base, still accuses; the event already there never does.
+    // A real change seen later, compared with a fresh base, is stored as the change it is (a calendar.created first
+    // seen then), with its marker: since v1.12 no Calendar change accuses (Decisions [2.close]). Nor, ever, does the
+    // event already there.
+    expect(await passAt(at(311), [standup, dentist])).toEqual({ ok: true });
+    expect(await passAt(at(312), [standup, dentist, vendor])).toEqual({ ok: true });
+    expect(await firstSeen('Vendor call')).toBe(at(312));
+    expect((await stored()).filter(isFirstLookMarker)).toContainEqual(
+      markerOf(vendor, at(312), { accountHash: ACCOUNT, allCalendars: false }),
+    );
+    expect(await orphans(at(330))).toEqual([]);
+  });
+
+  it('once the account’s own changes can be told (2.8), a real change seen later still accuses; the event there never does', async () => {
+    vi.mocked(accountMadeChange).mockImplementation(() => true);
+    expect(await passAt(at(0), [standup])).toEqual({ ok: true });
+    expect(await passAt(at(2), [standup])).toEqual({ ok: true });
+    expect(await passAt(at(305), [standup, dentist])).toEqual({ ok: true });
+    expect(await passAt(at(130), [standup, dentist])).toEqual({ ok: true });
+    expect(await firstSeen('Dentist')).toBe(at(130));
     expect(await passAt(at(311), [standup, dentist])).toEqual({ ok: true });
     expect(await passAt(at(312), [standup, dentist, vendor])).toEqual({ ok: true });
     expect(await orphans(at(330))).toEqual(['Vendor call']);
   });
 
   it('a row a batch read stays as stored; its earlier re-sighting changes nothing, and it never accuses', async () => {
+    // With the account's own changes told apart (2.8), so the clock floor is what keeps the row from accusing.
+    vi.mocked(accountMadeChange).mockImplementation(() => true);
     expect(await passAt(at(0), [standup])).toEqual({ ok: true });
     expect(await passAt(at(2), [standup])).toEqual({ ok: true });
     expect(await passAt(at(303), [standup, dentist])).toEqual({ ok: true });

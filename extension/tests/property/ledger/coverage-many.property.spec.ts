@@ -21,7 +21,7 @@ import {
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { isoAt, MS_PER_MINUTE } from '../../tools/attest-world';
-import { expectLedgerError, sha, uniqueDbName } from './fixtures';
+import { expectLedgerError, sha, uniqueDbName } from '../../unit/ledger/fixtures';
 
 const RUNS = 60;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -151,8 +151,9 @@ describe('coverageForMany reads less', () => {
     const single = where.mock.calls.length;
     where.mockClear();
     const many = await coverageForMany(db, claims, DEFAULT_POLICY);
-    // Each further claim reads only its own window's entries: one query each.
-    expect(where.mock.calls.length).toBe(single + claims.length - 1);
+    // Each further claim reads only its own window's entries: two queries each, its points and the spans that may
+    // reach it (TECH-1); the Calendar closure, the accounts and their latest are read once for the batch.
+    expect(where.mock.calls.length).toBe(single + 2 * (claims.length - 1));
     where.mockRestore();
     expect(many[0]).toEqual(one[0]);
   });

@@ -21,7 +21,7 @@ import { coverageForClaim, readInterval, recordCoverage } from '../../../src/led
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { buildClaim, isoAt, MS_PER_MINUTE } from '../../tools/attest-world';
-import { makeGrant, sha, uniqueDbName } from './fixtures';
+import { makeGrant, sha, uniqueDbName } from '../../unit/ledger/fixtures';
 
 const RUNS = 200;
 const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;

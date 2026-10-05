@@ -3,6 +3,12 @@
  * Rules 5, 6): a stored interval read back as a placed entry (`readInterval`, `storedEntries`), and `recordCoverage`,
  * which merges a pass's entry into its group's stored intervals (./coverage-merge.ts) and raises the clock's high
  * water (./clock-guard.ts).
+ *
+ * Bounded reads (TECH-1, schema v4): a stored interval is a `point` (one instant: a first-look marker, a receipt's
+ * instant) or a `span`, read from separate index ranges, and the longest span of a source is one indexed read
+ * (`longestSpanMs`). An interval [s, e] overlaps or touches [from, to] exactly when e ≥ from and s ≤ to, so with
+ * spans no longer than L its end lies in [from, to + L]: the reads below walk exactly the rows that can overlap,
+ * never every interval that ends later (every marker of a future event, every window ahead).
  */
 import { Dexie, type Collection } from 'dexie';
 import type { z } from 'zod';
@@ -21,7 +27,7 @@ import {
 } from './coverage-merge';
 import { readRow, type CoverageIntervalRow, type LedgerDb } from './db';
 import { LedgerError } from './errors';
-import { ObserverCoverage, type ObserverCoverageInput } from './types';
+import { ObserverCoverage, type ObserverCoverageInput, type ObservationSource } from './types';
 
 export function placeEntry(entry: ObserverCoverage): PlacedEntry {
   return {
@@ -34,7 +40,49 @@ export function placeEntry(entry: ObserverCoverage): PlacedEntry {
 
 export function toIntervalRow(placed: PlacedEntry): CoverageIntervalRow {
   const { entry, startMs, endMs, syncMs } = placed;
-  return { ...entry, accountKey: accountKeyOfEntry(entry), startMs, endMs, syncMs };
+  const kind = startMs === endMs ? 'point' : 'span';
+  return {
+    ...entry,
+    accountKey: accountKeyOfEntry(entry),
+    startMs,
+    endMs,
+    syncMs,
+    kind,
+    lenMs: endMs - startMs,
+  };
+}
+
+/** The length of the source's longest stored span (0 when it has none): one indexed read. */
+export async function longestSpanMs(db: LedgerDb, source: ObservationSource): Promise<number> {
+  const longest = await db.coverageIntervals
+    .where('[source+kind+lenMs]')
+    .between([source, 'span', Dexie.minKey], [source, 'span', Dexie.maxKey], true, true)
+    .last();
+  return typeof longest?.lenMs === 'number' && longest.lenMs > 0 ? longest.lenMs : 0;
+}
+
+/** The source's stored points whose instant lies in [fromMs, toMs]. */
+export function pointsIn(
+  db: LedgerDb,
+  source: ObservationSource,
+  fromMs: number,
+  toMs: number,
+): Collection<CoverageIntervalRow, number> {
+  return db.coverageIntervals
+    .where('[source+kind+endMs]')
+    .between([source, 'point', fromMs], [source, 'point', toMs], true, true);
+}
+
+/** The source's stored spans that end in [fromMs, toMs]. */
+export function spansEndingIn(
+  db: LedgerDb,
+  source: ObservationSource,
+  fromMs: number,
+  toMs: number,
+): Collection<CoverageIntervalRow, number> {
+  return db.coverageIntervals
+    .where('[source+kind+endMs]')
+    .between([source, 'span', fromMs], [source, 'span', toMs], true, true);
 }
 
 /**
@@ -80,15 +128,25 @@ const sameEntry = (a: PlacedEntry, b: PlacedEntry): boolean =>
   canonicalJson(a.entry) === canonicalJson(b.entry);
 
 /**
- * The stored intervals `incoming` may touch: those ending at or after its start. A first-look marker merges only with
- * an identical marker (./coverage-merge.ts: its own group, one point per sighting), so for one only the intervals
- * ending at its instant are read, never every interval after it.
+ * The stored intervals `incoming` may touch, read by bounded index ranges (see the header):
+ *  - a first-look marker merges only with an identical marker (./coverage-merge.ts: its own group, one point per
+ *    sighting): only the points at its instant;
+ *  - a `gcal.event` window: only spans. Every `gcal.event` point is a marker (a pass's window is a run of whole
+ *    days), and a marker never merges with a window;
+ *  - any other entry: the points inside it and the spans that may reach it.
+ * Spans are read up to the incoming end plus the source's longest span: a span ending later starts after it. A
+ * Gmail window never ends after its sync (src/background/observer-messages.ts refuses one that does), so its read
+ * never reaches a future the clock has not seen.
  */
-function mayTouch(db: LedgerDb, incoming: PlacedEntry): Collection<CoverageIntervalRow, number> {
+async function mayTouch(db: LedgerDb, incoming: PlacedEntry): Promise<StoredEntry[]> {
   const { source } = incoming.entry;
-  const index = db.coverageIntervals.where('[source+endMs]');
-  if (isFirstLookMarker(incoming.entry)) return index.equals([source, incoming.endMs]);
-  return index.between([source, incoming.startMs], [source, Dexie.maxKey], true, true);
+  const { startMs, endMs } = incoming;
+  if (isFirstLookMarker(incoming.entry)) return storedEntries(pointsIn(db, source, endMs, endMs));
+  const spans = await storedEntries(
+    spansEndingIn(db, source, startMs, endMs + (await longestSpanMs(db, source))),
+  );
+  if (source === 'gcal.event') return spans;
+  return [...(await storedEntries(pointsIn(db, source, startMs, endMs))), ...spans];
 }
 
 /**
@@ -104,9 +162,10 @@ export async function recordCoverage(db: LedgerDb, input: ObserverCoverageInput)
   const table = db.coverageIntervals;
   await db.transaction('rw', [table, db.meta], async (): Promise<void> => {
     await noteStoredInstant(db, incoming.entry.lastSyncAt);
-    const touching = (await storedEntries(mayTouch(db, incoming))).filter(
-      ({ placed }) => groupKey(placed.entry) === group && touches(placed, incoming),
-    );
+    // In [source+endMs] index order (end, then key), the order the merge always read them in.
+    const touching = (await mayTouch(db, incoming))
+      .filter(({ placed }) => groupKey(placed.entry) === group && touches(placed, incoming))
+      .sort((a, b) => a.placed.endMs - b.placed.endMs || a.key - b.key);
     const { union, absorbed } = absorb(incoming, touching);
     const [only] = absorbed;
     if (absorbed.length === 1 && only !== undefined && sameEntry(only.placed, union)) return;

@@ -3,14 +3,16 @@
  * thing changed: guests (the account left out, one per address, at most a list's worth), titles that are not one
  * clean line or say "(No title)", times that run backwards, a chip outside the visible days, more chips than one
  * batch; hidden grids and cells; text that looks like an "N more" control or a zone hint but sits in a chip; a
- * calendar the list names twice; two equal runs of whole days; a stored snapshot read after this pass.
+ * calendar the list names twice (what the service worker's diff makes of it); two equal runs of whole days; and the
+ * snapshot's own chain (it holds no stored snapshot: the service worker carries a chain on).
  */
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
 import { hashText } from '../../../../src/core/redact';
+import { diffSnapshots } from '../../../../src/observers/gcal/diff';
 import { createGcalObserver } from '../../../../src/observers/gcal/observer';
-import { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
+import type { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
 import { planPass } from '../../../../src/observers/plan';
 import type { LabelledFixture } from '../../fixtures/fixture-labels';
 import { zoneOffset } from '../../fixtures/fixture-page-read';
@@ -26,16 +28,16 @@ function edited(base: string, from: string | RegExp, to: string): string {
   return html;
 }
 
-function observer(f: LabelledFixture, previous: CalendarSnapshot | null = null) {
-  return createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone), previous: () => previous });
+function observer(f: LabelledFixture) {
+  return createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone) });
 }
 
 function healthOf(html: string, f: LabelledFixture = WEEK) {
   return observer(f).health(parseDocument(html));
 }
 
-function snapshotOf(html: string, f: LabelledFixture = WEEK, previous: CalendarSnapshot | null = null) {
-  return observer(f, previous).snapshot(parseDocument(html), ctxOf(f));
+function snapshotOf(html: string, f: LabelledFixture = WEEK) {
+  return observer(f).snapshot(parseDocument(html), ctxOf(f));
 }
 
 function eventNamed(snapshot: CalendarSnapshot | null, subject: string) {
@@ -164,12 +166,16 @@ describe('gcal.event: calendars named twice, equal runs, a later stored snapshot
     expect(previous?.calendars).toContainEqual({ key: hashText('Family'), shown: true, ambiguous: true });
     const swapped = edited(htmlOf(TWO), family, twice(false, true)).replace(familyChip, '');
     const plan = planPass({
-      observer: observer(TWO, previous),
+      observer: observer(TWO),
       doc: parseDocument(swapped),
       ctx: ctxOf(TWO),
       policy: DEFAULT_POLICY,
     });
     expect(plan).toMatchObject({ status: 'OK', observations: [] });
+    const next = snapshotOf(swapped, TWO);
+    if (previous === null || next === null) throw new Error('no snapshot');
+    // What the service worker's diff makes of the swap: the Family events gone from view are no deletion.
+    expect(diffSnapshots(previous, next).changes).toEqual([]);
   });
 
   it('two equal runs of whole days: both are reported, the earlier first', () => {
@@ -184,13 +190,10 @@ describe('gcal.event: calendars named twice, equal runs, a later stored snapshot
     ]);
   });
 
-  it('a stored snapshot read after this pass: the chain restarts here, never a baseline after the read', () => {
-    const before = snapshotOfFixture(fixture('synthetic-gcal-week-before.html'));
-    const later = CalendarSnapshot.parse({
-      ...before,
-      readAt: '2026-10-03T23:00:00-04:00',
-      baselineAt: '2026-10-03T22:00:00-04:00',
-    });
-    expect(snapshotOf(htmlOf(WEEK), WEEK, later)?.baselineAt).toBe(WEEK.page.readAt);
+  it('a snapshot starts its own chain, at its read: the service worker carries a chain on (calendar-step)', () => {
+    for (const f of [WEEK, TWO, fixture('synthetic-gcal-week-before.html')]) {
+      const snapshot = snapshotOfFixture(f);
+      expect([snapshot.readAt, snapshot.baselineAt]).toEqual([f.page.readAt, f.page.readAt]);
+    }
   });
 });

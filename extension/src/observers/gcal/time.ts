@@ -12,14 +12,12 @@
  */
 import { isoWithOffset, type OffsetAt } from '../../core/normalize';
 import { wallToInstant } from '../../core/normalize-time';
+import { MS_PER_MINUTE } from '../../core/units';
+import { type CivilDay, civilDay } from './days';
 import { GCAL_SELECTORS, ZONE_PATTERN } from './selectors';
 
-/** A calendar day, month 1–12. */
-export interface CivilDay {
-  readonly year: number;
-  readonly month: number;
-  readonly day: number;
-}
+// The plain-day helpers live in ./days.ts (no selectors), so the snapshot and the diff never load ./selectors.json.
+export { type CivilDay, civilDay, dayFromIso, dayIso, nextDay } from './days';
 
 /** An instant as epoch ms and as ISO 8601 written in the offset in force at it. */
 export interface Instant {
@@ -27,25 +25,13 @@ export interface Instant {
   readonly iso: string;
 }
 
-const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_HALF_DAY = 12;
 const MINUTES_PER_DAY = 1_440;
-const FIRST_YEAR = 1970;
-const LAST_YEAR = 9999;
 
 const DAY_TEXT = /^(\p{Lu}\p{Ll}+) (\d{1,2}), (\d{4})$/u;
-const DAY_ISO = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const CLOCK_12 = /^(\d{1,2})(?::(\d{2}))?\s?([ap])m$/iu;
 const CLOCK_24 = /^(\d{1,2}):(\d{2})$/u;
-
-/** `year-month-day` when it is a real day in 1970–9999, else null. */
-export function civilDay(year: number, month: number, day: number): CivilDay | null {
-  if (![year, month, day].every(Number.isInteger) || year < FIRST_YEAR || year > LAST_YEAR) return null;
-  const at = new Date(Date.UTC(year, month - 1, day));
-  const real = at.getUTCFullYear() === year && at.getUTCMonth() === month - 1 && at.getUTCDate() === day;
-  return real ? { year, month, day } : null;
-}
 
 /** "October 5, 2026" (an English month name, as Calendar writes it) → the day, or null. */
 export function parseDay(text: string): CivilDay | null {
@@ -54,26 +40,6 @@ export function parseDay(text: string): CivilDay | null {
   const [, monthName = '', day = '', year = ''] = match;
   const month = GCAL_SELECTORS.text.months.indexOf(monthName) + 1;
   return month === 0 ? null : civilDay(Number(year), month, Number(day));
-}
-
-/** "2026-10-05" → the day, or null. */
-export function dayFromIso(text: string): CivilDay | null {
-  const match = DAY_ISO.exec(text);
-  if (match === null) return null;
-  const [, year = '', month = '', day = ''] = match;
-  return civilDay(Number(year), Number(month), Number(day));
-}
-
-/** The day as `YYYY-MM-DD`. */
-export function dayIso(day: CivilDay): string {
-  const two = (value: number): string => String(value).padStart(2, '0');
-  return `${String(day.year).padStart(4, '0')}-${two(day.month)}-${two(day.day)}`;
-}
-
-/** The day after `day` (null past 9999-12-31). */
-export function nextDay(day: CivilDay): CivilDay | null {
-  const at = new Date(Date.UTC(day.year, day.month - 1, day.day + 1));
-  return civilDay(at.getUTCFullYear(), at.getUTCMonth() + 1, at.getUTCDate());
 }
 
 /** "10am", "10:30am", "12pm", "10:30 PM" or "14:05" → the minute of the day, or null. */

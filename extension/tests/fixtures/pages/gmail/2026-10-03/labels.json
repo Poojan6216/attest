@@ -1,7 +1,7 @@
 {
   "synthetic-drafts.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "base64_blob",
@@ -33,7 +33,7 @@
   },
   "synthetic-inbox.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_local_part",
       "base64_blob",
@@ -65,7 +65,7 @@
   },
   "synthetic-receipt-amazon.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "street_address",
@@ -122,7 +122,7 @@
   },
   "synthetic-receipt-generic-bakery.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "passphrase",
@@ -167,20 +167,13 @@
         "rowKey": "1a101af7b40e2410",
         "parser": "generic",
         "confidence": 0.6
-      },
-      {
-        "kind": "coverage",
-        "source": "gmail.receipt",
-        "account": "avery.founder@example.com",
-        "windowStart": "2026-10-03T08:14:00-04:00",
-        "windowEnd": "2026-10-03T08:14:00-04:00"
       }
     ],
-    "notes": "Generic positive: the sender has no \"order\" but the subject says receipt and an amount is present. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
+    "notes": "Generic positive: the sender has no \"order\" but the subject says receipt and an amount is present. No coverage: the sender is outside the registry, so this receipt is evidence for a claim but never covers its instant (SEC-6)."
   },
   "synthetic-receipt-generic-booking-cad.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -225,20 +218,13 @@
         "rowKey": "1a0f278d4009300a",
         "parser": "generic",
         "confidence": 0.6
-      },
-      {
-        "kind": "coverage",
-        "source": "gmail.receipt",
-        "account": "avery.founder@example.com",
-        "windowStart": "2026-09-30T09:20:00-04:00",
-        "windowEnd": "2026-09-30T09:20:00-04:00"
       }
     ],
-    "notes": "Generic positive in another currency: CA$ is CAD, never USD. The subject uses an en dash. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
+    "notes": "Generic positive in another currency: CA$ is CAD, never USD. The subject uses an en dash. No coverage: the sender is outside the registry, so this receipt is evidence for a claim but never covers its instant (SEC-6)."
   },
   "synthetic-receipt-generic-order-confirmation.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "token_lowercase",
       "street_address",
@@ -283,20 +269,13 @@
         "rowKey": "1a0e3d0ff40aa50b",
         "parser": "generic",
         "confidence": 0.6
-      },
-      {
-        "kind": "coverage",
-        "source": "gmail.receipt",
-        "account": "avery.founder@example.com",
-        "windowStart": "2026-09-27T13:02:00-04:00",
-        "windowEnd": "2026-09-27T13:02:00-04:00"
       }
     ],
-    "notes": "Generic positive: sender contains \"order\", subject says confirmation, and an amount is on a total line. Merchant is the sender display name. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
+    "notes": "Generic positive: sender contains \"order\", subject says confirmation, and an amount is on a total line. Merchant is the sender display name. No coverage: the sender is outside the registry, so this receipt is evidence for a claim but never covers its instant (SEC-6)."
   },
   "synthetic-receipt-generic-order-eur.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "person_name_1",
@@ -341,20 +320,13 @@
         "rowKey": "1a0df3fde60b0471",
         "parser": "generic",
         "confidence": 0.6
-      },
-      {
-        "kind": "coverage",
-        "source": "gmail.receipt",
-        "account": "avery.founder@example.com",
-        "windowStart": "2026-09-26T15:45:00-04:00",
-        "windowEnd": "2026-09-26T15:45:00-04:00"
       }
     ],
-    "notes": "Generic positive with a decimal comma: €42,50 is 4250 EUR cents. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
+    "notes": "Generic positive with a decimal comma: €42,50 is 4250 EUR cents. No coverage: the sender is outside the registry, so this receipt is evidence for a claim but never covers its instant (SEC-6)."
   },
   "synthetic-receipt-instacart.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "passphrase_hyphenated",
@@ -411,7 +383,7 @@
   },
   "synthetic-receipt-marketplace-listing.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -468,7 +440,7 @@
   },
   "synthetic-receipt-negative-newsletter.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_local_part",
       "base64_blob",
@@ -506,7 +478,7 @@
   },
   "synthetic-receipt-negative-no-currency.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "ssn_shape",
       "person_name_1",
@@ -544,7 +516,7 @@
   },
   "synthetic-receipt-negative-promo-order.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "token_lowercase",
       "email_local_part",
@@ -582,7 +554,7 @@
   },
   "synthetic-receipt-negative-shipping.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -620,7 +592,7 @@
   },
   "synthetic-receipt-opentable.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "phone_number",
@@ -677,7 +649,7 @@
   },
   "synthetic-receipt-shopify.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_2",
       "person_name_2",
@@ -734,7 +706,7 @@
   },
   "synthetic-receipt-stripe-subscription.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "api_key_aws_shape",
@@ -791,7 +763,7 @@
   },
   "synthetic-receipt-stripe.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -848,7 +820,7 @@
   },
   "synthetic-receipt-uber.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.0.1",
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -905,7 +877,7 @@
   },
   "synthetic-sent-account-2.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "passphrase",
@@ -987,7 +959,7 @@
   },
   "synthetic-sent-dst-auckland.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "email_body_3",
@@ -1069,7 +1041,7 @@
   },
   "synthetic-sent-midnight.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "ssn_shape",
       "phone_number",
@@ -1151,7 +1123,7 @@
   },
   "synthetic-sent-page-1.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "phone_number",
       "email_body_2",
@@ -1278,15 +1250,15 @@
         "kind": "coverage",
         "source": "gmail.sent",
         "account": "avery.founder@example.com",
-        "windowStart": "2026-09-29T17:55:00-04:00",
+        "windowStart": "2026-09-29T17:56:00-04:00",
         "windowEnd": "lastSyncAt"
       }
     ],
-    "notes": "Sent list, first page (Newer is disabled: the head of the list), 10 rows, 11 observations (row 2 has two recipients). Edge rows: a U+202F before AM/PM in two time titles; a subject with a double space (collapsed in subjectHint); a recipient address in mixed case (kept exactly as read); \"(no subject)\" (no subjectHint); a subject over 80 code points (subjectHint is the first 80); an emoji subject (one code point, never split). Seeds sit in snippets and in the screen-reader row summary, never in the subject span. Rows 9 and 10 reappear on page 2."
+    "notes": "Sent list, first page (Newer is disabled: the head of the list), 10 rows, 11 observations (row 2 has two recipients). Older is enabled, so the list may go on: the window starts one minute after the oldest row's minute (17:55), whose rows are still observations, because a send in that minute older than the oldest row would be on page 2, unseen (QA-1). Edge rows: a U+202F before AM/PM in two time titles; a subject with a double space (collapsed in subjectHint); a recipient address in mixed case (kept exactly as read); \"(no subject)\" (no subjectHint); a subject over 80 code points (subjectHint is the first 80); an emoji subject (one code point, never split). Seeds sit in snippets and in the screen-reader row summary, never in the subject span. Rows 9 and 10 reappear on page 2."
   },
   "synthetic-sent-page-2.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_3",
       "ssn_shape",
@@ -1420,7 +1392,7 @@
   },
   "synthetic-sent-thread.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_1",
       "api_key_openai_shape",
@@ -1458,7 +1430,7 @@
   },
   "synthetic-sent-time-unresolved.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": null,
+    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "api_key_openai_shape",
       "street_address",

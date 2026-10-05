@@ -19,7 +19,6 @@ import {
   getCoveragePing,
   getMeta,
   getObservation,
-  observationsByCounterpartyToken,
   observationsByTypeAndBuckets,
   putAdapterHealth,
   putCoveragePing,
@@ -103,7 +102,6 @@ describe('reads skip corrupt rows', () => {
       skipped.map((id) => ['warn', 'observations', id]),
     );
     expect(JSON.stringify(logs.records)).not.toContain(SECRET);
-    expect(await observationsByCounterpartyToken(db, 'alice@example.com')).toEqual([makeObservation()]);
   });
 
   it('a get of a corrupt row returns undefined instead of throwing', async () => {
@@ -188,7 +186,8 @@ describe('idempotent upserts never treat an unreadable row as already stored', (
       inserted: true,
     });
     expect(await getObservation(db, observationId(1))).toEqual(fresh);
-    expect(await observationsByCounterpartyToken(db, 'alice@example.com')).toEqual([fresh]);
+    const bucket = timeBucketOf(fresh.occurredAt);
+    expect(await observationsByTypeAndBuckets(db, 'email.sent', bucket, bucket)).toEqual([fresh]);
     expect(await db.observations.count()).toBe(1);
     expect(events('ledger.row_replaced')).toEqual([['observations', observationId(1)]]);
     // Once replaced, the hash is idempotent again.

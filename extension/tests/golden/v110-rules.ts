@@ -18,7 +18,7 @@ import { instantMs, truncateIso } from './time';
 const CALENDAR_TYPES: readonly string[] = ['calendar.created', 'calendar.updated', 'calendar.deleted'];
 
 /** When an observation was first seen: the file's `observedAt` (golden files carry no `sightedAt`). */
-const firstSeen = (o: ScenarioObservation): number => instantMs(o.observedAt ?? '');
+export const firstSeen = (o: ScenarioObservation): number => instantMs(o.observedAt ?? '');
 
 const calendarViews = (s: Scenario): ScenarioCoverage[] =>
   s.input.coverage.filter((e) => e.source === 'gcal.event');
@@ -44,7 +44,7 @@ export function isMarkerOf(e: ScenarioCoverage, o: ScenarioObservation): boolean
 }
 
 /** Rule (a): a view holding `o`'s start followed changes from strictly before its first sighting through it. */
-function followedOver(s: Scenario, o: ScenarioObservation): boolean {
+export function followedOver(s: Scenario, o: ScenarioObservation): boolean {
   const seen = firstSeen(o);
   return calendarViews(s).some(
     (e) =>
@@ -56,12 +56,12 @@ function followedOver(s: Scenario, o: ScenarioObservation): boolean {
 }
 
 /** Some agent's session ping lies within ±sessionMin of `atMs`: the row would otherwise be attributed (§7). */
-function sessionNear(s: Scenario, atMs: number, policy: PolicyView): boolean {
+export function sessionNear(s: Scenario, atMs: number, policy: PolicyView): boolean {
   const reach = minutes(policy.unasked.windows.sessionMin);
   return (s.input.activity?.sessions ?? []).some((p) => Math.abs(instantMs(p.at) - atMs) <= reach);
 }
 
-const calendarRows = (s: Scenario): ScenarioObservation[] =>
+export const calendarRows = (s: Scenario): ScenarioObservation[] =>
   s.input.observations.filter((o) => o.source === 'gcal.event' && o.observedAt !== undefined);
 
 /**

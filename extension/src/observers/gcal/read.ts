@@ -22,7 +22,10 @@
  *  - `event.calendar_hidden`: a chip on a calendar the list says is off (the list cannot be trusted then);
  *  - `event.time_ambiguous`: a start or end that a DST change skips or repeats (no single instant);
  *  - `event.too_many`: more events than one bus batch.
- * The account is read here only to leave the user out of each event's guests; the skeleton hashes it.
+ * One reason is the observer's, not the read's (./observer.ts): `page.busy`, a page still drawing its range after
+ * BUSY_LIMIT_MS of passes, which is not read at all.
+ * The account is read here to leave the user out of each event's guests, and kept in the facts so a pass reads it
+ * once (TECH-2); the skeleton hashes it.
  */
 import { asciiLower, type OffsetAt } from '../../core/normalize';
 import { clampSubjectHint, hashRowKey, hashText } from '../../core/redact';
@@ -60,6 +63,7 @@ export const GCAL_REASONS = Object.freeze([
   'event.calendar_hidden',
   'event.time_ambiguous',
   'event.too_many',
+  'page.busy',
 ] as const);
 
 export type GcalReason = (typeof GCAL_REASONS)[number];
@@ -81,6 +85,11 @@ export interface PageFacts {
   readonly days: readonly GridDay[];
   readonly calendars: readonly ListedCalendar[];
   readonly events: readonly ReadEvent[];
+  /**
+   * The account switcher's address as ./page.ts `accountOf` reads it: null when the page names no account, '' when
+   * it cannot tell which one. Never posted: only its hash leaves the content script (../account.ts).
+   */
+  readonly account: string | null;
 }
 
 export type PageRead =
@@ -192,8 +201,15 @@ function isReasons(list: ReadEvent[] | GcalReason[]): list is GcalReason[] {
   return list.some((item) => typeof item === 'string');
 }
 
-/** Reads the page: its facts, or why a pass must not report any. */
-export function readCalendar(doc: Document, offsetAt: OffsetAt): PageRead {
+/**
+ * Reads the page: its facts, or why a pass must not report any. `account` is the page's account as `accountOf` reads
+ * it, when the caller already read it (one read per pass).
+ */
+export function readCalendar(
+  doc: Document,
+  offsetAt: OffsetAt,
+  account: string | null = accountOf(doc),
+): PageRead {
   const main = mainOf(doc);
   if (main === 'missing') return failed('selector.missing.main');
   if (main === 'ambiguous') return failed('selector.ambiguous.main');
@@ -206,14 +222,13 @@ export function readCalendar(doc: Document, offsetAt: OffsetAt): PageRead {
   if (calendars === null) return failed('selector.missing.calendar_list');
   const zone = zoneProblem(main, days, offsetAt);
   if (zone !== null) return failed(zone);
-  const account = accountOf(doc);
   const visible = new Set(days.map((day) => day.iso));
   const events = readEvents(main, { calendars, visible, account: account === '' ? null : account, offsetAt });
   if (isReasons(events)) {
     const [first, ...rest] = events;
     return first === undefined ? failed('event.unreadable') : failed(first, ...rest);
   }
-  return { ok: true, facts: { days, calendars, events } };
+  return { ok: true, facts: { days, calendars, events, account } };
 }
 
 /** The calendar key a snapshot stores for a calendar name. */

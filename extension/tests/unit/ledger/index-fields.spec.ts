@@ -9,7 +9,6 @@ import {
   INDEX_FIELDS,
   LEDGER_TABLE_NAMES,
   accountKeyOf,
-  counterpartyTokensOf,
   dateKey,
   stripIndexFields,
   timeBucketOf,
@@ -73,26 +72,9 @@ describe('timeBucketOf', () => {
   });
 });
 
-describe('counterpartyTokensOf', () => {
-  it('indexes a normalised email, its domain, and the merchant', () => {
-    const tokens = counterpartyTokensOf(
-      makeObservation({ counterparty: '  Alice@Example.COM ', merchant: 'Blue Bottle' }),
-    );
-    expect(tokens).toEqual(['alice@example.com', 'example.com', 'blue bottle']);
-  });
-
-  it('deduplicates and skips blanks and non-email names', () => {
-    expect(counterpartyTokensOf(makeObservation({ counterparty: 'Acme', merchant: ' ACME ' }))).toEqual([
-      'acme',
-    ]);
-    expect(counterpartyTokensOf(makeObservation({ counterparty: '   ', merchant: '' }))).toEqual([]);
-    expect(counterpartyTokensOf(omit(makeObservation(), 'counterparty'))).toEqual([]);
-  });
-});
-
 describe('stripIndexFields', () => {
   it("removes exactly the table's derived keys and keeps everything else", () => {
-    const row = { ...makeObservation(), timeBucket: 5, counterpartyTokens: ['x'], body: 'smuggled' };
+    const row = { ...makeObservation(), timeBucket: 5, body: 'smuggled' };
     const stripped = stripIndexFields('observations', row);
     expect(stripped).toEqual({ ...makeObservation(), body: 'smuggled' });
     // A smuggled key survives the strip, so the strict schema still rejects the row.

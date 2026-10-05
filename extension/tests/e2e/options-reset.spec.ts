@@ -52,7 +52,7 @@ test.describe('options page: the two-step reset from the keyboard', () => {
       await expectVisibleFocus(page, await focusState(page));
       await page.keyboard.press('Enter');
 
-      await expect(page.getByRole('status')).toHaveText(RESET_DONE);
+      await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
       await expect(start).toBeFocused();
       const after = await storedInstallId(worker);
       expect(after).toMatch(UUID_V4);
@@ -80,12 +80,12 @@ test.describe('options page: the install id reset', () => {
     await expect(start).toBeFocused();
     expect(await storedInstallId(worker)).toBe(before);
     await expect(shown).toHaveText(before);
-    await expect(page.getByRole('status')).toHaveText('');
+    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText('');
 
     await start.click();
     await page.getByRole('button', { name: 'Reset id', exact: true }).click();
 
-    await expect(page.getByRole('status')).toHaveText(RESET_DONE);
+    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
     const after = await storedInstallId(worker);
     expect(after).toMatch(UUID_V4);
     expect(after).not.toBe(before);
@@ -104,7 +104,7 @@ test.describe('options page: the install id reset', () => {
 
     await first.page.getByRole('button', { name: 'Reset install id', exact: true }).click();
     await first.page.getByRole('button', { name: 'Reset id', exact: true }).click();
-    await expect(first.page.getByRole('status')).toHaveText(RESET_DONE);
+    await expect(first.page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
 
     const after = await first.page.locator('#install-id-value').innerText();
     await expect(second.page.locator('#install-id-value')).toHaveText(after);
@@ -131,7 +131,7 @@ test.describe('options page: an install id changed elsewhere', () => {
 
     await page.getByRole('button', { name: 'Reset install id', exact: true }).click();
     await page.getByRole('button', { name: 'Reset id', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText(RESET_DONE);
+    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
     const after = await storedInstallId(worker);
     expect(after).toMatch(UUID_V4);
     await expect(shown).toHaveText(after);

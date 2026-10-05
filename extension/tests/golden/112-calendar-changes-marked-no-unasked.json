@@ -1,0 +1,172 @@
+{
+  "name": "calendar changes other people made, each stored with its marker, accuse no agent; a claim still finds its change",
+  "covers": ["contract:calendar_changes_marked"],
+  "mode": "batch",
+  "notes": [
+    "§3, §7 v1.12: a snapshot cannot tell the account's own changes from other people's (an invitation Google adds from anyone, an organiser's reschedule or cancellation, a colleague's edit on a shared calendar), so the service worker stores every Calendar row as a first sighting, with its first-look marker: a gcal.event point at the row's start whose lastSyncAt and changesSince are its first sighting. Orphan rule (b) then finds every Calendar row already there, so none is UNASKED. The rows are still candidates for claims (§4.1).",
+    "Coverage (acct-a, every calendar, bound by the grant, week [10-05 00:00, 10-12 00:00]): the first look at 14:05 (no changesSince), then passes at 14:20, 14:30, 14:40 and 15:05 that compared with it (changesSince 14:05). Plus one marker per row (below).",
+    "o1 'Invitation from a stranger' (calendar.created, 10-08 09:00): Google added an invitation; first seen by the 14:20 comparison. Marker: point 10-08 09:00, lastSyncAt = changesSince = 14:20. o2 'Design review' (calendar.updated, 10-08 15:00): the organiser moved it; first seen 14:30, marker at 14:30. o3 'Board sync' (calendar.deleted, 10-07 11:00): the organiser cancelled it; first seen at its first absence, 14:30, marker at 14:30. o4 'Dentist colleague' (calendar.updated, 10-09 13:00): a colleague edited an event on a shared calendar the grid shows; first seen 14:40, marker at 14:40.",
+    "Each row is a change a followed view saw (rule (a) holds: the 14:20, 14:30 and 14:40 entries hold the starts with changesSince 14:05 < first sighting ≤ lastSyncAt), and each sits next to muse's activity: sessions at 14:19, 14:29, 14:39 (within ±10 min of the first sightings, 4000) and idle [14:15, 14:25], [14:25, 14:35], [14:35, 14:45] (each covers [anchor − 2 min, anchor], 3000) → 7/10 ≥ 6/10 for each. Under v1.11's ledger, which wrote no marker for a change, o1, o3 and o4 would be UNASKED, FINAL (muse's adapter synced 15:30 ≥ anchor + 2 + 30 min for each). Their markers began comparing at their first sightings (changesSince equal to it), so rule (b) holds for none of them: no orphan, no receipt.",
+    "c1: muse says at 14:29 it moved 'Design review' to 10-08 15:00 (calendar.updated, targetAt 10-08 15:00). Window [10-05 15:00, 10-11 15:00]. Candidates of its type: o2 and o4. o2: applicable timeProximity 2500 and subjectOverlap 1500 (no counterparty on either side), Σw = 4000; tp 1 (o2 starts at targetAt); subject {design, review} = {design, review} → 1; S = 4000/4000 = 1/1. o4: subject {dentist, colleague} shares nothing with {design, review}: no content feature scores above 0, so it scores 0 (§5.3 v1.11, no evidence on time alone) and is never assigned. Best o2 at 1/1 → verified, before partial_coverage (§6.2); the change claim's coverage is capped (coverage.change_unprovable) but a change row a view saw still verifies. FINAL (§8): the 15:05 entry synced ≥ end + graceMin = 14:30 + 30 min = 15:00.",
+    "o2 is c1's, so it is no orphan either way. The marker on it changes nothing for c1: a marker is a coverage point, never a candidate, and it never makes coverage full."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T16:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.updated",
+        "subjectHint": "Design review",
+        "claimedAt": "2026-10-06T14:29:00-04:00",
+        "targetAt": "2026-10-08T15:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Invitation from a stranger",
+        "occurredAt": "2026-10-08T09:00:00-04:00",
+        "observedAt": "2026-10-06T14:20:00-04:00",
+        "rowKey": "evt-invitation"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.updated",
+        "subjectHint": "Design review",
+        "occurredAt": "2026-10-08T15:00:00-04:00",
+        "observedAt": "2026-10-06T14:30:00-04:00",
+        "rowKey": "evt-design-review"
+      },
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.deleted",
+        "subjectHint": "Board sync",
+        "occurredAt": "2026-10-07T11:00:00-04:00",
+        "observedAt": "2026-10-06T14:30:00-04:00",
+        "rowKey": "evt-board-sync"
+      },
+      {
+        "ref": "o4",
+        "source": "gcal.event",
+        "type": "calendar.updated",
+        "subjectHint": "Dentist colleague",
+        "occurredAt": "2026-10-09T13:00:00-04:00",
+        "observedAt": "2026-10-06T14:40:00-04:00",
+        "rowKey": "evt-dentist"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:05:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:20:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T15:05:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:20:00-04:00",
+        "windowStart": "2026-10-08T09:00:00-04:00",
+        "windowEnd": "2026-10-08T09:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:20:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-08T15:00:00-04:00",
+        "windowEnd": "2026-10-08T15:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:30:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:30:00-04:00",
+        "windowStart": "2026-10-07T11:00:00-04:00",
+        "windowEnd": "2026-10-07T11:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:30:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-09T13:00:00-04:00",
+        "windowEnd": "2026-10-09T13:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:40:00-04:00"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:19:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:29:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:39:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:15:00-04:00", "to": "2026-10-06T14:25:00-04:00" },
+        { "from": "2026-10-06T14:25:00-04:00", "to": "2026-10-06T14:35:00-04:00" },
+        { "from": "2026-10-06T14:35:00-04:00", "to": "2026-10-06T14:45:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T15:30:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o2" } }
+    }
+  ]
+}

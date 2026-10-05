@@ -14,32 +14,20 @@ import { AckCode } from '../../../src/bus/messages';
 import { LEDGER_REASON_PREFIX } from '../../../src/ledger/health';
 import { GCAL_REASONS } from '../../../src/observers/gcal/read';
 import { SENT_HEALTH_REASONS } from '../../../src/observers/gmail/health';
-import type { Landmark } from '../../../src/observers/gmail/receipts/message';
-import { UNREADABLE_REASONS } from '../../../src/observers/gmail/receipts/parser';
+import { RECEIPT_HEALTH_REASONS } from '../../../src/observers/gmail/receipts/health';
 import { PASS_REASONS } from '../../../src/observers/plan';
 
 const DOC = readFileSync(path.resolve(import.meta.dirname, '../../../../docs/adapters.md'), 'utf8');
 
-/** The landmarks a receipt pass reports as `selector.missing.<landmark>` (./receipts/health.ts). */
-const RECEIPT_LANDMARKS = [
-  'main',
-  'subject',
-  'message',
-  'sender',
-  'date',
-] as const satisfies readonly Landmark[];
 /** The row refusals the service worker reports as `ledger.<code>` (src/background/observer-messages.ts). */
 const ROW_CODES = ['invalid_input', 'id_conflict', 'late_sighting'] as const satisfies readonly RowCode[];
 
-// Both lists must name every member of their union: a landmark or row code added in the code fails the typecheck.
+// The list must name every member of its union: a row code added in the code fails the typecheck. The receipt
+// reasons are RECEIPT_HEALTH_REASONS, which receipts/health.ts proves complete the same way.
 type Missing<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : false;
-const landmarksComplete: Missing<Landmark, (typeof RECEIPT_LANDMARKS)[number]> = true;
 const rowCodesComplete: Missing<RowCode, (typeof ROW_CODES)[number]> = true;
 
-const RECEIPT_REASONS = [
-  ...RECEIPT_LANDMARKS.map((landmark) => `selector.missing.${landmark}`),
-  ...UNREADABLE_REASONS,
-];
+const RECEIPT_REASONS = [...RECEIPT_HEALTH_REASONS];
 const LEDGER_REASONS = ROW_CODES.map((code) => `${LEDGER_REASON_PREFIX}${code}`);
 
 /** Every reason code a stored health report can carry. */
@@ -61,8 +49,8 @@ function section(title: string): string {
 }
 
 describe('docs/adapters.md explains every DEGRADED reason', () => {
-  it('both hand-kept lists name every member of their type', () => {
-    expect([landmarksComplete, rowCodesComplete]).toEqual([true, true]);
+  it('the hand-kept list names every member of its type', () => {
+    expect(rowCodesComplete).toBe(true);
   });
 
   it.each(REASONS.flatMap(([who, codes]) => codes.map((code) => [who, code] as const)))(

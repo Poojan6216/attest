@@ -71,7 +71,10 @@ const LandmarksShape = z.strictObject({
   senderAddress: SOURCE,
   senderName: SOURCE,
   date: SOURCE,
+  dateTitle: SOURCE,
+  dateAlt: SOURCE,
   account: SOURCE,
+  accountAttribute: SOURCE,
   header: SOURCE,
   blocks: SOURCE,
   cells: SOURCE,
@@ -79,8 +82,11 @@ const LandmarksShape = z.strictObject({
 
 const SelectorsShape = z.strictObject({
   $comment: z.string(),
+  observer: z.literal('gmail.receipt'),
   version: ComponentId,
+  fixtures: z.array(z.string().min(1)).min(1),
   landmarks: LandmarksShape,
+  text: z.strictObject({ noSubject: z.array(z.string().min(1)) }),
   threadUrl: SOURCE,
   platforms: z.strictObject({
     stripe: PlatformShape,
@@ -137,8 +143,13 @@ export interface GenericRules {
 export type Landmarks = z.infer<typeof LandmarksShape>;
 
 export interface ReceiptSelectors {
+  readonly observer: 'gmail.receipt';
   readonly version: string;
+  /** The fixture folders this version was checked against (agents/adapter_engineer.md rule 3). */
+  readonly fixtures: readonly string[];
   readonly landmarks: Landmarks;
+  /** Gmail's placeholders for an empty subject: interface text, never a subject (Decisions [2.1/2.4]). */
+  readonly noSubject: ReadonlySet<string>;
   readonly threadUrl: RegExp;
   readonly platforms: Readonly<Record<PlatformId, Platform>>;
   readonly generic: GenericRules;
@@ -199,8 +210,11 @@ function load(value: unknown): ReceiptSelectors {
   if (new Set(domains).size !== domains.length) throw new ReceiptError('invalid_selectors');
   const generic = data.generic;
   return Object.freeze({
+    observer: data.observer,
     version: data.version,
+    fixtures: Object.freeze([...data.fixtures]),
     landmarks: Object.freeze({ ...data.landmarks }),
+    noSubject: new Set(data.text.noSubject),
     threadUrl: compile(data.threadUrl),
     platforms: Object.freeze(platforms),
     generic: Object.freeze({

@@ -4,8 +4,16 @@
  */
 import { hashRowKey, hashText } from '../../../src/core/redact';
 import { IsoTs, Sha256 } from '../../../src/core/schema';
-import type { CalendarRecord, PendingAbsence } from '../../../src/ledger/calendar-snapshots';
-import { CalendarSnapshot, type CalendarSnapshotInput } from '../../../src/observers/gcal/snapshot';
+import {
+  CalendarRecord,
+  type PendingAbsence,
+  type UpdateWindow,
+} from '../../../src/ledger/calendar-snapshots';
+import {
+  CalendarSnapshot,
+  type CalendarSnapshotInput,
+  type StoredSnapshot,
+} from '../../../src/observers/gcal/snapshot';
 
 export const MAIN = hashText('Avery Founder');
 export const FAMILY = hashText('Family');
@@ -72,13 +80,21 @@ export function week(events: readonly EventInput[], options: WeekOptions = {}): 
   });
 }
 
-/** The record the service worker would store for `snapshot`, waiting on `pending`. */
-export function record(snapshot: CalendarSnapshot, pending: readonly PendingAbsence[] = []): CalendarRecord {
-  return {
+/**
+ * The record the service worker would store for `snapshot` (a page snapshot is stored in its stored form), waiting on
+ * `pending`, with the update windows `updates`.
+ */
+export function record(
+  snapshot: CalendarSnapshot | StoredSnapshot,
+  pending: readonly PendingAbsence[] = [],
+  updates: readonly UpdateWindow[] = [],
+): CalendarRecord {
+  return CalendarRecord.parse({
     observerId: 'gcal.event',
     accountHash: ACCOUNT,
     range: snapshot.range,
     snapshot,
     pending: [...pending],
-  };
+    updates: [...updates],
+  });
 }

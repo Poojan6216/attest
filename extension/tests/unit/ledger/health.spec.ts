@@ -15,7 +15,9 @@ import {
   UNKNOWN_VERSION,
 } from '../../../src/ledger/health';
 import { openLedger } from '../../../src/ledger/migrations';
-import { getAdapterHealth } from '../../../src/ledger/repo';
+import { readInstant } from '../../../src/ledger/clock-high-water';
+import { CLOCK_HIGH_WATER } from '../../../src/ledger/clock-guard';
+import { getAdapterHealth, putAdapterHealth } from '../../../src/ledger/repo';
 import { IsoTs } from '../../../src/ledger/types';
 import { expectLedgerError, makeHealth, pinClock, releaseClock, uniqueDbName } from './fixtures';
 
@@ -44,14 +46,17 @@ const own = (checkedAt: string, reasons: string[] = []) =>
 
 describe('recordOwnHealth', () => {
   it('keeps the latest of the observer reports while the service worker set nothing', async () => {
-    expect(await recordOwnHealth(db, own(T2))).toEqual({ written: true });
-    expect(await recordOwnHealth(db, own(T1, ['not_sent_folder']))).toEqual({ written: false });
+    expect(await recordOwnHealth(db, own(T2))).toEqual({ written: true, changed: true });
+    expect(await recordOwnHealth(db, own(T1, ['not_sent_folder']))).toEqual({
+      written: false,
+      changed: false,
+    });
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'OK', checkedAt: T2 });
   });
 
   it('never lets an OK report replace a DEGRADED the service worker set', async () => {
     await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.late_sighting'], at: T1 });
-    expect(await recordOwnHealth(db, own(T2))).toEqual({ written: false });
+    expect(await recordOwnHealth(db, own(T2))).toEqual({ written: false, changed: false });
     expect(setByLedger(await getAdapterHealth(db, 'gmail.sent'))).toBe(true);
   });
 
@@ -116,5 +121,53 @@ describe('clearLedgerDegraded', () => {
     await recordOwnHealth(db, own(T1, ['not_sent_folder']));
     expect(await clearLedgerDegraded(db, own(T2))).toEqual({ cleared: false });
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ reasons: ['not_sent_folder'] });
+  });
+});
+
+describe('a repeat of the stored report (TECH-2: no write, no broadcast, checkedAt kept fresh)', () => {
+  const at = (minutes: number, seconds = 0): IsoTs =>
+    IsoTs.parse(new Date(Date.parse(T1) + minutes * 60_000 + seconds * 1_000).toISOString());
+
+  it('is not rewritten while the stored one is younger than OBSERVER_HEALTH_REFRESH_MS', async () => {
+    expect(await recordOwnHealth(db, own(at(0)))).toEqual({ written: true, changed: true });
+    expect(await recordOwnHealth(db, own(at(0, 30)))).toEqual({ written: false, changed: false });
+    expect(await recordOwnHealth(db, own(at(0, 59)))).toEqual({ written: false, changed: false });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ checkedAt: at(0) });
+  });
+
+  it('is written once the stored one is that old, so checkedAt stays fresh, but says nothing new', async () => {
+    await recordOwnHealth(db, own(at(0)));
+    expect(await recordOwnHealth(db, own(at(1)))).toEqual({ written: true, changed: false });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'OK', checkedAt: at(1) });
+  });
+
+  it('a change of status, reasons or version is written at once and announced', async () => {
+    await recordOwnHealth(db, own(at(0)));
+    expect(await recordOwnHealth(db, own(at(0, 5), ['not_sent_folder']))).toEqual({
+      written: true,
+      changed: true,
+    });
+    expect(await recordOwnHealth(db, own(at(0, 10), ['selector.missing.row']))).toEqual({
+      written: true,
+      changed: true,
+    });
+    // A page that recovers clears its DEGRADED at its next pass (Hard Rule 6).
+    expect(await recordOwnHealth(db, own(at(0, 15)))).toEqual({ written: true, changed: true });
+    const bumped = makeHealth({ adapterId: 'gmail.sent', version: '1.0.1', checkedAt: at(0, 20) });
+    expect(await recordOwnHealth(db, bumped)).toEqual({ written: true, changed: true });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
+      version: '1.0.1',
+      checkedAt: at(0, 20),
+    });
+  });
+
+  it('every health instant written raises the clock high water (SEC-4: the guard repairs it)', async () => {
+    await recordOwnHealth(db, own(T2));
+    expect(await readInstant(db, CLOCK_HIGH_WATER)).toBe(T2);
+    await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.late_sighting'], at: T3 });
+    expect(await readInstant(db, CLOCK_HIGH_WATER)).toBe(T3);
+    const later = IsoTs.parse(new Date(Date.parse(T3) + 60_000).toISOString());
+    await putAdapterHealth(db, makeHealth({ adapterId: 'muse', checkedAt: later }));
+    expect(await readInstant(db, CLOCK_HIGH_WATER)).toBe(later);
   });
 });

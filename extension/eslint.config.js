@@ -19,14 +19,18 @@ import {
   appGlobals,
   DEXIE_ALLOWED,
   DEXIE_RESTRICTION,
+  EXTENSION_STORAGE_SYNTAX,
   EXTRACTOR_RESTRICTED_IMPORTS,
   EXTRACTOR_SCOPES,
+  HELPER_RESTRICTED_IMPORTS,
+  HELPER_SCOPES,
   LISTENER_SCOPES,
   MESSAGING_SYNTAX,
   NETWORK_EXEMPT_FILES,
   NODE_IMPORTS,
   NODE_TYPE_SYNTAX,
   restrictGlobals,
+  SKELETON_FILES,
   WORKER_SCOPES,
 } from './eslint-rules/fences.js';
 
@@ -258,11 +262,25 @@ export default tseslint.config(
     rules: {
       'attest/no-act': 'error',
       'no-restricted-imports': ['error', ACT_RESTRICTED_IMPORTS],
+      // The APP list (flat config replaces it), plus no extension storage on a vendor page (TECH-10).
+      'no-restricted-syntax': [
+        'error',
+        ...MESSAGING_SYNTAX,
+        ...NODE_TYPE_SYNTAX,
+        ...AMBIENT_SYNTAX,
+        ...DOUBLE_ASSERTION_SYNTAX,
+        ...EXTENSION_STORAGE_SYNTAX,
+      ],
     },
   },
   {
+    // The helpers extractors import: never the bus, an extension API or the skeleton (TECH-10).
+    files: HELPER_SCOPES,
+    ignores: SKELETON_FILES,
+    rules: { 'no-restricted-imports': ['error', HELPER_RESTRICTED_IMPORTS] },
+  },
+  {
     files: EXTRACTOR_SCOPES,
-    ignores: ['src/adapters/base.ts', 'src/observers/base.ts'],
     rules: { 'no-restricted-imports': ['error', EXTRACTOR_RESTRICTED_IMPORTS] },
   },
   {

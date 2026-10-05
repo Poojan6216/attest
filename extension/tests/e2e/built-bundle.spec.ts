@@ -8,10 +8,14 @@
  *    other (sprint_2 2.7: the E2E tests route fixtures to these hosts; there is no test build), and every shipped
  *    script is ASCII (Chrome refuses an extension whose content script holds a Unicode noncharacter);
  *  - no shipped script contains a network call, eval, or a Function constructor (SECURITY-6, Hard Rules 1
- *    and 9), apart from the allowlisted sites below.
+ *    and 9), apart from the allowlisted sites below;
+ *  - the extension never runs in incognito tabs (Decisions [2.close] S3, SEC-9);
+ *  - each content script stays within its size budget, and no shipped script carries zod's JSON Schema code
+ *    (TECH-17: wxt.config.ts `zodWithoutJsonSchema`).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 import { expect, test } from '@playwright/test';
 
@@ -64,6 +68,8 @@ test('the shipped manifest matches the decisions', () => {
     extension_pages: "script-src 'self'; object-src 'none'",
   });
   expect(manifest).not.toHaveProperty('optional_host_permissions');
+  // Decisions [2.close] S3 (SEC-9): never in incognito, so no incognito page's facts reach the persistent ledger.
+  expect(manifest.incognito).toBe('not_allowed');
 });
 
 function files(dir: string): string[] {
@@ -133,4 +139,26 @@ test('no shipped script reaches the network or evaluates code', () => {
   expect(hits).toEqual([]);
   // The allowlist is not stale: the Zod probe is really there (once per chunk that bundles Zod).
   expect(allowedHits).toBeGreaterThanOrEqual(1);
+});
+
+/**
+ * The size budget of each content script, gzipped at level 9 (TECH-17): what a Gmail or Calendar tab downloads and
+ * parses at every load. Measured at the Sprint 2 close: Gmail 66,574 B and Calendar 62,056 B (71,247 B and 66,753 B
+ * before zod's JSON Schema code was left out). Growth past the budget is a decision, not a drift.
+ */
+const CONTENT_SCRIPT_BUDGET_GZIP = 75_000;
+
+test('each content script is within its size budget, and no script ships zod JSON Schema code (TECH-17)', () => {
+  for (const name of ['gmail', 'gcal']) {
+    const file = path.join(EXTENSION_PATH, 'content-scripts', `${name}.js`);
+    const size = gzipSync(readFileSync(file), { level: 9 }).length;
+    console.info(
+      `[bundle] content-scripts/${name}.js: ${String(size)} B gzipped (budget ${String(CONTENT_SCRIPT_BUDGET_GZIP)})`,
+    );
+    expect(size, name).toBeLessThanOrEqual(CONTENT_SCRIPT_BUDGET_GZIP);
+  }
+  const carrying = scripts(EXTENSION_PATH).filter((file) =>
+    readFileSync(file, 'utf8').includes('json-schema.org'),
+  );
+  expect(carrying.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
 });

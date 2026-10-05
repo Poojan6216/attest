@@ -4,11 +4,13 @@
  * never as a silent zero (Hard Rule 6).
  *
  * Every selector anchors on `role`, `aria-*`, `data-*` and structure, never on a class name: Gmail's class names
- * are randomised and rotate (sprint_2 🔥). `version` is the observer's version: bump it on any change.
+ * are randomised and rotate (sprint_2 🔥). `version` is the observer's version: bump it on any change. The Gmail host
+ * is not here: it is src/config.ts OBSERVER_HOSTS.gmail, the host permission itself (./route.ts).
  */
 import { z } from 'zod';
 
 import { ComponentId } from '../../core/schema';
+import { ObserverError } from '../errors';
 import raw from './selectors.json' with { type: 'json' };
 
 const Selector = z.string().min(1);
@@ -20,7 +22,6 @@ const SentSelectorsFile = z.strictObject({
   version: ComponentId,
   fixtures: z.array(z.string().min(1)).min(1),
   route: z.strictObject({
-    host: z.string().min(1),
     folder: z.string().regex(/^[a-z]+$/u),
     pageSegment: z.string().min(1),
   }),
@@ -34,8 +35,8 @@ const SentSelectorsFile = z.strictObject({
     recipient: Selector,
     time: Selector,
     newer: Selector,
-    banner: Selector,
-    accountLabel: Selector,
+    older: Selector,
+    account: Selector,
   }),
   attributes: z.strictObject({
     navSelected: Attribute,
@@ -54,8 +55,18 @@ const SentSelectorsFile = z.strictObject({
 
 export type SentSelectorsFile = z.infer<typeof SentSelectorsFile>;
 
-/** The parsed selectors.json (throws a ZodError at load when the file is malformed). */
-export const SENT_SELECTORS: Readonly<SentSelectorsFile> = Object.freeze(SentSelectorsFile.parse(raw));
+/**
+ * Parses a selectors document. A malformed one throws ObserverError('invalid_selectors'), which the logger prints by
+ * name and code (TECH-3), and never half-loads. Exported for tests.
+ */
+export function loadSentSelectors(value: unknown): Readonly<SentSelectorsFile> {
+  const parsed = SentSelectorsFile.safeParse(value);
+  if (!parsed.success) throw new ObserverError('invalid_selectors');
+  return Object.freeze(parsed.data);
+}
+
+/** The parsed selectors.json. */
+export const SENT_SELECTORS: Readonly<SentSelectorsFile> = loadSentSelectors(raw);
 
 /** The second segment of a Sent list page's route (`#sent/p2`), compiled once. */
 export const PAGE_SEGMENT = new RegExp(SENT_SELECTORS.route.pageSegment, 'u');

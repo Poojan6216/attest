@@ -18,18 +18,20 @@ import {
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../config';
 import { getLedger } from '../ledger/repo';
-import { purgeExpired } from '../ledger/retention';
+import { purgeAtTrustedClock } from '../ledger/retention-clock';
 import { log } from '../log';
 
 export type AlarmHandler = () => Promise<void> | void;
 
 /**
  * The retention purge (Sprint 2.6): the dated history older than RETENTION_DAYS goes, by the rule in
- * src/ledger/retention.ts. The clock is read here, at the edge. A failure rejects, and `handleAlarm` logs it with
- * the alarm name; the next daily alarm tries again (the purge is one transaction: all or nothing).
+ * src/ledger/retention.ts. The clock is read here, at the edge, and trusted only as far as src/ledger/
+ * retention-clock.ts allows (SEC-5): a clock far ahead of what the ledger stored never purges current history. A
+ * failure rejects, and `handleAlarm` logs it with the alarm name; the next daily alarm tries again (the purge is one
+ * transaction: all or nothing).
  */
 export async function runRetentionPurge(): Promise<void> {
-  await purgeExpired(await getLedger(), { now: nowIso() });
+  await purgeAtTrustedClock(await getLedger(), { now: nowIso() });
 }
 
 /** One handler per alarm name; later sprints add theirs (3.6 grace, 4.7 digest). */

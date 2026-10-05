@@ -16,6 +16,14 @@ export const ACT_SCOPES = ['entrypoints/content/**', 'src/adapters/**', 'src/obs
 /** The extractors themselves (`src/adapters/<vendor>/…`): pure over the DOM, no bus, no extension APIs. */
 export const EXTRACTOR_SCOPES = ['src/adapters/*/**', 'src/observers/*/**'];
 
+/**
+ * The helpers beside each skeleton that extractors import (`src/observers/text.ts`, `types.ts`, `shown.ts`, …):
+ * no bus, no extension APIs, and never the skeleton, so no import chain from an extractor reaches the bus (TECH-10).
+ * The skeleton itself (`base.ts`) posts to the bus and is the one file of these directories that may.
+ */
+export const HELPER_SCOPES = ['src/adapters/*.ts', 'src/observers/*.ts'];
+export const SKELETON_FILES = ['src/adapters/base.ts', 'src/observers/base.ts'];
+
 /** Files where MV3 listeners are registered. */
 export const LISTENER_SCOPES = ['entrypoints/background.ts', 'src/background/**', 'src/bus/**'];
 
@@ -97,6 +105,11 @@ export const ACT_RESTRICTED_IMPORTS = {
     NODE_IMPORTS,
     { group: ['dexie/*'], message: 'Code on a vendor page never opens storage (Hard Rule 2).' },
     {
+      group: ['wxt/utils/storage', '@wxt-dev/storage'],
+      message:
+        'Code on a vendor page never uses extension storage: it posts to src/bus only (TECH-10, Hard Rule 2).',
+    },
+    {
       regex: '(^|/)(ledger|background|crypto|telemetry|intel|ui)(/|$)',
       message:
         'Code on a vendor page posts to src/bus only; it never touches the ledger, worker, crypto, telemetry, model or UI code (Hard Rules 1, 2).',
@@ -104,8 +117,11 @@ export const ACT_RESTRICTED_IMPORTS = {
   ],
 };
 
-/** Extractors are pure over the DOM: no bus, no extension APIs (tech_reviewer; build_spec §7 contract). */
-export const EXTRACTOR_RESTRICTED_IMPORTS = {
+/**
+ * The helpers extractors import (HELPER_SCOPES) are as pure as the extractors: no bus, no extension APIs, and never
+ * the skeleton (`base`), which reaches the bus (TECH-10).
+ */
+export const HELPER_RESTRICTED_IMPORTS = {
   paths: [DEXIE_RESTRICTION, { name: 'wxt/browser', message: 'extract() is pure: no extension APIs.' }],
   patterns: [
     ...ACT_RESTRICTED_IMPORTS.patterns,
@@ -114,6 +130,25 @@ export const EXTRACTOR_RESTRICTED_IMPORTS = {
       message: 'extract() is pure: no extension APIs.',
     },
     { regex: '(^|/)bus(/|$)', message: 'extract() returns data; the content script posts it to the bus.' },
+    {
+      regex: '(^|/)base$',
+      message: 'The skeleton (base) reaches the bus: extractors and their helpers never import it (TECH-10).',
+    },
+  ],
+};
+
+/**
+ * Extractors are pure over the DOM: no bus, no extension APIs (tech_reviewer; build_spec §7 contract), not even
+ * through the skeleton or its pass planner (`plan`), which only the skeleton runs (TECH-10).
+ */
+export const EXTRACTOR_RESTRICTED_IMPORTS = {
+  paths: HELPER_RESTRICTED_IMPORTS.paths,
+  patterns: [
+    ...HELPER_RESTRICTED_IMPORTS.patterns,
+    {
+      regex: '(^|/)plan$',
+      message: 'The pass planner is the skeleton’s: an extractor never imports it (TECH-10).',
+    },
   ],
 };
 
@@ -195,6 +230,21 @@ export const AMBIENT_SYNTAX = [
   selector,
   message:
     'Shipped code declares no globals and no namespaces: an ambient declaration hides the real global from every fence (Hard Rules 1, 4).',
+}));
+
+/**
+ * Extension storage (`browser.storage`, `chrome.storage`, however reached) is not for code on a vendor page (TECH-10,
+ * Hard Rule 2): what a content script learns goes to the service worker through src/bus, which validates it and stores
+ * it in the ledger. `navigator.storage` is the vendor's own and attest/no-act refuses it too.
+ */
+export const EXTENSION_STORAGE_SYNTAX = [
+  "MemberExpression[property.name='storage']",
+  "MemberExpression[computed=true][property.value='storage']",
+  "ObjectPattern > Property[key.name='storage']",
+].map((selector) => ({
+  selector,
+  message:
+    'Code on a vendor page never uses extension storage: it posts to the service worker through src/bus (TECH-10, Hard Rule 2).',
 }));
 
 /** Runtime messaging only through src/bus (TECH-4, extension_engineer rule 2). */

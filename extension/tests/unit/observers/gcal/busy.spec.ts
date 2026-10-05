@@ -2,18 +2,25 @@
  * The Calendar observer while the page is still drawing its range (sprint_2 2.7; src/observers/gcal/page.ts
  * `pageBusy`; Hard Rules 5, 6): a half-drawn week is never read as deletions. While `role="main"`, a grid in it, or
  * an ancestor of either is `aria-busy="true"`, or a progress bar is shown in `role="main"`, the pass is health OK
- * with no rows, no coverage and no snapshot (never DEGRADED: drawing is not a fault). Once drawn, the same page reads
- * as usual. And days that each hide events behind their own "N more" are a page read whole with nothing seen whole:
- * OK, no coverage, its snapshot still posted; a "more" control in no day is a layout the reader does not know:
- * DEGRADED `window.unknown`.
+ * with no rows, no coverage and no snapshot (drawing is not a fault). Once drawn, the same page reads as usual. A page
+ * that stays busy is DEGRADED `page.busy` once its run of busy passes has lasted BUSY_LIMIT_MS (SEC-10: never OK with
+ * no coverage forever). And days that each hide events behind their own "N more" are a page read whole with nothing
+ * seen whole: OK, no coverage, its snapshot still posted; a "more" control in no day is a layout the reader does not
+ * know: DEGRADED `window.unknown`.
+ *
+ * What a page's snapshot implies is the diff's (src/observers/gcal/diff.ts), which the service worker runs on every
+ * pass against the range's stored snapshot: the tests compare the drawn week before the edit with the page read here.
  */
 import { describe, expect, it } from 'vitest';
 
 import type { BusMessage } from '../../../../src/bus/messages';
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
+import { type IsoTs } from '../../../../src/core/schema';
 import { runPass } from '../../../../src/observers/base';
+import { diffSnapshots } from '../../../../src/observers/gcal/diff';
+import { BUSY_GAP_MS, BUSY_LIMIT_MS } from '../../../../src/observers/gcal/health';
+import type { GcalObserver } from '../../../../src/observers/gcal/observer';
 import { planPass } from '../../../../src/observers/plan';
-import type { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
 import type { LabelledFixture } from '../../fixtures/fixture-labels';
 import { zoneOffset } from '../../fixtures/fixture-page-read';
 import { recordingPost } from '../helpers';
@@ -49,8 +56,15 @@ function progressIn(parent: Element, hidden = false): void {
   parent.prepend(bar);
 }
 
-function plan(f: LabelledFixture, doc: Document, previous: CalendarSnapshot | null) {
-  return planPass({ observer: observerFor(f, previous), doc, ctx: ctxOf(f), policy: DEFAULT_POLICY });
+function plan(f: LabelledFixture, doc: Document) {
+  return planPass({ observer: observerFor(f), doc, ctx: ctxOf(f), policy: DEFAULT_POLICY });
+}
+
+/** The change rows the snapshot of `doc` (read as `f`'s page) implies against the drawn week before the deletion. */
+function changesAgainstEdit(f: LabelledFixture, doc: Document): string[] {
+  const snapshot = observerFor(f).snapshot(doc, ctxOf(f));
+  if (snapshot === null) throw new Error('no snapshot');
+  return diffSnapshots(snapshotOfFixture(EDIT), snapshot).changes.map((row) => row.type);
 }
 
 const BUSY: readonly [string, (doc: Document) => void][] = [
@@ -82,24 +96,20 @@ const BUSY: readonly [string, (doc: Document) => void][] = [
 
 describe('a page still drawing is not read (Hard Rule 5: a half-drawn week is never deletions)', () => {
   it('without the busy mark, the same half-drawn page would read every event as deleted', () => {
-    const result = plan(
+    const changes = changesAgainstEdit(
       DELETE,
       halfDrawn(DELETE, () => undefined),
-      snapshotOfFixture(EDIT),
     );
-    expect(result.observations.length).toBeGreaterThan(1);
-    expect(new Set(result.observations.map((o) => o.type))).toEqual(new Set(['calendar.deleted']));
+    expect(changes.length).toBeGreaterThan(1);
+    expect(new Set(changes)).toEqual(new Set(['calendar.deleted']));
   });
 
   it.each(BUSY)('%s: health OK, no rows, no coverage, no snapshot', (_, mark) => {
     const doc = halfDrawn(DELETE, mark);
-    const observer = observerFor(DELETE, snapshotOfFixture(EDIT));
+    const observer = observerFor(DELETE);
     expect(observer.health(doc)).toEqual({ status: 'OK' });
     expect(observer.snapshot(doc, ctxOf(DELETE))).toBeNull();
-    expect(plan(DELETE, doc, snapshotOfFixture(EDIT))).toEqual({
-      status: 'OK_NO_COVERAGE',
-      observations: [],
-    });
+    expect(plan(DELETE, doc)).toEqual({ status: 'OK_NO_COVERAGE', observations: [] });
   });
 
   it('a busy pass posts its health, OK, and nothing else, even with an account switcher still drawing', async () => {
@@ -108,7 +118,7 @@ describe('a page still drawing is not read (Hard Rule 5: a half-drawn week is ne
       d.querySelector('[aria-label^="Google Account:"]')?.setAttribute('aria-label', 'Google Account:');
     });
     const recording = recordingPost();
-    const result = await runPass(observerFor(DELETE, snapshotOfFixture(EDIT)), {
+    const result = await runPass(observerFor(DELETE), {
       doc,
       post: recording.post,
       now: () => DELETE.page.readAt,
@@ -118,6 +128,81 @@ describe('a page still drawing is not read (Hard Rule 5: a half-drawn week is ne
     });
     expect(result).toEqual({ status: 'OK', reasons: [], posted: ['adapter.health'], complete: true });
     expect(recording.messages.map((m: BusMessage) => m.type)).toEqual(['adapter.health']);
+  });
+});
+
+/** `DELETE.page.readAt` plus `ms`, in New York time. */
+function after(ms: number): IsoTs {
+  const at = new Date(Date.parse(DELETE.page.readAt) + ms - 4 * 3_600_000);
+  return `${at.toISOString().slice(0, 19)}-04:00` as IsoTs;
+}
+
+/** One pass of `observer` over `doc` at `DELETE.page.readAt` + `ms`: its status and reasons. */
+function passAt(observer: GcalObserver, doc: Document, ms: number): string {
+  const result = planPass({
+    observer,
+    doc,
+    ctx: { ...ctxOf(DELETE), observedAt: after(ms) },
+    policy: DEFAULT_POLICY,
+  });
+  return result.status === 'DEGRADED' ? `DEGRADED ${result.reasons.join()}` : result.status;
+}
+
+const busyPage = (): Document =>
+  halfDrawn(DELETE, (doc) => {
+    main(doc).setAttribute('aria-busy', 'true');
+  });
+const MINUTE = 60_000;
+
+describe('a page that stays busy is DEGRADED page.busy (SEC-10, Hard Rule 6: never OK with no coverage forever)', () => {
+  it('once a run of busy passes has lasted BUSY_LIMIT_MS, until a pass finds the page drawn', () => {
+    expect(BUSY_LIMIT_MS).toBe(5 * MINUTE);
+    const observer = observerFor(DELETE);
+    const doc = busyPage();
+    const run = [0, 1, 2, 3, 4, 5].map((minute) => passAt(observer, doc, minute * MINUTE));
+    expect(run).toEqual(Array.from({ length: 6 }, () => 'OK_NO_COVERAGE'));
+    // The run has lasted 5 minutes: the next busy pass, and every one after it, is DEGRADED.
+    expect(passAt(observer, doc, 6 * MINUTE)).toBe('DEGRADED page.busy');
+    expect(passAt(observer, doc, 7 * MINUTE)).toBe('DEGRADED page.busy');
+    // A pass that finds the page drawn ends the run; a busy page after it starts a new one.
+    expect(passAt(observer, docOf(DELETE), 8 * MINUTE)).toBe('OK');
+    expect(passAt(observer, doc, 9 * MINUTE)).toBe('OK_NO_COVERAGE');
+  });
+
+  it('a gap longer than BUSY_GAP_MS between two busy passes starts a new run (the tab was hidden)', () => {
+    const observer = observerFor(DELETE);
+    const doc = busyPage();
+    const step = BUSY_GAP_MS + 1_000;
+    const spaced = [0, 1, 2, 3, 4, 5].map((i) => passAt(observer, doc, i * step));
+    expect(spaced).toEqual(Array.from({ length: 6 }, () => 'OK_NO_COVERAGE'));
+    // Passes BUSY_GAP_MS apart keep one run going.
+    const kept = [0, 1, 2, 3].map((i) => passAt(observer, doc, 6 * step + i * BUSY_GAP_MS));
+    expect(kept).toEqual(['OK_NO_COVERAGE', 'OK_NO_COVERAGE', 'OK_NO_COVERAGE', 'OK_NO_COVERAGE']);
+    expect(passAt(observer, doc, 6 * step + 4 * BUSY_GAP_MS)).toBe('DEGRADED page.busy');
+  });
+
+  it('a run that already made the page DEGRADED still ends on a gap or a clock that went back', () => {
+    const observer = observerFor(DELETE);
+    const doc = busyPage();
+    const run = [0, 1, 2, 3, 4, 5, 6].map((minute) => passAt(observer, doc, minute * MINUTE));
+    expect(run.at(-1)).toBe('DEGRADED page.busy');
+    // The tab sat hidden for an hour: its first busy pass after that starts a new run, never cries wolf.
+    const back = 6 * MINUTE + BUSY_GAP_MS + 60 * MINUTE;
+    expect(passAt(observer, doc, back)).toBe('OK_NO_COVERAGE');
+    for (const minute of [1, 2, 3, 4, 5])
+      expect(passAt(observer, doc, back + minute * MINUTE)).toBe('OK_NO_COVERAGE');
+    expect(passAt(observer, doc, back + 6 * MINUTE)).toBe('DEGRADED page.busy');
+    // So does a clock that went back while the page was DEGRADED.
+    expect(passAt(observer, doc, 0)).toBe('OK_NO_COVERAGE');
+  });
+
+  it('a clock that went back starts a new run', () => {
+    const observer = observerFor(DELETE);
+    const doc = busyPage();
+    for (const minute of [10, 11, 12, 13, 14])
+      expect(passAt(observer, doc, minute * MINUTE)).toBe('OK_NO_COVERAGE');
+    expect(passAt(observer, doc, 0)).toBe('OK_NO_COVERAGE');
+    expect(passAt(observer, doc, MINUTE)).toBe('OK_NO_COVERAGE');
   });
 });
 
@@ -147,7 +232,7 @@ describe('a busy page is never DEGRADED for what it has not drawn yet (Hard Rule
       'event.unreadable',
     ],
   ])('%s: DEGRADED (%s) unmarked, but health OK and nothing read while busy', (_, draw, mark, reason) => {
-    const observer = observerFor(DELETE, snapshotOfFixture(EDIT));
+    const observer = observerFor(DELETE);
     const unmarked = docOf(DELETE);
     draw(unmarked);
     const health = observer.health(unmarked);
@@ -156,10 +241,7 @@ describe('a busy page is never DEGRADED for what it has not drawn yet (Hard Rule
     draw(busy);
     mark(busy);
     expect(observer.health(busy)).toEqual({ status: 'OK' });
-    expect(plan(DELETE, busy, snapshotOfFixture(EDIT))).toEqual({
-      status: 'OK_NO_COVERAGE',
-      observations: [],
-    });
+    expect(plan(DELETE, busy)).toEqual({ status: 'OK_NO_COVERAGE', observations: [] });
   });
 });
 
@@ -188,9 +270,8 @@ describe('a page that only looks busy is read as usual', () => {
   ])('%s is not busy: the drawn page reads as usual (one calendar.deleted)', (_, mark) => {
     const doc = docOf(DELETE);
     mark(doc);
-    const result = plan(DELETE, doc, snapshotOfFixture(EDIT));
-    expect(result.status).toBe('OK');
-    expect(result.observations.map((o) => o.type)).toEqual(['calendar.deleted']);
+    expect(plan(DELETE, doc).status).toBe('OK');
+    expect(changesAgainstEdit(DELETE, doc)).toEqual(['calendar.deleted']);
   });
 });
 
@@ -212,7 +293,7 @@ describe('days that hide events, and a "more" control in no day', () => {
   it('every day hiding events behind its own "N more": OK, no coverage, the snapshot still kept', () => {
     const doc = docOf(EDIT);
     hideEventsOn(doc, WEEK_KEYS);
-    const result = plan(EDIT, doc, null);
+    const result = plan(EDIT, doc);
     expect(result.status).toBe('OK_NO_COVERAGE');
     const snapshot = observerFor(EDIT).snapshot(doc, ctxOf(EDIT));
     expect(snapshot?.days.every((day) => !day.complete)).toBe(true);
@@ -225,7 +306,7 @@ describe('days that hide events, and a "more" control in no day', () => {
     stray.setAttribute('role', 'button');
     stray.textContent = '3 more';
     main(doc).prepend(stray);
-    const result = plan(EDIT, doc, null);
+    const result = plan(EDIT, doc);
     expect(result).toMatchObject({ status: 'DEGRADED', reasons: ['window.unknown'] });
     expect(result).not.toHaveProperty('snapshot');
   });

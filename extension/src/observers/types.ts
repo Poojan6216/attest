@@ -44,8 +44,12 @@ export interface Adapter<T> {
   readonly version: string;
   /** Exact host permissions (src/config.ts OBSERVER_HOSTS), never a wildcard (Hard Rule 8). */
   readonly hosts: readonly string[];
-  /** Runs first, on every pass. DEGRADED → nothing is extracted and no coverage is written (Hard Rules 5, 6). */
-  readonly health: (doc: Document) => HealthCheck;
+  /**
+   * Runs first, on every pass. DEGRADED → nothing is extracted and no coverage is written (Hard Rules 5, 6). The
+   * skeleton also passes the pass's context: most observers read only the page, and the Calendar one times its run of
+   * busy passes with `ctx.observedAt` (Decisions [2.close] SEC-10), so that run goes on while the pass is DEGRADED.
+   */
+  readonly health: (doc: Document, ctx?: ExtractContext) => HealthCheck;
   /** Pure over the DOM; never mutates, never dispatches events (Hard Rule 3). */
   readonly extract: (doc: Document, ctx: ExtractContext) => readonly T[];
 }
@@ -87,6 +91,16 @@ export interface Observer extends Adapter<RawRow> {
    * only when the pass has a window or a snapshot to post.
    */
   readonly account: (doc: Document) => string | null;
+  /**
+   * Every attribute a read of the page depends on (TECH-2): the ones its selectors match on (`role`, `aria-label`,
+   * `data-…`; ./batch.ts `selectorAttributes` lists them from selectors.json) and the ones it reads (`title`,
+   * `email`, …), the account reader's included. The content script's one MutationObserver watches only these
+   * attributes of all its observers, plus the shown-view ones (./batch.ts VIEW_ATTRIBUTES), so a hover or focus change
+   * that touches only other attributes starts no pass (one that changes `class`, or an attribute an observer reads,
+   * still does; real pages are measured in Sprint 6.4); tree and text changes always do. Absent: every attribute is
+   * watched.
+   */
+  readonly attributes?: readonly string[] | undefined;
   /**
    * The span this pass could see (§3: for a newest-first list whose pass saw its head, `windowEnd` is
    * `ctx.observedAt`; otherwise the newest visible row). Null when the page does not show it: the pass is then

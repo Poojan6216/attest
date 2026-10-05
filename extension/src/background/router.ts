@@ -3,6 +3,10 @@
  * answered from the ledger; observer messages (sprint_2 2.7) go to ./observer-messages.ts and ./calendar-pass.ts,
  * which store what they may and answer a `BusAck`. Adapters (3.6) add theirs here.
  *
+ * Every observer message is first checked against the site it came from (./sender-site.ts, SEC-V1): an observer's
+ * health, rows, pings and snapshots are taken only from a page on that observer's own site, so one site's content
+ * script can never write another site's facts or health.
+ *
  * Whatever an observer handler stored is announced to open UI pages with one `ledger.changed` broadcast (nobody may
  * be listening: src/bus send() logs that at debug only).
  */
@@ -17,6 +21,7 @@ import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
 import { createPassState } from './observer-state';
+import { wrongSite } from './sender-site';
 
 /** The clock lives at the edge (never in src/core). ISO 8601 with the writer's local offset (src/clock.ts). */
 export type Clock = () => string;
@@ -65,9 +70,13 @@ export function createHandlers(
 ): BusHandlers {
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
-    'adapter.health': (message) => onHealth(ctx, message),
-    'observer.observations': (message) => onObservations(ctx, message),
-    'coverage.ping': (message, sender) => onCoveragePing(ctx, message, sender),
-    'calendar.snapshot': (message, sender) => onCalendarSnapshot(ctx, message, sender),
+    'adapter.health': (message, sender) =>
+      wrongSite(sender, message.health.adapterId, message.type) ?? onHealth(ctx, message),
+    'observer.observations': (message, sender) =>
+      wrongSite(sender, message.observerId, message.type) ?? onObservations(ctx, message),
+    'coverage.ping': (message, sender) =>
+      wrongSite(sender, message.ping.observerId, message.type) ?? onCoveragePing(ctx, message, sender),
+    'calendar.snapshot': (message, sender) =>
+      wrongSite(sender, message.observerId, message.type) ?? onCalendarSnapshot(ctx, message, sender),
   };
 }

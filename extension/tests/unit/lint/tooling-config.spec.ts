@@ -110,9 +110,13 @@ describe('the poisoned run (FR3-4): core, golden and property tests under the ru
     expect(POISON_EXCLUDE).toEqual(['tests/unit/core/core-poison*.spec.ts']);
     expect(poisonConfig.test?.include).toEqual(POISON_INCLUDE);
     expect(poisonConfig.test?.exclude).toEqual(expect.arrayContaining(POISON_EXCLUDE));
-    // Only the ledger's own index property leaves the guarded run, and the candidate tests swap to the memory index
-    // there (it does no I/O); the main run keeps both implementations.
-    expect(POISON_LEDGER_EXCLUDE).toEqual(['tests/property/candidates-ledger-index.property.spec.ts']);
+    // Only the ledger's own property suites (fake-indexeddb, a pinned clock) leave the guarded run, and the candidate
+    // tests swap to the memory index there (it does no I/O); the main run keeps both implementations.
+    expect(POISON_LEDGER_EXCLUDE).toEqual([
+      'tests/property/candidates-ledger-index.property.spec.ts',
+      'tests/property/calendar-third-party.property.spec.ts',
+      'tests/property/ledger/**/*.spec.ts',
+    ]);
     expect(poisonConfig.test?.exclude).toEqual(expect.arrayContaining(POISON_LEDGER_EXCLUDE));
     expect(POISON_INDEX_ALIAS).toBe('tests/unit/ledger/index-implementations-memory.ts');
     expect(poisonConfig.test?.setupFiles).toEqual([TIMEOUT_SETUP, POISON_SETUP]);

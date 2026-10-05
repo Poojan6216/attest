@@ -23,10 +23,16 @@ export const POISON_INCLUDE = [
 export const POISON_EXCLUDE = ['tests/unit/core/core-poison*.spec.ts'];
 
 /**
- * Ledger tests that sit beside the core ones: they run src/ledger over fake-indexeddb, which does I/O by design, so
- * they test the ledger, not src/core's purity, and run in the main suite.
+ * Ledger tests that sit beside the core ones: they run src/ledger over fake-indexeddb, which does I/O by design, with
+ * a pinned clock, so they test the ledger, not src/core's purity, and run in the main suite. The ledger's own property
+ * suites live in tests/property/ledger (TECH-15: every property suite under tests/property); the Calendar ledger
+ * property beside the core ones is one of them too.
  */
-export const POISON_LEDGER_EXCLUDE = ['tests/property/candidates-ledger-index.property.spec.ts'];
+export const POISON_LEDGER_EXCLUDE = [
+  'tests/property/candidates-ledger-index.property.spec.ts',
+  'tests/property/calendar-third-party.property.spec.ts',
+  'tests/property/ledger/**/*.spec.ts',
+];
 
 /** The candidate tests' implementation list, swapped for the memory index alone (its header says why). */
 export const POISON_INDEX_ALIAS = 'tests/unit/ledger/index-implementations-memory.ts';

@@ -13,9 +13,10 @@
  *
  * The ledger keeps two `meta` facts:
  *  - `clockHighWater`: the latest instant stored since the last repair: each new row's and claim's sighting, each
- *    coverage interval's `lastSyncAt` and each Calendar record's `readAt` (`noteStoredInstant`, written in the
- *    transaction that stores the fact). Each was read at or before the now of the transaction that stored it, so a
- *    later now below it means the clock went back. Batch instants are not counted: a batch reads, it is not evidence.
+ *    coverage interval's `lastSyncAt`, each Calendar record's `readAt` and each observer health report's `checkedAt`
+ *    (`noteStoredInstant`, written in the transaction that stores the fact). Each was read at or before the now of
+ *    the transaction that stored it, so a later now below it means the clock went back. Batch instants are not
+ *    counted: a batch reads, it is not evidence.
  *  - `clockFloorAt`: written by a repair, never lowered: the latest instant stamped before the clock went back. No
  *    Calendar chain vouches for changes before it (src/background/calendar-pass.ts lifts `changesSince` to it).
  *
@@ -31,8 +32,13 @@
  *     deleted: the next pass derives it again, first seen in the present, with its first-look marker. A row a batch
  *     read stays as it is (replay, Hard Rule 4): its earlier re-sightings are no-ops (./upsert.ts `clockMs`), and the
  *     floor keeps any chain from reading it as a change it followed;
- *  5. the floor becomes the high water (or stays, if higher) and the high water is cleared;
- *  6. it logs `ledger.clock_regressed` once, with counts only.
+ *  5. every observer health report checked after now is repaired (SEC-4): otherwise every honest report would be
+ *     older than it and ignored (./health.ts), so a stored OK would hide a real DEGRADED, and a DEGRADED the service
+ *     worker set could not be cleared, until real time caught up. The observer's own report is deleted (its next
+ *     report, the message being stored included, takes its place); a DEGRADED the service worker set is re-stamped
+ *     at now, its reasons kept, so it still stands until a later clean pass is accepted (Hard Rule 6);
+ *  6. the floor becomes the high water (or stays, if higher) and the high water is cleared;
+ *  7. it logs `ledger.clock_regressed` once, with counts only (the re-stamped health reports only when there were any).
  * Claims and other rows stay as stored: a batch may have graded with them.
  *
  * Known limit: a jump that comes back before anything is stored and before any batch runs leaves instants that are
@@ -44,25 +50,37 @@ import { lastBatchMs } from './batch-instant';
 import { CalendarRecord } from './calendar-snapshots';
 import { CLOCK_HIGH_WATER, readInstant } from './clock-high-water';
 import { readRow, readRows, type LedgerDb } from './db';
+import { setByLedger } from './health';
 import { accountKeyOf, epochMs } from './index-fields';
-import { CoveragePing, type IsoTs, Observation } from './types';
+import { AdapterHealth, CoveragePing, IsoTs, Observation } from './types';
 
 export { CLOCK_HIGH_WATER, noteStoredInstant } from './clock-high-water';
 
 /** The meta key of the floor below which no Calendar chain vouches for changes. Written only by a repair. */
 export const CLOCK_FLOOR_AT = 'clockFloorAt';
 
-/** The tables a guard reads and repairs: its scope, or a subset of the caller's transaction. */
-function guardTables(db: LedgerDb) {
-  return [db.meta, db.observations, db.coverageIntervals, db.coverage, db.calendarSnapshots];
+/**
+ * The tables a guard reads and repairs: its scope, or a subset of the caller's transaction. A caller that stores
+ * with the guard in one transaction (src/background/observer-messages.ts) opens it over these.
+ */
+export function guardTables(db: LedgerDb) {
+  return [
+    db.meta,
+    db.observations,
+    db.coverageIntervals,
+    db.coverage,
+    db.calendarSnapshots,
+    db.adapterHealth,
+  ];
 }
 
-/** What a repair removed (step 6 of the header). */
+/** What a repair removed or re-stamped (step 7 of the header). */
 interface ClockRepair {
   readonly intervals: number;
   readonly pings: number;
   readonly records: number;
   readonly rows: number;
+  readonly health: number;
 }
 
 /** The later of two instants (as instants; the first on a tie), either possibly absent. */
@@ -113,30 +131,62 @@ async function dropUnreadFutureRows(db: LedgerDb, nowMs: number): Promise<number
   return unread.length;
 }
 
-/** Steps 1 to 6 of the header, for a clock at `nowMs` below the stored high water `high`. */
+/**
+ * Step 5: every health report checked after `nowMs`: the observer's own deleted, a DEGRADED the service worker set
+ * re-stamped at `nowMs` (status, reasons and version kept). The table holds one row per observer, so reading it
+ * whole is bounded.
+ */
+async function repairFutureHealth(db: LedgerDb, nowMs: number): Promise<number> {
+  const future = readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()).filter(
+    (report) => epochMs(report.checkedAt) > nowMs,
+  );
+  const checkedAt = IsoTs.parse(new Date(nowMs).toISOString());
+  const ledgerSet = (report: AdapterHealth): boolean => setByLedger(report);
+  const own = future.filter((report) => !ledgerSet(report)).map((report) => report.adapterId);
+  await db.adapterHealth.bulkDelete(own);
+  await db.adapterHealth.bulkPut(future.filter(ledgerSet).map((report) => ({ ...report, checkedAt })));
+  return future.length;
+}
+
+/** Steps 1 to 7 of the header, for a clock at `nowMs` below the stored high water `high`. */
 async function repair(db: LedgerDb, nowMs: number, high: IsoTs): Promise<ClockRepair> {
   const floor = later(await readInstant(db, CLOCK_FLOOR_AT), high) ?? high;
   const coverage = await dropFutureCoverage(db, nowMs);
   const records = await db.calendarSnapshots.where('readMs').above(nowMs).delete();
   const rows = await dropUnreadFutureRows(db, nowMs);
+  const health = await repairFutureHealth(db, nowMs);
   await db.meta.put({ key: CLOCK_FLOOR_AT, value: floor });
   await db.meta.delete(CLOCK_HIGH_WATER);
   const { intervals, pings } = coverage;
-  log.warn('ledger.clock_regressed', { intervals, pings, records, rows });
-  return { intervals, pings, records, rows };
+  // The health count is named only when a report was re-stamped (the earlier fields keep their exact shape).
+  log.warn(
+    'ledger.clock_regressed',
+    health > 0 ? { intervals, pings, records, rows, health } : { intervals, pings, records, rows },
+  );
+  return { intervals, pings, records, rows, health };
 }
 
 /**
  * The guard of the header, at the clock `nowMs` (epoch ms) the caller reads for the message it is about to store:
  * repairs when the clock went back below what the ledger stored, then returns the floor in force (undefined when
- * the clock never went back). One readwrite transaction over `meta`, `observations`, `coverageIntervals`,
- * `coverage` and `calendarSnapshots`, or the caller's when it has one with those tables (src/ledger/first-look.ts
- * `inCalendarPass`).
+ * the clock never went back). Whether a repair is due is decided by a read (TECH-2: the guard runs for every observer
+ * message, and the clock almost never went back); the repair is one readwrite transaction over `guardTables` (`meta`,
+ * `observations`, `coverageIntervals`, `coverage`, `calendarSnapshots` and `adapterHealth`), which checks again inside
+ * it. Either runs in the caller's transaction when it has one with those tables.
  */
 export async function guardClock(db: LedgerDb, nowMs: number): Promise<IsoTs | undefined> {
-  return db.transaction('rw', guardTables(db), async (): Promise<IsoTs | undefined> => {
+  const due = async (): Promise<IsoTs | undefined> => {
     const high = await highWater(db);
-    if (high !== undefined && nowMs < epochMs(high)) await repair(db, nowMs, high);
+    return high !== undefined && nowMs < epochMs(high) ? high : undefined;
+  };
+  const seen = await db.transaction('r', [db.meta, db.calendarSnapshots], async () => ({
+    high: await due(),
+    floor: await readInstant(db, CLOCK_FLOOR_AT),
+  }));
+  if (seen.high === undefined) return seen.floor;
+  return db.transaction('rw', guardTables(db), async (): Promise<IsoTs | undefined> => {
+    const high = await due();
+    if (high !== undefined) await repair(db, nowMs, high);
     return readInstant(db, CLOCK_FLOOR_AT);
   });
 }

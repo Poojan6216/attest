@@ -25,7 +25,8 @@ import {
   upsertClaim,
   upsertObservation,
 } from '../../../src/ledger/repo';
-import { purgeExpired, RETENTION_DAYS } from '../../../src/ledger/retention';
+import { RETENTION_DAYS } from '../../../src/config';
+import { purgeExpired } from '../../../src/ledger/retention';
 import { CoveragePing } from '../../../src/ledger/types';
 import {
   claimId,

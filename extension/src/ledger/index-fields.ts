@@ -2,12 +2,12 @@
  * Derived index fields: computed by the repo on write, stripped on read.
  *
  * A stored row is the strict domain object plus a few derived keys that exist only so IndexedDB can
- * answer the hot query paths (tech_reviewer: type+timeBucket, counterparty token, agent+date). They are
+ * answer the hot query paths (tech_reviewer: type+timeBucket, agent+date, the coverage instants). They are
  * never part of a domain object, never returned to callers, and never exported. Every derived value is
  * computed from allowlisted domain fields only, so no new content enters storage (Hard Rule 2).
  *
  * Derived values are frozen into each row when it is written. Changing how one is computed (the bucket
- * width `LEDGER_TIME_BUCKET_MINUTES`, `normalizeToken`, `counterpartyTokensOf`, `dateKey`) needs a ledger
+ * width `LEDGER_TIME_BUCKET_MINUTES`, `dateKey`) needs a ledger
  * migration whose `upgrade` recomputes the field over existing rows. Without it, old rows silently drop out
  * of the index queries, and evidence Attest already saw stops reaching grading (Hard Rule 5).
  */
@@ -39,15 +39,16 @@ export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
 export const INDEX_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> = {
   requests: ['date'],
   claims: ['date'],
-  observations: ['timeBucket', 'counterpartyTokens'],
+  observations: ['timeBucket'],
   grants: [],
   // `agent` is a Receipt field (docs/grading.md §14.3), so the [agent+date] index reads it from the domain.
   receipts: ['date'],
   adapterHealth: [],
   coverage: ['accountKey'],
   meta: [],
-  // Epoch ms read by core `instantMs` (./coverage.ts), so IndexedDB answers range queries by instant.
-  coverageIntervals: ['accountKey', 'startMs', 'endMs', 'syncMs'],
+  // Epoch ms read by core `instantMs` (./coverage.ts), so IndexedDB answers range queries by instant; the kind and
+  // length keep window reads off the markers and bound them (schema v4, TECH-1).
+  coverageIntervals: ['accountKey', 'startMs', 'endMs', 'syncMs', 'kind', 'lenMs'],
   // The snapshot's `readAt` in epoch ms, for the retention purge (./calendar-snapshots.ts).
   calendarSnapshots: ['readMs'],
 };
@@ -56,13 +57,11 @@ export type RequestRow = Request & { readonly date: string };
 export type ClaimRow = Claim & { readonly date: string };
 export type ObservationRow = Observation & {
   readonly timeBucket: number;
-  readonly counterpartyTokens: readonly string[];
 };
 export type ReceiptRow = Receipt & { readonly date: string };
 export type CoverageRow = CoveragePing & { readonly accountKey: string };
 
 const TIME_BUCKET_MS = LEDGER_TIME_BUCKET_MINUTES * 60_000;
-const EMAIL = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/;
 
 /**
  * `YYYY-MM-DD` of an ISO-with-offset timestamp: the writer's local date at the place it was recorded. Edge
@@ -90,32 +89,6 @@ export function timeBucketOf(isoTs: string): number {
   return Math.floor(epochMs(isoTs) / TIME_BUCKET_MS);
 }
 
-/** Normalises a counterparty token for indexing and for lookups (same function on both sides). */
-export function normalizeToken(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-/**
- * Tokens for the multiEntry `counterpartyTokens` index: the normalised counterparty, its domain when it is
- * an email address, and the normalised merchant; deduplicated, in that order.
- *
- * PLACEHOLDER derivation (Sprint 0): Sprint 1 `src/core/normalize.ts` owns counterparty normalisation and
- * replaces this function's body; the index name and its multiEntry shape stay. That replacement ships with a
- * migration that re-derives `counterpartyTokens` for stored observations (see the header).
- */
-export function counterpartyTokensOf(observation: Pick<Observation, 'counterparty' | 'merchant'>): string[] {
-  const tokens = new Set<string>();
-  const counterparty = normalizeToken(observation.counterparty ?? '');
-  if (counterparty !== '') {
-    tokens.add(counterparty);
-    const domain = EMAIL.exec(counterparty)?.[1];
-    if (domain !== undefined) tokens.add(domain);
-  }
-  const merchant = normalizeToken(observation.merchant ?? '');
-  if (merchant !== '') tokens.add(merchant);
-  return [...tokens];
-}
-
 /** Coverage rows are keyed by `[observerId+accountKey]`; IndexedDB keys cannot be undefined. */
 export function accountKeyOf(accountHash: string | undefined): string {
   return accountHash ?? '';
@@ -133,7 +106,6 @@ export function toObservationRow(observation: Observation): ObservationRow {
   return {
     ...observation,
     timeBucket: timeBucketOf(observation.occurredAt),
-    counterpartyTokens: counterpartyTokensOf(observation),
   };
 }
 

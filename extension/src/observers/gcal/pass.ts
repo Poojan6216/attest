@@ -1,6 +1,8 @@
 /**
- * What one Calendar pass reports, from one read of the page (./read.ts): its snapshot, its coverage windows and its
- * rows (sprint_2 2.5; docs/grading.md §3, §6.1).
+ * What one Calendar pass reports, from one read of the page (./read.ts): its snapshot and its coverage windows
+ * (sprint_2 2.5; docs/grading.md §3, §6.1). The snapshot starts its own chain (`baselineAt` = its `readAt`): the
+ * observer never holds a stored snapshot, and the service worker carries a chain's baseline on from its stored base
+ * (src/background/calendar-step.ts).
  *
  * Coverage (Hard Rule 5): a window runs from the first instant of a visible day (local midnight, in the zone the
  * times are read in) to the first instant of the day after the last one, so a week reaching into the future is
@@ -8,7 +10,7 @@
  * more" was not seen whole, so it is left out and the range splits into several windows, each its own coverage.ping
  * (sprint_2 2.7). A clean pass with no whole day reports none: OK, no coverage.
  */
-import { instantMs, type OffsetAt } from '../../core/normalize';
+import type { OffsetAt } from '../../core/normalize';
 import type { VisibleWindow } from '../types';
 import { GcalError } from './errors';
 import type { GridDay } from './page';
@@ -22,28 +24,8 @@ export function rangeOf(facts: PageFacts): string {
   return `${facts.days[0]?.iso ?? ''}/${facts.days[facts.days.length - 1]?.iso ?? ''}`;
 }
 
-/**
- * The chain's baseline: the previous snapshot's when this one continues it (same range, same selectors version,
- * its baseline not after this pass), else this pass's own instant.
- */
-function baselineOf(previous: CalendarSnapshot | null, range: string, readAt: string): string {
-  const continues =
-    previous !== null &&
-    previous.range === range &&
-    previous.version === GCAL_VERSION &&
-    instantMs(previous.baselineAt) <= instantMs(readAt);
-  return continues ? previous.baselineAt : readAt;
-}
-
-/**
- * The snapshot of `facts` read at `readAt` (the pass instant), continuing `previous` (the stored snapshot of the
- * range, or null). Throws `GcalError('invalid_snapshot')` on a bug.
- */
-export function snapshotOf(
-  facts: PageFacts,
-  readAt: string,
-  previous: CalendarSnapshot | null = null,
-): CalendarSnapshot {
+/** The snapshot of `facts` read at `readAt` (the pass instant). Throws `GcalError('invalid_snapshot')` on a bug. */
+export function snapshotOf(facts: PageFacts, readAt: string): CalendarSnapshot {
   const range = rangeOf(facts);
   const calendars = new Map<string, { shown: boolean; listed: number }>();
   for (const calendar of facts.calendars) {
@@ -60,7 +42,7 @@ export function snapshotOf(
     version: GCAL_VERSION,
     range,
     readAt,
-    baselineAt: baselineOf(previous, range, readAt),
+    baselineAt: readAt,
     days: facts.days.map((day) => ({ date: day.iso, complete: day.complete })),
     calendars: [...calendars.entries()].map(([key, { shown, listed }]) =>
       listed > 1 ? { key, shown, ambiguous: true } : { key, shown },
@@ -97,11 +79,4 @@ export function coverageWindows(facts: PageFacts, offsetAt: OffsetAt): VisibleWi
     if (first === undefined || after === null) return [];
     return [{ windowStart: dayStart(first.day, offsetAt).iso, windowEnd: dayStart(after, offsetAt).iso }];
   });
-}
-
-/** A previous snapshot as the store returned it: parsed (Zod at the boundary), or null when absent or invalid. */
-export function previousSnapshot(stored: unknown): CalendarSnapshot | null {
-  if (stored === null || stored === undefined) return null;
-  const parsed = CalendarSnapshot.safeParse(stored);
-  return parsed.success ? parsed.data : null;
 }

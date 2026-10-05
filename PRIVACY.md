@@ -22,7 +22,7 @@ Later versions read these pages, and only in tabs you have open yourself:
 - receipt emails you open in Gmail, to see purchases
 - Google Calendar, to see which events exist
 
-Attest only reads these pages. It never clicks, types, sends, cancels or submits anything on them. It never reads from a hidden background tab and never signs in for you. It does not use the Gmail API or any server-side access to your accounts.
+Attest only reads these pages. It never clicks, types, sends, cancels or submits anything on them. It does not run in incognito windows, so nothing you open there is read or stored. It reads only tabs you opened yourself, including one you have switched away from, never opens or reads a tab on its own, and never signs in for you. It does not use the Gmail API or any server-side access to your accounts.
 
 It never opens a page on its own, with one exception: an optional feature, off by default, that opens Gmail in a visible, pinned tab so that checks can run. It does nothing until you turn it on, and it is described here in full before it ships.
 
@@ -44,7 +44,7 @@ It also keeps:
 - the limits you set for each agent, and the names of the apps and accounts each agent's settings page shows as connected
 - when your Gmail and Calendar tabs were open and whether you were active in them, with a fingerprint of the account instead of its address, so a receipt can say UNVERIFIABLE when Attest could not see, and can flag sends made while you were away
 - whether each page reader is working
-- for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, and its guests' email addresses, so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
+- for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, its first guest's email address, and a one-way fingerprint of each guest's address (never the address), so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
 
 It never stores email bodies, attachments, chat transcripts or full pages. The full list, table by table and field by field, is in docs/privacy-architecture.md.
 
@@ -72,11 +72,11 @@ Its only use is the opt-in telemetry described above, which does not exist yet. 
 
 ## How long data is kept
 
-Later versions delete stored facts and receipts after 90 days by default. You will be able to choose 30, 90 or 180 days.
+Attest deletes stored facts once they are 90 days old; the purge runs once a day. A later version lets you choose 30, 90 or 180 days, and deletes receipts on the same schedule once it makes them.
 
 ## Deleting your data
 
-Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. A later version adds a button in the options to delete all Attest data without uninstalling, and an export (JSON or CSV) so you can keep a copy first.
+Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
 
 ## Permissions
 

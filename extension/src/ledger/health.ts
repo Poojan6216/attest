@@ -15,9 +15,19 @@
  *  - A pass that sends nothing but its health (a Gmail list view with no receipt open) clears nothing: there was
  *    nothing to accept.
  * Otherwise the observer's own report is stored as before: the latest wins (repo.ts `putAdapterHealth`).
+ *
+ * A report that says what the stored one says (status, reasons and version) is written only once the stored one is
+ * OBSERVER_HEALTH_REFRESH_MS old (TECH-2): a pass runs every few seconds on a busy page, and rewriting the same row
+ * each time cost a readwrite transaction per pass. The stored `checkedAt` stays at most that old while the observer
+ * keeps reporting, and a change of status, reasons or version is always written at once (`changed`), so a page that
+ * recovers still clears its DEGRADED at its next pass (Hard Rule 6). Every instant written here raises the clock's
+ * high water (./clock-high-water.ts), so a report stamped while the clock ran ahead is repaired with the rest of the
+ * ledger when the clock comes back (./clock-guard.ts, SEC-4).
  */
+import { OBSERVER_HEALTH_REFRESH_MS } from '../config';
 import { instantMs } from '../core/normalize';
 import { SCHEMA_LIMITS } from '../core/schema';
+import { noteStoredInstant } from './clock-high-water';
 import { readRow, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { AdapterHealth, ComponentId, type AdapterHealthInput, type IsoTs } from './types';
@@ -58,28 +68,59 @@ async function stored(db: LedgerDb, adapterId: string): Promise<AdapterHealth | 
   return readRow('adapterHealth', AdapterHealth, await db.adapterHealth.get(adapterId));
 }
 
+/** What a health write did: whether a row was written, and whether it says something the stored one did not. */
+export interface HealthWrite {
+  readonly written: boolean;
+  /** Status, reasons or version differ from the stored report (or there was none): open UI pages must re-read. */
+  readonly changed: boolean;
+}
+
+const UNWRITTEN: HealthWrite = Object.freeze({ written: false, changed: false });
+
+/** Whether two reports say the same thing: status, reasons (in order) and version. */
+function sameReport(a: AdapterHealth, b: AdapterHealth): boolean {
+  return (
+    a.status === b.status &&
+    a.version === b.version &&
+    a.reasons.length === b.reasons.length &&
+    a.reasons.every((reason, index) => reason === b.reasons[index])
+  );
+}
+
+/** The row the rule in the header stores for `own` over `current`, or null when it stores nothing. */
+function nextOwnReport(own: AdapterHealth, current: AdapterHealth | undefined): AdapterHealth | null {
+  if (current !== undefined && instantMs(own.checkedAt) < instantMs(current.checkedAt)) return null;
+  if (!setByLedger(current)) return own;
+  if (own.status === 'OK') return null;
+  return { ...own, reasons: mergeReasons(own.reasons, current.reasons.filter(isLedgerReason)) };
+}
+
+/** What writing `next` over `current` comes to: nothing for a repeat of the stored report younger than the refresh. */
+function plannedWrite(next: AdapterHealth | null, current: AdapterHealth | undefined): HealthWrite {
+  if (next === null) return UNWRITTEN;
+  if (current === undefined || !sameReport(current, next)) return { written: true, changed: true };
+  const age = instantMs(next.checkedAt) - instantMs(current.checkedAt);
+  return age >= OBSERVER_HEALTH_REFRESH_MS ? { written: true, changed: false } : UNWRITTEN;
+}
+
 /**
- * Stores an observer's (or adapter's) own report by the rule in the header. Returns whether anything was written:
- * false for a report older than the stored one, and for an OK report while a DEGRADED the service worker set stands.
+ * Stores an observer's (or adapter's) own report by the rule in the header. Returns whether anything was written
+ * (false for a report older than the stored one, for an OK report while a DEGRADED the service worker set stands, and
+ * for a repeat of the stored report younger than OBSERVER_HEALTH_REFRESH_MS) and whether it changed what the stored
+ * report says. The common case, a repeat, is decided by a read alone: no readwrite transaction.
  */
-export async function recordOwnHealth(
-  db: LedgerDb,
-  input: AdapterHealthInput,
-): Promise<{ readonly written: boolean }> {
+export async function recordOwnHealth(db: LedgerDb, input: AdapterHealthInput): Promise<HealthWrite> {
   const own = parseHealth(input);
-  return db.transaction('rw', db.adapterHealth, async (): Promise<{ written: boolean }> => {
+  const seen = await stored(db, own.adapterId);
+  if (!plannedWrite(nextOwnReport(own, seen), seen).written) return UNWRITTEN;
+  return db.transaction('rw', [db.adapterHealth, db.meta], async (): Promise<HealthWrite> => {
     const current = await stored(db, own.adapterId);
-    if (current !== undefined && instantMs(own.checkedAt) < instantMs(current.checkedAt)) {
-      return { written: false };
-    }
-    if (!setByLedger(current)) {
-      await db.adapterHealth.put(own);
-      return { written: true };
-    }
-    if (own.status === 'OK') return { written: false };
-    const kept = current.reasons.filter(isLedgerReason);
-    await db.adapterHealth.put({ ...own, reasons: mergeReasons(own.reasons, kept) });
-    return { written: true };
+    const next = nextOwnReport(own, current);
+    const write = plannedWrite(next, current);
+    if (!write.written || next === null) return UNWRITTEN;
+    await db.adapterHealth.put(next);
+    await noteStoredInstant(db, next.checkedAt);
+    return write;
   });
 }
 
@@ -103,7 +144,7 @@ export async function markLedgerDegraded(db: LedgerDb, input: LedgerDegraded): P
     });
   }
   const version = ComponentId.safeParse(input.version).data ?? UNKNOWN_VERSION;
-  await db.transaction('rw', db.adapterHealth, async (): Promise<void> => {
+  await db.transaction('rw', [db.adapterHealth, db.meta], async (): Promise<void> => {
     const current = await stored(db, input.adapterId);
     const report = parseHealth({
       adapterId: input.adapterId,
@@ -113,6 +154,7 @@ export async function markLedgerDegraded(db: LedgerDb, input: LedgerDegraded): P
       checkedAt: current === undefined ? input.at : later(input.at, current.checkedAt),
     });
     await db.adapterHealth.put(report);
+    await noteStoredInstant(db, report.checkedAt);
   });
 }
 
@@ -125,12 +167,14 @@ export async function clearLedgerDegraded(
   input: AdapterHealthInput,
 ): Promise<{ readonly cleared: boolean }> {
   const own = parseHealth(input);
-  return db.transaction('rw', db.adapterHealth, async (): Promise<{ cleared: boolean }> => {
-    const current = await stored(db, own.adapterId);
-    if (!setByLedger(current) || instantMs(own.checkedAt) <= instantMs(current.checkedAt)) {
-      return { cleared: false };
-    }
+  const clears = (current: AdapterHealth | undefined): boolean =>
+    setByLedger(current) && instantMs(own.checkedAt) > instantMs(current.checkedAt);
+  // Nearly every accepted message finds nothing to clear: a read decides that, with no readwrite transaction.
+  if (!clears(await stored(db, own.adapterId))) return { cleared: false };
+  return db.transaction('rw', [db.adapterHealth, db.meta], async (): Promise<{ cleared: boolean }> => {
+    if (!clears(await stored(db, own.adapterId))) return { cleared: false };
     await db.adapterHealth.put(own);
+    await noteStoredInstant(db, own.checkedAt);
     return { cleared: true };
   });
 }

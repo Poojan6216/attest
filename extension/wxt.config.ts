@@ -1,7 +1,8 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import tailwindcss from '@tailwindcss/vite';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'wxt';
 
 import packageJson from './package.json' with { type: 'json' };
@@ -31,6 +32,68 @@ function contentScripts(): { name: string; inputPath: string; type: 'content-scr
   });
 }
 
+// Zod's JSON Schema export (TECH-17). zod classic's schema module imports its two JSON Schema modules and names them
+// in every schema constructor, so tree-shaking kept about 17 KB of code Attest never calls (`toJSONSchema()`, the
+// Standard Schema `jsonSchema` methods) in each content script and in the worker's chunk. This plugin gives that one
+// importer stand-ins instead: each processor and each method factory throws if it is ever called, and
+// `aggregateChecks`, which the `.minLength`/`.format` getters read, comes from the real module. The names are read
+// from zod's own file at build time, so an upgrade that renames them fails the build or the bundle check
+// (tests/unit/lint/zod-json-schema.spec.ts, tests/e2e/built-bundle.spec.ts), never silently.
+const ZOD_CLASSIC_SCHEMAS = /[\\/]zod[\\/]v4[\\/]classic[\\/]schemas\.js$/;
+const ZOD_PROCESSORS = '../core/json-schema-processors.js';
+const ZOD_TO_JSON_SCHEMA = '../core/to-json-schema.js';
+const ZOD_STAND_IN = '\0attest-zod-json-schema:';
+const UNSHIPPED = `() => { throw new Error('zod JSON Schema is not shipped in Attest'); }`;
+
+/** The names zod classic's schema module reads from `processors`, and imports from the to-json-schema module. */
+export function zodJsonSchemaNames(classic: string): { processors: string[]; toJsonSchema: string[] } {
+  const code = classic.replace(/^import[^;]*;$/gm, '');
+  const processors = [
+    ...new Set([...code.matchAll(/\bprocessors\.([A-Za-z_$][\w$]*)/g)].map((m) => m[1] ?? '')),
+  ];
+  const imported = /import\s*\{([^}]*)\}\s*from\s*["']\.\.\/core\/to-json-schema\.js["']/.exec(classic)?.[1];
+  const toJsonSchema = (imported ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (!processors.includes('aggregateChecks') || toJsonSchema.length === 0) {
+    throw new Error('zod classic no longer imports its JSON Schema modules as wxt.config.ts expects');
+  }
+  return { processors: processors.sort(), toJsonSchema: toJsonSchema.sort() };
+}
+
+/** The stand-in for `source` (one of the two modules) as imported by zod classic's schema module at `importer`. */
+export function zodStandIn(source: string, importer: string): string {
+  const names = zodJsonSchemaNames(readFileSync(importer, 'utf8'));
+  if (source === ZOD_TO_JSON_SCHEMA) {
+    return names.toJsonSchema.map((name) => `export const ${name} = () => ${UNSHIPPED};`).join('\n');
+  }
+  const real = JSON.stringify(path.resolve(path.dirname(importer), ZOD_PROCESSORS));
+  const stubs = names.processors.filter((name) => name !== 'aggregateChecks');
+  return [
+    `export { aggregateChecks } from ${real};`,
+    ...stubs.map((name) => `export const ${name} = ${UNSHIPPED};`),
+  ].join('\n');
+}
+
+/** The Vite plugin of the comment above. */
+export function zodWithoutJsonSchema(): Plugin {
+  return {
+    name: 'attest:zod-without-json-schema',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (importer === undefined || !ZOD_CLASSIC_SCHEMAS.test(importer)) return null;
+      if (source !== ZOD_PROCESSORS && source !== ZOD_TO_JSON_SCHEMA) return null;
+      return `${ZOD_STAND_IN}${source}|${importer}`;
+    },
+    load(id) {
+      if (!id.startsWith(ZOD_STAND_IN)) return null;
+      const [source = '', importer = ''] = id.slice(ZOD_STAND_IN.length).split('|');
+      return zodStandIn(source, importer);
+    },
+  };
+}
+
 export default defineConfig({
   hooks: {
     'entrypoints:found': (_wxt, infos) => {
@@ -44,6 +107,9 @@ export default defineConfig({
     name: 'Attest',
     description: packageJson.description,
     minimum_chrome_version: '120',
+    // Never in incognito tabs (Decisions [2.close] S3, SEC-9): the ledger is the regular profile's IndexedDB and
+    // outlives an incognito session, so an incognito Gmail or Calendar page is never read (Hard Rules 2, 11).
+    incognito: 'not_allowed',
     permissions: ['storage', 'alarms'],
     host_permissions: [...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal],
     content_security_policy: {
@@ -56,7 +122,7 @@ export default defineConfig({
     artifactTemplate: '{{name}}-{{version}}.zip',
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), zodWithoutJsonSchema()],
     oxc: {
       jsx: { runtime: 'automatic', importSource: 'preact' },
     },

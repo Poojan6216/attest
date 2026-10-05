@@ -2,15 +2,16 @@
  * One Calendar pass, decided (sprint_2 2.7; docs/grading.md §3, §4.1, §7; Decisions [2.7]; Hard Rules 4, 5, 7). PURE:
  * no DOM, no clock, no I/O. ./calendar-pass.ts stores what it decides.
  *
- * `calendarStep(stored, next)` compares the snapshot a pass posted (`next`) with the range's stored record (the
- * comparison base and the absences it waits to confirm, src/ledger/calendar-snapshots.ts) through the observer's own
- * pure diff (src/observers/gcal/diff.ts `diffSnapshots`), and says:
- *  - the rows to store, each with the instant it was first seen (its `observedAt` on the way in, §3, §10):
- *    creations and updates as the diff reports them, every first sighting (an event the base could not have seen:
- *    the first look at a range, a calendar switched on, a day that was hidden), flagged as such so it is stored with
- *    its first-look marker, and deletions only once confirmed;
- *  - the record to store next;
- *  - how the pass's windows may be recorded as coverage.
+ * `calendarStep(stored, next, options)` compares the snapshot a pass posted (`next`, the page form) with the range's
+ * stored record (the comparison base, in the stored form, and the absences it waits to confirm, src/ledger/
+ * calendar-snapshots.ts) through the observer's own pure diff (src/observers/gcal/diff.ts `diffSnapshots`), and says:
+ *  - the rows to store, each with the instant it was first seen (its `observedAt` on the way in, §3, §10), and whether
+ *    it is stored as a first sighting, with its first-look marker (src/ledger/first-look.ts): creations and updates as
+ *    the diff reports them, every first sighting (an event the base could not have seen: the first look at a range, a
+ *    calendar switched on, a day that was hidden), and deletions only once confirmed;
+ *  - the record to store next: the base (in its stored form), the absences it waits on, and the update windows
+ *    (./calendar-churn.ts);
+ *  - how the pass's windows may be recorded as coverage, and how many update rows it held back (SEC-11).
  *
  * Rules (no change is ever inferred from an absence a snapshot cannot vouch for: a hidden day, a calendar named
  * twice, no account):
@@ -24,12 +25,22 @@
  *  - Creations and updates come from the diff as it decides them (a creation needs a base that saw the range whole,
  *    otherwise the event is a first sighting: the same `calendar.created` row). An event the base holds never
  *    becomes a creation or a first sighting again, so an edit is one `calendar.updated` row, never a new
- *    `calendar.created` row of the event's new state (Hard Rules 5, 7).
+ *    `calendar.created` row of the event's new state (Hard Rules 5, 7). At most CHURN_LIMIT updates of one event are
+ *    stored per window; past that they are held back (./calendar-churn.ts).
  *  - Changes are followed (`baselineAt`, then the coverage's `changesSince`) from the first of an unbroken run of
  *    complete snapshots of the range that show the same calendars. Coverage of a complete pass with nothing pending
  *    is recorded with `changesSince`; a complete pass that waits to confirm an absence records none (a batch must not
- *    read "every change was seen" while one is unreported, Hard Rule 5); a pass that is not complete records its
- *    windows without `changesSince` (it covers what was there, not what changed).
+ *    read "every change was seen" while one is unreported, Hard Rule 5); a pass that is not complete, or one that held
+ *    an update back, records its windows without `changesSince` (it covers what was there, not every change), and a
+ *    pass that held an update back also breaks the run.
+ *  - Who made a change (docs/grading.md §3, §7 v1.12; Decisions [2.close]; Hard Rule 7). A change may accuse an
+ *    agent only when the account itself made it, and other people change the account's calendar too (an invitation
+ *    Google adds, an organiser's reschedule or cancellation, an edit on a shared calendar). `options.ownChange` says
+ *    whether the account made the change a row reports, from the event's state the row describes (the new one, or
+ *    the deleted one); a change it did not make is a first sighting. The service worker passes
+ *    ./calendar-own.ts `accountMadeChange`, which since v1.12 knows of no change the account made: every creation,
+ *    update and confirmed deletion is stored as a first sighting with its first-look marker, evidence for a claim
+ *    (§4.1) that never accuses an agent.
  *  - A change noticed late is a first sighting (Decisions [2.7] wave E; Hard Rule 7). A change happened somewhere
  *    between the read of its comparison base and its first sighting, and attribution reads the first sighting
  *    (docs/grading.md §7). When the base was read more than `staleAfterMs` before it, the change may lie outside the
@@ -43,15 +54,22 @@ import { instantMs } from '../core/normalize';
 import type { Policy } from '../core/policy';
 import { type IsoTs, Sha256 } from '../core/schema';
 import { MS_PER_MINUTE } from '../core/units';
-import type { CalendarRecord, PendingAbsence } from '../ledger/calendar-snapshots';
-import { diffSnapshots } from '../observers/gcal/diff';
-import { CalendarSnapshot, type SnapshotEvent } from '../observers/gcal/snapshot';
+import type { CalendarRecord, PendingAbsence, UpdateWindow } from '../ledger/calendar-snapshots';
+import { type CalendarEvent, diffSnapshots } from '../observers/gcal/diff';
+import {
+  type CalendarSnapshot,
+  type StoredEvent,
+  StoredSnapshot,
+  storedSnapshotOf,
+} from '../observers/gcal/snapshot';
 import type { RawRow } from '../observers/types';
+import { capUpdates } from './calendar-churn';
+import type { OwnChange } from './calendar-own';
 
 /**
- * One row the pass reports, with the instant it was first seen, and whether it is a first sighting (an event the
- * base could not have seen) rather than a change: a first sighting is stored with its first-look marker
- * (src/ledger/first-look.ts), so it never accuses an agent (docs/grading.md §3, §7; Hard Rule 7).
+ * One row the pass reports, with the instant it was first seen, and whether it is stored as a first sighting: with
+ * its first-look marker (src/ledger/first-look.ts), so it never accuses an agent (docs/grading.md §3, §7; Hard Rule
+ * 7). Under ./calendar-own.ts `accountMadeChange` (v1.12) every row is.
  */
 export interface CalendarRow {
   readonly row: RawRow;
@@ -67,16 +85,21 @@ export type CalendarCoverage =
 
 export interface CalendarStep {
   readonly rows: readonly CalendarRow[];
-  /** The range's next comparison base and the absences it waits to confirm. */
-  readonly snapshot: CalendarSnapshot;
+  /** The range's next comparison base, the absences it waits to confirm and its update windows. */
+  readonly snapshot: StoredSnapshot;
   readonly pending: readonly PendingAbsence[];
+  readonly updates: readonly UpdateWindow[];
   readonly coverage: CalendarCoverage;
+  /** How many `calendar.updated` rows were held back by the per-event cap (./calendar-churn.ts); 0 for none. */
+  readonly heldBack: number;
 }
 
 /** What decides a step besides its two snapshots. */
 export interface StepOptions {
   /** A change whose comparison base was read more than this before its first sighting is a first sighting. */
   readonly staleAfterMs: number;
+  /** Whether the account made a change (./calendar-own.ts); a change it did not make is a first sighting. */
+  readonly ownChange: OwnChange;
 }
 
 /**
@@ -94,29 +117,27 @@ const isStale = (baseAt: IsoTs | undefined, sightedAt: IsoTs, options: StepOptio
   baseAt === undefined || instantMs(sightedAt) - instantMs(baseAt) > options.staleAfterMs;
 
 /** Whether a snapshot saw every day of its range whole and its list names each calendar once. */
-export function chainable(snapshot: CalendarSnapshot): boolean {
+export function chainable(snapshot: CalendarSnapshot | StoredSnapshot): boolean {
   return (
     snapshot.days.every((day) => day.complete) &&
     snapshot.calendars.every((calendar) => calendar.ambiguous !== true)
   );
 }
 
-function shownCalendars(snapshot: CalendarSnapshot): ReadonlySet<string> {
+function shownCalendars(snapshot: CalendarSnapshot | StoredSnapshot): ReadonlySet<string> {
   return new Set(snapshot.calendars.filter((calendar) => calendar.shown).map((calendar) => calendar.key));
 }
 
-function sameShown(a: CalendarSnapshot, b: CalendarSnapshot): boolean {
+function sameShown(a: CalendarSnapshot | StoredSnapshot, b: CalendarSnapshot | StoredSnapshot): boolean {
   const left = shownCalendars(a);
   const right = shownCalendars(b);
   return left.size === right.size && [...left].every((key) => right.has(key));
 }
 
-function rowsAt(rows: readonly RawRow[], sightedAt: IsoTs, firstSighting: boolean): CalendarRow[] {
-  return rows.map((row) => ({ row, sightedAt, firstSighting }));
-}
-
-function withBaseline(snapshot: CalendarSnapshot, baselineAt: IsoTs, events?: SnapshotEvent[]): unknown {
-  return { ...snapshot, baselineAt, events: events ?? snapshot.events };
+/** The stored form of `next` with `baselineAt` and the base's events it carries on (none by default). */
+function baseOf(next: CalendarSnapshot, baselineAt: IsoTs, carried: readonly StoredEvent[] = []): unknown {
+  const stored = storedSnapshotOf(next);
+  return { ...stored, baselineAt, events: [...stored.events, ...carried] };
 }
 
 /** The stored base `next` can be compared with: same range, read under the same selectors. */
@@ -126,18 +147,39 @@ function comparable(stored: CalendarRecord | null, next: CalendarSnapshot): stor
 
 /** A first look at the range: every event a first sighting, a chain starting now when the pass is complete. */
 function firstLook(next: CalendarSnapshot): CalendarStep {
-  const complete = chainable(next);
   return {
-    rows: rowsAt(diffSnapshots(null, next).sightings, next.readAt, true),
-    snapshot: CalendarSnapshot.parse(withBaseline(next, next.readAt)),
+    rows: diffSnapshots(null, next).sightings.map((row) => ({
+      row,
+      sightedAt: next.readAt,
+      firstSighting: true,
+    })),
+    snapshot: StoredSnapshot.parse(baseOf(next, next.readAt)),
     pending: [],
-    coverage: complete ? { kind: 'followed', changesSince: next.readAt } : { kind: 'plain' },
+    updates: [],
+    coverage: chainable(next) ? { kind: 'followed', changesSince: next.readAt } : { kind: 'plain' },
+    heldBack: 0,
   };
+}
+
+/** The event of `events` a row describes (by its key), if any. */
+function eventOf(row: RawRow, events: ReadonlyMap<string, CalendarEvent>): CalendarEvent | undefined {
+  return row.rowKey === undefined ? undefined : events.get(row.rowKey);
+}
+
+/** Whether a change to `event` must be stored as a first sighting: not known to be the account's own, or late. */
+function asSighting(
+  event: CalendarEvent | undefined,
+  baseAt: IsoTs | undefined,
+  sightedAt: IsoTs,
+  options: StepOptions,
+): boolean {
+  return event === undefined || !options.ownChange(event) || isStale(baseAt, sightedAt, options);
 }
 
 /**
  * The absences of `absences` the stored record already held (confirmed: first seen at the first absence, a first
- * sighting when that absence was noticed late), and the first ones (pending, compared with the stored snapshot).
+ * sighting when that absence was noticed late or is not the account's own), and the first ones (pending, compared
+ * with the stored snapshot).
  */
 function sortAbsences(
   absences: readonly RawRow[],
@@ -146,6 +188,7 @@ function sortAbsences(
   options: StepOptions,
 ): { confirmed: CalendarRow[]; fresh: PendingAbsence[] } {
   const waiting = new Map(stored.pending.map((absence) => [absence.key, absence]));
+  const base = new Map<string, CalendarEvent>(stored.snapshot.events.map((event) => [event.key, event]));
   const confirmed: CalendarRow[] = [];
   const fresh: PendingAbsence[] = [];
   for (const row of absences) {
@@ -154,7 +197,7 @@ function sortAbsences(
     const first = waiting.get(key.data);
     if (first === undefined) fresh.push({ key: key.data, since: readAt, baseAt: stored.snapshot.readAt });
     else {
-      const firstSighting = isStale(first.baseAt, first.since, options);
+      const firstSighting = asSighting(eventOf(row, base), first.baseAt, first.since, options);
       confirmed.push({ row, sightedAt: first.since, firstSighting });
     }
   }
@@ -169,13 +212,13 @@ function carriedEvents(
   stored: CalendarRecord,
   next: CalendarSnapshot,
   fresh: readonly PendingAbsence[],
-): { events: SnapshotEvent[]; pending: PendingAbsence[] } {
+): { events: StoredEvent[]; pending: PendingAbsence[] } {
   const present = new Set(next.events.map((event) => event.key));
   const freshKeys = new Set(fresh.map((absence) => absence.key));
   const waiting = new Map(stored.pending.map((absence) => [absence.key, absence]));
   const shown = shownCalendars(next);
   const vouches = chainable(next);
-  const events: SnapshotEvent[] = [];
+  const events: StoredEvent[] = [];
   const pending: PendingAbsence[] = [...fresh];
   for (const event of stored.snapshot.events) {
     if (present.has(event.key)) continue;
@@ -189,41 +232,76 @@ function carriedEvents(
   return { events, pending };
 }
 
-function coverageOf(next: CalendarSnapshot, pending: number, changesSince: IsoTs): CalendarCoverage {
+function coverageOf(next: CalendarSnapshot, pending: number, followed: IsoTs | null): CalendarCoverage {
   if (!chainable(next)) return { kind: 'plain' };
-  return pending > 0 ? { kind: 'none' } : { kind: 'followed', changesSince };
+  if (pending > 0) return { kind: 'none' };
+  return followed === null ? { kind: 'plain' } : { kind: 'followed', changesSince: followed };
+}
+
+/** The rows of a pass compared with its stored base: changes (capped), confirmed deletions, first sightings. */
+function rowsOf(
+  stored: CalendarRecord,
+  next: CalendarSnapshot,
+  options: StepOptions,
+): { rows: CalendarRow[]; fresh: PendingAbsence[]; updates: readonly UpdateWindow[]; heldBack: number } {
+  const diff = diffSnapshots(stored.snapshot, next);
+  const absences = chainable(next) ? diff.changes.filter((row) => row.type === 'calendar.deleted') : [];
+  const { confirmed, fresh } = sortAbsences(absences, stored, next.readAt, options);
+  // Every event the next base can hold; `compared` keeps the windows of those it does hold (`heldIn`).
+  const known = new Set([...next.events, ...stored.snapshot.events].map((event) => event.key));
+  const changes = diff.changes.filter((row) => row.type !== 'calendar.deleted');
+  const capped = capUpdates(changes, stored.updates, next.readAt, known);
+  const now = new Map<string, CalendarEvent>(next.events.map((event) => [event.key, event]));
+  const baseAt = stored.snapshot.readAt;
+  const rows = [
+    ...capped.rows.map((row) => ({
+      row,
+      sightedAt: next.readAt,
+      firstSighting: asSighting(eventOf(row, now), baseAt, next.readAt, options),
+    })),
+    ...confirmed,
+    ...diff.sightings.map((row) => ({ row, sightedAt: next.readAt, firstSighting: true })),
+  ];
+  return { rows, fresh, updates: capped.updates, heldBack: capped.heldBack };
 }
 
 /** A pass compared with a stored base of its range (see the module comment). */
 function compared(stored: CalendarRecord, next: CalendarSnapshot, options: StepOptions): CalendarStep {
   const base = stored.snapshot;
-  const diff = diffSnapshots(base, next);
-  const kept = diff.changes.filter((row) => row.type !== 'calendar.deleted');
-  const absences = chainable(next) ? diff.changes.filter((row) => row.type === 'calendar.deleted') : [];
-  const { confirmed, fresh } = sortAbsences(absences, stored, next.readAt, options);
-  const rows = [
-    ...rowsAt(kept, next.readAt, isStale(base.readAt, next.readAt, options)),
-    ...confirmed,
-    ...rowsAt(diff.sightings, next.readAt, true),
-  ];
-  const continues = chainable(base) && chainable(next) && sameShown(base, next);
+  const { rows, fresh, updates, heldBack } = rowsOf(stored, next, options);
+  const continues = heldBack === 0 && chainable(base) && chainable(next) && sameShown(base, next);
   const baselineAt =
     continues && instantMs(base.baselineAt) <= instantMs(next.readAt) ? base.baselineAt : next.readAt;
   const carried = carriedEvents(stored, next, fresh);
-  const snapshot = CalendarSnapshot.safeParse(
-    withBaseline(next, baselineAt, [...next.events, ...carried.events]),
-  );
+  const snapshot = StoredSnapshot.safeParse(baseOf(next, baselineAt, carried.events));
+  const followed = heldBack === 0 ? baselineAt : null;
   if (!snapshot.success) {
     // More events than one snapshot holds: keep this pass alone, forget what it could not confirm, restart the chain.
-    const restarted = CalendarSnapshot.parse(withBaseline(next, next.readAt));
-    return { rows, snapshot: restarted, pending: [], coverage: coverageOf(next, 0, next.readAt) };
+    const restarted = StoredSnapshot.parse(baseOf(next, next.readAt));
+    const coverage = coverageOf(next, 0, heldBack === 0 ? next.readAt : null);
+    return {
+      rows,
+      snapshot: restarted,
+      pending: [],
+      updates: heldIn(updates, restarted),
+      coverage,
+      heldBack,
+    };
   }
   return {
     rows,
     snapshot: snapshot.data,
     pending: carried.pending,
-    coverage: coverageOf(next, carried.pending.length, baselineAt),
+    updates: heldIn(updates, snapshot.data),
+    coverage: coverageOf(next, carried.pending.length, followed),
+    heldBack,
   };
+}
+
+/** The windows of the events `base` holds. */
+function heldIn(updates: readonly UpdateWindow[], base: StoredSnapshot): UpdateWindow[] {
+  const keys = new Set(base.events.map((event) => event.key));
+  return updates.filter((window) => keys.has(window.key));
 }
 
 /**

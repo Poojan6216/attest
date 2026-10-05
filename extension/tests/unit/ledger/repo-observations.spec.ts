@@ -12,12 +12,7 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { LedgerError } from '../../../src/ledger/errors';
 import { INDEX_FIELDS, timeBucketOf } from '../../../src/ledger/index-fields';
 import { openLedger } from '../../../src/ledger/migrations';
-import {
-  getObservation,
-  observationsByCounterpartyToken,
-  observationsByTypeAndBuckets,
-  upsertObservation,
-} from '../../../src/ledger/repo';
+import { getObservation, observationsByTypeAndBuckets, upsertObservation } from '../../../src/ledger/repo';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { ActionType, ObservationInput } from '../../../src/ledger/types';
 import {
@@ -283,23 +278,5 @@ describe('observationsByTypeAndBuckets', () => {
       observationsByTypeAndBuckets(db, 'email.deleted' as never, base, base),
       'invalid_input',
     );
-  });
-});
-
-describe('observationsByCounterpartyToken', () => {
-  it('finds by email, email domain, and merchant, case- and space-insensitively', async () => {
-    const email = makeObservation({ counterparty: 'Alice@Example.com' });
-    const merchantOnly = makeReceiptObservation({ merchant: 'Blue Bottle', amountCents: 650 });
-    await upsert(db, email);
-    await upsert(db, merchantOnly);
-    expect(await observationsByCounterpartyToken(db, '  ALICE@example.COM ')).toEqual([email]);
-    expect(await observationsByCounterpartyToken(db, 'example.com')).toEqual([email]);
-    expect(await observationsByCounterpartyToken(db, 'blue bottle')).toEqual([merchantOnly]);
-  });
-
-  it('returns nothing for an unknown token and rejects an empty one', async () => {
-    await upsert(db, makeObservation());
-    expect(await observationsByCounterpartyToken(db, 'bob@example.org')).toEqual([]);
-    await expectLedgerError(observationsByCounterpartyToken(db, '   '), 'invalid_input');
   });
 });

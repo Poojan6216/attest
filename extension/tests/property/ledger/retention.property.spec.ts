@@ -34,7 +34,7 @@ import {
   sha,
   ulid,
   uniqueDbName,
-} from './fixtures';
+} from '../../unit/ledger/fixtures';
 
 const RUNS = 150;
 const NOW = '2027-01-01T12:00:00Z';

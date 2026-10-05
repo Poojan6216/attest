@@ -8,15 +8,12 @@
  *  - The Sent list and a run of Calendar weeks (before and after a creation, an edit and a deletion) export as
  *    exactly their labelled observations, with only allowlisted fields, no seeded secret, OK health, coverage
  *    that follows the rows, and a first-look marker for each event the first look found (Hard Rules 2, 5, 7).
- *  - A forged `observer.observations` (a gcal.event with merchant fields and a self-chosen contentHash) writes
- *    nothing and turns the observer DEGRADED until a later clean pass of it is accepted (SEC-V1; Hard Rules 2, 6).
- *  - Two passes of one row delivered out of order: the first is stored, the second refused `late_sighting`, and the
- *    observer is DEGRADED (Hard Rules 4, 6).
+ *  - Forged and out-of-order observer messages, sent from a vendor tab's content-script world since the service worker
+ *    checks which site an observer message comes from, are ./observer-forged.spec.ts.
  *  - A Calendar event sighted before a `calendar.created` claim but written after a grading batch is stored with its
  *    sighting as `sightedAt` and is not that claim's evidence (SIM-2; docs/grading.md §4.1; Hard Rule 5).
  */
 import { expect, type Page, test } from '@playwright/test';
-import type { WxtBrowser } from 'wxt/browser';
 
 import { candidates, createMemoryIndex } from '../../src/core/candidates';
 import { idFromHash } from '../../src/core/hash';
@@ -41,13 +38,11 @@ import {
   waitForLedger,
 } from './support/vendor-pages';
 
-declare const chrome: WxtBrowser;
-
 interface Session {
   readonly server: FixtureServer;
   readonly extension: LaunchedExtension;
   readonly routes: VendorRoutes;
-  /** An extension page the test asks the ledger from (and sends forged messages from). */
+  /** An extension page the test asks the ledger from. */
   readonly ledgerPage: Page;
 }
 
@@ -154,82 +149,6 @@ async function exportsLabelledRows(session: Session): Promise<void> {
   expectMarkers(ledger, before);
 }
 
-/** A forged message writes nothing and leaves the observer DEGRADED until a later clean pass is accepted. */
-async function forgedWritesNothing(session: Session): Promise<void> {
-  const contentHash = 'ab'.repeat(32);
-  const forged = {
-    type: 'observer.observations',
-    observerId: 'gcal.event',
-    version: '1.2.0',
-    observations: [
-      {
-        id: idFromHash(contentHash),
-        source: 'gcal.event',
-        type: 'calendar.created',
-        merchant: 'Acme Store',
-        amountCents: 4200,
-        currency: 'USD',
-        occurredAt: '2026-10-08T19:00:00-04:00',
-        observedAt: new Date().toISOString(),
-        contentHash,
-      },
-    ],
-  };
-  const answer: unknown = await session.ledgerPage.evaluate(
-    (message) => chrome.runtime.sendMessage(message),
-    forged,
-  );
-  expect(answer).toEqual({ ok: false, code: 'invalid_input' });
-  const ledger = await readLedger(session.ledgerPage);
-  expect(ledger.tables.observations).toEqual([]);
-  expect(ledger.tables.coverageIntervals).toEqual([]);
-  const degraded = health(ledger, 'gcal.event');
-  expect(degraded).toMatchObject({ status: 'DEGRADED', reasons: ['ledger.invalid_input'] });
-
-  // It stays DEGRADED until a later clean pass of the same observer is fully accepted.
-  await openVendorPage(
-    session.extension.context,
-    session.routes,
-    vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
-  );
-  const cleared = await waitForLedger(
-    session.ledgerPage,
-    (state) => health(state, 'gcal.event')?.status === 'OK',
-  );
-  const report = health(cleared, 'gcal.event');
-  expect(instantMs(report?.checkedAt ?? '')).toBeGreaterThan(instantMs(degraded?.checkedAt ?? ''));
-  expect(cleared.tables.calendarSnapshots).toHaveLength(1);
-}
-
-/** The same row twice, the later sighting delivered first. */
-async function outOfOrderRefused(session: Session): Promise<void> {
-  const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
-  const [fact] = sent.observations;
-  if (fact === undefined) throw new Error('page 1 has no observation');
-  const now = Date.now();
-  const later = new Date(now - 30_000).toISOString();
-  const earlier = new Date(now - 90_000).toISOString();
-  const pass = (observedAt: string) => ({
-    type: 'observer.observations',
-    observerId: 'gmail.sent',
-    version: '1.0.0',
-    observations: [{ ...expectedObservation(sent, fact), observedAt }],
-  });
-  const post = (message: unknown): Promise<unknown> =>
-    session.ledgerPage.evaluate((each) => chrome.runtime.sendMessage(each), message);
-  expect(await post(pass(later))).toEqual({ ok: true });
-  expect(await post(pass(earlier))).toEqual({ ok: false, code: 'late_sighting' });
-
-  const ledger = await readLedger(session.ledgerPage);
-  expect(ledger.tables.observations).toHaveLength(1);
-  const [stored] = ledger.tables.observations;
-  expect(instantMs(stored?.sightedAt ?? stored?.observedAt ?? '')).toBe(instantMs(later));
-  expect(health(ledger, 'gmail.sent')).toMatchObject({
-    status: 'DEGRADED',
-    reasons: ['ledger.late_sighting'],
-  });
-}
-
 /** A grading batch between a pass's sighting and its write. */
 async function sightedBeforeBatch(session: Session): Promise<void> {
   // The ledger is open (an export opens it); then a grading batch is recorded two minutes ahead, so every row
@@ -250,16 +169,6 @@ test.describe('the observers write Gmail and Calendar to the ledger (sprint_2 2.
   test('the Sent and Calendar fixtures export as their labelled observations, allowlisted fields only', async () => {
     test.setTimeout(4 * 60_000);
     await withSession(exportsLabelledRows);
-  });
-
-  test('a forged observer.observations message writes nothing and turns the observer DEGRADED', async () => {
-    test.setTimeout(2 * 60_000);
-    await withSession(forgedWritesNothing);
-  });
-
-  test('two passes of one row delivered out of order: the first is stored, the second refused late_sighting', async () => {
-    test.setTimeout(2 * 60_000);
-    await withSession(outOfOrderRefused);
   });
 
   test('a Calendar event sighted before a calendar.created claim but written after a batch is not its evidence', async () => {
@@ -289,23 +198,23 @@ const isMarker = (entry: Interval): boolean =>
   instantMs(entry.changesSince) === instantMs(entry.lastSyncAt);
 
 /**
- * Each first sighting of the first look is stored with its marker: a point at the event's start whose changesSince
- * is the row's first sighting (docs/grading.md §3; Hard Rule 7). The rows the later weeks report are changes: none.
+ * Every Calendar row is stored with its first-look marker: a point at the event's start whose changesSince is the
+ * row's first sighting (docs/grading.md §3, §7 v1.12; Hard Rule 7). The first look's sightings have one, and so does
+ * every change the later weeks report, since Attest cannot yet tell a change the account made from one other people
+ * made: no Calendar row accuses an agent, and no marker is left without its row.
  */
 function expectMarkers(ledger: LedgerExport, before: LabelledFixture): void {
   const markers = ledger.tables.coverageIntervals.filter(isMarker);
   const marked = new Set(
     markers.map((entry) => `${instantMs(entry.windowStart)}@${instantMs(entry.lastSyncAt)}`),
   );
-  for (const event of before.events) {
-    const row = ledger.tables.observations.find(
-      (each) => each.contentHash === sightingOf(before, event).contentHash,
-    );
-    if (row === undefined) throw new Error('a first sighting was not stored');
+  const rows = ledger.tables.observations.filter((row) => row.source === 'gcal.event');
+  expect(rows.length).toBeGreaterThan(before.events.length);
+  for (const row of rows) {
     const firstSeen = instantMs(row.sightedAt ?? row.observedAt);
-    expect(marked.has(`${instantMs(row.occurredAt)}@${firstSeen}`), event.subjectHint).toBe(true);
+    expect(marked.has(`${instantMs(row.occurredAt)}@${firstSeen}`), row.subjectHint).toBe(true);
   }
-  expect(markers.length).toBeLessThanOrEqual(before.events.length);
+  expect(markers.length).toBeLessThanOrEqual(rows.length);
 }
 
 /** Coverage follows the rows: the Sent head up to its sync, the Calendar week with its changes followed. */

@@ -6,7 +6,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OBSERVER_DEBOUNCE_MS, OBSERVER_MAX_WAIT_MS } from '../../../src/config';
-import { createBatcher, MUTATION_INIT, type Timers, watchMutations } from '../../../src/observers/batch';
+import {
+  createBatcher,
+  MUTATION_INIT,
+  selectorAttributes,
+  type Timers,
+  VIEW_ATTRIBUTES,
+  watchedInit,
+  watchMutations,
+} from '../../../src/observers/batch';
 import { ObserverError } from '../../../src/observers/errors';
 
 const options = { debounceMs: OBSERVER_DEBOUNCE_MS, maxWaitMs: OBSERVER_MAX_WAIT_MS };
@@ -174,5 +182,59 @@ describe('watchMutations', () => {
     callback?.(records, {} as MutationObserver);
     expect(onChange).toHaveBeenCalledWith();
     watch.disconnect();
+  });
+});
+
+describe('watchedInit: the attributes one content script watches (TECH-2)', () => {
+  it('the tree, the text, and only the named attributes plus the shown-view ones, once each and sorted', () => {
+    const init = watchedInit([
+      ['title', 'role'],
+      ['aria-label', 'role'],
+    ]);
+    expect(init).toEqual({
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributeFilter: ['aria-label', 'class', 'hidden', 'role', 'style', 'title'],
+    });
+    expect(init).not.toHaveProperty('attributes');
+    expect(VIEW_ATTRIBUTES).toEqual(['class', 'hidden', 'style']);
+  });
+
+  it('every attribute when any observer names none', () => {
+    expect(watchedInit([['title'], undefined])).toBe(MUTATION_INIT);
+  });
+
+  it('an attribute outside the filter calls nobody; one inside does', async () => {
+    document.body.innerHTML = '<main role="main"><div role="row" title="t">a</div></main>';
+    const onChange = vi.fn();
+    const watch = watchMutations(document, onChange, MutationObserver, watchedInit([['title']]));
+    const row = document.querySelector('[role="row"]');
+    row?.setAttribute('aria-expanded', 'true');
+    await vi.runAllTimersAsync();
+    expect(onChange).not.toHaveBeenCalled();
+    row?.setAttribute('title', 'u');
+    await vi.runAllTimersAsync();
+    expect(onChange).toHaveBeenCalled();
+    onChange.mockClear();
+    row?.setAttribute('style', 'display: none');
+    await vi.runAllTimersAsync();
+    expect(onChange).toHaveBeenCalled();
+    watch.disconnect();
+  });
+});
+
+describe('selectorAttributes: what CSS selectors match on', () => {
+  it('names every attribute a selector tests, whatever the operator, never a value', () => {
+    expect(
+      selectorAttributes([
+        '[role="main"] [role="grid"]',
+        '[role="button"][aria-label="Older"]',
+        '[email], [data-hovercard-id]',
+        'a[href*="#"]',
+        '[ data-eventid ~= x]',
+        'button, a',
+      ]),
+    ).toEqual(['aria-label', 'data-eventid', 'data-hovercard-id', 'email', 'href', 'role']);
   });
 });

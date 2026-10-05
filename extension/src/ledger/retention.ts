@@ -58,8 +58,6 @@ import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
 import { ActionType, AgentId, Claim, IsoTs, Observation, Receipt, Request } from './types';
 import { RETENTION_DAYS } from '../config';
 
-export { RETENTION_DAYS };
-
 export interface PurgeOptions {
   /** The purge instant, ISO 8601 with an offset: the caller reads the clock (src/clock.ts), never the ledger. */
   readonly now: string;

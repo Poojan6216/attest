@@ -32,11 +32,11 @@ import { assertLoadedPolicy, type Policy } from '../core/policy';
 import { observationIntegrityProblems } from '../core/redact';
 import { log } from '../log';
 import { LAST_EVALUATED_AT } from './batch-instant';
+import { noteStoredInstant } from './clock-high-water';
 import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import {
   accountKeyOf,
-  normalizeToken,
   toCoverageRow,
   toReceiptRow,
   toRequestRow,
@@ -160,16 +160,6 @@ export async function observationsByTypeAndBuckets(
   return readRows('observations', Observation, rows);
 }
 
-/** Observations indexed under a counterparty token (matched after the same normalisation as on write). */
-export async function observationsByCounterpartyToken(db: LedgerDb, token: string): Promise<Observation[]> {
-  const normalized = normalizeToken(token);
-  if (normalized === '') {
-    throw new LedgerError('invalid_input', 'Counterparty token is empty', { table: 'observations' });
-  }
-  const rows = await db.observations.where('counterpartyTokens').equals(normalized).toArray();
-  return readRows('observations', Observation, rows);
-}
-
 // ── Claims ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -251,13 +241,18 @@ export async function listGrants(db: LedgerDb): Promise<Grant[]> {
 
 // ── Adapter health ──────────────────────────────────────────────────────────────────────────────
 
-/** Keeps the latest health report per adapter; a report older than the stored one is ignored. */
+/**
+ * Keeps the latest health report per adapter; a report older than the stored one is ignored. Its `checkedAt` raises
+ * the clock's high water (./clock-high-water.ts), as every health instant does (SEC-4), so a report stored while the
+ * clock ran ahead is repaired when it comes back (./clock-guard.ts).
+ */
 export async function putAdapterHealth(db: LedgerDb, input: AdapterHealthInput): Promise<WriteResult> {
   const health = parseInput('adapterHealth', AdapterHealth, input);
-  return db.transaction('rw', db.adapterHealth, async (): Promise<WriteResult> => {
+  return db.transaction('rw', [db.adapterHealth, db.meta], async (): Promise<WriteResult> => {
     const stored = readRow('adapterHealth', AdapterHealth, await db.adapterHealth.get(health.adapterId));
     if (stored !== undefined && isOlder(health.checkedAt, stored.checkedAt)) return { written: false };
     await db.adapterHealth.put(health);
+    await noteStoredInstant(db, health.checkedAt);
     return { written: true };
   });
 }

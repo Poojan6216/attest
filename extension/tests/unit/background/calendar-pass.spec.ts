@@ -1,14 +1,15 @@
 /**
  * A Calendar pass completed by its snapshot (src/background/calendar-pass.ts; sprint_2 2.7 interfaces 2 and 5;
  * docs/grading.md §3, §4.1, §7; Hard Rules 5, 6, 7) over a real ledger: the pass's held pings and its snapshot
- * become rows (each first sighting with its first-look marker), a stored record and coverage, with `changesSince`
- * only where every change was reported.
+ * become rows (each with its first-look marker: since v1.12 a change too, Decisions [2.close]), a stored record and
+ * coverage, with `changesSince` only where every change was reported.
  */
 import 'fake-indexeddb/auto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { onCalendarSnapshot, windowInRange } from '../../../src/background/calendar-pass';
+import { onCalendarSnapshot } from '../../../src/background/calendar-pass';
+import { windowInRange } from '../../../src/background/calendar-window';
 import { onCoveragePing, onHealth } from '../../../src/background/observer-messages';
 import { getCalendarRecord } from '../../../src/ledger/calendar-snapshots';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -64,13 +65,13 @@ describe('a pass with a known account', () => {
     ]);
   });
 
-  it('a later pass reports the change, with no marker, and extends the window followed since the first look', async () => {
+  it('a later pass reports the change with its marker (v1.12), and extends the window followed since the first look', async () => {
     await pass(week([event('a')], { readAt: at(0) }));
-    expect(await pass(week([event('a'), eventOn('b', '2026-10-07')], { readAt: at(1) }))).toEqual({
-      ok: true,
-    });
+    const b = eventOn('b', '2026-10-07');
+    expect(await pass(week([event('a'), b], { readAt: at(1) }))).toEqual({ ok: true });
     expect(await typesStored()).toEqual(['calendar.created', 'calendar.created']);
-    expect(await markers(db)).toEqual([markerOf(event('a'), at(0))]);
+    // Who made it is not known (Decisions [2.close]): stored as a first sighting, so it never accuses an agent.
+    expect(await markers(db)).toEqual([markerOf(event('a'), at(0)), markerOf(b, at(1))]);
     expect(await windows(db)).toEqual([{ ...entryOf(weekPing(at(1))), changesSince: at(0) }]);
   });
 
@@ -93,7 +94,28 @@ describe('a pass with a known account', () => {
       }),
     );
     expect(await typesStored()).toEqual(['calendar.created', 'calendar.updated']);
-    expect(await markers(db)).toHaveLength(1);
+    // The first look's marker and the update's own (v1.12: every change is stored as a first sighting).
+    expect(await markers(db)).toHaveLength(2);
+  });
+});
+
+describe('what the stored record keeps of the guests (SEC-2, Hard Rule 2)', () => {
+  it('each event’s first guest in clear and a key per guest; the other addresses never reach the store', async () => {
+    const guests = ['amy@example.org', 'Sam.Chen@example.net', 'zed@example.com'];
+    const review = eventOn('r', '2026-10-07', 15, { guests, guestCount: 3 });
+    expect(await pass(week([review], { readAt: at(0) }))).toEqual({ ok: true });
+    const moved = { ...review, guests: guests.slice(1), guestCount: 2 };
+    expect(await pass(week([moved], { readAt: at(1) }))).toEqual({ ok: true });
+    const stored = JSON.stringify(await db.calendarSnapshots.toArray()).toLowerCase();
+    expect(stored).toContain('sam.chen@example.net');
+    expect(stored).not.toContain('amy@example.org');
+    expect(stored).not.toContain('zed@example.com');
+    expect((await record())?.snapshot.events[0]).toMatchObject({
+      firstGuest: 'Sam.Chen@example.net',
+      guestCount: 2,
+    });
+    // The update that removed amy is still seen: the guests are compared by key.
+    expect(await typesStored()).toEqual(['calendar.created', 'calendar.updated']);
   });
 });
 
@@ -108,7 +130,8 @@ describe('a pass that cannot report every change', () => {
     const deleted = (await db.observations.toArray()).find((row) => row.type === 'calendar.deleted');
     expect(deleted?.observedAt).toBe(at(1));
     expect(await windows(db)).toEqual([{ ...entryOf(weekPing(at(20))), changesSince: at(0) }]);
-    expect(await markers(db)).toHaveLength(2);
+    // The first look's two markers and the deletion's own, at its first absence (v1.12).
+    expect((await markers(db)).map((entry) => entry.lastSyncAt)).toEqual([at(0), at(0), at(1)]);
   });
 
   it('a pass that cannot vouch for changes records its windows without changesSince; its sightings have markers', async () => {

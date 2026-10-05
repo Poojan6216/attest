@@ -26,7 +26,7 @@ import { coverageForClaim, readInterval, recordCoverage } from '../../../src/led
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { buildClaim, isoAt, MS_PER_MINUTE } from '../../tools/attest-world';
-import { makeGrant, sha, uniqueDbName } from './fixtures';
+import { makeGrant, sha, uniqueDbName } from '../../unit/ledger/fixtures';
 
 const RUNS = 300;
 /** After every generated pass synced (600 + 120 + 120 minutes, + 1 ms): any batch after the writes. */

@@ -1,4 +1,5 @@
 import { DangerZone } from './components/DangerZone';
+import { ExportSection } from './components/ExportSection';
 import { PrivacySection } from './components/PrivacySection';
 import { PrivacyStatement } from './components/PrivacyStatement';
 import { SectionNav } from './components/SectionNav';
@@ -6,7 +7,7 @@ import { StubSection } from './components/StubSection';
 
 /**
  * Options page shell (Sprint 0). The privacy statement is the first line; sections follow in the order of
- * `SECTIONS`. Features that arrive later say so and show no controls.
+ * `SECTIONS`. Features that arrive later say so and show no controls. Export saves the ledger (Sprint 2 close).
  */
 export function App() {
   return (
@@ -31,7 +32,7 @@ export function App() {
             id="model"
             summary="An optional model can suggest which items might match. It never decides a grade, and it is off by default."
           />
-          <StubSection id="export" summary="Save your receipts and their evidence as JSON or CSV." />
+          <ExportSection />
           <DangerZone />
         </div>
       </main>

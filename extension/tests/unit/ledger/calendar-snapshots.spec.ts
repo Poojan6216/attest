@@ -1,7 +1,8 @@
 /**
  * The Calendar snapshot store (src/ledger/calendar-snapshots.ts; schema v3; sprint_2 2.7; Hard Rules 2, 5): records
  * keyed by observer, account hash and range, parsed on write and on read, replaced only by a later read, exported
- * with the rest of the ledger, and purged with retention.
+ * with the rest of the ledger, and purged with retention. A record keeps each event's first guest in clear and only a
+ * key per guest (SEC-2): never every guest address of every event.
  */
 import 'fake-indexeddb/auto';
 
@@ -17,6 +18,7 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { exportLedger, LedgerExport } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
 import { purgeExpired } from '../../../src/ledger/retention';
+import { guestKey, StoredEvent } from '../../../src/observers/gcal/snapshot';
 import { ACCOUNT, at, event, keyOf, RANGE, record, week } from '../background/calendar-fixtures';
 import { captureLogs, expectLedgerError, pinClock, releaseClock, sha, uniqueDbName } from './fixtures';
 
@@ -135,5 +137,59 @@ describe('export and retention', () => {
     const report = await purgeExpired(db, { now: '2027-03-01T00:00:00Z' });
     expect(report.calendarSnapshots).toBe(1);
     expect(await db.calendarSnapshots.count()).toBe(0);
+  });
+});
+
+describe('what a record keeps of an event’s guests (SEC-2, Hard Rule 2)', () => {
+  const GUESTS = ['amy@example.org', 'Sam.Chen@example.net', 'zed@example.com'];
+  const HIDDEN = ['sam.chen@example.net', 'zed@example.com'];
+  const withGuests = (readAt = at(0)) => week([event('b', { guests: GUESTS, guestCount: 4 })], { readAt });
+
+  it('its first guest in clear and a key per guest, in the store and in the export', async () => {
+    await putCalendarRecord(db, record(withGuests()));
+    const [stored] = (await getCalendarRecord(db, KEY))?.snapshot.events ?? [];
+    expect(stored).toMatchObject({
+      firstGuest: 'amy@example.org',
+      guestKeys: GUESTS.map(guestKey).sort(),
+      guestCount: 4,
+    });
+    expect(stored).not.toHaveProperty('guests');
+    const raw = JSON.stringify(await db.calendarSnapshots.toArray()).toLowerCase();
+    const exported = JSON.stringify(await exportLedger(db, { exportedAt: at(30) })).toLowerCase();
+    for (const text of [raw, exported]) {
+      expect(text).toContain('amy@example.org');
+      for (const hidden of HIDDEN) expect(text, hidden).not.toContain(hidden);
+    }
+  });
+
+  it('a record stored in the page form, before SEC-2, is read as its stored form and rewritten so', async () => {
+    const page = withGuests();
+    await db.calendarSnapshots.put({
+      ...KEY,
+      snapshot: page,
+      pending: [],
+      readMs: Date.parse(at(0)),
+    } as never);
+    const read = await getCalendarRecord(db, KEY);
+    expect(read?.snapshot.format).toBe(2);
+    expect(read?.snapshot.events[0]?.firstGuest).toBe('amy@example.org');
+    for (const hidden of HIDDEN) expect(JSON.stringify(read).toLowerCase()).not.toContain(hidden);
+    await putCalendarRecord(db, record(withGuests(at(1))));
+    const raw = JSON.stringify(await db.calendarSnapshots.toArray()).toLowerCase();
+    for (const hidden of HIDDEN) expect(raw).not.toContain(hidden);
+  });
+
+  it('refuses a stored event whose first guest is not one of its keys, or whose keys are not ascending', () => {
+    const [stored] = record(withGuests()).snapshot.events;
+    if (stored === undefined) throw new Error('no event');
+    expect(StoredEvent.safeParse(stored).success).toBe(true);
+    expect(StoredEvent.safeParse({ ...stored, firstGuest: 'other@example.com' }).success).toBe(false);
+    expect(StoredEvent.safeParse({ ...stored, guestKeys: [...stored.guestKeys].reverse() }).success).toBe(
+      false,
+    );
+    expect(StoredEvent.safeParse({ ...stored, guestCount: 2 }).success).toBe(false);
+    const withoutFirst = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== 'firstGuest'));
+    expect(StoredEvent.safeParse(withoutFirst).success).toBe(false);
+    expect(StoredEvent.safeParse({ ...withoutFirst, guestKeys: [] }).success).toBe(true);
   });
 });

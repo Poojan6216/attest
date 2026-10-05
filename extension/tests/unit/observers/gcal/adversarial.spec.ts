@@ -12,7 +12,8 @@ import { asciiLower } from '../../../../src/core/normalize';
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
 import { hashRowKey, hashText } from '../../../../src/core/redact';
 import { accountHashOf } from '../../../../src/observers/account';
-import { createGcalObserver } from '../../../../src/observers/gcal/observer';
+import { diffSnapshots } from '../../../../src/observers/gcal/diff';
+import { createGcalObserver, type GcalObserver } from '../../../../src/observers/gcal/observer';
 import type { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
 import { planPass } from '../../../../src/observers/plan';
 import type { LabelledFixture } from '../../fixtures/fixture-labels';
@@ -51,27 +52,15 @@ function earlierWeekGrid(withChip: boolean): string {
 interface Run {
   readonly plan: ReturnType<typeof planPass>;
   readonly snapshot: CalendarSnapshot | null;
-  readonly asked: unknown[][];
+  readonly observer: GcalObserver;
 }
 
-function run(
-  html: string,
-  f: LabelledFixture = WEEK,
-  timeZone = f.page.timeZone,
-  previous: CalendarSnapshot | null = null,
-): Run {
-  const asked: unknown[][] = [];
+function run(html: string, f: LabelledFixture = WEEK, timeZone = f.page.timeZone): Run {
   const offsetAt = zoneOffset(timeZone);
-  const observer = createGcalObserver({
-    offsetAt,
-    previous: (...args) => {
-      asked.push(args);
-      return previous;
-    },
-  });
+  const observer = createGcalObserver({ offsetAt });
   const ctx = { ...ctxOf(f), offsetAt };
   const plan = planPass({ observer, doc: parseDocument(html), ctx, policy: DEFAULT_POLICY });
-  return { plan, snapshot: observer.snapshot(parseDocument(html), ctx), asked };
+  return { plan, snapshot: observer.snapshot(parseDocument(html), ctx), observer };
 }
 
 /** The snapshot's events as the labels write them (key, calendar hash, subject, start, all-day, guests). */
@@ -184,7 +173,7 @@ describe('gcal.event: days that hide events, zones, dates', () => {
     ['a link', '<a href="#more">2 more</a>'],
   ])('"N more" written as %s still leaves its day out', (_, control) => {
     const html = edited(htmlOf(MONTH), MORE_BUTTON, control);
-    const observer = createGcalObserver({ offsetAt: zoneOffset(MONTH.page.timeZone), previous: () => null });
+    const observer = createGcalObserver({ offsetAt: zoneOffset(MONTH.page.timeZone) });
     const windows = observer.visibleWindows(parseDocument(html), ctxOf(MONTH));
     expect(windows?.map((w) => [w.windowStart, w.windowEnd])).toEqual(twoWindows);
   });
@@ -193,9 +182,11 @@ describe('gcal.event: days that hide events, zones, dates', () => {
     const quarterly =
       /<div role="button" tabindex="0" data-eventchip="" data-eventid="YWI3Z21ldGVrM2c0cWU2bnZ0dW9sb3JlZG4gYXZlcnkuZm91bmRlckBleGFtcGxlLmNvbQ"[\s\S]*?Quarterly planning<\/span><\/div><\/div>/u;
     const moved = edited(htmlOf(MONTH), quarterly, '');
-    const { plan } = run(moved, MONTH, MONTH.page.timeZone, snapshotOfFixture(MONTH));
+    const { plan, snapshot } = run(moved, MONTH);
     expect(plan.status).toBe('OK');
-    expect(plan.observations).toEqual([]);
+    if (snapshot === null) throw new Error('no snapshot');
+    // What the service worker's diff makes of it, against the month as drawn before: no change at all.
+    expect(diffSnapshots(snapshotOfFixture(MONTH), snapshot)).toEqual({ changes: [], sightings: [] });
   });
 
   it('an "N more" control in no day: no day is whole, so the pass reports no window (DEGRADED)', () => {
@@ -240,32 +231,26 @@ describe('gcal.event: time zones and dates', () => {
 });
 
 describe('gcal.event: accounts', () => {
-  it('a second account (/u/1/) asks the store for its own snapshots, by its own hash', () => {
+  it('a second account (/u/1/): its coverage and its snapshot name its own hash, never the first one', () => {
     const second = 'casey.second@example.net';
     const html = htmlOf(WEEK)
       .replaceAll('avery.founder@example.com)', `${second})`)
       .replaceAll('/u/0/', '/u/1/');
-    const { plan, asked } = run(html);
+    const { plan, observer } = run(html);
     expect(plan.status === 'OK' && plan.coverage.map((c) => c.accountHash)).toEqual([accountHashOf(second)]);
-    expect(asked.length).toBeGreaterThan(0);
-    for (const args of asked) expect(args).toEqual(['2026-10-04/2026-10-10', accountHashOf(second)]);
+    expect(plan.status === 'OK' && plan.snapshot !== undefined).toBe(true);
+    // The service worker keys the range's stored snapshots by the account the snapshot message names.
+    expect(observer.passAccount(WEEK.page.readAt)).toBe(accountHashOf(second));
+    expect(plan.observations).toEqual([]);
   });
 
   it('a page with no account is compared with nothing: every event a first sighting, never a change', () => {
     const html = edited(htmlOf(WEEK), /aria-label="Google Account:[^"]*"/u, 'aria-label="Menu"');
-    const previous = snapshotOfFixture(fixture('synthetic-gcal-week-before.html'));
-    const asked: unknown[][] = [];
-    const observer = createGcalObserver({
-      offsetAt: zoneOffset(WEEK.page.timeZone),
-      previous: (...args) => {
-        asked.push(args);
-        return previous;
-      },
-    });
-    const plan = planPass({ observer, doc: parseDocument(html), ctx: ctxOf(WEEK), policy: DEFAULT_POLICY });
-    expect(asked).toEqual([]);
+    const { plan, observer } = run(html);
     expect(plan.observations).toHaveLength(WEEK.events.length);
+    expect(new Set(plan.observations.map((o) => o.type))).toEqual(new Set(['calendar.created']));
     expect(plan.status === 'OK' && plan.coverage.map((c) => c.accountHash)).toEqual([undefined]);
     expect(plan).not.toHaveProperty('snapshot');
+    expect(observer.passAccount(WEEK.page.readAt)).toBeNull();
   });
 });

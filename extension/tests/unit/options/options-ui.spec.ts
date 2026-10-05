@@ -96,8 +96,9 @@ describe('options App', () => {
     expect(navLinks).toEqual(SECTIONS.map((s) => [`#${s.id}`, s.title]));
     const headings = Array.from(root.querySelectorAll('section > h2')).map((el) => el.textContent);
     expect(headings).toEqual(SECTIONS.map((s) => s.title));
-    // Stubs say they are not built and carry no controls; the only button is the reset.
+    // Stubs say they are not built and carry no controls; the buttons are the export and the reset.
     expect(Array.from(root.querySelectorAll('button')).map((b) => b.textContent.trim())).toEqual([
+      'Export ledger',
       'Reset install id',
     ]);
     expect(root.querySelector('#install-id-value')?.textContent).toBe(ID_A);

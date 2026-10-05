@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureAlarms, handleAlarm, isAttestAlarm, resetAlarms } from '../../../src/background/alarms';
 import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES, PURGE_STARTUP_DELAY_MINUTES } from '../../../src/config';
-import { closeLedger } from '../../../src/ledger/repo';
+import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { closeLedger, getLedger, getObservation, upsertObservation } from '../../../src/ledger/repo';
 import { type LogRecord, setLogSink } from '../../../src/log';
+import { makeObservation, pinClock, releaseClock } from '../ledger/fixtures';
 
 let records: LogRecord[] = [];
 let restore: () => void = () => undefined;
@@ -104,5 +106,26 @@ describe('handleAlarm', () => {
         fields: { alarm: ALARM_NAMES.PURGE, error: 'LedgerError code=open_failed messageLength=39' },
       },
     ]);
+  });
+});
+
+describe('the purge alarm trusts the clock only as far as the ledger (SEC-5)', () => {
+  afterEach(() => {
+    releaseClock();
+  });
+
+  it('firing with the clock a year ahead deletes nothing current, and says the clock is ahead', async () => {
+    pinClock('2026-10-01T10:30:00-04:00');
+    const db = await getLedger();
+    await db.observations.clear();
+    const current = makeObservation({
+      occurredAt: '2026-10-01T10:14:00-04:00',
+      observedAt: '2026-10-01T10:20:00-04:00',
+    });
+    await upsertObservation(db, current, DEFAULT_POLICY);
+    pinClock('2027-10-01T10:30:00-04:00');
+    await handleAlarm({ name: ALARM_NAMES.PURGE });
+    expect(await getObservation(db, current.id)).toMatchObject({ contentHash: current.contentHash });
+    expect(records.map((r) => r.event)).toEqual(['alarm.fired', 'ledger.purge_clock_ahead']);
   });
 });

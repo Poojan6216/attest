@@ -68,6 +68,13 @@ export function docOf(fixture: LabelledFixture): Document {
   return parseDocument(htmlOf(fixture));
 }
 
+/** The fixture's HTML with the account switcher's label replaced: a page that names no account. */
+export function accountlessHtmlOf(fixture: LabelledFixture): string {
+  const html = htmlOf(fixture).replace(/aria-label="Google Account:[^"]*"/u, 'aria-label="Menu"');
+  if (html === htmlOf(fixture)) throw new Error(`${fixture.file}: no account switcher`);
+  return html;
+}
+
 /** The labelled fixture named `file` (in the first date folder that has it). */
 export function fixture(file: string): LabelledFixture {
   const found = GCAL_FIXTURES.find((f) => f.file === file);
@@ -80,9 +87,9 @@ export function ctxOf(f: LabelledFixture): ExtractContext {
   return { observedAt: IsoTs.parse(f.page.readAt), offsetAt: zoneOffset(f.page.timeZone) };
 }
 
-/** The observer as a content script builds it for this fixture, with `previous` as the stored snapshot. */
-export function observerFor(f: LabelledFixture, previous: CalendarSnapshot | null = null): GcalObserver {
-  return createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone), previous: () => previous });
+/** The observer as a content script builds it for this fixture (its browser zone is the page fact's). */
+export function observerFor(f: LabelledFixture): GcalObserver {
+  return createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone) });
 }
 
 /** The snapshot a clean pass over `f` stores. */

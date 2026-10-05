@@ -3,27 +3,45 @@
  * the pages model"). Pure over the DOM: it reads `doc`, returns data, and never writes, focuses, scrolls or
  * dispatches anything (Hard Rule 3). Landmarks come from ./selectors.json: role, aria-*, data-* and structure only.
  *
- * Is a conversation open? Any one of three signals says so: the page address names a thread (`#inbox/<id>`), the
- * main landmark holds the subject heading, or it holds a message. When none does, the view is a list (or settings,
- * or anything else): there is nothing to read and nothing is wrong, so health stays OK (Hard Rule 6 must not cry
- * wolf on every list view). When one does, every landmark the parsers need must be there (the main landmark
- * first), so a Gmail markup change that breaks one landmark is caught by the others, and one that breaks every DOM
- * landmark by the address.
+ * Only the main landmark Gmail shows is read (../../shown.ts, the rule every observer shares): Gmail keeps views the
+ * user left in the DOM, hidden, and a hidden conversation is never the one open (TECH-5). Is a conversation open?
+ * Any one of three signals says so: the page address names a thread (`#inbox/<id>`, read through ../route.ts
+ * `gmailFragment`), a shown main landmark holds the subject heading, or it holds a message. When none does, the
+ * view is a list (or settings, or anything else): there is nothing to read and nothing is wrong, so health stays
+ * OK (Hard Rule 6 must not cry wolf on every list view). When one does, every landmark the parsers need must be
+ * there, exactly one shown main landmark first (two are `ambiguous`: which one the user sees cannot be told), so a
+ * Gmail markup change that breaks one landmark is caught by the others, and one that breaks every DOM landmark by
+ * the address.
+ *
+ * The account is the shared Google-account reader's (../../google-account.ts) with ./selectors.json's `account`
+ * and `accountAttribute`: any display language reads, and two different addresses where a conversation is open
+ * are `ambiguous` (whose mail is "the user's own", and whose coverage, cannot be told; Hard Rule 5).
  *
  * The body is read lazily, line by line (`MessageView.lines`): a parser looks only for the total lines it needs and
  * keeps nothing but the amount it found. No body text is returned or stored (Hard Rule 2). A message is read under
  * its own conversation's subject heading: Gmail can keep an earlier conversation's view beside the open one. The
  * address names a thread as `#<view>/<id>`, or `#label/<name>/<id>` and `#search/<query>/<id>`; a bare
  * `#label/<name>` or `#search/<query>` is a list, however long its name.
+ *
+ * `pageOf` is the read kept for one pass (../../pass-memo.ts): health, the rows, the windows and the account all
+ * read the same page, once (TECH-2).
  */
 import { asciiLower, email, type EmailAddress } from '../../../core/normalize';
+import { readGoogleAccount } from '../../google-account';
+import { isElement, TEXT_NODE } from '../../nodes';
+import { perPass } from '../../pass-memo';
+import { shownChecker, shownOnly } from '../../shown';
 import { oneLine } from '../../text';
+import { gmailFragment } from '../route';
 import { RECEIPT_SELECTORS } from './selectors';
 
 const L = RECEIPT_SELECTORS.landmarks;
 
 /** What a parser-ready conversation needs; a missing one is reported as `selector.missing.<landmark>`. */
 export type Landmark = 'main' | 'subject' | 'message' | 'sender' | 'date';
+
+/** What must be one but the page shows twice; reported as `selector.ambiguous.<what>`. */
+export type Twice = 'main' | 'account';
 
 /**
  * One body line: the cells of a table row (two or more that hold text; spacer cells left out), or one run of an
@@ -54,26 +72,21 @@ export interface PageView {
   readonly opened: boolean;
   /** Landmarks a parser needs that the page lacks (only where a conversation is open). */
   readonly missing: readonly Landmark[];
+  /** What a parser needs once that the page shows twice (only where a conversation is open). */
+  readonly ambiguous: readonly Twice[];
   /** The expanded messages whose sender and date were found. */
   readonly messages: readonly MessageView[];
-  /** The signed-in account's address, ASCII-lowercased, or null when the page shows none. */
+  /** The signed-in account's address, ASCII-lowercased; null when the page names none, or two. */
   readonly account: string | null;
 }
 
 /** True when the page address's fragment names a conversation (`#inbox/FMfcg…`, `#search/q/<id>`). */
 function threadInAddress(doc: Document): boolean {
-  const url = doc.URL;
-  const hash = url.indexOf('#');
-  return hash >= 0 && RECEIPT_SELECTORS.threadUrl.test(url.slice(hash + 1));
+  const path = gmailFragment(doc.URL);
+  return path !== null && RECEIPT_SELECTORS.threadUrl.test(path);
 }
 
-/** The account switcher's address (`Google Account: Name (address)`), lowercased, or null. */
-function accountOf(doc: Document): string | null {
-  const label = doc.querySelector(L.account)?.getAttribute('aria-label') ?? '';
-  const inside = /\(([^()]*)\)\s*$/u.exec(label)?.[1];
-  const parsed = inside === undefined ? null : email(inside);
-  return parsed === null ? null : asciiLower(parsed.address);
-}
+const ACCOUNT = Object.freeze({ selector: L.account, attribute: L.accountAttribute });
 
 /** A block inside the message header (sender, date, recipients, buttons), or one that holds part of it. */
 function inHeader(block: Element, item: Element): boolean {
@@ -82,14 +95,8 @@ function inHeader(block: Element, item: Element): boolean {
   return mark !== null && item.contains(mark);
 }
 
-/** DOM node types read here (`Node.ELEMENT_NODE`, `Node.TEXT_NODE`; the `Node` global is not in every runtime). */
-const ELEMENT_NODE = 1;
-const TEXT_NODE = 3;
-
 /** Elements whose text is never mail text (a style sheet in an email body is CSS, not a line). */
 const NOT_TEXT = new Set(['style', 'script', 'template', 'noscript']);
-
-const isElement = (node: Node): node is Element => node.nodeType === ELEMENT_NODE;
 
 /**
  * The text of `root` in runs, each on one line: a `<br>` (at any depth) or the edge of a block inside `root` ends a
@@ -146,7 +153,7 @@ function* bodyLines(item: Element): Generator<Line> {
 }
 
 function dateTextOf(date: Element): string {
-  const stated = date.getAttribute('title') ?? date.getAttribute('alt');
+  const stated = date.getAttribute(L.dateTitle) ?? date.getAttribute(L.dateAlt);
   if (stated !== null && oneLine(stated) !== '') return oneLine(stated);
   return oneLine(date.textContent).replace(/\s*\([^()]*\)$/u, '');
 }
@@ -159,7 +166,7 @@ function dateCell(item: Element, sender: Element | null): Element | null {
   const notSender = (cell: Element): boolean =>
     sender === null || (!cell.contains(sender) && !sender.contains(cell));
   const cells = Array.from(item.querySelectorAll(L.date)).filter(notSender);
-  return cells.find((cell) => cell.hasAttribute('title')) ?? cells[0] ?? null;
+  return cells.find((cell) => cell.hasAttribute(L.dateTitle)) ?? cells[0] ?? null;
 }
 
 /** `Node.DOCUMENT_POSITION_FOLLOWING`: the other node comes after this one in document order. */
@@ -200,20 +207,38 @@ function messageView(item: Element, main: Element, missing: Set<Landmark>): Mess
   };
 }
 
+/** A page with nothing read: no conversation open, or none that can be told apart (`missing`, `ambiguous`). */
+function unread(opened: boolean, missing: readonly Landmark[], ambiguous: readonly Twice[]): PageView {
+  return { opened, missing, ambiguous, messages: [], account: null };
+}
+
+/** True when `main` holds a message or the subject heading: a conversation is open in it. */
+const holdsConversation = (main: Element): boolean =>
+  main.querySelector(L.message) !== null || main.querySelector(L.subject) !== null;
+
 /** Reads the opened conversation, if any. Never throws for a page that lacks something: it reports it missing. */
 export function readPage(doc: Document): PageView {
-  const inAddress = threadInAddress(doc);
-  const main = doc.querySelector(L.main);
-  if (main === null)
-    return { opened: inAddress, missing: inAddress ? ['main'] : [], messages: [], account: null };
+  const mains = shownOnly(doc.querySelectorAll(L.main), shownChecker());
+  const opened = threadInAddress(doc) || mains.some(holdsConversation);
+  if (!opened) return unread(false, [], []);
+  const [main, ...others] = mains;
+  if (main === undefined) return unread(true, ['main'], []);
+  if (others.length > 0) return unread(true, [], ['main']);
   const items = Array.from(main.querySelectorAll(L.message));
-  const heading = main.querySelector(L.subject);
-  const opened = inAddress || items.length > 0 || heading !== null;
-  if (!opened) return { opened, missing: [], messages: [], account: null };
   const missing = new Set<Landmark>();
-  if (heading === null) missing.add('subject');
+  if (main.querySelector(L.subject) === null) missing.add('subject');
   if (items.length === 0) missing.add('message');
   const expanded = items.filter((item) => item.getAttribute(L.expanded) !== 'false');
   const messages = expanded.flatMap((item) => messageView(item, main, missing) ?? []);
-  return { opened, missing: [...missing], messages, account: accountOf(doc) };
+  const account = readGoogleAccount(doc, ACCOUNT);
+  return {
+    opened,
+    missing: [...missing],
+    ambiguous: !account.ok && account.reason === 'selector.ambiguous.account' ? ['account'] : [],
+    messages,
+    account: account.ok ? asciiLower(account.address) : null,
+  };
 }
+
+/** `readPage`, read once per pass (../../pass-memo.ts): what health, the rows, the windows and the account read. */
+export const pageOf: (doc: Document) => PageView = perPass(readPage);

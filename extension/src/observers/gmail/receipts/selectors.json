@@ -1,6 +1,8 @@
 {
-  "$comment": "Gmail receipt parsers (sprint 2.3). Bump version on any change; record it with the fixture folder date in Decisions.md. Landmarks are role, aria-*, data-* and structure only, never class names. Regexes are read case-insensitively ('iu'). Sender lists are domains: an address matches its own domain and any subdomain of it. See ./index.ts.",
-  "version": "1.0.1",
+  "$comment": "Gmail receipt parsers (sprint 2.3). Bump version on any change; record it with the fixture folder date in Decisions.md. Landmarks are role, aria-*, data-* and structure only, never class names. Regexes are read case-insensitively ('iu') and must run in linear time on any subject (no quantified run next to an overlapping one: a stranger writes the subject). Sender lists are domains: an address matches its own domain and any subdomain of it. See ./index.ts.",
+  "observer": "gmail.receipt",
+  "version": "1.1.0",
+  "fixtures": ["tests/fixtures/pages/gmail/2026-10-03"],
   "landmarks": {
     "main": "[role=\"main\"]",
     "subject": "h2[data-legacy-thread-id]",
@@ -11,10 +13,16 @@
     "senderAddress": "email",
     "senderName": "name",
     "date": "[role=\"gridcell\"]",
-    "account": "[role=\"banner\"] a[aria-label^=\"Google Account:\"]",
+    "dateTitle": "title",
+    "dateAlt": "alt",
+    "account": "[role=\"banner\"] [aria-label]",
+    "accountAttribute": "aria-label",
     "header": "[email], [role=\"gridcell\"], [role=\"button\"]",
     "blocks": "tr, p, li, div, h1, h2, h3, h4, h5, h6, blockquote, pre",
     "cells": "td, th"
+  },
+  "text": {
+    "noSubject": ["(no subject)"]
   },
   "threadUrl": "^(?:(?:label|search|category|advanced-search)/[^/#?]+|(?!(?:label|search|category|advanced-search)/)[^/#?]+)/(?:[0-9a-f]{16}|[a-z0-9]{24,})$",
   "platforms": {
@@ -144,7 +152,7 @@
     "subjectTrigger": "\\b(?:order|receipt|confirmation)\\b",
     "refuseSubject": [
       "^(?:re|fwd?|fw)\\s*:",
-      "\\d+\\s*%\\s*off\\b|\\b(?:sale|deals?|save|shop now|order now|order today|ends (?:today|tonight|soon)|last (?:chance|call)|limited time|free shipping|coupons?|promo(?:tion)?s?|newsletter|picks|back in stock|price drop|new arrivals|re-?order|expir(?:es?|ed|ing))\\b",
+      "\\d\\s*%\\s*off\\b|\\b(?:sale|deals?|save|shop now|order now|order today|ends (?:today|tonight|soon)|last (?:chance|call)|limited time|free shipping|coupons?|promo(?:tion)?s?|newsletter|picks|back in stock|price drop|new arrivals|re-?order|expir(?:es?|ed|ing))\\b",
       "\\b(?:cart|reminder|complete your|finish your|(?:is|are) waiting|still (?:want|thinking|available|interested)|forg[eo]t|left (?:behind|something)|come back|almost (?:complete|done|yours|there)|confirm your|please confirm|verify your)\\b",
       "\\b(?:fail(?:ed|ure)?|declined|unsuccessful|could ?n[o'’]t|unable|on hold|pending|awaiting|problem|issue|action required|due|overdue|statement|invoice|quote|estimate)\\b",
       "\\b(?:shipped|shipping|shipment|dispatched|on its way|in transit|arriving|arrives|out for delivery|delivered|ready for pickup|picked up|tracking)\\b",

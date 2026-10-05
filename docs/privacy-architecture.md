@@ -33,7 +33,7 @@ Limitations first.
 
 - **The ledger is not encrypted.** It is an IndexedDB database in your Chrome profile on disk. Other websites and other extensions cannot read it (it belongs to Attest's own origin), but anyone or anything that can read your Chrome profile can. Optional encryption at rest is Sprint 6.5.
 - **A hash is not a secret.** Attest stores some values only as SHA-256 hashes ([§6](#6-what-is-hashed)), so a casual reader of the ledger or an export does not see them. A hash of a value someone can guess (an email address, a calendar named "Family") can be confirmed by hashing the guess. Hashing hides; it does not encrypt.
-- **Some content is stored in clear, because matching needs it.** A recipient address, a merchant name, an amount, the first 80 characters of a subject, and for Calendar the guest addresses of every event in a range you looked at ([§5.4](#54-calendarsnapshots)). These are the facts a claim is checked against.
+- **Some content is stored in clear, because matching needs it.** A recipient address, a merchant name, an amount, the first 80 characters of a subject, and for Calendar the first guest address of every event in a range you looked at; its other guests are kept only as one-way keys ([§5.4](#54-calendarsnapshots)). These are the facts a claim is checked against.
 - **The export holds everything the ledger holds** ([§8](#8-the-export)). Treat an export file like the ledger itself.
 - **The content script sees the whole page.** It runs inside the Gmail or Calendar tab you opened, so the page's text is in its memory while a pass reads it, as it is in Gmail's own. What it keeps from a pass is only what this document lists; the rest is dropped before anything crosses to the service worker (Hard Rule 2).
 
@@ -46,6 +46,8 @@ Each observer reads one vendor page in a tab you opened, and only while you have
 | `gmail.sent` | The Sent list: each row's recipients, subject and time | One row per recipient: the address, the subject (80 characters), the minute sent, a hash of Gmail's row id | The snippet, the message body, display names, other folders |
 | `gmail.receipt` | Every expanded message of a conversation you opened: its sender, subject and date; the body only of a message whose sender and subject make it a receipt candidate, and only to find the total line | One row per receipt: merchant, amount, currency, subject (80 characters), date, a hash of Gmail's message id | The rest of the body (items, addresses, card digits), any message that is not a receipt |
 | `gcal.event` | The visible days, each event chip's label (start, end, title, calendar, guests), the calendar list | One row per event first seen, created, changed or removed: title (80 characters), start, one guest address, a hash of the event key; and the range's snapshot ([§5.4](#54-calendarsnapshots)) | Locations, conference links, descriptions, response status |
+
+Attest does not run in incognito windows (the manifest says `"incognito": "not_allowed"`): an incognito Gmail or Calendar tab is never read, so nothing from it reaches the ledger, which lives in your regular profile and outlives the incognito session.
 
 Every observer also reads the signed-in account's address, and keeps only its hash ([§6](#6-what-is-hashed)). While a tab is open, the observer notes the instant of your last key press, pointer move, scroll or touch in it (never which key, where, or on what), and sends one yes/no with each coverage ping: whether there was input in the last minute ([§5.3](#53-coverage)).
 
@@ -109,7 +111,7 @@ What the observers saw: one row per distinct fact. Written only by the service w
 | `observedAt` | When the ledger stored the row: no earlier than the observer's sighting, the writer's clock, and 1 ms after the last grading batch. It decides which grading batches read the row. Never changed once stored. |
 | `sightedAt` | Present only when the ledger stored the row later than the observer saw it: the instant of that sighting. Set by the ledger only. |
 
-Index fields: `timeBucket` (the hour of `occurredAt`), `counterpartyTokens` (the counterparty, its domain and the merchant, lowercased).
+Index field: `timeBucket` (the hour of `occurredAt`). Schema v4 dropped the v1 `counterpartyTokens` index and removed its field from every stored row ([`src/ledger/migrations.ts`](../extension/src/ledger/migrations.ts)).
 
 ### 5.2 `coverageIntervals`
 
@@ -128,7 +130,7 @@ When the computer's clock goes back (a jump forward that came back, or a step ba
 | `allCalendars` | Calendar only: every listed calendar was shown. |
 | `changesSince` | Calendar only, set by the ledger: since when that view had compared every snapshot of the range, so a change in `[changesSince, lastSyncAt]` would have been seen ([`docs/adapters.md` §8.3](adapters.md#83-gcalevent)). Never earlier than the clock floor (`clockFloorAt`, [§5.6](#56-meta)). |
 
-Index fields: `accountKey` (the account hash, or empty), `startMs`, `endMs`, `syncMs` (the instants in epoch milliseconds).
+Index fields: `accountKey` (the account hash, or empty), `startMs`, `endMs`, `syncMs` (the instants in epoch milliseconds), `kind` (`point` for a single instant, `span` otherwise) and `lenMs` (`endMs` − `startMs`), which let a read stop at the intervals that can reach the window it asks about. They hold nothing the stored fields do not.
 
 ### 5.3 `coverage`
 
@@ -145,24 +147,25 @@ Index field: `accountKey`. A latest ping synced after the clock's time is delete
 
 For each Calendar observer, account and visible range, the last snapshot of that range: what the service worker compares the next pass with, to find created, changed and deleted events. Key `[observerId+accountHash+range]`. A snapshot is stored only for a page whose account is known.
 
-**This table holds more than an observation's allowlist.** It keeps every event in a range you looked at, whether or not anything happened to it, with up to 200 guest addresses each, and its end and all-day flag. It is not governed by `allowlistedFields`, which covers observation rows; it is governed by its own strict schema ([`src/observers/gcal/snapshot.ts`](../extension/src/observers/gcal/snapshot.ts), [`src/ledger/calendar-snapshots.ts`](../extension/src/ledger/calendar-snapshots.ts)). It is needed because a deletion can only be seen by comparing with what was there, and a changed guest list is an update.
+**This table holds more than an observation's allowlist.** It keeps every event in a range you looked at, whether or not anything happened to it, with its end and all-day flag, its first guest's address (a deletion's row names it) and, for each of up to 200 guests, only a one-way key: SHA-256 of the address, ASCII-lowercased, enough to tell that the guest list changed, never who is on it. It is not governed by `allowlistedFields`, which covers observation rows; it is governed by its own strict schema ([`src/observers/gcal/snapshot.ts`](../extension/src/observers/gcal/snapshot.ts), [`src/ledger/calendar-snapshots.ts`](../extension/src/ledger/calendar-snapshots.ts)). It is needed because a deletion can only be seen by comparing with what was there, and a changed guest list is an update.
 
 | Field | Meaning |
 |---|---|
 | `observerId`, `accountHash`, `range` | Whose snapshot: the observer, the account's hash, and `<first day>/<last day>` of the range. |
 | `snapshot` | The comparison base: the latest snapshot, plus the events of the previous base it lacked but could not vouch were gone (it hid a day behind "N more" or named a calendar twice, and the event's calendar is shown), plus any event it lacked that waits for a second absence (below). So this table can hold an event the latest pass did not show. |
+| `updates` | Per event of the base, the `calendar.updated` rows its range reported in the current churn window: the event `key`, `since` (the first of them) and `count`. At most 20 a day are stored per event ([grading.md §3](grading.md#3-inputs), *Update rows per event*). |
 | `pending` | Events of the base missing from one complete snapshot: each event `key`, `since` (that snapshot's read instant) and `baseAt` (the read instant of the snapshot it was compared with, so a deletion noticed long after it happened is never blamed on whoever was active when it was noticed; absent in a record stored before Sprint 2 wave E). A second absence confirms the deletion; the event coming back clears it. |
 
 The snapshot's own fields:
 
 | Field | Meaning |
 |---|---|
-| `format`, `observer`, `version` | The snapshot format (1), `gcal.event`, and the selectors version it was read under. A snapshot of another version is never compared with a new one. |
+| `format`, `observer`, `version` | The stored format (2; a record stored in the page form, format 1, is read as format 2 and rewritten by its range's next pass), `gcal.event`, and the selectors version it was read under. A snapshot of another version is never compared with a new one. |
 | `readAt` | When the pass read the page. |
 | `baselineAt` | Since when this range's changes have been followed without a break. |
 | `days` | Each visible day: its `date` (`YYYY-MM-DD`) and `complete` (false when events hid behind "N more"). |
 | `calendars` | Each listed calendar: `key` (SHA-256 of its name), `shown`, and `ambiguous` when two calendars share a name. |
-| `events` | Each event: `key` (SHA-256 of `data-eventid`), `calendar` (its calendar's key), `subjectHint` (title, 80 code points), `occurredAt` (start), `endAt`, `allDay`, `days` (the days its chips sit in), `guests` (up to 200 addresses as written, your own left out, sorted) and `guestCount`. |
+| `events` | Each event: `key` (SHA-256 of `data-eventid`), `calendar` (its calendar's key), `subjectHint` (title, 80 code points), `occurredAt` (start), `endAt`, `allDay`, `days` (the days its chips sit in), `firstGuest` (the first guest's address, your own left out), `guestKeys` (SHA-256 of each guest's address, ASCII-lowercased, ascending; up to 200) and `guestCount`. |
 
 Index field: `readMs` (`readAt` in epoch milliseconds, for the purge). A record read after the clock's time is deleted when the clock goes back (§5.2), so its range is compared with nothing next time.
 
@@ -175,7 +178,7 @@ The latest health of each observer (and, from Sprint 3, each adapter): what the 
 | `adapterId`, `version` | The observer and its selectors version. |
 | `status` | `OK` or `DEGRADED`. |
 | `reasons` | Reason codes such as `not_sent_folder` or `selector.missing.row`: codes only, never page text ([`docs/adapters.md` §4](adapters.md#4-reading-a-degraded-reason)). |
-| `checkedAt` | When the pass ran. |
+| `checkedAt` | When the pass ran that wrote it. A report that repeats the stored one (same status, reasons and version) is written again only once the stored one is a minute old (`OBSERVER_HEALTH_REFRESH_MS`); a change is written at once. A report checked after the service worker's clock is refused, and one stored while the clock ran ahead is repaired when the clock comes back. |
 
 ### 5.6 `meta`
 
@@ -183,7 +186,7 @@ Small facts about the ledger itself. Key `key`.
 
 | Field | Meaning |
 |---|---|
-| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync or a snapshot read at since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)). Instants only, never content. |
+| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync, a snapshot read at or a health check since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)); `purgeTrustedAt`, the instant the last retention purge trusted ([§7](#7-retention-and-purge)). Instants only, never content. |
 | `value` | A string of at most 256 characters, a number or a boolean. |
 
 ### 5.7 `requests`
@@ -263,16 +266,17 @@ Every hash is SHA-256 ([`docs/grading.md` §10](grading.md#10-ids-and-hashes-has
 | The signed-in account's address | `accountHash`: SHA-256 of the address, ASCII-lowercased. The address never leaves the content script. | `coverageIntervals`, `coverage`, `calendarSnapshots`, `grants.accounts` |
 | Gmail's row and message ids | `rowKeyHash` | `observations` |
 | Calendar's event id | The event `key` (SHA-256 of `data-eventid`); `rowKeyHash` hashes that key again | `calendarSnapshots`, `observations` |
+| A Calendar guest's address (every guest but an event's first) | `guestKeys`: SHA-256 of the address, ASCII-lowercased | `calendarSnapshots` |
 | A calendar's name | Its `key` | `calendarSnapshots` |
 | A row's content | `contentHash`, beside the content itself (it is an identity, not a hiding place) | `observations` |
 | A request's full text | `textHash`; the first 200 characters are kept in clear as `textHint` | `requests` (Sprint 3) |
 | A receipt's inputs | `policyHash`, `inputsHash` | `receipts` (Sprint 3) |
 
-Kept in clear, because a claim is matched against them: recipient and guest addresses, merchant names, amounts and currencies, subjects and titles (80 code points), and times.
+Kept in clear, because a claim is matched against them: recipient addresses, each Calendar event's first guest address, merchant names, amounts and currencies, subjects and titles (80 code points), and times.
 
 ## 7. Retention and purge
 
-Dated history is kept `RETENTION_DAYS` (90 days, [`src/config.ts`](../extension/src/config.ts)). A service-worker alarm runs the purge once a day ([`alarms.ts`](../extension/src/background/alarms.ts)), and again one minute after the browser starts when Chrome dropped the alarm. The rule is in [`src/ledger/retention.ts`](../extension/src/ledger/retention.ts) and runs in one transaction: all of it or none.
+Dated history is kept `RETENTION_DAYS` (90 days, [`src/config.ts`](../extension/src/config.ts)). A service-worker alarm runs the purge once a day ([`alarms.ts`](../extension/src/background/alarms.ts)), and again one minute after the browser starts when Chrome dropped the alarm. The rule is in [`src/ledger/retention.ts`](../extension/src/ledger/retention.ts) and runs in one transaction: all of it or none. The purge never trusts a clock that jumped ahead ([`src/ledger/retention-clock.ts`](../extension/src/ledger/retention-clock.ts)): it runs at the wall clock, but no later than the latest instant the ledger stored (`clockHighWater`, or `clockFloorAt` after a repair) or two days past the last purge's instant (`purgeTrustedAt`), whichever is later, and logs `ledger.purge_clock_ahead` when the clock is further ahead. In daily use that is the wall clock; a clock a year ahead deletes nothing current; a ledger nobody stored into for weeks catches up one day faster than real time per daily purge.
 
 - **Observations** go 90 days after `occurredAt`, unless a kept receipt still names them as evidence. An observation dated after the cutoff (next month's event of an old calendar claim) stays as long as the receipt that explains it.
 - **Claims and receipts** go together: a claim made more than 90 days ago takes its receipt with it, and a receipt last graded more than 90 days ago takes its claim, unless current evidence keeps them (above). Evidence goes with its receipt, never before it.
@@ -285,12 +289,12 @@ The retention setting (30, 90 or 180 days) arrives in the options page in Sprint
 
 ## 8. The export
 
-`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data and the input of `pnpm attest replay`. Today an extension page asks for it with the bus query `ledger.export`; the export button in the options page arrives in Sprint 4.5.
+`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data. `pnpm attest replay` reads it once Sprint 3.6 adds each receipt's inputs and policy to it; until then replay runs on test ledgers. The options page's Export section saves it as one JSON file, `attest-ledger-<date>.json`, through your browser's own download: nothing is sent anywhere, and no `downloads` permission is needed. Any extension page can also ask for it with the bus query `ledger.export`. Receipts as JSON or CSV arrive in Sprint 4.5.
 
 ```json
 {
   "format": "attest-ledger",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "exportedAt": "2026-10-04T09:30:00.000-04:00",
   "tables": {
     "requests": [],

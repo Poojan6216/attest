@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { splitBlocks } from '../../../../scripts/check-docs-blocks';
 import { segments } from '../../../../scripts/check-docs-markdown';
-import { CalendarRecord, PendingAbsence } from '../../../src/ledger/calendar-snapshots';
+import { CalendarRecord, PendingAbsence, UpdateWindow } from '../../../src/ledger/calendar-snapshots';
 import { INDEX_FIELDS, LEDGER_TABLE_NAMES, type LedgerTableName } from '../../../src/ledger/index-fields';
 import {
   AdapterHealth,
@@ -28,10 +28,10 @@ import {
   Request,
 } from '../../../src/ledger/types';
 import {
-  CalendarSnapshot,
   SnapshotCalendar,
   SnapshotDay,
-  SnapshotEvent,
+  StoredEvent,
+  StoredSnapshot,
 } from '../../../src/observers/gcal/snapshot';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
@@ -54,11 +54,12 @@ const TABLE_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> = {
   coverageIntervals: keys(ObserverCoverage),
   calendarSnapshots: [
     ...keys(CalendarRecord),
-    ...keys(CalendarSnapshot),
+    ...keys(StoredSnapshot),
     ...keys(SnapshotDay),
     ...keys(SnapshotCalendar),
-    ...keys(SnapshotEvent),
+    ...keys(StoredEvent),
     ...keys(PendingAbsence),
+    ...keys(UpdateWindow),
   ],
 };
 

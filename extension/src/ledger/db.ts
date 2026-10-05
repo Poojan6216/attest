@@ -86,12 +86,36 @@ export const STORES_V3 = {
   [CALENDAR_SNAPSHOTS]: '[observerId+accountHash+range], readMs',
 } as const;
 
+/**
+ * Schema v4 (Sprint 2 close; Decisions [2.close]):
+ *  - `coverageIntervals` gains two derived fields and two indexes, so the coverage reads stay bounded as the calendar
+ *    fills (TECH-1; ./coverage.ts, ./coverage-store.ts). `kind`: `point` for an interval over one instant (a
+ *    first-look marker, a receipt's instant), `span` otherwise, so a window read never walks the markers: points and
+ *    spans are read from separate index ranges. `lenMs`: `endMs - startMs`; `[source+kind+lenMs]` gives the longest
+ *    span of a source in one read, so a read of the spans that may overlap a window stops at its end plus that
+ *    length, exactly: no assumed maximum.
+ *  - `observations` drops the v1 `*counterpartyTokens` index (TECH-13): only tests read it; candidate retrieval reads
+ *    `[type+timeBucket]` and core's own tokens (./index.ts).
+ * The upgrade computes `kind` and `lenMs` over every stored interval and removes `counterpartyTokens` from every
+ * stored observation (./migrations.ts), so no stored row carries a field its strict read would refuse.
+ */
+export const STORES_V4 = {
+  observations: 'id, &contentHash, [type+timeBucket], occurredAt',
+  [COVERAGE_INTERVALS]:
+    '++, [source+endMs], [source+accountKey], [source+accountKey+syncMs], [source+kind+endMs], [source+kind+lenMs]',
+} as const;
+
+/** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
+export type IntervalKind = 'point' | 'span';
+
 /** A stored coverage interval: the core `ObserverCoverage` plus the derived fields ./coverage.ts strips on read. */
 export type CoverageIntervalRow = ObserverCoverage & {
   readonly accountKey: string;
   readonly startMs: number;
   readonly endMs: number;
   readonly syncMs: number;
+  readonly kind: IntervalKind;
+  readonly lenMs: number;
 };
 
 /** Developer-chosen keys (adapter ids, observer ids, meta keys); the logger prints one only if it is in LOG_VALUES. */

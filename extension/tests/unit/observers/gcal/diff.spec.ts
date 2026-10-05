@@ -7,11 +7,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { diffSnapshots, passRows } from '../../../../src/observers/gcal/diff';
+import { type CalendarDiff, diffSnapshots } from '../../../../src/observers/gcal/diff';
 import { GcalError } from '../../../../src/observers/gcal/errors';
 import { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
 import { expectedObservation, fixture, GCAL_FIXTURES, projectRows, snapshotOfFixture } from './gcal-fixtures';
 import { type EventInput, event, FAMILY, MAIN, READ_AT, snapshot } from './snapshot-builders';
+
+/** Every row a diff reports: the changes, then the first sightings. */
+const passRows = (diff: CalendarDiff) => [...diff.changes, ...diff.sightings];
 
 function hashes(observations: readonly { contentHash: string }[]): string[] {
   return observations.map((o) => o.contentHash).sort();

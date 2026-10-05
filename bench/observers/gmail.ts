@@ -15,7 +15,8 @@
  * hash: only the head of the list asserts a window, sprint_2 2.7) and nowhere else; dedup facts hold (the
  * overlapping second page); no subjectHint is over 80 code points; no seeded secret (value or canary,
  * tests/e2e/support/leaks.ts matching) or account address is in any pass output.
- * The corpus is synthetic until the founder's captures land (2.1 BLOCKED(MANUAL)); `gmailSentRealFixtures` says so.
+ * The corpus is synthetic until the founder's captures land (2.1 BLOCKED(MANUAL)); `gmailSentRealFixtures` says so,
+ * counted over the Sent-list fixtures the accuracy is scored on (QA-V3), never over every Gmail page.
  */
 import { asciiLower } from '../../extension/src/core/normalize';
 import { hashRowKey } from '../../extension/src/core/redact';
@@ -139,11 +140,14 @@ const accountsOf = (fixtures: readonly LabelledFixture[]): string[] => [
   ...new Set(fixtures.map((f) => asciiLower(f.page.account))),
 ];
 
-/** Runs the bench: one pass per labelled Gmail fixture (`observer` is replaced only by the bench's own tests). */
+/**
+ * Runs the bench: one pass per labelled Gmail fixture. `observer` and `fixtures` are replaced only by the bench's own
+ * tests (a broken observer; a corpus with real captures in it).
+ */
 export async function runGmailBench(
   observer: Observer = gmailSentObserver,
+  fixtures: readonly LabelledFixture[] = gmailFixtures(),
 ): Promise<Readonly<Record<string, MetricValue>>> {
-  const fixtures = gmailFixtures();
   const plans = new Map<string, PassPlan>();
   for (const fixture of fixtures) plans.set(fixture.file, await runSentPass(fixture, { observer }));
   const planOf = (fixture: LabelledFixture): PassPlan => {
@@ -164,7 +168,7 @@ export async function runGmailBench(
     gmailFixtureFolders: [...new Set(fixtures.map((f) => f.date))].sort().join(','),
     gmailFixtures: fixtures.length,
     gmailSentListFixtures: sentLists.length,
-    gmailSentRealFixtures: fixtures.filter((f) => !f.page.synthetic).length,
+    gmailSentRealFixtures: sentLists.filter((f) => !f.page.synthetic).length,
     gmailSentLabelledObservations: tally.labelled,
     gmailSentProducedObservations: tally.produced,
     gmailSentFieldsCompared: tally.total * FIELDS.length,

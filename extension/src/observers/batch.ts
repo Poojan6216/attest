@@ -4,7 +4,8 @@
  *
  * `createBatcher` turns a stream of pokes into flushes: one flush `debounceMs` after the last poke, and never later
  * than `maxWaitMs` after the first poke of a burst. Timers are injected (`SYSTEM_TIMERS` reads the global ones at
- * call time, so Vitest's fake timers drive it). `watchMutations` pokes on every DOM mutation under a node.
+ * call time, so Vitest's fake timers drive it). `watchMutations` pokes on every DOM mutation under a node that its
+ * init names: one watcher per content script, over the attributes its observers read (`watchedInit`, TECH-2).
  *
  * Read-only (Hard Rule 3): a MutationObserver only listens. Nothing here reads a mutation record, writes the DOM or
  * dispatches anything, so a pass can never trigger itself.
@@ -84,7 +85,10 @@ export function createBatcher(flush: () => void, options: BatchOptions): Batcher
   return Object.freeze({ poke, cancel });
 }
 
-/** What a pass depends on: the tree, text and attributes (the time cell's `title`, a row's `aria-label`). */
+/**
+ * What a pass depends on: the tree, text and attributes (the time cell's `title`, a row's `aria-label`). Every
+ * attribute, when not every observer of the content script says which ones it reads (`watchedInit`).
+ */
 export const MUTATION_INIT: MutationObserverInit = Object.freeze({
   childList: true,
   subtree: true,
@@ -92,13 +96,52 @@ export const MUTATION_INIT: MutationObserverInit = Object.freeze({
   attributes: true,
 });
 
+/**
+ * The attributes that decide whether an element is drawn, which every observer's shown-view check reads
+ * (src/observers/shown.ts: the `hidden` attribute, the inline style, and the computed style the classes give).
+ */
+export const VIEW_ATTRIBUTES: readonly string[] = Object.freeze(['class', 'hidden', 'style']);
+
+/**
+ * What one content script's watcher observes (TECH-2): the tree and the text always, and of the attributes only the
+ * ones its observers read (each observer's `attributes`, src/observers/types.ts) plus VIEW_ATTRIBUTES. A page changes
+ * other attributes all the time (hover state, focus, `aria-expanded`), and each change made a pass. When any
+ * observer does not say which attributes it reads, every attribute is watched (`MUTATION_INIT`): a missed change
+ * would leave the ledger without a pass the page called for, never with a wrong one, but nothing is guessed.
+ */
+export function watchedInit(lists: readonly (readonly string[] | undefined)[]): MutationObserverInit {
+  const named: string[] = [];
+  for (const list of lists) {
+    if (list === undefined) return MUTATION_INIT;
+    named.push(...list);
+  }
+  const attributeFilter = [...new Set([...VIEW_ATTRIBUTES, ...named])].sort();
+  return Object.freeze({ childList: true, subtree: true, characterData: true, attributeFilter });
+}
+
+/** An attribute name in a CSS selector: what follows `[` up to the operator or `]`. */
+const SELECTOR_ATTRIBUTE = /\[\s*([A-Za-z_][\w:.-]*)/g;
+
+/**
+ * Every attribute name the CSS selectors match on (`[role="main"]` → `role`), for an observer's `attributes`: a
+ * change to one of them can change what its selectors find.
+ */
+export function selectorAttributes(selectors: Iterable<string>): string[] {
+  const names = new Set<string>();
+  for (const selector of selectors) {
+    for (const match of selector.matchAll(SELECTOR_ATTRIBUTE))
+      if (match[1] !== undefined) names.add(match[1]);
+  }
+  return [...names].sort();
+}
+
 export interface MutationWatch {
   readonly disconnect: () => void;
 }
 
 /**
- * Calls `onChange` (no arguments: the records are never read) whenever the DOM under `target` changes. Pass the
- * document itself to see a page that replaces its whole body. `Watcher` is injected for tests.
+ * Calls `onChange` (no arguments: the records are never read) whenever the DOM under `target` changes as `init`
+ * says. Pass the document itself to see a page that replaces its whole body. `Watcher` is injected for tests.
  */
 export function watchMutations(
   target: Node,

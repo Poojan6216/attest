@@ -1,6 +1,11 @@
 /**
  * The Calendar pass step (src/background/calendar-step.ts; sprint_2 2.7; Decisions [2.7]; Hard Rules 5, 7): what the
  * service worker reports when a pass's snapshot meets the stored record of its range.
+ *
+ * These tests pass `ownChange: () => true`, every change the account's own: the rules a change must also meet to
+ * accuse (followed in time, not held first elsewhere) are kept for when the live smoke (2.8) confirms which changes
+ * are the account's. Since v1.12 the service worker passes src/background/calendar-own.ts `accountMadeChange`, which
+ * knows of none, so every row is a first sighting (calendar-third-party.spec.ts, calendar-churn.spec.ts).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -9,8 +14,11 @@ import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { IsoTs } from '../../../src/core/schema';
 import { at, event, FAMILY, keyOf, record, week } from './calendar-fixtures';
 
+/** Every change the account's own (see the header). */
+const OWN = (): boolean => true;
+
 /** A bound no gap of these tests reaches: every change here is noticed in time (see 'a change noticed late'). */
-const WIDE = { staleAfterMs: 60 * 60_000 };
+const WIDE = { staleAfterMs: 60 * 60_000, ownChange: OWN };
 
 const types = (rows: readonly CalendarRow[]) => rows.map(({ row }) => [row.type, row.rowKey]);
 const eventKeys = (step: ReturnType<typeof calendarStep>) =>
@@ -19,7 +27,7 @@ const eventKeys = (step: ReturnType<typeof calendarStep>) =>
 describe('a first look at a range', () => {
   it('reports every event as a first sighting at the pass instant, and starts following changes there', () => {
     const next = week(
-      [event('a'), event('b', { guests: ['zed@example.com', 'amy@example.org'], guestCount: 2 })],
+      [event('a'), event('b', { guests: ['amy@example.org', 'zed@example.com'], guestCount: 2 })],
       {
         readAt: at(0),
       },
@@ -203,6 +211,23 @@ describe('a base too large to carry what it waits on', () => {
   });
 });
 
+describe('the chain a base carries on', () => {
+  it('a base whose baseline lies after the pass’s read never lends it: the chain restarts at the pass', () => {
+    const base = record({ ...week([event('a')], { readAt: at(30) }), baselineAt: at(20) });
+    const step = calendarStep(base, week([event('a')], { readAt: at(10) }), WIDE);
+    expect(step.snapshot.baselineAt).toBe(at(10));
+    expect(step.coverage).toEqual({ kind: 'followed', changesSince: at(10) });
+  });
+
+  it('a base read under other selectors is no base: a first look, its own chain', () => {
+    const base = record(week([event('a')], { readAt: at(0), version: '0.9.0' }));
+    const step = calendarStep(base, week([event('a'), event('b')], { readAt: at(10) }), WIDE);
+    expect(step.snapshot.baselineAt).toBe(at(10));
+    expect(step.rows.every((row) => row.firstSighting)).toBe(true);
+    expect(types(step.rows)).toEqual([keyOf('a'), keyOf('b')].sort().map((key) => ['calendar.created', key]));
+  });
+});
+
 describe('a calendar switched on', () => {
   it('its events are first sightings, and the chain restarts at the pass (they were there before)', () => {
     const base = record(week([event('a')], { readAt: at(0) }));
@@ -247,7 +272,7 @@ describe('which rows are first sightings (stored with a first-look marker, src/l
 });
 
 // A change noticed late is a first sighting (Decisions [2.7] wave E; Hard Rule 7).
-const bound = { staleAfterMs: staleChangeMs(DEFAULT_POLICY) };
+const bound = { staleAfterMs: staleChangeMs(DEFAULT_POLICY), ownChange: OWN };
 /** Noon on Sat 3 Oct 2026 plus `ms` milliseconds, New York time (at() to the millisecond). */
 const atMs = (ms: number): IsoTs =>
   IsoTs.parse(`${new Date(Date.parse(at(0)) + ms - 4 * 3_600_000).toISOString().slice(0, 23)}-04:00`);

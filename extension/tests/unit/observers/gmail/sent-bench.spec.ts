@@ -10,6 +10,8 @@ import { gmailSentObserver } from '../../../../src/observers/gmail/sent-observer
 import { sentWindow } from '../../../../src/observers/gmail/extract';
 import type { ExtractContext, Observer, RawRow } from '../../../../src/observers/types';
 import { loadSeeds } from '../../../e2e/support/leaks';
+import type { LabelledFixture } from '../../fixtures/fixture-labels';
+import { gmailFixtures } from './sent-fixtures';
 
 const wrap = (change: Partial<Observer>): Observer => ({ ...gmailSentObserver, ...change });
 
@@ -61,5 +63,26 @@ describe('every bench gate can fail', () => {
       mapRows((row) => ({ ...row, fields: { ...row.fields, subjectHint: seed.value } })),
     );
     expect(metrics.gmailSentSeedsGatePassed).toBe(false);
+  });
+});
+
+describe('the real-capture count describes the pages the accuracy is scored on (QA-V3; Hard Rule 12)', () => {
+  /** The labelled corpus with `file` marked as a real capture. */
+  const realOne = (file: string): LabelledFixture[] =>
+    gmailFixtures().map((f) => (f.file === file ? { ...f, page: { ...f.page, synthetic: false } } : f));
+
+  it('is 0 on the synthetic corpus', async () => {
+    expect((await runGmailBench()).gmailSentRealFixtures).toBe(0);
+  });
+
+  it('a real Drafts or receipt capture is not a real Sent list: still 0', async () => {
+    for (const file of ['synthetic-drafts.html', 'synthetic-receipt-amazon.html']) {
+      expect((await runGmailBench(gmailSentObserver, realOne(file))).gmailSentRealFixtures, file).toBe(0);
+    }
+  });
+
+  it('a real Sent list counts', async () => {
+    const metrics = await runGmailBench(gmailSentObserver, realOne('synthetic-sent-page-1.html'));
+    expect(metrics.gmailSentRealFixtures).toBe(1);
   });
 });

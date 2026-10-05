@@ -4,7 +4,7 @@
  *
  *   health() → extract() → redact.project() → bus
  *
- * A content script does nothing but `startObserver(observer)`. Each pass reads the clock once (src/clock.ts) and
+ * A content script does nothing but `startObservers(observers)`. Each pass reads the clock once (src/clock.ts) and
  * decides what it may report (./plan.ts), then posts, in this order and one message at a time, each only after the
  * previous one was answered:
  *  1. `adapter.health`: OK, or DEGRADED with reason codes (Hard Rule 6: every pass reports its health);
@@ -24,13 +24,22 @@
  * (sprint_2 2.7). The default, src/bus `send()`, resolves on a transport failure; only tests and the E2E harness rely
  * on it.
  *
- * Passes run one at a time (./serial.ts): DOM mutations are batched (./batch.ts: debounce OBSERVER_DEBOUNCE_MS, at
- * most OBSERVER_MAX_WAIT_MS) and the first pass runs one debounce after start, or, on a page Chrome prerendered,
- * one debounce after the user opens it (Hard Rule 11: a page the user has not opened is not read). Read-only (Hard
- * Rule 3): nothing here writes the DOM, dispatches an event or reaches the network; `attest/no-act` lints all of
- * src/observers/**.
+ * A content script starts all its observers at once (`startObservers`), with one MutationObserver over the document,
+ * one activity tracker and one page-sync tracker (TECH-2). Changes to the tree, the text and the attributes its
+ * observers read (./batch.ts `watchedInit`) are batched (debounce OBSERVER_DEBOUNCE_MS, at most OBSERVER_MAX_WAIT_MS)
+ * into one request for a pass of each observer, and each observer's passes run one at a time (./serial.ts). The
+ * first passes run one debounce after start, or, on a page Chrome prerendered, one debounce after the user opens it
+ * (Hard Rule 11: a page the user has not opened is not read). A pass that cannot vouch that the page shows the
+ * present (offline, or catching up after it came back: ./lifecycle.ts `trackPageSync`) posts its health and rows but
+ * no coverage and no snapshot (Decisions [2.close] S4; Hard Rule 5).
+ *
+ * The skeleton stops only when the extension context is really gone (Decisions [2.close] S5, SEC-3): a post that
+ * rejects with BusError `context_invalidated`, or src/bus `extensionContextAlive()` false when a batch flushes. It
+ * never stops on WXT's `ctx.onInvalidated`, which the page itself can fire by dispatching WXT's start-up event.
+ * Read-only (Hard Rule 3): nothing here writes the DOM, dispatches an event or reaches the network; `attest/no-act`
+ * lints all of src/observers/**.
  */
-import { send } from '../bus/send';
+import { BusError } from '../bus/errors';
 import {
   AdapterHealthMessage,
   type BusMessage,
@@ -39,27 +48,39 @@ import {
   CoveragePingMessage,
   ObserverObservationsMessage,
 } from '../bus/messages';
+import { extensionContextAlive, send } from '../bus/send';
 import { nowIso } from '../clock';
-import { OBSERVER_DEBOUNCE_MS, OBSERVER_HOSTS, OBSERVER_MAX_WAIT_MS } from '../config';
-import type { OffsetAt } from '../core/normalize';
+import { OBSERVER_DEBOUNCE_MS, OBSERVER_MAX_WAIT_MS } from '../config';
+import { instantMs, type OffsetAt } from '../core/normalize';
 import { DEFAULT_POLICY } from '../core/policy';
-import { ComponentId, IsoTs, type Observation, ObservationSource, SCHEMA_LIMITS } from '../core/schema';
+import { IsoTs, type Observation, SCHEMA_LIMITS } from '../core/schema';
 import { trackUserActivity } from './activity';
 import {
   checkOptions,
   createBatcher,
   SYSTEM_TIMERS,
-  type TimerHandle,
   type Timers,
+  watchedInit,
   watchMutations,
 } from './batch';
 import { ObserverError } from './errors';
+import {
+  checkHeartbeat,
+  isPrerendering,
+  PRERENDERING_CHANGE,
+  startHeartbeat,
+  trackPageSync,
+} from './lifecycle';
+import { assertObserver } from './observer-check';
 import { type PassPlan, type PassPolicy, planPass } from './plan';
-import { serialRunner } from './serial';
+import { type SerialRunner, serialRunner } from './serial';
+import { browserOffsetAt } from './time-zone';
 import type { Observer } from './types';
 
 export type * from './types';
 export { PASS_REASONS, type PassPolicy, type PassReason } from './plan';
+export { assertObserver } from './observer-check';
+export { browserOffsetAt } from './time-zone';
 
 /** Hands one validated message to the service worker; settles when it was answered. Default: src/bus `send`. */
 export type Post = (message: BusMessage) => Promise<unknown>;
@@ -74,6 +95,12 @@ export interface PassDeps {
   readonly policy: PassPolicy;
   /** The coverage ping's user-activity flag at the pass instant (./activity.ts). */
   readonly userActive: () => boolean;
+  /**
+   * Whether the pass `observerId` read at `atMs` can vouch that the page showed the present (./lifecycle.ts
+   * `trackPageSync`; `startObservers` always gives it). False: the pass posts its health and rows, no coverage and no
+   * snapshot. Absent: every pass vouches.
+   */
+  readonly vouches?: ((observerId: string, atMs: number) => boolean) | undefined;
 }
 
 /**
@@ -87,49 +114,6 @@ export interface PassResult {
   readonly posted: readonly BusMessageType[];
   /** False when a post failed and the rest of the pass was not sent. */
   readonly complete: boolean;
-}
-
-/** The user's UTC offset in minutes at an instant, as this browser's time zone gives it. Not a clock read. */
-export const browserOffsetAt: OffsetAt = (epochMs: number): number => -new Date(epochMs).getTimezoneOffset();
-
-const OBSERVER_HOST_SET: ReadonlySet<string> = new Set(Object.values(OBSERVER_HOSTS).flat());
-
-function hostsAreOurs(hosts: unknown): boolean {
-  if (!Array.isArray(hosts) || hosts.length === 0) return false;
-  return hosts.every((host: unknown) => typeof host === 'string' && OBSERVER_HOST_SET.has(host));
-}
-
-const isFunction = (value: unknown): boolean => typeof value === 'function';
-
-/** Exactly one window reader: `visibleWindow` or `visibleWindows`, a function, the other absent. */
-function oneWindowReader(observer: Observer): boolean {
-  const { visibleWindow: one, visibleWindows: many } = observer;
-  return one === undefined ? isFunction(many) : many === undefined && isFunction(one);
-}
-
-/** `allCalendars` and `snapshot` are Calendar facts: absent, or functions of a `gcal.event` observer. */
-function calendarHooksFit(observer: Observer): boolean {
-  const hooks = [observer.allCalendars, observer.snapshot].filter((hook) => hook !== undefined);
-  return hooks.length === 0 || (observer.source === 'gcal.event' && hooks.every(isFunction));
-}
-
-/**
- * Throws `ObserverError('invalid_observer')` unless the observer's id, vendor and version are ComponentId tokens,
- * its source is an ObservationSource, its hosts are a non-empty subset of OBSERVER_HOSTS (Hard Rule 8), its
- * `health`, `extract` and `account` are functions, it has exactly one window reader, and only a `gcal.event`
- * observer has `allCalendars` or `snapshot`. A bad definition is a developer error and fails loud at start,
- * before any page is read.
- */
-export function assertObserver(observer: Observer): void {
-  const tokens = [observer.id, observer.vendor, observer.version];
-  const valid =
-    tokens.every((token) => ComponentId.safeParse(token).success) &&
-    ObservationSource.safeParse(observer.source).success &&
-    hostsAreOurs(observer.hosts) &&
-    [observer.health, observer.extract, observer.account].every(isFunction) &&
-    oneWindowReader(observer) &&
-    calendarHooksFit(observer);
-  if (!valid) throw new ObserverError('invalid_observer');
 }
 
 function healthMessage(observer: Observer, plan: PassPlan, checkedAt: IsoTs): BusMessage | null {
@@ -231,6 +215,14 @@ function resultOf(messages: readonly BusMessage[], posted: BusMessageType[], com
 }
 
 /**
+ * The plan of a pass that cannot vouch that the page shows the present (./lifecycle.ts): its health and its rows, no
+ * coverage and no snapshot. A DEGRADED plan posts neither anyway.
+ */
+function withoutCoverage(plan: PassPlan): PassPlan {
+  return plan.status === 'DEGRADED' ? plan : { status: 'OK_NO_COVERAGE', observations: plan.observations };
+}
+
+/**
  * One pass: read the clock once, decide (./plan.ts), post each message after the previous one was answered.
  * Resolves what it did; never rejects. A post that rejects ends the pass: nothing after it is sent.
  */
@@ -240,7 +232,9 @@ export async function runPass(observer: Observer, deps: PassDeps): Promise<PassR
   if (!clock.success) return { status: 'DEGRADED', reasons: ['clock.invalid'], posted: [], complete: false };
   const observedAt = clock.data;
   const ctx = { observedAt, offsetAt: deps.offsetAt };
-  const plan = planPass({ observer, doc: deps.doc, ctx, policy: deps.policy });
+  const planned = planPass({ observer, doc: deps.doc, ctx, policy: deps.policy });
+  const vouches = deps.vouches?.(observer.id, instantMs(observedAt)) ?? true;
+  const plan = vouches ? planned : withoutCoverage(planned);
   const messages = passMessages(observer, plan, observedAt, deps.userActive());
   const posted: BusMessageType[] = [];
   for (const message of messages) {
@@ -254,7 +248,7 @@ export async function runPass(observer: Observer, deps: PassDeps): Promise<PassR
   return resultOf(messages, posted, true);
 }
 
-/** Everything `startObserver` can be given; each has a production default. */
+/** Everything `startObservers` can be given; each has a production default. */
 export interface StartOptions extends PassDeps {
   readonly view: Window;
   readonly timers: Timers;
@@ -267,6 +261,8 @@ export interface StartOptions extends PassDeps {
    * compared with is never older than the attribution bound (docs/grading.md §3, §7).
    */
   readonly heartbeatMs: number | null;
+  /** Whether this content script can still reach the extension (src/bus `extensionContextAlive`). */
+  readonly contextAlive: () => boolean;
 }
 
 export interface ObserverHandle {
@@ -276,7 +272,7 @@ export interface ObserverHandle {
   readonly settled: () => Promise<void>;
 }
 
-function startOptions(overrides: Partial<StartOptions>): Omit<StartOptions, 'userActive'> {
+function startOptions(overrides: Partial<StartOptions>): Omit<StartOptions, 'userActive' | 'vouches'> {
   return {
     doc: overrides.doc ?? document,
     view: overrides.view ?? window,
@@ -289,84 +285,88 @@ function startOptions(overrides: Partial<StartOptions>): Omit<StartOptions, 'use
     debounceMs: overrides.debounceMs ?? OBSERVER_DEBOUNCE_MS,
     maxWaitMs: overrides.maxWaitMs ?? OBSERVER_MAX_WAIT_MS,
     heartbeatMs: overrides.heartbeatMs ?? null,
+    contextAlive: overrides.contextAlive ?? extensionContextAlive,
   };
 }
 
-/** A heartbeat is off (null) or a whole number of ms no shorter than the max wait, so it never outpaces a burst. */
-function checkHeartbeat(options: Pick<StartOptions, 'heartbeatMs' | 'maxWaitMs'>): void {
-  const { heartbeatMs, maxWaitMs } = options;
-  if (heartbeatMs === null) return;
-  if (!Number.isSafeInteger(heartbeatMs) || heartbeatMs < maxWaitMs)
-    throw new ObserverError('invalid_options');
-}
+/** A post rejected because this content script lost its extension: reloaded, updated or removed under the page. */
+const contextLost = (error: unknown): boolean =>
+  error instanceof BusError && error.code === 'context_invalidated';
 
-const VISIBILITY_CHANGE = 'visibilitychange';
-
-/**
- * While the page is visible, pokes every `everyMs`, and pokes when it becomes visible again. Reading is not acting
- * (Hard Rule 3): the listener reads only `visibilityState`. Returns the function that stops it.
- */
-function startHeartbeat(doc: Document, timers: Timers, everyMs: number | null, poke: () => void): () => void {
-  if (everyMs === null) return () => undefined;
-  let handle: TimerHandle | undefined;
-  const visible = (): boolean => doc.visibilityState === 'visible';
-  const beat = (): void => {
-    if (visible()) poke();
-    handle = timers.setTimeout(beat, everyMs);
+/** `post`, calling `stop` when it rejects because the extension context is gone; the rejection still ends the pass. */
+function stoppingWhenGone(post: Post, contextAlive: () => boolean, stop: () => void): Post {
+  return async (message) => {
+    try {
+      return await post(message);
+    } catch (error) {
+      if (contextLost(error) || !contextAlive()) stop();
+      throw error;
+    }
   };
-  const onVisibility = (): void => {
-    if (visible()) poke();
-  };
-  handle = timers.setTimeout(beat, everyMs);
-  doc.addEventListener(VISIBILITY_CHANGE, onVisibility);
-  return () => {
-    doc.removeEventListener(VISIBILITY_CHANGE, onVisibility);
-    if (handle !== undefined) timers.clearTimeout(handle);
-    handle = undefined;
-  };
-}
-
-/** Fired on a prerendered document when it becomes the page the user opened (Chrome 108+). */
-const PRERENDERING_CHANGE = 'prerenderingchange';
-
-/**
- * True while Chrome prerenders the page (omnibox or speculation-rules prerendering), before the user has opened it.
- * Chrome injects content scripts into prerendered pages; a page the user has not opened is never read (Hard Rule 11).
- */
-function isPrerendering(doc: Document): boolean {
-  return Reflect.get(doc, 'prerendering') === true;
 }
 
 /**
- * Starts the skeleton for `observer` on this page: watches the DOM, runs a pass one debounce after start and after
- * every burst of mutations, one pass at a time. A prerendered page runs no pass until the user opens it; its first
- * pass is then one debounce later. Throws `ObserverError` for an invalid observer or options, before it attaches
- * any listener.
+ * Starts the skeleton for a content script's `observers` on this page (see the module comment): one watcher, one
+ * activity tracker, one page-sync tracker and one heartbeat for all of them, and one serial pass runner each. The
+ * first passes run one debounce after start; a prerendered page runs none until the user opens it. Throws
+ * `ObserverError` for an invalid observer or options, before it attaches any listener.
  */
-export function startObserver(observer: Observer, overrides: Partial<StartOptions> = {}): ObserverHandle {
-  assertObserver(observer);
+export function startObservers(
+  observers: readonly Observer[],
+  overrides: Partial<StartOptions> = {},
+): ObserverHandle {
+  if (observers.length === 0) throw new ObserverError('invalid_observer');
+  for (const observer of observers) assertObserver(observer);
   const options = startOptions(overrides);
   checkOptions(options);
-  checkHeartbeat(options);
-  const activity = trackUserActivity(options.view, { now: options.now, timers: options.timers });
-  const deps: PassDeps = { ...options, userActive: overrides.userActive ?? activity.active };
-  const runner = serialRunner(() => runPass(observer, deps));
+  checkHeartbeat(options.heartbeatMs, options.maxWaitMs);
+  const { doc, timers, now } = options;
+  // Stopped in the order they were started; `stop` runs once, from disconnect or when the extension is gone, and
+  // nothing pokes the batcher after it (a pass still running finishes, and may not ask for another).
+  const stops: (() => void)[] = [];
+  let stopped = false;
+  const stop = (): void => {
+    stopped = true;
+    for (const each of stops.splice(0)) each();
+  };
+  let runners: readonly SerialRunner[] = [];
   const batcher = createBatcher(() => {
-    if (!isPrerendering(options.doc)) runner.request();
+    if (!options.contextAlive()) stop();
+    else if (!isPrerendering(doc)) for (const runner of runners) runner.request();
   }, options);
-  const watch = watchMutations(options.doc, batcher.poke, options.Watcher);
-  options.doc.addEventListener(PRERENDERING_CHANGE, batcher.poke);
-  const stopHeartbeat = startHeartbeat(options.doc, options.timers, options.heartbeatMs, batcher.poke);
-  batcher.poke();
-  return Object.freeze({
-    disconnect: (): void => {
-      stopHeartbeat();
-      options.doc.removeEventListener(PRERENDERING_CHANGE, batcher.poke);
-      watch.disconnect();
-      batcher.cancel();
-      runner.halt();
-      activity.disconnect();
+  const poke = (): void => {
+    if (!stopped) batcher.poke();
+  };
+  const activity = trackUserActivity(options.view, { now, timers });
+  const sync = trackPageSync(options.view, { now, timers, requestPass: poke });
+  const post = stoppingWhenGone(options.post, options.contextAlive, stop);
+  const userActive = overrides.userActive ?? activity.active;
+  const deps: PassDeps = { ...options, post, userActive, vouches: overrides.vouches ?? sync.vouches };
+  runners = observers.map((observer) => serialRunner(() => runPass(observer, deps)));
+  const watch = watchMutations(doc, poke, options.Watcher, watchedInit(observers.map((o) => o.attributes)));
+  doc.addEventListener(PRERENDERING_CHANGE, poke);
+  const stopHeartbeat = startHeartbeat(doc, timers, options.heartbeatMs, poke);
+  stops.push(
+    activity.disconnect,
+    sync.disconnect,
+    watch.disconnect,
+    () => {
+      doc.removeEventListener(PRERENDERING_CHANGE, poke);
     },
-    settled: runner.idle,
+    stopHeartbeat,
+    batcher.cancel,
+    ...runners.map((runner) => runner.halt),
+  );
+  poke();
+  return Object.freeze({
+    disconnect: stop,
+    settled: async (): Promise<void> => {
+      await Promise.all(runners.map((runner) => runner.idle()));
+    },
   });
+}
+
+/** `startObservers` for a content script with one observer. */
+export function startObserver(observer: Observer, overrides: Partial<StartOptions> = {}): ObserverHandle {
+  return startObservers([observer], overrides);
 }

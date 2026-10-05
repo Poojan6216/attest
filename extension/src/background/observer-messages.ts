@@ -5,9 +5,13 @@
  * through the ledger, and answers a `BusAck` (interface 6).
  *
  *  - `adapter.health`: the observer's own report, stored by src/ledger/health.ts's rule (a DEGRADED the service
- *    worker set stays until a later clean pass is fully accepted).
- *  - `observer.observations`: a Gmail row is stored on its own through `upsertObservation(db, row, policy)`, and the
- *    refusals are collected, so one refused row never stops the rest. Calendar rows (a page with no account: every
+ *    worker set stays until a later clean pass is fully accepted; a repeat of the stored report is not rewritten and
+ *    not announced). A report of an observer the extension does not have is refused `invalid_input` (SEC-4), and one
+ *    checked after the service worker's clock is refused `clock_behind`, as rows and pings are (SEC-4).
+ *  - `observer.observations`: a Gmail row is stored through `upsertObservation(db, row, policy)`, every row of the
+ *    message in one readwrite transaction with the clock guard (TECH-2), and the refusals are collected, so one
+ *    refused row never stops the rest (a refusal writes nothing and never aborts the others). Calendar rows (a page
+ *    with no account: every
  *    one a first sighting) are stored all or none, each with its first-look marker (./calendar-rows.ts; docs/
  *    grading.md §3: a Calendar row never stays stored without what keeps it from accusing an agent). A row of another
  *    source than the observer reads, or of an observer the extension does not have, is refused `invalid_input` and
@@ -37,7 +41,7 @@ import { OBSERVER_SOURCES } from '../config';
 import { instantMs } from '../core/normalize';
 import type { Policy } from '../core/policy';
 import { IsoTs, type Observation, type ObservationSource } from '../core/schema';
-import { guardClock } from '../ledger/clock-guard';
+import { guardClock, guardTables } from '../ledger/clock-guard';
 import { recordCoverage } from '../ledger/coverage';
 import type { LedgerDb } from '../ledger/db';
 import {
@@ -50,6 +54,7 @@ import { putCoveragePing, upsertObservation, type WriterClock } from '../ledger/
 import type { CoveragePing, ObserverCoverageInput } from '../ledger/types';
 import { log } from '../log';
 import { storeAccountlessRows, type StoredRows } from './calendar-rows';
+import { calendarWindowFits } from './calendar-window';
 import {
   holdPing,
   noteOwnHealth,
@@ -110,12 +115,21 @@ export async function refuse(ctx: ObserverContext, db: LedgerDb, refusal: Refusa
     await markLedgerDegraded(db, {
       adapterId: refusal.observerId,
       reasons,
-      at: refusal.at,
+      at: notAfterNow(refusal.at, ctx.now),
       version: refusal.version,
     });
     ctx.notify(['adapterHealth']);
   }
   return ackRefused(code);
+}
+
+/**
+ * `at`, or the service worker's now when `at` is after it (SEC-4): a DEGRADED is never stamped in the future, where
+ * no later pass could clear it until real time caught up (Hard Rule 6: never cry wolf).
+ */
+function notAfterNow(at: IsoTs, now: () => string): IsoTs {
+  const clock = IsoTs.safeParse(now());
+  return clock.success && instantMs(at) > instantMs(clock.data) ? clock.data : at;
 }
 
 /** Every part of the pass read at `passMs` that reached the service worker so far was stored: clear a DEGRADED. */
@@ -130,33 +144,46 @@ export async function accepted(
   if ((await clearLedgerDegraded(db, own)).cleared) ctx.notify(['adapterHealth']);
 }
 
+/**
+ * An observer's own report (SEC-4): refused `invalid_input` for an observer the extension does not have (logged with
+ * the code only; no health row, no pass state, whatever the id), and `clock_behind` when checked after the service
+ * worker's clock (so no report is stored in the future, where it would hide every honest one until real time caught
+ * up). Otherwise the clock guard runs and the report is stored by src/ledger/health.ts's rule; open UI pages hear of
+ * it only when it says something new.
+ */
 export async function onHealth(ctx: ObserverContext, message: AdapterHealthMessage): Promise<BusAck> {
   const { health } = message;
+  if (sourceOf(health.adapterId) === undefined) return unknownObserver(health.adapterId, message.type);
   return serially(ctx.state, health.adapterId, async (): Promise<BusAck> => {
     const db = await ctx.db();
+    const clockMs = instantMs(ctx.now());
+    if (instantMs(health.checkedAt) > clockMs) return clockBehind(health.adapterId, message.type);
+    await guardClock(db, clockMs);
     noteOwnHealth(ctx.state, health);
-    if ((await recordOwnHealth(db, health)).written) ctx.notify(['adapterHealth']);
+    if ((await recordOwnHealth(db, health)).changed) ctx.notify(['adapterHealth']);
     return ACK_OK;
   });
 }
 
+/** A message naming an observer the extension does not have: refused, logged, nothing stored or remembered. */
+function unknownObserver(observerId: string, type: string): BusAck {
+  log.warn('observer.refused', { observer: observerId, type, code: 'invalid_input', count: 1 });
+  return ackRefused('invalid_input');
+}
+
 /**
- * Stores a message's rows: Calendar rows all or none, with their markers (./calendar-rows.ts); any other row on its
- * own (`upsertObservation`). A row of another source than the observer reads is refused before the ledger (for
- * Calendar, with every other row of its message).
+ * Each row on its own (`upsertObservation`), collecting the refusals: a refused row writes nothing and never aborts
+ * the rows around it (src/ledger/upsert.ts decides a refusal before it writes and raises it after its own nested
+ * transaction has settled), so the caller may run them all in one transaction. A row of another source than the
+ * observer reads is refused before the ledger. Any other error (a bug) propagates.
  */
-async function storeRows(
+async function storeEachRow(
   db: LedgerDb,
   policy: Policy,
-  observerId: string,
+  source: ObservationSource | undefined,
   rows: readonly Observation[],
   clock: WriterClock,
 ): Promise<StoredRows> {
-  const source = sourceOf(observerId);
-  if (source === 'gcal.event') {
-    if (rows.some((row) => row.source !== source)) return { inserted: 0, codes: new Set(['invalid_input']) };
-    return storeAccountlessRows(db, policy, observerId, rows, clock);
-  }
   let inserted = 0;
   const codes = new Set<RowCode>();
   for (const row of rows) {
@@ -173,6 +200,33 @@ async function storeRows(
     }
   }
   return { inserted, codes };
+}
+
+/**
+ * Runs the clock guard, then stores a message's rows: Calendar rows all or none, with their markers, in their own
+ * pass transaction (./calendar-rows.ts; a refusal there aborts the whole transaction, so it never shares one with the
+ * guard); any other row through `storeEachRow`, in ONE readwrite transaction with the guard (TECH-2: one transaction
+ * per message instead of one per row). A row of another source than the observer reads is refused before the ledger
+ * (for Calendar, with every other row of its message).
+ */
+async function storeRows(
+  db: LedgerDb,
+  policy: Policy,
+  observerId: string,
+  rows: readonly Observation[],
+  clockMs: number,
+): Promise<StoredRows> {
+  const source = sourceOf(observerId);
+  const clock = { clockMs };
+  if (source !== 'gcal.event') {
+    return db.transaction('rw', guardTables(db), async (): Promise<StoredRows> => {
+      await guardClock(db, clockMs);
+      return storeEachRow(db, policy, source, rows, clock);
+    });
+  }
+  await guardClock(db, clockMs);
+  if (rows.some((row) => row.source !== source)) return { inserted: 0, codes: new Set(['invalid_input']) };
+  return storeAccountlessRows(db, policy, observerId, rows, clock);
 }
 
 /** The pass instant of a message's rows: their one sighting, or undefined when they differ (or there are none). */
@@ -203,8 +257,7 @@ export async function onObservations(
     if (observations.some((row) => instantMs(row.observedAt) > clockMs)) {
       return clockBehind(observerId, message.type);
     }
-    await guardClock(db, clockMs);
-    const stored = await storeRows(db, ctx.policy, observerId, observations, { clockMs });
+    const stored = await storeRows(db, ctx.policy, observerId, observations, clockMs);
     if (stored.inserted > 0) ctx.notify(rowTables(observerId));
     if (stored.codes.size > 0) {
       for (const row of observations) noteRefused(ctx.state, observerId, instantMs(row.observedAt));
@@ -235,7 +288,8 @@ function versioned(message: ObserverObservationsMessage): { version: string; cou
 /**
  * Why a ping cannot be what it says, or null. A Gmail window never ends after its sync. A Sent window ends exactly at
  * its sync: only the head of the Sent list writes coverage (interface 4, docs/grading.md §3), so a window that ends
- * earlier is an older page's, which cannot vouch for its span (Hard Rule 5). A receipt window is one instant.
+ * earlier is an older page's, which cannot vouch for its span (Hard Rule 5). A receipt window is one instant. A
+ * Calendar window spans what one run of whole visible days can (./calendar-window.ts `calendarWindowFits`, SEC-8).
  */
 export function pingProblem(ping: CoveragePing): 'unknown_observer' | 'source' | 'window' | null {
   const source = sourceOf(ping.observerId);
@@ -244,6 +298,7 @@ export function pingProblem(ping: CoveragePing): 'unknown_observer' | 'source' |
   const startMs = instantMs(ping.windowStart);
   const endMs = instantMs(ping.windowEnd);
   const syncMs = instantMs(ping.lastSyncAt);
+  if (source === 'gcal.event' && !calendarWindowFits(ping)) return 'window';
   if (source !== 'gcal.event' && endMs > syncMs) return 'window';
   if (source === 'gmail.sent' && endMs !== syncMs) return 'window';
   if (source === 'gmail.receipt' && startMs !== endMs) return 'window';
@@ -270,6 +325,14 @@ export async function recordPing(db: LedgerDb, ping: CoveragePing, changesSince?
   await putCoveragePing(db, ping);
 }
 
+/** The clock guard, then `recordPing`, in one readwrite transaction (TECH-2). */
+async function guardedRecordPing(db: LedgerDb, ping: CoveragePing, clockMs: number): Promise<void> {
+  await db.transaction('rw', guardTables(db), async (): Promise<void> => {
+    await guardClock(db, clockMs);
+    await recordPing(db, ping);
+  });
+}
+
 const COVERAGE_TABLES: readonly LedgerTable[] = ['coverageIntervals', 'coverage'];
 
 export async function onCoveragePing(
@@ -282,16 +345,16 @@ export async function onCoveragePing(
     const db = await ctx.db();
     const syncMs = instantMs(ping.lastSyncAt);
     const base = { observerId: ping.observerId, type: message.type, at: ping.lastSyncAt, count: 1 };
-    if (pingProblem(ping) !== null) return refuse(ctx, db, { ...base, codes: new Set(['invalid_input']) });
-    if (wasRefused(ctx.state, ping.observerId, syncMs)) return refusedCoverage(ping);
+    // The clock first (SEC-4): a ping synced after the clock is no news of the page, never a reason to turn DEGRADED.
     const clockMs = instantMs(ctx.now());
     if (syncMs > clockMs) return clockBehind(ping.observerId, message.type);
+    if (pingProblem(ping) !== null) return refuse(ctx, db, { ...base, codes: new Set(['invalid_input']) });
+    if (wasRefused(ctx.state, ping.observerId, syncMs)) return refusedCoverage(ping);
     if (ping.source === 'gcal.event' && ping.accountHash !== undefined) {
       const held = holdPing(ctx.state, senderKey(sender), ping, clockMs);
       return held ? ACK_OK : refuse(ctx, db, { ...base, codes: new Set(['invalid_input']) });
     }
-    await guardClock(db, clockMs);
-    await recordPing(db, ping);
+    await guardedRecordPing(db, ping, clockMs);
     ctx.notify(COVERAGE_TABLES);
     await accepted(ctx, db, ping.observerId, syncMs);
     return ACK_OK;

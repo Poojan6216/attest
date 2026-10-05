@@ -16,9 +16,9 @@
  *
  * `byCounterpartyToken` reads the same bounded `[type+timeBucket]` ranges for every action type and keeps the rows
  * whose core `counterpartyTokens` (§4.2: the address read through `email()`, its domain, its local-part tokens, the
- * merchant's name tokens) include the token, matched exactly as given, as the memory index matches. It does not
- * read the v1 `counterpartyTokens` multiEntry index: that index is still the Sprint 0 placeholder derivation
- * (index-fields.ts `counterpartyTokensOf`), which differs from §4.2, and is unbounded in time.
+ * merchant's name tokens) include the token, matched exactly as given, as the memory index matches. (The v1
+ * `counterpartyTokens` multiEntry index, a Sprint 0 placeholder that differed from §4.2 and was unbounded in time,
+ * was dropped in schema v4: db.ts STORES_V4.)
  *
  * Reads run in the caller's transaction when there is one (a batch's readwrite transaction must include
  * `observations`, §3 Background obligations), else each in its own.

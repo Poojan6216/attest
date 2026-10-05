@@ -70,6 +70,29 @@ export function withFixture<T>(f: LabelledFixture, read: (doc: Document) => T, w
   return withPage(readFileSync(f.htmlPath, 'utf8'), withUrl ? f.page.liveUrl : 'about:blank', read);
 }
 
+/** The labelled gmail.receipt observations of a fixture. */
+export const receiptFacts = (f: LabelledFixture): LabelledFixture['observations'] =>
+  f.observations.filter((o) => o.source === 'gmail.receipt');
+
+/** The positives: fixtures with a labelled receipt, the pages field accuracy is measured on. */
+export const receiptPositives = (fixtures: readonly LabelledFixture[]): LabelledFixture[] =>
+  fixtures.filter((f) => receiptFacts(f).length > 0);
+
+/** The negatives: opened inbox messages with no labelled receipt, the pages that must stay unparsed. */
+export const receiptNegatives = (fixtures: readonly LabelledFixture[]): LabelledFixture[] =>
+  fixtures.filter(
+    (f) => f.page.view === 'gmail.message' && f.page.folder === 'inbox' && receiptFacts(f).length === 0,
+  );
+
+/**
+ * The fixtures the receipt numbers are scored on (QA-V3): the positives (field accuracy) and the negatives (the
+ * false-positive gate). The bench's real-capture count is taken over these, never over every Gmail page.
+ */
+export const receiptScoredFixtures = (fixtures: readonly LabelledFixture[]): LabelledFixture[] => [
+  ...receiptPositives(fixtures),
+  ...receiptNegatives(fixtures),
+];
+
 /** The pass context of a fixture: its read instant and its zone. */
 export function contextOf(f: LabelledFixture): ExtractContext {
   return { observedAt: IsoTs.parse(f.page.readAt), offsetAt: zoneOffset(f.page.timeZone) };

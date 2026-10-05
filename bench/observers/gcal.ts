@@ -8,18 +8,38 @@
  *    labelled event the observer did not read counts every field wrong, and an event it read that no label names
  *    is counted as spurious;
  *  - health, the coverage windows (exact) and allCalendars;
- *  - every labelled diff: the change rows the observer emits against the `from` snapshot, compared by contentHash
- *    after `redact.project()`, so a row that differs in any allowlisted field, its type or its event is wrong.
+ *  - every labelled diff, through the pipeline that ships (TECH-13): the observer posts no rows on a page whose
+ *    account it names, so the rows are the service worker's. The `from` page, read a minute before the labelled one
+ *    (a visible tab is read every minute, so every change is one a followed view saw), is stored as the range's
+ *    record after a first look; the labelled page's snapshot is stepped against it as the service worker steps
+ *    every pass (src/background/calendar-step.ts `calendarStep`, with the policy's `staleChangeMs` and
+ *    src/background/calendar-own.ts `accountMadeChange`), and a deletion is confirmed by a second look at the same
+ *    page a minute later (a deletion is reported only after two absences). Every row stored at those passes is
+ *    compared with the labels by contentHash after `redact.project()`, so a row that differs in any allowlisted
+ *    field, its type or its event is wrong. A `calendar.created` row of an event the `from` page does not show (the
+ *    labelled creation, or the first sighting of an event on a calendar switched on) is never counted spurious; every
+ *    other unlabelled row is. Every row must also be stored as a first sighting, with its first-look marker
+ *    (docs/grading.md §3, §7 v1.12): `gcalStepRowsUnmarked`.
  * The gate (`gcalAccuracyGatePassed`): event field accuracy ≥ 95% (the Gmail Sent bar, sprint_2 2.2), every health,
- * coverage window and allCalendars as labelled, and every labelled diff reproduced exactly with no spurious row
- * (sprint_2 2.5 Done-when). Corpus honesty: the result says how many fixtures are synthetic stand-ins.
+ * coverage window and allCalendars as labelled, and every labelled diff reproduced exactly with no spurious and no
+ * unmarked row (sprint_2 2.5 Done-when). Corpus honesty: the result says how many fixtures are synthetic stand-ins.
  *
  * Fixture pages are parsed with happy-dom in Node (extension devDependency, loaded through the test helper that
  * owns it). `pnpm bench` (bench/run_bench.ts) writes the metrics to bench/results/gcal-<yyyy-mm-dd>.json.
  */
-import { asciiLower } from '../../extension/src/core/normalize';
+import { accountMadeChange } from '../../extension/src/background/calendar-own';
+import {
+  type CalendarRow,
+  calendarStep,
+  type CalendarStep,
+  staleChangeMs,
+} from '../../extension/src/background/calendar-step';
+import { asciiLower, instantMs, isoWithOffset } from '../../extension/src/core/normalize';
+import { DEFAULT_POLICY } from '../../extension/src/core/policy';
 import { hashRowKey, hashText } from '../../extension/src/core/redact';
-import { diffSnapshots } from '../../extension/src/observers/gcal/diff';
+import { IsoTs } from '../../extension/src/core/schema';
+import type { CalendarRecord } from '../../extension/src/ledger/calendar-snapshots';
+import { accountHashOf } from '../../extension/src/observers/account';
 import { GCAL_VERSION } from '../../extension/src/observers/gcal/selectors';
 import type { CalendarSnapshot, SnapshotEvent } from '../../extension/src/observers/gcal/snapshot';
 import type { EventFact, LabelledFixture } from '../../extension/tests/unit/fixtures/fixture-labels';
@@ -57,6 +77,7 @@ interface Counts {
   diffs: Tally;
   diffRows: Tally;
   diffRowsSpurious: number;
+  diffRowsUnmarked: number;
 }
 
 function emptyCounts(): Counts {
@@ -74,6 +95,7 @@ function emptyCounts(): Counts {
     diffs: tally(),
     diffRows: tally(),
     diffRowsSpurious: 0,
+    diffRowsUnmarked: 0,
   };
 }
 
@@ -129,20 +151,73 @@ function tallyPage(counts: Counts, f: LabelledFixture): void {
   for (const fact of f.coverage) count(counts.allCalendars, observer.allCalendars(doc) === fact.allCalendars);
 }
 
+/** How the service worker steps every pass: the policy's bound on late changes, and who made a change (v1.12). */
+const STEP = { staleAfterMs: staleChangeMs(DEFAULT_POLICY), ownChange: accountMadeChange };
+
+/** The record the service worker stores after `step` (src/background/calendar-pass.ts). */
+function recordOf(step: CalendarStep, account: string): CalendarRecord {
+  const accountHash = accountHashOf(account);
+  if (accountHash === null) throw new Error('a labelled Calendar page names its account');
+  return {
+    observerId: 'gcal.event',
+    accountHash,
+    range: step.snapshot.range,
+    snapshot: step.snapshot,
+    pending: [...step.pending],
+    updates: [...step.updates],
+  };
+}
+
+/** The UTC offset, in minutes, an ISO 8601 instant is written in ("-04:00" → -240). */
+function offsetOf(iso: string): number {
+  const match = /([+-])(\d{2}):(\d{2})$/u.exec(iso);
+  if (match === null) throw new Error(`no offset in ${iso}`);
+  const [, sign = '+', hours = '0', minutes = '0'] = match;
+  return (sign === '-' ? -1 : 1) * (Number(hours) * 60 + Number(minutes));
+}
+
+/** `snapshot`'s page read `ms` after `reference` was (a pass's own snapshot: its baseline is its read). */
+function readAfter(snapshot: CalendarSnapshot, reference: CalendarSnapshot, ms: number): CalendarSnapshot {
+  const readAt = IsoTs.parse(isoWithOffset(instantMs(reference.readAt) + ms, offsetOf(reference.readAt)));
+  return { ...snapshot, readAt, baselineAt: readAt };
+}
+
+/**
+ * The rows the service worker stores for `to` against a stored record of `from` read a minute before it, a deletion
+ * confirmed by the same page read a minute after it.
+ */
+function stepRows(from: CalendarSnapshot, to: CalendarSnapshot, account: string): CalendarRow[] {
+  const base = recordOf(calendarStep(null, readAfter(from, to, -60_000), STEP), account);
+  const step = calendarStep(base, to, STEP);
+  if (step.pending.length === 0) return [...step.rows];
+  return [...step.rows, ...calendarStep(recordOf(step, account), readAfter(to, to, 60_000), STEP).rows];
+}
+
 function tallyDiffs(counts: Counts, f: LabelledFixture, snapshot: CalendarSnapshot | null): void {
   for (const d of f.diffs) {
     const from = GCAL_FIXTURES.find((g) => g.dir === f.dir && g.file === d.from);
     const previous = from === undefined ? null : snapshotOf(from);
-    const rows = snapshot === null || previous === null ? [] : diffSnapshots(previous, snapshot).changes;
-    const got = projectRows(rows, f.page.readAt).map((o) => o.contentHash);
-    const want = d.observations.map((o) => expectedObservation(o, f.page.readAt).contentHash);
+    const rows = snapshot === null || previous === null ? [] : stepRows(previous, snapshot, f.page.account);
+    // A `calendar.created` row of an event the `from` page does not show is a creation (labelled) or a first
+    // sighting (a calendar switched on): either way not a spurious change. The labels, not the code, say which events
+    // each page shows.
+    const shownBefore = new Set<string>((from?.events ?? []).map((e) => hashRowKey(e.rowKey)));
+    const unseenBefore = (row: CalendarRow): boolean =>
+      row.row.type === 'calendar.created' && row.row.rowKey !== undefined && !shownBefore.has(row.row.rowKey);
+    const hashes = (list: readonly CalendarRow[]): string[] =>
+      projectRows(
+        list.map((each) => each.row),
+        f.page.readAt,
+      ).map((o) => o.contentHash);
+    const got = hashes(rows);
+    const want: string[] = d.observations.map((o) => expectedObservation(o, f.page.readAt).contentHash);
     for (const hash of want) count(counts.diffRows, got.includes(hash));
-    const spurious = got.filter((hash) => !want.includes(hash)).length;
-    counts.diffRowsSpurious += spurious;
-    count(
-      counts.diffs,
-      spurious === 0 && want.every((hash) => got.includes(hash)) && got.length === want.length,
+    const spurious = hashes(rows.filter((each) => !unseenBefore(each))).filter(
+      (hash) => !want.includes(hash),
     );
+    counts.diffRowsSpurious += spurious.length;
+    counts.diffRowsUnmarked += rows.filter((each) => !each.firstSighting).length;
+    count(counts.diffs, spurious.length === 0 && want.every((hash) => got.includes(hash)));
   }
 }
 
@@ -165,7 +240,8 @@ function metricsOf(counts: Counts): Record<string, MetricValue> {
     all(counts.windows) &&
     all(counts.allCalendars) &&
     all(counts.diffs) &&
-    counts.diffRowsSpurious === 0;
+    counts.diffRowsSpurious === 0 &&
+    counts.diffRowsUnmarked === 0;
   return {
     gcalSelectorsVersion: GCAL_VERSION,
     gcalFixtures: counts.fixtures,
@@ -183,9 +259,10 @@ function metricsOf(counts: Counts): Record<string, MetricValue> {
     gcalHealthCorrect: `${String(counts.health.correct)}/${String(counts.health.checked)}`,
     gcalCoverageWindowsCorrect: `${String(counts.windows.correct)}/${String(counts.windows.checked)}`,
     gcalAllCalendarsCorrect: `${String(counts.allCalendars.correct)}/${String(counts.allCalendars.checked)}`,
-    gcalDiffsExact: `${String(counts.diffs.correct)}/${String(counts.diffs.checked)}`,
-    gcalDiffRowsCorrect: `${String(counts.diffRows.correct)}/${String(counts.diffRows.checked)}`,
-    gcalDiffRowsSpurious: counts.diffRowsSpurious,
+    gcalStepDiffsExact: `${String(counts.diffs.correct)}/${String(counts.diffs.checked)}`,
+    gcalStepRowsCorrect: `${String(counts.diffRows.correct)}/${String(counts.diffRows.checked)}`,
+    gcalStepRowsSpurious: counts.diffRowsSpurious,
+    gcalStepRowsUnmarked: counts.diffRowsUnmarked,
     gcalAccuracy: accuracy,
     gcalAccuracyThreshold: GCAL_ACCURACY_GATE,
     gcalAccuracyGatePassed: fields.checked > 0 && accuracy >= GCAL_ACCURACY_GATE && exact,

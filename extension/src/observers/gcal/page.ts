@@ -8,9 +8,11 @@
  * `aria-hidden="true"` part. The `aria-hidden` part is what the chip draws; its lines are read only as candidate
  * titles (./label.ts), never as a whole, because it can draw the event's location.
  */
+import { readGoogleAccount } from '../google-account';
+import { isElement, TEXT_NODE } from '../nodes';
+import { shownChecker, shownOnly } from '../shown';
 import { oneLine } from '../text';
 import { GCAL_SELECTORS, MORE_PATTERN } from './selectors';
-import { shownChecker, shownOnly } from './shown';
 import { type CivilDay, civilDay, dayIso, nextDay, zoneHintMinutes } from './time';
 
 const S = GCAL_SELECTORS.selectors;
@@ -39,13 +41,6 @@ export interface Chip {
   readonly titles: readonly string[];
   /** The days whose cells hold the event's chips (`YYYY-MM-DD`); empty when a chip sits in no day cell. */
   readonly days: readonly string[];
-}
-
-const ELEMENT_NODE = 1;
-const TEXT_NODE = 3;
-
-function isElement(node: Node): node is Element {
-  return node.nodeType === ELEMENT_NODE;
 }
 
 function isHidden(el: Element): boolean {
@@ -191,18 +186,20 @@ export function zoneHints(main: Element): number[] {
 }
 
 /**
- * The signed-in account's address from the account switcher (`Google Account: Name (address)`): the text in its
- * last parentheses; '' when the switcher shows no address (the pass is then DEGRADED `account.invalid`); null when
- * the page has no switcher.
+ * The signed-in account's address from the account switcher, read by the shared Google-account reader
+ * (../google-account.ts: a banner label ending with `(address)`, in any display language) with this observer's
+ * `account` selector and `label` attribute. '' when the page names two (an account chooser drawn open), or shows a
+ * switcher with no address (`text.accountPrefix`, the English label, the one language it is known in): which
+ * account's calendar this is cannot be told, so the pass is DEGRADED `account.invalid` (Hard Rules 5, 6). Null when
+ * the page names no account: coverage then carries none, which grading caps, and nothing is compared.
  */
 export function accountOf(doc: Document): string | null {
+  const read = readGoogleAccount(doc, { selector: S.account, attribute: A.label });
+  if (read.ok) return read.address;
+  if (read.reason === 'selector.ambiguous.account') return '';
   const prefix = GCAL_SELECTORS.text.accountPrefix;
-  const link = Array.from(doc.querySelectorAll(S.account)).find((el) =>
-    oneLine(el.getAttribute(A.label) ?? '').startsWith(prefix),
-  );
-  if (link === undefined) return null;
-  const label = oneLine(link.getAttribute(A.label) ?? '');
-  return /\(([^()]+)\)$/u.exec(label)?.[1]?.trim() ?? '';
+  const labels = Array.from(doc.querySelectorAll(S.account), (el) => oneLine(el.getAttribute(A.label) ?? ''));
+  return labels.some((label) => label.startsWith(prefix)) ? '' : null;
 }
 
 /** The text of `node` outside every `aria-hidden="true"` part, as textContent joins it. */

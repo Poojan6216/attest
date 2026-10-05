@@ -224,11 +224,13 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
 });
 
 describe('coverage windows (Hard Rule 5)', () => {
-  it('a Gmail Sent window starts at its oldest row and ends at its newest row or, at the head, lastSyncAt', () => {
+  it('a Gmail Sent window starts at its oldest row (a minute later unless every Older is disabled, QA-1) and ends at its newest row or, at the head, lastSyncAt', () => {
     for (const f of fixtures.filter((x) => x.coverage.some((c) => c.source === 'gmail.sent'))) {
       const times = f.observations.map((o) => Date.parse(o.occurredAt));
       const [c] = f.coverage;
-      expect(Date.parse(c?.windowStart ?? ''), f.file).toBe(Math.min(...times));
+      const older = Array.from(docOf(f).querySelectorAll('[role="button"][aria-label="Older"]'));
+      const ends = older.length > 0 && older.every((x) => x.getAttribute('aria-disabled') === 'true');
+      expect(Date.parse(c?.windowStart ?? ''), f.file).toBe(Math.min(...times) + (ends ? 0 : 60_000));
       if (c?.windowEnd !== 'lastSyncAt')
         expect(Date.parse(c?.windowEnd ?? ''), f.file).toBe(Math.max(...times));
     }

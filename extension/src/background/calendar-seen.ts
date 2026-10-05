@@ -13,30 +13,19 @@
  *
  * Only a creation or an update can be seen first elsewhere; a confirmed deletion reports an absence. The other
  * record must be read strictly after this range's base and strictly before this pass: one read at or before the base
- * says nothing about the change since, and one read at this pass's instant cannot be ordered with it.
+ * says nothing about the change since, and one read at this pass's instant cannot be ordered with it. "In its new
+ * state" is the diff's own `sameEventState` (src/observers/gcal/diff.ts; TECH-6), over the other record's stored
+ * events, so "held first" can never drift from "changed".
+ *
+ * Since v1.12 every change is a first sighting already (./calendar-own.ts `accountMadeChange` knows of no change the
+ * account made), so this reads nothing until the live smoke (sprint_2 2.8) lets a change be the account's own again.
  */
-import { asciiLower, instantMs } from '../core/normalize';
+import { instantMs } from '../core/normalize';
 import { CalendarRecord, type CalendarRecordKey } from '../ledger/calendar-snapshots';
 import { readRows, type LedgerDb } from '../ledger/db';
+import { sameEventState } from '../observers/gcal/diff';
 import type { CalendarSnapshot, SnapshotEvent } from '../observers/gcal/snapshot';
 import type { CalendarRow } from './calendar-step';
-
-const sameInstant = (a: string | undefined, b: string | undefined): boolean =>
-  a === undefined || b === undefined ? a === b : instantMs(a) === instantMs(b);
-
-/** Whether two snapshots hold an event in one state (every field the diff compares, src/observers/gcal/diff.ts). */
-export function sameState(a: SnapshotEvent, b: SnapshotEvent): boolean {
-  return (
-    a.key === b.key &&
-    sameInstant(a.occurredAt, b.occurredAt) &&
-    sameInstant(a.endAt, b.endAt) &&
-    a.allDay === b.allDay &&
-    a.subjectHint === b.subjectHint &&
-    a.calendar === b.calendar &&
-    a.guestCount === b.guestCount &&
-    a.guests.map(asciiLower).join('\n') === b.guests.map(asciiLower).join('\n')
-  );
-}
 
 /** The stored records of other ranges (any account) read strictly between `afterMs` and `beforeMs`. */
 async function otherViews(
@@ -75,7 +64,7 @@ export async function seenFirstElsewhere(
   const heldFirst = (row: CalendarRow): boolean => {
     const state = row.row.rowKey === undefined ? undefined : now.get(row.row.rowKey);
     if (state === undefined) return false;
-    return views.some((view) => view.snapshot.events.some((event) => sameState(event, state)));
+    return views.some((view) => view.snapshot.events.some((event) => sameEventState(event, state)));
   };
   return rows.map((each) =>
     changes.includes(each) && heldFirst(each) ? { ...each, firstSighting: true } : each,

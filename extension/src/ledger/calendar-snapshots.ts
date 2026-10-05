@@ -3,11 +3,16 @@
  * hash and visible range, the snapshot the service worker diffs that range's next pass against
  * (src/background/calendar-step.ts), keyed by `[observerId+accountHash+range]` (schema v3, db.ts STORES_V3).
  *
- * A record holds derived facts only, the ones the observer's own snapshot schema allows (src/observers/gcal/
- * snapshot.ts: event and calendar keys are SHA-256, subject hints ≤ 80 code points, guest addresses, instants), plus
- * `pending`: the events of `snapshot` that one snapshot able to see them lacked, and since when. Such an event is
- * kept in `snapshot` until a second snapshot confirms its absence (a deletion is reported only after the event is
- * absent from two consecutive complete snapshots) or it comes back.
+ * A record holds derived facts only, in the snapshot's stored form (src/observers/gcal/snapshot.ts `StoredSnapshot`:
+ * event and calendar keys are SHA-256, subject hints ≤ 80 code points, instants, each event's first guest address
+ * and a SHA-256 key per guest, never every guest address in clear: SEC-2), plus:
+ *  - `pending`: the events of `snapshot` that one snapshot able to see them lacked, and since when. Such an event is
+ *    kept in `snapshot` until a second snapshot confirms its absence (a deletion is reported only after the event is
+ *    absent from two consecutive complete snapshots) or it comes back;
+ *  - `updates`: per event of `snapshot`, how many `calendar.updated` rows its range reported in the current churn
+ *    window, and since when (SEC-11: the cap on rows per event, src/background/calendar-churn.ts).
+ * A snapshot given in its page form (what a pass posts; a record of format 1, stored before SEC-2) is read as its
+ * stored form, so the store writes the stored form only and an older record is rewritten by the range's next pass.
  *
  * Every record is parsed with `CalendarRecord` on write and on read (Zod at the boundary). A stored record that fails
  * it reads as none (logged by id only, `ledger.row_invalid`): the next pass is then compared with nothing, which can
@@ -21,7 +26,7 @@ import { Dexie } from 'dexie';
 import { z } from 'zod';
 
 import { instantMs } from '../core/normalize';
-import { CalendarSnapshot, RangeKey } from '../observers/gcal/snapshot';
+import { CalendarSnapshot, RangeKey, StoredSnapshot, storedSnapshotOf } from '../observers/gcal/snapshot';
 import { noteStoredInstant } from './clock-high-water';
 import { readRow, type CalendarKey, type LedgerDb } from './db';
 import { LedgerError } from './errors';
@@ -35,34 +40,52 @@ import { ComponentId, IsoTs, SCHEMA_LIMITS, Sha256 } from './types';
  */
 export const PendingAbsence = z.strictObject({ key: Sha256, since: IsoTs, baseAt: IsoTs.optional() });
 
+/**
+ * The `calendar.updated` rows reported for one event of the record's snapshot in its current churn window: `count`
+ * of them since `since`, the first one's instant (SEC-11).
+ */
+export const UpdateWindow = z.strictObject({ key: Sha256, since: IsoTs, count: z.number().int().min(1) });
+
+/** A record's snapshot, always kept in its stored form; a page-form snapshot is read as its stored form. */
+const RecordSnapshot = z.union([StoredSnapshot, CalendarSnapshot.transform(storedSnapshotOf)]);
+
+/** Each entry of `list` names one event of `keys`, at most once. */
+function keyProblems(
+  list: readonly { readonly key: string }[],
+  keys: ReadonlySet<string>,
+  path: 'pending' | 'updates',
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  list.forEach((entry, i) => {
+    if (!keys.has(entry.key) || seen.has(entry.key)) {
+      ctx.addIssue({ code: 'custom', path: [path, i, 'key'], message: 'must name one snapshot event' });
+    }
+    seen.add(entry.key);
+  });
+}
+
 export const CalendarRecord = z
   .strictObject({
     observerId: ComponentId,
     accountHash: Sha256,
     range: RangeKey,
     /** The range's comparison base: the latest snapshot, plus the events it could not vouch for (see the header). */
-    snapshot: CalendarSnapshot,
+    snapshot: RecordSnapshot,
     pending: z.array(PendingAbsence).max(SCHEMA_LIMITS.BATCH),
+    updates: z.array(UpdateWindow).max(SCHEMA_LIMITS.BATCH).default([]),
   })
   .superRefine((record, ctx) => {
     if (record.snapshot.range !== record.range) {
       ctx.addIssue({ code: 'custom', path: ['range'], message: 'must be the snapshot range' });
     }
     const keys = new Set(record.snapshot.events.map((event) => event.key));
-    const pending = new Set<string>();
-    record.pending.forEach((absence, i) => {
-      if (!keys.has(absence.key) || pending.has(absence.key)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['pending', i, 'key'],
-          message: 'must name one snapshot event',
-        });
-      }
-      pending.add(absence.key);
-    });
+    keyProblems(record.pending, keys, 'pending', ctx);
+    keyProblems(record.updates, keys, 'updates', ctx);
   });
 
 export type PendingAbsence = z.infer<typeof PendingAbsence>;
+export type UpdateWindow = z.infer<typeof UpdateWindow>;
 export type CalendarRecord = z.infer<typeof CalendarRecord>;
 export type CalendarRecordInput = z.input<typeof CalendarRecord>;
 

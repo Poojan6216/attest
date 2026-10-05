@@ -50,6 +50,11 @@ jobs:
       - name: Core coverage
         run: pnpm test:coverage
 
+      # qa_tester rule 8 (QA-8): the observers stay at or above 85% of lines, measured over the suites that run them
+      # (extension/vitest.observers.config.ts).
+      - name: Observer coverage
+        run: pnpm test:coverage:observers
+
       # src/core under the runtime guard (Hard Rule 4): every core, golden and property test with every impure global
       # poisoned before src/core loads; fails on any impure use, any changed built-in, or below 95% of src/core's lines.
       - name: Core under the runtime guard

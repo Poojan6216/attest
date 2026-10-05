@@ -1,8 +1,9 @@
 /**
  * The Calendar observer through the 2.0 skeleton (src/observers/base.ts `runPass`): health → extract → project →
- * bus, on the labelled fixtures. The created event arrives as exactly one observation with the label's contentHash,
- * one coverage ping per labelled window carries the source, allCalendars and only the account's hash, the range's
- * snapshot follows last (sprint_2 2.7), an unchanged page posts no observation, and nothing the page holds beyond
+ * bus, on the labelled fixtures. On a page whose account is known a pass posts its health, one coverage ping per
+ * labelled window (the source, allCalendars and only the account's hash) and the range's snapshot last, and no rows
+ * of its own: the service worker derives them from the snapshot (src/background/calendar-step.ts; Decisions [2.7]).
+ * A page that names no account posts a first sighting of every event and no snapshot. Nothing the page holds beyond
  * the allowlist (seeds, event ids, calendar names, the account address) crosses the bus (Hard Rules 2, 5, 6, 10).
  */
 import { describe, expect, it } from 'vitest';
@@ -10,34 +11,32 @@ import { describe, expect, it } from 'vitest';
 import seededJson from '../../../fixtures/secrets/seeded.json';
 import type { BusMessage } from '../../../../src/bus/messages';
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
+import { HEALTH_REASON } from '../../../../src/core/schema-text';
 import { accountHashOf } from '../../../../src/observers/account';
 import { assertObserver, type PassDeps, runPass } from '../../../../src/observers/base';
-import { HEALTH_REASON } from '../../../../src/core/schema-text';
 import { createGcalObserver } from '../../../../src/observers/gcal/observer';
 import { GCAL_REASONS } from '../../../../src/observers/gcal/read';
-import type { CalendarSnapshot } from '../../../../src/observers/gcal/snapshot';
-import { planPass } from '../../../../src/observers/plan';
 import type { LabelledFixture } from '../../fixtures/fixture-labels';
 import { zoneOffset } from '../../fixtures/fixture-page-read';
 import { recordingPost } from '../helpers';
 import {
+  accountlessHtmlOf,
   ctxOf,
   docOf,
-  expectedObservation,
   fixture,
   GCAL_FIXTURES,
   observerFor,
-  snapshotOfFixture,
+  parseDocument,
 } from './gcal-fixtures';
 
 const SEEDS = seededJson.seeds.map((seed) => seed.value);
 /** Fields `project()` computes itself on every observation (docs/grading.md §10). */
 const ALWAYS = ['id', 'source', 'type', 'observedAt', 'rowKeyHash', 'contentHash'];
 
-function deps(f: LabelledFixture): PassDeps & { messages: BusMessage[] } {
+function deps(f: LabelledFixture, doc: Document = docOf(f)): PassDeps & { messages: BusMessage[] } {
   const recording = recordingPost();
   return {
-    doc: docOf(f),
+    doc,
     post: recording.post,
     now: () => f.page.readAt,
     offsetAt: zoneOffset(f.page.timeZone),
@@ -47,9 +46,9 @@ function deps(f: LabelledFixture): PassDeps & { messages: BusMessage[] } {
   };
 }
 
-async function pass(f: LabelledFixture, previous: CalendarSnapshot | null) {
-  const d = deps(f);
-  const result = await runPass(observerFor(f, previous), d);
+async function pass(f: LabelledFixture, doc?: Document) {
+  const d = deps(f, doc);
+  const result = await runPass(observerFor(f), d);
   return { result, messages: d.messages };
 }
 
@@ -63,7 +62,7 @@ describe('gcal.event through runPass', () => {
   });
 
   it('is a valid observer of calendar.google.com only', () => {
-    const observer = createGcalObserver({ offsetAt: zoneOffset('America/New_York'), previous: () => null });
+    const observer = createGcalObserver({ offsetAt: zoneOffset('America/New_York') });
     expect(() => {
       assertObserver(observer);
     }).not.toThrow();
@@ -71,20 +70,11 @@ describe('gcal.event through runPass', () => {
     expect(observer.source).toBe('gcal.event');
   });
 
-  it('after the event was created: one calendar.created with the label contentHash, coverage, the snapshot', async () => {
+  it('a page whose account is known: its health, its coverage, then its snapshot, and no row of its own', async () => {
     const f = fixture('synthetic-gcal-week-after-create.html');
-    const previous = snapshotOfFixture(fixture('synthetic-gcal-week-before.html'));
-    const { result, messages } = await pass(f, previous);
+    const { result, messages } = await pass(f);
     expect(result).toMatchObject({ status: 'OK', complete: true });
-    expect(messages.map((m) => m.type)).toEqual([
-      'adapter.health',
-      'observer.observations',
-      'coverage.ping',
-      'calendar.snapshot',
-    ]);
-    const [diff] = f.diffs;
-    const want = (diff?.observations ?? []).map((o) => expectedObservation(o, f.page.readAt));
-    expect(observationsIn(messages)).toEqual(want);
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'coverage.ping', 'calendar.snapshot']);
     const ping = messages.find((m) => m.type === 'coverage.ping');
     const [coverage] = f.coverage;
     expect(ping?.type === 'coverage.ping' && ping.ping).toEqual({
@@ -97,73 +87,27 @@ describe('gcal.event through runPass', () => {
       allCalendars: false,
       userActive: true,
     });
-    const stored = observerFor(f, previous).snapshot(docOf(f), ctxOf(f));
-    expect(messages.at(-1)).toEqual({
-      type: 'calendar.snapshot',
-      observerId: 'gcal.event',
-      snapshot: stored,
-    });
-    expect(stored?.baselineAt).toBe(previous.baselineAt);
+    const snapshot = observerFor(f).snapshot(docOf(f), ctxOf(f));
+    expect(messages.at(-1)).toEqual({ type: 'calendar.snapshot', observerId: 'gcal.event', snapshot });
+    // The observer holds no stored snapshot: each one starts its own chain, the service worker carries a chain on.
+    expect([snapshot?.readAt, snapshot?.baselineAt]).toEqual([f.page.readAt, f.page.readAt]);
+    expect(snapshot?.events).toHaveLength(f.events.length);
   });
-});
 
-describe('gcal.event through runPass: changes and first sightings', () => {
   it('an unchanged page posts its health, its coverage and its snapshot, and no observation', async () => {
-    const f = fixture('synthetic-gcal-week-unchanged.html');
-    const { messages } = await pass(f, snapshotOfFixture(fixture('synthetic-gcal-week-after-create.html')));
+    const { messages } = await pass(fixture('synthetic-gcal-week-unchanged.html'));
     expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'coverage.ping', 'calendar.snapshot']);
   });
 
-  it('asks the store for the snapshot of its range and its account (the hash, never the address)', () => {
+  it('a page that names no account: a first sighting of every event, coverage without an account, no snapshot', async () => {
     const f = fixture('synthetic-gcal-week-before.html');
-    const asked: unknown[][] = [];
-    const observer = createGcalObserver({
-      offsetAt: zoneOffset(f.page.timeZone),
-      previous: (...args) => {
-        asked.push(args);
-        return null;
-      },
-    });
-    observer.extract(docOf(f), ctxOf(f));
-    expect(asked).toEqual([['2026-10-04/2026-10-10', accountHashOf(f.page.account)]]);
-    expect(observer.range(docOf(f))).toBe('2026-10-04/2026-10-10');
-  });
-
-  it('a snapshot continues the stored chain of its range: it keeps the baseline, a first one starts its own', () => {
-    const first = snapshotOfFixture(fixture('synthetic-gcal-week-before.html'));
-    expect(first.baselineAt).toBe(first.readAt);
-    const f = fixture('synthetic-gcal-week-after-create.html');
-    const next = observerFor(f, first).snapshot(docOf(f), ctxOf(f));
-    expect(next?.baselineAt).toBe(first.readAt);
-    expect(next?.readAt).toBe(f.page.readAt);
-    const reread = observerFor(f, { ...first, version: '0.9.0' }).snapshot(docOf(f), ctxOf(f));
-    expect(reread?.baselineAt).toBe(f.page.readAt);
-  });
-
-  it('the first pass over a range posts a first sighting of every event', async () => {
-    const f = fixture('synthetic-gcal-week-before.html');
-    const { messages } = await pass(f, null);
+    const { messages } = await pass(f, parseDocument(accountlessHtmlOf(f)));
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
     const observations = observationsIn(messages);
     expect(observations).toHaveLength(f.events.length);
     expect(new Set(observations.map((o) => o.type))).toEqual(new Set(['calendar.created']));
-  });
-
-  it('a stored snapshot that fails its schema counts as none (first sightings, never a change)', () => {
-    const f = fixture('synthetic-gcal-week-after-create.html');
-    const observer = createGcalObserver({
-      offsetAt: zoneOffset(f.page.timeZone),
-      previous: () => ({ events: 'not a snapshot' }),
-    });
-    const rows = observer.extract(docOf(f), ctxOf(f));
-    expect(rows).toHaveLength(f.events.length);
-  });
-
-  it("a stored snapshot of another range fails the pass loud (extract.threw), it is the store's bug", () => {
-    const f = fixture('synthetic-gcal-week-after-create.html');
-    const other = snapshotOfFixture(fixture('synthetic-gcal-month-november.html'));
-    const observer = createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone), previous: () => other });
-    const plan = planPass({ observer, doc: docOf(f), ctx: ctxOf(f), policy: DEFAULT_POLICY });
-    expect(plan).toEqual({ status: 'DEGRADED', reasons: ['extract.threw'], observations: [] });
+    const ping = messages.find((m) => m.type === 'coverage.ping');
+    expect(ping?.type === 'coverage.ping' && ping.ping.accountHash).toBeUndefined();
   });
 });
 
@@ -171,7 +115,7 @@ describe('gcal.event through runPass: coverage and the allowlist', () => {
   it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(
     '%s: one ping per labelled window, each with the source, allCalendars and the account hash',
     async (_, f) => {
-      const { messages } = await pass(f, null);
+      const { messages } = await pass(f);
       const pings = messages.flatMap((m) => (m.type === 'coverage.ping' ? [m.ping] : []));
       expect(pings).toEqual(
         f.coverage.map((c) => ({
@@ -189,8 +133,7 @@ describe('gcal.event through runPass: coverage and the allowlist', () => {
   );
 
   it('the month view pings both runs the "2 more" day splits it into', async () => {
-    const f = fixture('synthetic-gcal-month-november.html');
-    const { messages } = await pass(f, null);
+    const { messages } = await pass(fixture('synthetic-gcal-month-november.html'));
     const spans = messages.flatMap((m) =>
       m.type === 'coverage.ping' ? [[m.ping.windowStart, m.ping.windowEnd]] : [],
     );
@@ -201,9 +144,12 @@ describe('gcal.event through runPass: coverage and the allowlist', () => {
   });
 
   it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(
-    '%s: nothing beyond the allowlist crosses the bus',
+    '%s: nothing beyond the allowlist crosses the bus, with or without an account',
     async (_, f) => {
-      const { messages } = await pass(f, null);
+      const known = await pass(f);
+      const accountless = await pass(f, parseDocument(accountlessHtmlOf(f)));
+      const messages = [...known.messages, ...accountless.messages];
+      expect(observationsIn(accountless.messages)).toHaveLength(f.events.length);
       const text = JSON.stringify(messages).toLowerCase();
       const secrets = [
         ...SEEDS,

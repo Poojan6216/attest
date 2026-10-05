@@ -1,7 +1,7 @@
 # Golden scenarios
 
 Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` **alone** (v1.5;
-`69` re-derived and `98` written under v1.6; `99`–`103` written and `86` updated under v1.9), never from `src/core`. They are the independent statement of what
+`69` re-derived and `98` written under v1.6; `99`–`103` written and `86` updated under v1.9; `112` written under v1.12), never from `src/core`. They are the independent statement of what
 `grade()` and `gradeBatch()` must do: the code is written to satisfy them, not the other way round (sprint 1: "write
 scenarios first").
 
@@ -23,6 +23,7 @@ scenarios first").
 | `v14-rules*.ts` (rules, events)         | One `contract:<tag>` per v1.4 rule, with a proof that the tagged file exercises it.               |
 | `v19-rules.ts`                          | One `contract:<tag>` per v1.9 rule (receipt points, followed calendar changes), with its proof.   |
 | `v110-rules.ts`                         | One `contract:<tag>` per v1.10 rule (first-look markers, views looked at too early), with proof.  |
+| `v112-rules.ts`                         | The v1.12 `contract:<tag>` (every Calendar row stored with its marker), with its proof.           |
 | `ids.ts`, `write-ids.ts`                | The ids snapshot and the script that writes it.                                                   |
 | `scenarios.spec.ts`                     | Validates every file, the coverage requirements, and the loader output.                           |
 | `checks.spec.ts`                        | Mutation tests: every check and v1.2 proof rejects a broken copy of a real expectation.           |
@@ -30,6 +31,7 @@ scenarios first").
 | `v14-rules.spec.ts`                     | The same for the v1.4 tags, and the v1.4 checks (grants, late claims, events, params) bite.       |
 | `v19-rules.spec.ts`                     | The same for the v1.9 tags.                                                                       |
 | `v110-rules.spec.ts`                    | The same for the v1.10 tags, and broken copies graded: without a marker the row is UNASKED.       |
+| `v112-rules.spec.ts`                    | The same for the v1.12 tag, and `112` graded without its markers: the changes are UNASKED.        |
 | `loader.spec.ts`                        | Pins the loader defaults, `claimedAtEnd`, row-key hashing, reason params and time helpers.        |
 | `__snapshots__/ids.json`                | Every claim and observation id per scenario, so a hashing change is a reviewed diff.              |
 | `runner.ts`, `golden.spec.ts`           | The runner: grades every file through the core (gradeBatch or grade, then the events).            |
@@ -163,6 +165,19 @@ Everything is exact: basis points and reduced fractions, never floats (§5.3). W
 `timeProximity` = 1 within `toleranceMin`, else `(edge − Δ)/(edge − tolerance)` in ms, with edge 120 000 before
 the unit, 2 700 000 after it, 259 200 000 around a calendar target. `28` and `29` exercise the millisecond
 boundaries (9503999/9504000, 17/20 exactly, 8078399/9504000).
+
+## What v1.12 changed in the files
+
+v1.12 is the Sprint 2 close (the status note of `docs/grading.md`). No file from `01` to `111` changed: the orphan rule
+is the same in `src/core`, and what changed is what the service worker stores. A snapshot cannot tell a change the
+account made from one other people made to its calendar, so every Calendar row is stored as a first sighting with its
+first-look marker, a change a followed view saw included. The rule has a `contract:<tag>` with a proof in
+`v112-rules.ts`; `v112-rules.spec.ts` also grades `112` without its markers, to show they decide the file.
+
+- **Calendar changes other people made (§3, §7).** `112` holds an invitation Google added, an organiser's reschedule
+  and cancellation, and a colleague's edit on a shared calendar, each a change a followed view saw, each next to an
+  agent's session and idle evidence, and each with its marker: none is UNASKED. A claim to have moved the meeting is
+  still VERIFIED on the reschedule's row: a marker is never a candidate.
 
 ## What v1.11 changed in the files
 

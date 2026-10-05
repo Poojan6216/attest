@@ -120,6 +120,21 @@ export async function sendChecked(message: BusMessage): Promise<BusAck> {
 }
 
 /**
+ * Whether this context can still reach the extension (Decisions [2.close] S5, SEC-3). Chrome clears `runtime.id` in a
+ * content script whose extension was reloaded, updated or removed under the page; every message it posts then fails
+ * with `context_invalidated`. The observer skeleton stops only on this, or on that failure, never on a signal the page
+ * can send (WXT's start-up event). Never throws: a runtime that cannot be read is gone.
+ */
+export function extensionContextAlive(): boolean {
+  try {
+    const runtime: unknown = Reflect.get(browser, 'runtime');
+    return typeof runtime === 'object' && runtime !== null && typeof Reflect.get(runtime, 'id') === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The `post` a content script gives the observer skeleton (src/observers/base.ts `Post`): resolves once the service
  * worker stored the message, and rejects with a `BusError` when it refused any of it (`refused`; the refusal's code
  * is logged at debug as `bus.refused`) or the message never arrived. The skeleton then stops the pass, so no

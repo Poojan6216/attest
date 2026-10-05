@@ -27,9 +27,12 @@
  *     since nothing is wrong with the page (Hard Rule 6: never cry wolf); its windows are not recorded.
  *  5. Each row is projected (core `project`, so it is exactly what an observer would have sent) with `observedAt` =
  *     when it was first seen, and stored (./calendar-rows.ts): a first sighting with its marker, a change as it is.
- *     A change whose comparison base was read too long before it (./calendar-step.ts `staleChangeMs`) is a first
- *     sighting, and so is a creation or an update another range's view held first (read after this range's base,
- *     before this pass, ./calendar-seen.ts): either way this pass is not when the change happened.
+ *     Since v1.12 every row is a first sighting (docs/grading.md §3, §7; Decisions [2.close]): whether the account
+ *     itself made a change is not known before the live smoke (sprint_2 2.8), so the step is given ./calendar-own.ts
+ *     `accountMadeChange`, and no Calendar row accuses an agent. The rules that will still apply once it can know are
+ *     in place: a change whose comparison base was read too long before it (./calendar-step.ts `staleChangeMs`) is a
+ *     first sighting too, and so is a creation or an update another range's view held first (read after this range's
+ *     base, before this pass, ./calendar-seen.ts): either way this pass is not when the change happened.
  *     The first refusal aborts the transaction: DEGRADED, `{ ok: false, code }`, nothing stored, and the range's
  *     record is then dropped, so the next pass is a first look at a new instant (its rows first sightings with
  *     markers): a pass refused on a row it derives again from the same record every time (a confirmed deletion first
@@ -37,6 +40,9 @@
  *  6. Then the record is stored, and the pass's windows are recorded as the step says: with `changesSince` (a
  *     complete pass with nothing pending), without it (a pass that cannot vouch for changes), or not at all (a pass
  *     waiting to confirm an absence; its first sightings still have their markers).
+ *  7. A pass whose step held back updates of an event past the per-event cap (./calendar-churn.ts, SEC-11) is stored
+ *     like any other, answered `{ ok: true }`, and leaves the observer DEGRADED `ledger.event_churn` (Hard Rule 6: a
+ *     row not stored is never silent) until a later pass is fully accepted with nothing held back.
  */
 import { ACK_OK, type BusAck, type CalendarSnapshotMessage, type LedgerTable } from '../bus/messages';
 import type { MessageSender } from '../bus/listen';
@@ -53,12 +59,15 @@ import {
 import { guardClock } from '../ledger/clock-guard';
 import type { LedgerDb } from '../ledger/db';
 import { inCalendarPass } from '../ledger/first-look';
+import { LEDGER_REASON_PREFIX, markLedgerDegraded } from '../ledger/health';
 import type { CoveragePing, IsoTs } from '../ledger/types';
 import { log } from '../log';
 import type { CalendarSnapshot } from '../observers/gcal/snapshot';
 import { CalendarRowRefused, type CalendarWrite, writeCalendarRows } from './calendar-rows';
+import { accountMadeChange } from './calendar-own';
 import { type CalendarCoverage, type CalendarRow, calendarStep, staleChangeMs } from './calendar-step';
 import { seenFirstElsewhere } from './calendar-seen';
+import { windowInRange } from './calendar-window';
 import {
   accepted,
   clockBehind,
@@ -69,31 +78,6 @@ import {
 } from './observer-messages';
 import { senderKey, serially, takeHeld, wasRefused } from './observer-state';
 import type { RowCode } from './row-codes';
-
-/** The day after a `YYYY-MM-DD` day, as `YYYY-MM-DD` (UTC calendar arithmetic: no zone is involved). */
-function dayAfter(day: string): string {
-  const [year, month, date] = day.split('-').map(Number);
-  return new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, (date ?? 1) + 1)).toISOString().slice(0, 10);
-}
-
-/**
- * Whether a ping's window lies inside the snapshot's range, on days the snapshot saw whole: it starts on a visible
- * day and ends no later than the midnight after the last one (both read as the local dates the observer wrote them
- * in), and every day it reaches into is whole: its first day, and each visible day before the day its end falls on (a
- * window ends at the first instant of the day after its run, which may be a hidden one). A window over a day hidden
- * behind "N more" would report that day as seen (Hard Rule 5): the observer never sends one (src/observers/gcal/
- * pass.ts), so one that does is refused.
- */
-export function windowInRange(ping: CoveragePing, snapshot: CalendarSnapshot): boolean {
-  const first = snapshot.days[0]?.date;
-  const last = snapshot.days[snapshot.days.length - 1]?.date;
-  if (first === undefined || last === undefined) return false;
-  const startDay = ping.windowStart.slice(0, 10);
-  const endDay = ping.windowEnd.slice(0, 10);
-  if (startDay < first || startDay > last || endDay > dayAfter(last)) return false;
-  const reached = (date: string): boolean => date === startDay || (date > startDay && date < endDay);
-  return snapshot.days.every((day) => day.complete || !reached(day.date));
-}
 
 /** Each row as the observer's `project()` would have produced it, first seen when the step says; null if one fails. */
 function projectRows(rows: readonly CalendarRow[], policy: Policy): CalendarWrite[] | null {
@@ -126,7 +110,7 @@ export type CalendarOutcome =
   | { readonly kind: 'late' }
   | { readonly kind: 'clock_behind' }
   | { readonly kind: 'refused'; readonly code: RowCode; readonly count: number }
-  | { readonly kind: 'stored'; readonly tables: readonly LedgerTable[] };
+  | { readonly kind: 'stored'; readonly tables: readonly LedgerTable[]; readonly heldBack: number };
 
 /**
  * The pass's coverage above the clock floor (step 2 of the module comment): a `changesSince` below it is lifted to
@@ -181,19 +165,40 @@ async function storePass(
   const stored = (await getCalendarRecord(db, key)) ?? null;
   if (stored !== null && instantMs(stored.snapshot.readAt) >= instantMs(snapshot.readAt))
     return { kind: 'late' };
-  const step = calendarStep(stored, snapshot, { staleAfterMs: staleChangeMs(policy) });
+  const options = { staleAfterMs: staleChangeMs(policy), ownChange: accountMadeChange };
+  const step = calendarStep(stored, snapshot, options);
   count.rows = step.rows.length;
   const writes = projectRows(await seenFirstElsewhere(db, key, stored, snapshot, step.rows), policy);
   if (writes === null) throw new CalendarRowRefused('invalid_input');
   const owner = { observerId, accountHash, allCalendars: allCalendarsOf(snapshot) };
   const inserted = await writeCalendarRows(db, policy, writes, owner, { clockMs: clock.nowMs });
-  await putCalendarRecord(db, { ...key, snapshot: step.snapshot, pending: [...step.pending] });
+  const record = { snapshot: step.snapshot, pending: [...step.pending], updates: [...step.updates] };
+  await putCalendarRecord(db, { ...key, ...record });
   const coverage = aboveFloor(step.coverage, clock.floorAt, snapshot.readAt);
   const recorded = await recordWindows(db, pass.pings, coverage);
   const tables: LedgerTable[] = ['calendarSnapshots'];
   if (inserted > 0) tables.push('observations', 'coverageIntervals');
   if (recorded) tables.push('coverageIntervals', 'coverage');
-  return { kind: 'stored', tables: [...new Set(tables)] };
+  return { kind: 'stored', tables: [...new Set(tables)], heldBack: step.heldBack };
+}
+
+/** The reason a pass that held back updates of a churning event leaves (step 7 of the module comment). */
+export const EVENT_CHURN_REASON = `${LEDGER_REASON_PREFIX}event_churn`;
+
+/** Step 7: the observer DEGRADED `ledger.event_churn`, stamped at the pass, until a later pass is fully accepted. */
+async function heldBackUpdates(
+  ctx: ObserverContext,
+  db: LedgerDb,
+  snapshot: CalendarSnapshot,
+  observerId: string,
+): Promise<void> {
+  await markLedgerDegraded(db, {
+    adapterId: observerId,
+    reasons: [EVENT_CHURN_REASON],
+    at: snapshot.readAt,
+    version: snapshot.version,
+  });
+  ctx.notify(['adapterHealth']);
 }
 
 /** Steps 2 to 6 of the module comment, for a pass whose snapshot passed step 1, at the service worker's `nowMs`. */
@@ -252,7 +257,8 @@ export async function onCalendarSnapshot(
     if (outcome.kind === 'refused')
       return refuse(ctx, db, { ...base, codes: new Set([outcome.code]), count: outcome.count });
     ctx.notify(outcome.tables);
-    await accepted(ctx, db, observerId, readMs);
+    if (outcome.heldBack > 0) await heldBackUpdates(ctx, db, snapshot, observerId);
+    else await accepted(ctx, db, observerId, readMs);
     return ACK_OK;
   });
 }

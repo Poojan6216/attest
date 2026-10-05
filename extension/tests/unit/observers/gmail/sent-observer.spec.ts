@@ -90,6 +90,7 @@ async function postedFor(file: string): Promise<BusMessage[]> {
 
 describe('what the skeleton posts', () => {
   it('Sent page 1: health OK, the 11 observations, then a ping with the account hash and the window', async () => {
+    // Older is enabled on page 1, so the window starts a minute after its oldest row's (17:55): QA-1.
     const messages = await postedFor('synthetic-sent-page-1.html');
     expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
     const [, observations, ping] = messages;
@@ -100,7 +101,7 @@ describe('what the skeleton posts', () => {
         observerId: 'gmail.sent',
         source: 'gmail.sent',
         lastSyncAt: '2026-10-03T10:15:00-04:00',
-        windowStart: '2026-09-29T17:55:00-04:00',
+        windowStart: '2026-09-29T17:56:00-04:00',
         windowEnd: '2026-10-03T10:15:00-04:00',
         accountHash: accountHashOf('avery.founder@example.com'),
       },

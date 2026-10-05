@@ -16,7 +16,12 @@
  * Gate `receiptParsersGatePassed`: all eight parsers (stripe, amazon, marketplace, opentable, instacart, uber,
  * shopify, generic) reproduce every labelled fixture exactly, the generic parser has at least 3 positives and the
  * corpus at least 3 negatives, every negative stays unparsed, every list view is neutral, every page asserts
- * exactly its labelled coverage (none where nothing was parsed), and every labelled health matches.
+ * exactly its labelled coverage (a platform receipt's instant; none for a generic receipt, SEC-6, or where nothing
+ * was parsed), and every labelled health matches.
+ *
+ * Corpus honesty (Hard Rule 12; QA-4, QA-V3): `receiptRealFixtures` counts the real captures among the pages the
+ * numbers are scored on (the positives and the negatives, receipt-fixtures.ts `receiptScoredFixtures`). It is 0
+ * until the founder's captures land (2.1, 2.4 BLOCKED(MANUAL)): every accuracy here describes synthetic pages.
  *
  * The DOM lib reference above types the extension code this bench runs (it takes a DOM `Document`); nothing here
  * touches a real browser or the network.
@@ -30,8 +35,11 @@ import {
   expectedReceipts,
   gmailFixtures,
   planCoverage,
+  receiptFacts,
   receiptHealthLabel,
+  receiptNegatives,
   type ReceiptRun,
+  receiptScoredFixtures,
   runReceipts,
 } from '../../extension/tests/unit/observers/receipts/receipt-fixtures';
 
@@ -59,7 +67,6 @@ interface ParserTally {
 }
 
 const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
-const receiptFacts = (f: LabelledFixture) => f.observations.filter((o) => o.source === 'gmail.receipt');
 
 /** Fields of `expected` that the observation with its row key holds equally (none when it is missing). */
 function fieldsRight(expected: Observation, actual: readonly Observation[]): number {
@@ -104,9 +111,7 @@ function healthMatches(f: LabelledFixture, run: ReceiptRun): boolean | null {
   return run.health.status === label.status && JSON.stringify(reasons) === JSON.stringify(label.reasons);
 }
 
-function scoreOverall(f: LabelledFixture, run: ReceiptRun, overall: Overall): void {
-  const negative =
-    f.page.view === 'gmail.message' && f.page.folder === 'inbox' && receiptFacts(f).length === 0;
+function scoreOverall(f: LabelledFixture, run: ReceiptRun, overall: Overall, negative: boolean): void {
   if (negative) {
     overall.negatives += 1;
     overall.negativesUnparsed += run.plan.observations.length === 0 ? 1 : 0;
@@ -151,8 +156,13 @@ function gatePassed(tallies: Map<Parser, ParserTally>, overall: Overall): boolea
   );
 }
 
-/** The receipt bench: per-parser and overall metrics, flat, with the `receiptParsersGatePassed` gate. */
-export function runReceiptsBench(): Promise<Readonly<Record<string, MetricValue>>> {
+/**
+ * The receipt bench: per-parser and overall metrics, flat, with the `receiptParsersGatePassed` gate. `fixtures` is
+ * replaced only by the bench's own tests (a corpus with real captures in it).
+ */
+export function runReceiptsBench(
+  fixtures: readonly LabelledFixture[] = gmailFixtures(),
+): Promise<Readonly<Record<string, MetricValue>>> {
   const tallies = new Map<Parser, ParserTally>(
     RECEIPT_PARSERS.map((p) => [p, { fixtures: 0, exact: 0, fieldsRight: 0, fieldsTotal: 0 }]),
   );
@@ -167,16 +177,17 @@ export function runReceiptsBench(): Promise<Readonly<Record<string, MetricValue>
     healthLabelled: 0,
     healthMatched: 0,
   };
-  const fixtures = gmailFixtures();
+  const negatives = new Set(receiptNegatives(fixtures));
   for (const f of fixtures) {
     const run = runReceipts(f);
     if (receiptFacts(f).length > 0) scorePositive(f, run, tallies);
-    scoreOverall(f, run, overall);
+    scoreOverall(f, run, overall, negatives.has(f));
   }
   const fieldsRightAll = [...tallies.values()].reduce((sum, t) => sum + t.fieldsRight, 0);
   const fieldsTotalAll = [...tallies.values()].reduce((sum, t) => sum + t.fieldsTotal, 0);
   return Promise.resolve({
     gmailFixtures: fixtures.length,
+    receiptRealFixtures: receiptScoredFixtures(fixtures).filter((f) => !f.page.synthetic).length,
     ...parserMetrics(tallies),
     receiptFieldAccuracy: fieldsTotalAll === 0 ? 0 : round4(fieldsRightAll / fieldsTotalAll),
     ...overall,

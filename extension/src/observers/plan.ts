@@ -106,10 +106,10 @@ const HealthCheckShape = z.discriminatedUnion('status', [
 ]);
 
 /** The observer's health, checked against the contract: `health.threw` or `health.invalid` when it is not. */
-function checkHealth(observer: Observer, doc: Document): HealthCheck {
+function checkHealth(observer: Observer, doc: Document, ctx: ExtractContext): HealthCheck {
   let check: unknown;
   try {
-    check = observer.health(doc);
+    check = observer.health(doc, ctx);
   } catch {
     return { status: 'DEGRADED', reasons: ['health.threw'] };
   }
@@ -185,7 +185,7 @@ function cleanPlan(observations: readonly Observation[], facts: PassCoverage): P
 
 /** Decides one pass over `input.doc`. Never throws. */
 export function planPass(input: PassInput): PassPlan {
-  const health = checkHealth(input.observer, input.doc);
+  const health = checkHealth(input.observer, input.doc, input.ctx);
   if (health.status === 'DEGRADED') return { status: 'DEGRADED', reasons: health.reasons, observations: [] };
   const rows = extractRows(input);
   if (!rows.ok) return { status: 'DEGRADED', reasons: [rows.reason], observations: [] };

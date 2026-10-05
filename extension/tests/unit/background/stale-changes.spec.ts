@@ -8,7 +8,7 @@
  */
 import 'fake-indexeddb/auto';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { coveredObservations, visibleAt } from '../../../src/core/batch-orphans';
 import { createMemoryIndex } from '../../../src/core/candidates';
@@ -23,6 +23,11 @@ import { pinClock, releaseClock, uniqueDbName } from '../ledger/fixtures';
 import { ACCOUNT, at, week } from './calendar-fixtures';
 import { eventOn, markerOf, markers, runPass, WIDE_WINDOWS_POLICY } from './calendar-pass-harness';
 import { contextOf, type TestContext } from './observer-harness';
+
+// Since v1.12 no Calendar change is known to be the account's own (src/background/calendar-own.ts), so none
+// accuses. These scenarios keep the rules a change must also meet once it can be (the live smoke, sprint_2 2.8):
+// they run as if the account made every change.
+vi.mock('../../../src/background/calendar-own', () => ({ accountMadeChange: () => true }));
 
 let db: LedgerDb;
 let ctx: TestContext;

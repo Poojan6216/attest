@@ -11,6 +11,7 @@
 import { z } from 'zod';
 
 import { ComponentId } from '../../core/schema';
+import { ObserverError } from '../errors';
 import raw from './selectors.json' with { type: 'json' };
 
 const Selector = z.string().min(1);
@@ -63,10 +64,18 @@ const CalendarSelectorsFile = z.strictObject({
 
 export type CalendarSelectorsFile = z.infer<typeof CalendarSelectorsFile>;
 
-/** The parsed selectors.json (throws a ZodError at load when the file is malformed). */
-export const GCAL_SELECTORS: Readonly<CalendarSelectorsFile> = Object.freeze(
-  CalendarSelectorsFile.parse(raw),
-);
+/**
+ * Parses a selectors document. A malformed one throws ObserverError('invalid_selectors'), which the logger prints by
+ * name and code (TECH-3), and never half-loads. Exported for tests.
+ */
+export function loadCalendarSelectors(value: unknown): Readonly<CalendarSelectorsFile> {
+  const parsed = CalendarSelectorsFile.safeParse(value);
+  if (!parsed.success) throw new ObserverError('invalid_selectors');
+  return Object.freeze(parsed.data);
+}
+
+/** The parsed selectors.json. */
+export const GCAL_SELECTORS: Readonly<CalendarSelectorsFile> = loadCalendarSelectors(raw);
 
 /** The observer's version: selectors.json's. */
 export const GCAL_VERSION = GCAL_SELECTORS.version;

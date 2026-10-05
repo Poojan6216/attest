@@ -8,7 +8,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { BUS_ERROR_CODES, BusError, transportErrorCode } from '../../../src/bus/errors';
 import { listen } from '../../../src/bus/listen';
 import { type BusMessage, BUS_MESSAGE_TYPES, type BusMessageType } from '../../../src/bus/messages';
-import { postAcked, query, send, sendChecked } from '../../../src/bus/send';
+import { extensionContextAlive, postAcked, query, send, sendChecked } from '../../../src/bus/send';
 import type { IsoTs, Sha256 } from '../../../src/core/schema';
 import {
   CLAIM,
@@ -305,5 +305,27 @@ describe('transportErrorCode / BusError', () => {
       expect(error.code).toBe(code);
       expect(error.message).toBe(`bus: ${code}`);
     }
+  });
+});
+
+describe('extensionContextAlive (Decisions [2.close] S5, SEC-3)', () => {
+  it('is true while the runtime has an id, and false once Chrome cleared it or it cannot be read', () => {
+    expect(extensionContextAlive()).toBe(true);
+    const runtime = fakeBrowser.runtime as { id?: string };
+    const id = runtime.id;
+    try {
+      Object.defineProperty(runtime, 'id', { configurable: true, value: undefined });
+      expect(extensionContextAlive()).toBe(false);
+      Object.defineProperty(runtime, 'id', {
+        configurable: true,
+        get: () => {
+          throw new Error('Extension context invalidated.');
+        },
+      });
+      expect(extensionContextAlive()).toBe(false);
+    } finally {
+      Object.defineProperty(runtime, 'id', { configurable: true, writable: true, value: id });
+    }
+    expect(extensionContextAlive()).toBe(true);
   });
 });

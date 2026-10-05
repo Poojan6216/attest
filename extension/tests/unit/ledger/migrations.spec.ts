@@ -71,7 +71,7 @@ describe('the shipped schema', () => {
   it('opens at the shipped version with every ledger table (the coverage intervals and Calendar snapshots included)', async () => {
     const db = await open(uniqueDbName('v1'));
     expect(db.verno).toBe(SHIPPED);
-    expect(SHIPPED).toBe(3);
+    expect(SHIPPED).toBe(4);
     expect(LEDGER_TABLE_NAMES).toContain(COVERAGE_INTERVALS);
     expect(db.tables.map((table) => table.name).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
   });
@@ -81,7 +81,8 @@ describe('the shipped schema', () => {
     expect(indexOf(db, 'observations', 'contentHash')?.unique).toBe(true);
     expect(indexOf(db, 'claims', 'rawHash')?.unique).toBe(true);
     expect(indexOf(db, 'observations', '[type+timeBucket]')?.compound).toBe(true);
-    expect(indexOf(db, 'observations', 'counterpartyTokens')?.multi).toBe(true);
+    // v4 (TECH-13): the v1 counterparty-token index is gone; candidate retrieval reads [type+timeBucket].
+    expect(indexOf(db, 'observations', 'counterpartyTokens')).toBeUndefined();
     for (const table of ['claims', 'requests', 'receipts']) {
       expect(indexOf(db, table, '[agent+date]')?.compound, table).toBe(true);
     }

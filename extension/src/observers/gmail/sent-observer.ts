@@ -10,11 +10,29 @@
  * `startObserver(gmailSentObserver)`.
  */
 import { OBSERVER_HOSTS } from '../../config';
+import { selectorAttributes } from '../batch';
 import type { Observer } from '../types';
 import { gmailAccount } from './account';
 import { extractSent, sentWindows } from './extract';
 import { sentHealth } from './health';
 import { SENT_SELECTORS } from './selectors';
+
+/**
+ * Every attribute a read of the Sent page depends on (TECH-2; ../types.ts `attributes`): the ones the selectors match
+ * on and the ones the reader reads off elements (`navSelectedValue` is a value, not a name). The content script's one
+ * watcher starts a pass on a change to one of these, to the tree or the text, or to `class`, `hidden` or `style`
+ * (../batch.ts VIEW_ATTRIBUTES), not on a hover or focus change that touches only other attributes.
+ */
+export const SENT_ATTRIBUTES: readonly string[] = Object.freeze(
+  [
+    ...new Set([
+      ...selectorAttributes(Object.values(SENT_SELECTORS.selectors)),
+      ...Object.entries(SENT_SELECTORS.attributes)
+        .filter(([key]) => key !== 'navSelectedValue')
+        .flatMap(([, names]) => names),
+    ]),
+  ].sort(),
+);
 
 export const gmailSentObserver: Observer = Object.freeze({
   id: 'gmail.sent',
@@ -26,4 +44,5 @@ export const gmailSentObserver: Observer = Object.freeze({
   extract: extractSent,
   account: gmailAccount,
   visibleWindows: sentWindows,
+  attributes: SENT_ATTRIBUTES,
 });

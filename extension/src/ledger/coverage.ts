@@ -27,9 +27,12 @@
  * and `graceElapsed` reads the latest eligible sync whatever window it saw, so the result decides every condition
  * exactly as every stored interval would, at a bounded size. The `gcal.event` entries it returns are closed under
  * overlap (v1.9): with any it holds, every other one synced by `evaluatedAt` whose window overlaps it, whatever its
- * account (`closeOverlaps`). `coverageForMany` answers every claim of a batch in one read transaction, reading the
- * Calendar source once for all of them. A window that no interval overlaps gets level `none` (Hard Rule 5): a claim
- * windowed before an observer's first pass is UNVERIFIABLE (`no_coverage`).
+ * account (`closeOverlaps`). `coverageForMany` answers every claim of a batch in one read transaction, reading each
+ * Calendar run and each source's latest per account once for all of them. Every read is bounded (TECH-1, schema v4):
+ * windows only where they can overlap the claim's window (they end within it plus the source's longest stored
+ * window), first-look markers only inside it, and a Calendar run widened from its seeds, never the whole source, so
+ * no read grows with the markers of future events. A window that no interval overlaps gets level `none` (Hard Rule
+ * 5): a claim windowed before an observer's first pass is UNVERIFIABLE (`no_coverage`).
  *
  * Rows are read through `readInterval`: derived fields stripped, strict `ObserverCoverage` parse, a corrupt row
  * skipped and logged by count only (it then counts as no coverage, the safe direction). The observer obligations
@@ -44,10 +47,13 @@ import type { Policy } from '../core/policy';
 import { claimWindow, type WindowClaim } from '../core/window';
 import { accountKeyOfEntry, isFirstLookMarker, type PlacedEntry, type StoredEntry } from './coverage-merge';
 import {
+  longestSpanMs,
   parseCoverageInput,
   placeEntry,
+  pointsIn,
   readInterval,
   recordCoverage,
+  spansEndingIn,
   storedEntries,
   toIntervalRow,
 } from './coverage-store';
@@ -85,25 +91,72 @@ function checkWindow(window: CoverageWindow | null): void {
   }
 }
 
-/** The source's intervals synced by `evaluatedMs` that overlap `window`. */
+/**
+ * What one read transaction has already read, per source and instant: the closed source's runs, each source's
+ * latest interval per account and longest span. Shared by every query of a batch (`coverageForMany`), so none of it
+ * is read once per claim.
+ */
+type ReadCache = Map<string, Promise<unknown>>;
+
+function cached<T>(cache: ReadCache, key: string, read: () => Promise<T>): Promise<T> {
+  const held = cache.get(key) as Promise<T> | undefined;
+  if (held !== undefined) return held;
+  const reading = read();
+  cache.set(key, reading);
+  return reading;
+}
+
+/** The sources whose windows may end after their sync: a calendar shows days to come. */
+const SEES_AHEAD: ReadonlySet<ObservationSource> = new Set<ObservationSource>(['gcal.event']);
+
+/** Whether `placed` (of `source`, synced by `evaluatedMs`) overlaps or touches [fromMs, toMs]. */
+function overlapsSpan(
+  placed: PlacedEntry,
+  source: ObservationSource,
+  fromMs: number,
+  toMs: number,
+  evaluatedMs: number,
+) {
+  return (
+    placed.entry.source === source &&
+    placed.syncMs <= evaluatedMs &&
+    placed.startMs <= toMs &&
+    placed.endMs >= fromMs
+  );
+}
+
+/**
+ * The source's stored rows that can overlap [fromMs, toMs] (./coverage-store.ts header): its points inside it, and
+ * its spans that end between `fromMs` and `toMs` plus its longest span. A Gmail window never ends after its sync, so
+ * for a source that does not see ahead the spans read stop at `evaluatedMs` too: one ending later synced later.
+ */
+async function rowsNear(
+  db: LedgerDb,
+  source: ObservationSource,
+  fromMs: number,
+  toMs: number,
+  evaluatedMs: number,
+  cache: ReadCache,
+): Promise<StoredEntry[]> {
+  const longest = await cached(cache, `longest:${source}`, () => longestSpanMs(db, source));
+  const reach = SEES_AHEAD.has(source) ? toMs + longest : Math.min(toMs + longest, evaluatedMs);
+  const points = await storedEntries(pointsIn(db, source, fromMs, toMs));
+  const spans = reach < fromMs ? [] : await storedEntries(spansEndingIn(db, source, fromMs, reach));
+  return [...points, ...spans];
+}
+
+/** The source's intervals synced by `evaluatedMs` that overlap `window`: a bounded read (TECH-1). */
 async function overlapping(
   db: LedgerDb,
   source: ObservationSource,
   window: CoverageWindow,
   evaluatedMs: number,
+  cache: ReadCache,
 ): Promise<PlacedEntry[]> {
-  const ending = db.coverageIntervals
-    .where('[source+endMs]')
-    .between([source, window.fromMs], [source, Dexie.maxKey], true, true);
-  return (await storedEntries(ending))
+  const { fromMs, toMs } = window;
+  return (await rowsNear(db, source, fromMs, toMs, evaluatedMs, cache))
     .map(({ placed }) => placed)
-    .filter(
-      (placed) =>
-        placed.entry.source === source &&
-        placed.syncMs <= evaluatedMs &&
-        placed.startMs <= window.toMs &&
-        placed.endMs >= window.fromMs,
-    );
+    .filter((placed) => overlapsSpan(placed, source, fromMs, toMs, evaluatedMs));
 }
 
 /** Each account key the source was seen with (the account-less key '' included). */
@@ -158,61 +211,73 @@ function compareEntries(a: PlacedEntry, b: PlacedEntry): number {
 /** The source whose entries a batch holds closed under overlap (docs/grading.md §3, Background obligations, v1.9). */
 const CLOSED_SOURCE: ObservationSource = 'gcal.event';
 
-/** One run of `overlapRuns`: its intervals, its earliest start and the latest end it reaches. */
+/** One RUN: a connected component of the overlap graph, its intervals and the span [startMs, reachMs] they cover. */
 interface Run {
-  readonly entries: PlacedEntry[];
+  readonly entries: readonly PlacedEntry[];
   readonly startMs: number;
-  reachMs: number;
+  readonly reachMs: number;
+}
+
+/** A closed range of epoch ms an index was already read over. */
+interface Range {
+  readonly fromMs: number;
+  readonly toMs: number;
+}
+
+/** The parts of `wanted` that `done` (null: nothing read yet) does not cover: at most two, one on each side. */
+function unread(wanted: Range, done: Range | null): Range[] {
+  if (done === null) return [wanted];
+  const parts: Range[] = [];
+  if (wanted.fromMs < done.fromMs) parts.push({ fromMs: wanted.fromMs, toMs: done.fromMs - 1 });
+  if (wanted.toMs > done.toMs) parts.push({ fromMs: done.toMs + 1, toMs: wanted.toMs });
+  return parts;
 }
 
 /**
- * What one read transaction has already read, per source and instant: the closed source's runs and each source's
- * latest interval per account. Shared by every query of a batch (`coverageForMany`), so the source is read once per
- * batch, not once per claim.
+ * The run of `seed` among the source's intervals synced by `evaluatedMs`: the maximal set of intervals connected to
+ * it by a chain of ones that overlap or touch (closed intervals). Widened from the seed (TECH-1): read the points
+ * inside the run's span so far and the spans that may reach it (./coverage-store.ts header), each index range only
+ * where it was not read yet, take every interval synced by `evaluatedMs` that overlaps the span, and widen the span
+ * to theirs, until nothing joins. The span of a connected set is one interval, and every interval that overlaps it
+ * overlaps a member, so the fixpoint is exactly the component a scan of the whole source finds, read without the
+ * rest of the source.
  */
-type ReadCache = Map<string, Promise<unknown>>;
-
-function cached<T>(cache: ReadCache, key: string, read: () => Promise<T>): Promise<T> {
-  const held = cache.get(key) as Promise<T> | undefined;
-  if (held !== undefined) return held;
-  const reading = read();
-  cache.set(key, reading);
-  return reading;
-}
-
-/**
- * The source's intervals synced by `evaluatedMs`, cut into RUNS: maximal groups, ascending by start, in which each
- * interval overlaps or touches (closed intervals) one before it. Two intervals are connected by a chain of
- * overlapping ones exactly when they share a run, so a run is a connected component of the overlap graph.
- */
-async function overlapRuns(db: LedgerDb, source: ObservationSource, evaluatedMs: number): Promise<Run[]> {
-  const all = db.coverageIntervals
-    .where('[source+endMs]')
-    .between([source, Dexie.minKey], [source, Dexie.maxKey], true, true);
-  const synced = (await storedEntries(all))
-    .map(({ placed }) => placed)
-    .filter((placed) => placed.entry.source === source && placed.syncMs <= evaluatedMs)
-    .sort((a, b) => compareNumbers(a.startMs, b.startMs));
-  const runs: Run[] = [];
-  for (const placed of synced) {
-    const last = runs[runs.length - 1];
-    if (last === undefined || placed.startMs > last.reachMs) {
-      runs.push({ entries: [placed], startMs: placed.startMs, reachMs: placed.endMs });
-    } else {
-      last.entries.push(placed);
-      last.reachMs = Math.max(last.reachMs, placed.endMs);
+async function runOf(db: LedgerDb, seed: PlacedEntry, evaluatedMs: number, cache: ReadCache): Promise<Run> {
+  const source = CLOSED_SOURCE;
+  const longest = await cached(cache, `longest:${source}`, () => longestSpanMs(db, source));
+  const seen = new Map<number, PlacedEntry>();
+  const read: { points: Range | null; spans: Range | null } = { points: null, spans: null };
+  let span = { startMs: seed.startMs, reachMs: seed.endMs };
+  for (;;) {
+    const points = { fromMs: span.startMs, toMs: span.reachMs };
+    const spans = { fromMs: span.startMs, toMs: span.reachMs + longest };
+    for (const part of unread(points, read.points)) {
+      for (const { key, placed } of await storedEntries(pointsIn(db, source, part.fromMs, part.toMs)))
+        seen.set(key, placed);
     }
+    for (const part of unread(spans, read.spans)) {
+      for (const { key, placed } of await storedEntries(spansEndingIn(db, source, part.fromMs, part.toMs))) {
+        seen.set(key, placed);
+      }
+    }
+    read.points = points;
+    read.spans = spans;
+    const members = [...seen.values()].filter((placed) =>
+      overlapsSpan(placed, source, span.startMs, span.reachMs, evaluatedMs),
+    );
+    const startMs = Math.min(span.startMs, ...members.map((placed) => placed.startMs));
+    const reachMs = Math.max(span.reachMs, ...members.map((placed) => placed.endMs));
+    if (startMs === span.startMs && reachMs === span.reachMs) return { entries: members, startMs, reachMs };
+    span = { startMs, reachMs };
   }
-  return runs;
 }
 
 /**
  * Adds to `found` every interval of `source` synced by `evaluatedMs` whose window overlaps one `found` holds, until
  * none joins: the orphan rule reads every first look over a change's days, whatever its account, so a reader that
  * returned only some of them could let another account's first-look rows accuse an agent (§3, §7; Hard Rule 7).
- * That fixpoint is every run (`overlapRuns`) an interval of `found` overlaps. The source is read once per read
- * transaction and instant (`cache`) and the closure is taken in memory: one query per joined interval made a batch's
- * read quadratic in the source's intervals, and first-look markers (./first-look.ts) add one per event first seen.
+ * That fixpoint is every run an interval of `found` overlaps. Each run is read once per read transaction and instant
+ * (`cache`), widened from the first seed in it (`runOf`): never the whole source, and never once per claim.
  */
 async function closeOverlaps(
   db: LedgerDb,
@@ -223,12 +288,14 @@ async function closeOverlaps(
 ): Promise<void> {
   const seeds = [...found.values()].filter((placed) => placed.entry.source === source);
   if (seeds.length === 0) return;
-  const runs = await cached(cache, `runs:${source}:${String(evaluatedMs)}`, () =>
-    overlapRuns(db, source, evaluatedMs),
-  );
-  for (const run of runs) {
-    const reached = seeds.some((seed) => seed.startMs <= run.reachMs && seed.endMs >= run.startMs);
-    if (!reached) continue;
+  const runs = await cached<Run[]>(cache, `runs:${source}:${String(evaluatedMs)}`, () => Promise.resolve([]));
+  for (const seed of seeds) {
+    const reaches = (run: Run): boolean => seed.startMs <= run.reachMs && seed.endMs >= run.startMs;
+    let run = runs.find(reaches);
+    if (run === undefined) {
+      run = await runOf(db, seed, evaluatedMs, cache);
+      runs.push(run);
+    }
     for (const other of run.entries) {
       const key = canonicalJson(other.entry);
       if (!found.has(key)) found.set(key, other);
@@ -261,7 +328,7 @@ async function coverageIn(
   const { type, window, evaluatedAt, evaluatedMs } = query;
   const found = new Map<string, PlacedEntry>();
   for (const source of policy.sourcesByType[type]) {
-    const seen = window === null ? [] : await overlapping(db, source, window, evaluatedMs);
+    const seen = window === null ? [] : await overlapping(db, source, window, evaluatedMs, cache);
     const latest = await cached(cache, `latest:${source}:${String(evaluatedMs)}`, () =>
       latestPerAccount(db, source, evaluatedMs),
     );

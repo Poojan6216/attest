@@ -15,9 +15,7 @@ const WEEK = fixture('synthetic-gcal-week-after-create.html');
 const MONTH = fixture('synthetic-gcal-month-november.html');
 
 function healthOf(html: string, timeZone = WEEK.page.timeZone) {
-  return createGcalObserver({ offsetAt: zoneOffset(timeZone), previous: () => null }).health(
-    parseDocument(html),
-  );
+  return createGcalObserver({ offsetAt: zoneOffset(timeZone) }).health(parseDocument(html));
 }
 
 function edited(base: string, from: string | RegExp, to: string): string {
@@ -132,7 +130,7 @@ describe('gcal.event health: ranges, zones and the pass', () => {
   });
 
   it('extract() on a page health() would refuse throws, so the pass reports extract.threw and no rows', () => {
-    const observer = createGcalObserver({ offsetAt: zoneOffset(WEEK.page.timeZone), previous: () => null });
+    const observer = createGcalObserver({ offsetAt: zoneOffset(WEEK.page.timeZone) });
     const ctx = { ...ctxOf(WEEK), offsetAt: zoneOffset('Europe/Paris') };
     const plan = planPass({ observer, doc: parseDocument(week), ctx, policy: DEFAULT_POLICY });
     expect(plan).toEqual({ status: 'DEGRADED', reasons: ['extract.threw'], observations: [] });

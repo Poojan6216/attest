@@ -4,9 +4,10 @@
  *
  *  - `invalid_selectors`: ./selectors.json does not parse (a developer error, thrown when the module loads, before
  *    any page is read).
- *  - `time_unresolved`: a message a parser claimed as a receipt has a date that does not name one minute (no date
- *    text, or a clock time a DST change makes ambiguous). `extract()` throws it, so the pass is DEGRADED
- *    (`extract.threw`) and no row is guessed (Hard Rules 5, 6).
+ *  - `time_unresolved`: a message a platform parser claimed as a receipt has a date that does not name one minute
+ *    (no date text, or a clock time a DST change makes ambiguous). `extract()` throws it, so the pass is DEGRADED
+ *    (`extract.threw`) and no row is guessed (Hard Rules 5, 6). A generic receipt with such a date is dropped
+ *    instead: a stranger's mail never makes the pass DEGRADED (./generic.ts, ./extract.ts).
  */
 
 export const RECEIPT_ERROR_CODES = ['invalid_selectors', 'time_unresolved'] as const;

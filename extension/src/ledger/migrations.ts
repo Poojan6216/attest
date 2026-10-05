@@ -15,7 +15,7 @@ import { type Transaction } from 'dexie';
 
 import { DB_NAME } from '../config';
 import { log } from '../log';
-import { LedgerDb, STORES_V1, STORES_V2, STORES_V3 } from './db';
+import { COVERAGE_INTERVALS, LedgerDb, STORES_V1, STORES_V2, STORES_V3, STORES_V4 } from './db';
 import { LedgerError } from './errors';
 import { LEDGER_TABLE_NAMES } from './index-fields';
 
@@ -29,15 +29,42 @@ export interface Migration {
 }
 
 /**
+ * v4's data upgrade (db.ts STORES_V4): every stored coverage interval gets its `kind` and `lenMs`, from the epoch-ms
+ * fields v2 already stored with it (a row without them never passed toIntervalRow: it is left alone, the strict read
+ * skips it as before, and no index lists it); and every stored observation loses `counterpartyTokens`, the derived
+ * field of the index v4 drops, which its strict read would otherwise refuse (Hard Rule 5: no evidence lost).
+ */
+async function upgradeToV4(tx: Transaction): Promise<void> {
+  await tx
+    .table(COVERAGE_INTERVALS)
+    .toCollection()
+    .modify((row: Record<string, unknown>) => {
+      const { startMs, endMs } = row;
+      if (typeof startMs !== 'number' || typeof endMs !== 'number') return;
+      row.kind = startMs === endMs ? 'point' : 'span';
+      row.lenMs = endMs - startMs;
+    });
+  await tx
+    .table('observations')
+    .toCollection()
+    .modify((row: Record<string, unknown>) => {
+      if ('counterpartyTokens' in row) Reflect.deleteProperty(row, 'counterpartyTokens');
+    });
+}
+
+/**
  * v1: the eight ledger tables (Sprint 0.6). v2 (Sprint 2.6): receipt indexes for the retention purge and the
  * coverage interval store (db.ts STORES_V2); IndexedDB builds the new receipt indexes over existing rows, and
  * the new table starts empty (no observer wrote coverage before Sprint 2), so v2 needs no data upgrade. v3 (Sprint
- * 2.7): the Calendar snapshot store (db.ts STORES_V3), new and empty, so no data upgrade either.
+ * 2.7): the Calendar snapshot store (db.ts STORES_V3), new and empty, so no data upgrade either. v4 (Sprint 2 close,
+ * TECH-1, TECH-13): the coverage intervals' kind and length indexes, derived over every stored interval, and no
+ * counterparty-token index on observations, whose derived field leaves every stored row (db.ts STORES_V4).
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, stores: STORES_V1 },
   { version: 2, stores: STORES_V2 },
   { version: 3, stores: STORES_V3 },
+  { version: 4, stores: STORES_V4, upgrade: upgradeToV4 },
 ];
 
 /** Throws `invalid_migrations` unless versions ascend and every ledger table survives to the last one. */
