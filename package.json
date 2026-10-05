@@ -27,7 +27,7 @@
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint && pnpm typecheck",
-    "pre-push": "pnpm test"
+    "pre-push": "bash scripts/pre-push.sh"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
