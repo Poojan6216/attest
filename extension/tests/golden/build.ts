@@ -212,7 +212,7 @@ function coverageEntry(entry: ScenarioCoverage): Record<string, unknown> {
     windowStart: entry.windowStart,
     windowEnd: entry.windowEnd,
     ...(entry.accountHash === undefined ? {} : { accountHash: labelHash(entry.accountHash) }),
-    ...present(entry, ['allCalendars']),
+    ...present(entry, ['allCalendars', 'changesSince']),
   };
 }
 

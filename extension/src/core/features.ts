@@ -10,7 +10,9 @@
  * dropped when the claim lacks its field or the field has no tokens, and the address/name split
  * (`normalize.counterparty`) picks exactly one of `counterpartyExact` + `counterpartyDomain` or
  * `counterpartyName`. A missing or empty field on the OBSERVATION scores 0 and is never "not applicable", so
- * no observation can make a claim easier to match by omitting data.
+ * no observation can make a claim easier to match by omitting data. A pair none of whose content features (every
+ * applicable feature but `timeProximity`: counterparty, subject, amount, merchant) scores above 0 scores 0 (§5.3
+ * content gate, v1.11): time alone never says which action an observation is, so it is never evidence.
  *
  * Speed (the task 1.5 grading perf gate scores every (claim, candidate) pair of a batch): what a claim says is
  * read once into a plan (its window, prepared address, token sets, the applicable features and their weights;
@@ -34,7 +36,7 @@ import {
   observedFacts,
   type TextFacts,
 } from './features-observed';
-import { type ClaimFacts, type ClaimPlan, fillParts } from './features-parts';
+import { type ClaimFacts, type ClaimPlan, contentMatched, fillParts } from './features-parts';
 import { counterparty } from './normalize';
 import { assertLoadedPolicy, type FeatureName, type Policy } from './policy';
 import {
@@ -42,7 +44,7 @@ import {
   NUMBER_RATIO_ZERO,
   type NumberRatio,
   type Ratio,
-  type Score,
+  Score,
   toDisplay,
   toDisplayOf,
   weightedFractionOf,
@@ -57,6 +59,10 @@ import { claimWindow, type WindowClaim } from './window';
  */
 const fillPartsLocal = fillParts;
 const weightedFractionOfLocal = weightedFractionOf;
+const contentMatchedLocal = contentMatched;
+
+/** The score of a pair that fails the §5.3 content gate: 0, exactly (v1.11). */
+const TIME_ALONE: Score = Score.ofReduced(0, 1);
 
 export type { CounterpartyReason } from './features-counterparty';
 export { type FeatureObservation, freshFacts, type ObservedFacts, TextFacts } from './features-observed';
@@ -121,6 +127,11 @@ function readsCounterparty(listed: readonly FeatureName[]): boolean {
   return false;
 }
 
+/** §5.3 content gate (v1.11): the positions in `applicable` of every feature but `timeProximity`. */
+function contentPositions(applicable: readonly FeatureName[]): number[] {
+  return applicable.flatMap((feature, i) => (feature === 'timeProximity' ? [] : [i]));
+}
+
 /**
  * The facts the features listed for the claim's type read (§5.2 decides applicability from these alone): a fact
  * no listed feature reads is left empty, since only listed features are ever checked or valued.
@@ -164,6 +175,7 @@ function computePlan(claim: FeatureClaim, policy: FeaturePolicy, texts: TextFact
     usesAddress: applicable.includes('counterpartyExact') || applicable.includes('counterpartyDomain'),
     subjectTokens: [...facts.subject],
     merchantTokens: facts.merchant === null ? [] : [...facts.merchant.tokens],
+    content: contentPositions(applicable),
   };
 }
 
@@ -251,7 +263,10 @@ function pairValues(plan: ClaimPlan, observed: ObservedFacts, policy: FeaturePol
   const dens = new Float64Array(plan.applicable.length);
   const verdict = fillPartsLocal(plan, observed, policy, nums, dens);
   const values = plan.applicable.map((_, i) => asNumberRatio(nums[i] ?? 0, dens[i] ?? 1));
-  return { observed, values, score: weightedScoreExact(plan.weights, values), reason: verdict?.reason };
+  // The mean first: with no weighted applicable feature it throws (§5.3), gate or not.
+  const mean = weightedScoreExact(plan.weights, values);
+  const score = contentMatchedLocal(plan, nums) ? mean : TIME_ALONE;
+  return { observed, values, score, reason: verdict?.reason };
 }
 
 /** The `FeatureResult` of a valued pair: display signals per applicable feature and the score, exact score, reason. */
@@ -288,12 +303,19 @@ export class RowScorer {
   }
 
   /**
-   * The pair's exact score as an unreduced fraction of two safe integers in `out` (ratio.ts `weightedFractionOf`),
-   * for exact comparisons; false when the score needs BigInt (then `score` gives it).
+   * The pair's exact score as an unreduced fraction of two safe integers in `out` (ratio.ts `weightedFractionOf`;
+   * 0/1 for a pair the §5.3 content gate stops), for exact comparisons; false when the score needs BigInt (then
+   * `score` gives it).
    */
   fraction(observed: ObservedFacts, out: Float64Array): boolean {
     fillPartsLocal(this.#plan, observed, this.policy, this.#nums, this.#dens);
-    return weightedFractionOfLocal(this.#plan.weights, this.#nums, this.#dens, out);
+    // The mean first: where it is undefined or needs BigInt, `score` decides (and throws for a zero weight sum).
+    if (!weightedFractionOfLocal(this.#plan.weights, this.#nums, this.#dens, out)) return false;
+    if (!contentMatchedLocal(this.#plan, this.#nums)) {
+      out[0] = 0;
+      out[1] = 1;
+    }
+    return true;
   }
 
   /** The pair's exact score: the `Score` `pairScorer` gives for the observation the facts were read from. */

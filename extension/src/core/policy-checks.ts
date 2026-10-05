@@ -65,7 +65,10 @@ function thresholdIssues({ thresholds, unasked }: PolicyDocument): PolicyIssue[]
  * §5.2, §5.3: a type that lists features must give them a positive total weight (the score divides by it),
  * and its identity features must be among them with a weight above 0. A type with sources must name at least
  * one identity feature (v1.3). Identity decides that a claim is not underspecified, so every claim that can be
- * assigned then has Σw > 0 and a zero weight can never make a claim matchable on time alone.
+ * assigned then has Σw > 0 and a zero weight can never make a claim matchable on time alone. `timeProximity` is
+ * never an identity feature (v1.11): it says when, never which action. So every claim that is not underspecified has
+ * an applicable content feature, and the §5.3 content gate (a pair that matched on time alone scores 0) never
+ * leaves such a claim with nothing that could match it.
  */
 function featureIssues(doc: PolicyDocument): PolicyIssue[] {
   const { features, featuresByType, identityFeatures, sourcesByType } = doc;
@@ -89,6 +92,9 @@ function featureIssues(doc: PolicyDocument): PolicyIssue[] {
       }
       if (roundedBasisPoints(features[feature]) === 0) {
         issues.push({ path, message: `"${feature}" has weight 0 in features` });
+      }
+      if (feature === 'timeProximity') {
+        issues.push({ path, message: '"timeProximity" says when, never which action' });
       }
     });
     return issues;

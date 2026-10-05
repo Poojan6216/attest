@@ -48,12 +48,19 @@ export function instantMs(isoTs: string): number {
   }
 }
 
-/** An observer's window is a real interval, and `allCalendars` is a calendar fact only (§3). */
+/**
+ * An observer's window is a real interval (a point is one: a `gmail.receipt` pass covers its message's instant),
+ * and `allCalendars` and `changesSince` are calendar facts only (§3). Changes are followed from no later than the
+ * pass that reports them: `changesSince ≤ lastSyncAt`, because `[changesSince, lastSyncAt]` is the span over which
+ * the view compared snapshots, which the orphan rule reads (§3, §7; since v1.11 no coverage level reads it).
+ */
 export function coverageProblems(entry: {
   readonly source: string;
+  readonly lastSyncAt: string;
   readonly windowStart: string;
   readonly windowEnd: string;
   readonly allCalendars?: boolean | undefined;
+  readonly changesSince?: string | undefined;
 }): Problem[] {
   const problems: Problem[] = [];
   if (instantMs(entry.windowEnd) < instantMs(entry.windowStart)) {
@@ -61,6 +68,11 @@ export function coverageProblems(entry: {
   }
   if (entry.allCalendars !== undefined && entry.source !== 'gcal.event') {
     problems.push(['allCalendars', 'applies to gcal.event only']);
+  }
+  if (entry.changesSince === undefined) return problems;
+  if (entry.source !== 'gcal.event') problems.push(['changesSince', 'applies to gcal.event only']);
+  if (instantMs(entry.changesSince) > instantMs(entry.lastSyncAt)) {
+    problems.push(['changesSince', 'must not be after lastSyncAt']);
   }
   return problems;
 }
@@ -210,6 +222,9 @@ export const REASON_CODES = [
   'coverage.partial',
   'coverage.account_unbound',
   'coverage.calendars_hidden',
+  'coverage.changes_unfollowed',
+  'coverage.change_unprovable',
+  'coverage.account_partial',
   'coverage.multiple_accounts',
   'coverage.no_account',
   'coverage.no_parser',
@@ -265,6 +280,9 @@ export const REASON_PARAM_KINDS: Readonly<Record<(typeof REASON_CODES)[number], 
   'coverage.partial': SOURCE,
   'coverage.account_unbound': SOURCE,
   'coverage.calendars_hidden': SOURCE,
+  'coverage.changes_unfollowed': SOURCE,
+  'coverage.change_unprovable': SOURCE,
+  'coverage.account_partial': SOURCE,
   'coverage.multiple_accounts': SOURCE,
   'coverage.no_account': SOURCE,
   'coverage.no_parser': SOURCE,

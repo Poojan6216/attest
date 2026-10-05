@@ -1,0 +1,94 @@
+{
+  "name": "a refused Calendar first look leaves nothing; the pass that derives its events again stores them with markers",
+  "covers": ["contract:calendar_first_look_marker", "edge:calendar_refused_first_look"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.10: a Calendar pass is stored all or none: its rows (changes and first sightings with their first-look markers), its snapshot record, its coverage and meta in one readwrite transaction that aborts on any refusal. A refused pass leaves no row and no marker, and because no snapshot record was stored, the next pass derives its events again.",
+    "Story. acct-b's first look at the week at 14:10 was refused (late_sighting: another tab had already stored one of its events with a later sighting), so the ledger holds nothing from it: the grader never sees a 14:10 sighting. acct-b's next pass, at 14:25, compares with no stored record: a first look again. It stores 'Already there' as a first sighting at 14:25, with its marker, and its week entry with changesSince = lastSyncAt = 14:25.",
+    "Coverage. acct-a follows the week [10-04 00:00, 10-11 00:00]: changesSince 09:00, last synced 14:40. acct-b: the week, changesSince = lastSyncAt = 14:25; its marker for o1: window [10-07 09:00, 10-07 09:00], changesSince = lastSyncAt = 14:25. No claims.",
+    "o1 'Already there' (10-07 09:00), first seen 14:25: acct-a's entry satisfies rule (a) (09:00 < 14:25 ≤ 14:40), but acct-b's week entry and the marker both began comparing at 14:25, its first sighting: rule (b) fails. Not an orphan → no receipt.",
+    "Had the pass been stored row by row, o1 would sit in the ledger first seen at 14:10 with no entry of acct-b at that instant: acct-a's rule (a) holds (09:00 < 14:10 ≤ 14:40) and acct-b's 14:25 first look began comparing after it, so nothing finds it already there. Anchored at 14:10, muse's session at 14:08 (4000) and idle [14:05, 14:12] covering [14:08, 14:10] (3000) give 7/10 → a false UNASKED (Hard Rule 7).",
+    "o1 at its real first sighting would also be attributed: anchor 14:25, muse's session at 14:28 (4000), idle [14:20, 14:35] covers [14:23, 14:25] (3000) → 7/10. Only the first-look rule keeps it from being UNASKED.",
+    "o2 'Team lunch' (10-07 12:30), first seen 14:30 by acct-a's pass: rule (a) through acct-a (09:00 < 14:30 ≤ 14:40); acct-b's entries began comparing at 14:25 ≠ 14:30 and the marker does not hold 12:30 → an orphan. Anchor 14:30: muse's session at 14:28 (4000), idle [14:20, 14:35] covers [14:28, 14:30] (3000) → 7/10 → UNASKED, reasons unasked.session, unasked.idle.",
+    "o2 finality (§7): muse's adapter synced 15:10 ≥ 14:30 + 2 + 30 min = 15:02 → FINAL (evaluatedAt 15:30)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:30:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Already there",
+        "occurredAt": "2026-10-07T09:00:00-04:00",
+        "observedAt": "2026-10-06T14:25:00-04:00",
+        "rowKey": "evt-already-there"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Team lunch",
+        "occurredAt": "2026-10-07T12:30:00-04:00",
+        "observedAt": "2026-10-06T14:30:00-04:00",
+        "rowKey": "evt-team-lunch"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:25:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:25:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:25:00-04:00",
+        "windowStart": "2026-10-07T09:00:00-04:00",
+        "windowEnd": "2026-10-07T09:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:25:00-04:00"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:08:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:28:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:05:00-04:00", "to": "2026-10-06T14:12:00-04:00" },
+        { "from": "2026-10-06T14:20:00-04:00", "to": "2026-10-06T14:35:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T15:10:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o2",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

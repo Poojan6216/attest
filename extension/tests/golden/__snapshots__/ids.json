@@ -527,5 +527,70 @@
     "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
     "o1": "092E3BFAWGX4VF10YW67NZ5702",
     "o2": "1HWXGX73ZH9ZDJYFGS42X8RG4E"
+  },
+  "99-receipt-point-verifies-purchase.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "1S8AVWDVCT5QPM07TVGYNF95G2"
+  },
+  "100-receipt-point-unclaimed-unasked.json": {
+    "o1": "1S8AVWDVCT5QPM07TVGYNF95G2",
+    "o2": "3HDJTBB28FT5ZTCT2GE7B01SF8"
+  },
+  "101-calendar-first-look-no-unasked.json": {
+    "o1": "389A70PYMJKBA9H4E52GV9910A",
+    "o2": "7208K57G5Q4KFNVRBV6XXXM3ZM",
+    "o3": "6BWWBV0ZR05R7RY3QY7GXH2RJQ"
+  },
+  "102-calendar-deletion-before-first-look.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "7208K57G5Q4KFNVRBV6XXXM3ZM"
+  },
+  "103-calendar-deletion-followed.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "59J17JN97RQJ9EX3Q85QPJ263G",
+    "o1": "389A70PYMJKBA9H4E52GV9910A",
+    "o2": "6NWW8WMHQSGHSHSEFG8RBC3EHY",
+    "o3": "7208K57G5Q4KFNVRBV6XXXM3ZM"
+  },
+  "104-calendar-marker-event-before-range.json": {
+    "o1": "3WWBZ11DDF373JQ6677H64FQPB",
+    "o2": "1JNZ25APBV7SQAN91WD6Z8VFP9"
+  },
+  "105-calendar-marker-hidden-day.json": {
+    "o1": "16NQ5R1W16F0TWHJMS771KNGW1",
+    "o2": "6BWWBV0ZR05R7RY3QY7GXH2RJQ"
+  },
+  "106-calendar-refused-first-look-rederived.json": {
+    "o1": "2PNYAA4B84114EGCN9G5KC3SYX",
+    "o2": "6BWWBV0ZR05R7RY3QY7GXH2RJQ"
+  },
+  "107-calendar-marker-pass-without-window.json": {
+    "o1": "1PDSMY85035JT0971G0GVHG8RC",
+    "o2": "6BWWBV0ZR05R7RY3QY7GXH2RJQ"
+  },
+  "108-calendar-created-stale-view.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "c2": "2SBRT7DGXN2MSZJA9GX1XXKJXF",
+    "c3": "6EQ1V3NZSWAYSVBT7CXAHM8ASW",
+    "o1": "49414R1J6A0KCPVSR2HX7RSWQV"
+  },
+  "109-calendar-change-never-not-found.json": {
+    "c1": "5RT4TQ8B056MQXEJCN0333M8XD",
+    "c2": "6YHWBNYT5WDPNTJVPV1HTM5X60",
+    "o1": "571ZW66GDYMVKQM2QE9S35SF6J",
+    "o2": "51WEP6SFNGKD1X7D3PZ8Y7A6J9"
+  },
+  "110-per-account-coverage.json": {
+    "c1": "5RT4TQ8B056MQXEJCN0333M8XD",
+    "c2": "6YHWBNYT5WDPNTJVPV1HTM5X60",
+    "c3": "0428ZP79V069DPQMKWEM3QSMVB",
+    "c4": "4H88K97BSBR5J26P8NCTCEDJRR"
+  },
+  "111-no-evidence-on-time-alone.json": {
+    "c1": "5RT4TQ8B056MQXEJCN0333M8XD",
+    "c2": "6YHWBNYT5WDPNTJVPV1HTM5X60",
+    "o1": "103Y5VRTEQ2MT201ZEFH232GHP",
+    "o2": "7MF9J4RZWR8GX170S31YBN1JQ7"
   }
 }

@@ -1,0 +1,100 @@
+{
+  "name": "a first-look marker keeps an event on a day hidden behind \"N more\" from accusing an agent",
+  "covers": ["contract:calendar_first_look_marker", "edge:calendar_hidden_day_first_sighting"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.10: every row a Calendar pass stores as a first sighting gets a first-look marker: a gcal.event entry of the same observer and account, window = the row's occurredAt (a point), lastSyncAt = changesSince = the row's first sighting. A marker blocks its row by orphan rule (b) and never makes coverage full.",
+    "Coverage. acct-a follows the week [10-04 00:00, 10-11 00:00]: changesSince 09:00, last synced 14:20. acct-b first looks at the same week at 14:10, but 10-08 hides events behind \"N more\": the pass reports one entry per run of whole days, [10-04 00:00, 10-08 00:00] and [10-09 00:00, 10-11 00:00], and, not having seen the week whole, records them without changesSince (§3). acct-b's marker for o1: window [10-08 10:00, 10-08 10:00], changesSince = lastSyncAt = 14:10. No claims.",
+    "o1 'Busy day' (10-08 10:00): a chip acct-b's pass read on the hidden day, stored as a first sighting at 14:10. No window of acct-b holds 10-08 10:00.",
+    "o1 (§3): the entries holding 10-08 10:00 are acct-a's (changesSince 09:00 < 14:10 ≤ 14:20: rule (a) holds) and the marker (changesSince 14:10 = o1's first sighting: rule (b) fails). Not an orphan → no receipt.",
+    "Without the marker, o1 would be an orphan (acct-b's runs leave its day out) and, anchored at 14:10, muse's session at 14:08 (4000) and idle [14:05, 14:12] covering [14:08, 14:10] (3000) give 7/10 → a false UNASKED for an event already on the calendar (Hard Rule 7).",
+    "o2 'Team lunch' (10-07 12:30), first seen 14:20 by acct-a's pass: acct-a's entry followed changes since 09:00 < 14:20 ≤ 14:20. acct-b's run [10-04, 10-08] holds 10-07 12:30 but compared nothing and was synced at 14:10 < 14:20, so it did not find o2 already there → an orphan. Anchor 14:20: muse's session at 14:18 (4000), idle [14:15, 14:25] covers [14:18, 14:20] (3000) → 7/10 → UNASKED, reasons unasked.session, unasked.idle.",
+    "o2 finality (§7): muse's adapter synced 15:00 ≥ 14:20 + 2 + 30 min = 14:52 → FINAL (evaluatedAt 15:30)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:30:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Busy day",
+        "occurredAt": "2026-10-08T10:00:00-04:00",
+        "observedAt": "2026-10-06T14:10:00-04:00",
+        "rowKey": "evt-busy-day"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Team lunch",
+        "occurredAt": "2026-10-07T12:30:00-04:00",
+        "observedAt": "2026-10-06T14:20:00-04:00",
+        "rowKey": "evt-team-lunch"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:20:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-08T00:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-09T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-08T10:00:00-04:00",
+        "windowEnd": "2026-10-08T10:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:10:00-04:00"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:08:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:18:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:05:00-04:00", "to": "2026-10-06T14:12:00-04:00" },
+        { "from": "2026-10-06T14:15:00-04:00", "to": "2026-10-06T14:25:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T15:00:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o2",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

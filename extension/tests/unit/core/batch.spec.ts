@@ -189,7 +189,8 @@ describe('gradeBatch: claims that are never scored (§4.3)', () => {
           observedAt: '2026-10-06T14:05:00-04:00',
         },
       ],
-      coverage: [{ ...GMAIL, source: 'gcal.event', allCalendars: true }],
+      // The view followed changes from 12:00, so o1, first seen at 14:05, is a change it saw happen (§3 v1.9).
+      coverage: [{ ...GMAIL, source: 'gcal.event', allCalendars: true, changesSince: GMAIL.windowStart }],
       activity: MUSE_ACTIVE,
     });
     expect(summary(loaded, await run(loaded))).toEqual({

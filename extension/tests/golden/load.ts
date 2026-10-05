@@ -54,7 +54,8 @@ export {
 } from './build';
 
 export const GOLDEN_DIR = import.meta.dirname;
-export const SCENARIO_FILE = /^(\d{2})-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
+/** `NN-slug.json`, or `NNN-slug.json` from 100 on (§15 v1.9: the two-digit numbers ran out at 99). */
+export const SCENARIO_FILE = /^(\d{2,3})-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 
 export type GoldenLoadErrorCode = 'unknown_ref' | 'duplicate_ref' | 'missing_agent';
 
@@ -285,11 +286,24 @@ export function readScenario(file: string): Scenario {
   return parseScenarioText(readFileSync(path.join(GOLDEN_DIR, file), 'utf8'));
 }
 
-/** Every .json file directly in tests/golden, sorted (each must be a scenario named NN-slug.json). */
+/** A scenario file's number (`NN` or `NNN`), or NaN for a name that does not start with one. */
+export function scenarioNumber(file: string): number {
+  return Number(SCENARIO_FILE.exec(file)?.[1] ?? Number.NaN);
+}
+
+/**
+ * Every .json file directly in tests/golden (each must be a scenario named NN-slug.json or NNN-slug.json), in number
+ * order (99 before 100), then by name.
+ */
 export function scenarioFiles(): string[] {
+  const byNumber = (a: string, b: string): number => {
+    const [x, y] = [scenarioNumber(a), scenarioNumber(b)];
+    if (x !== y && !Number.isNaN(x) && !Number.isNaN(y)) return x - y;
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
   return readdirSync(GOLDEN_DIR)
     .filter((name) => name.endsWith('.json'))
-    .sort();
+    .sort(byNumber);
 }
 
 function buildRefs(scenario: Scenario, policy: PolicyView): Built {

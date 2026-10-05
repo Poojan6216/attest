@@ -1,0 +1,120 @@
+{
+  "name": "a view that followed the calendar's changes verifies the deletion it saw; the one it never saw is never NOT_FOUND",
+  "covers": ["contract:calendar_change_followed"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.11: a calendar.deleted claim counts no gcal.event entry towards full coverage (every overlapping entry is capped, coverage.change_unprovable): a snapshot reader cannot show that a change did not happen between two looks. A change row a view saw still verifies, because verified comes before partial_coverage (§6.2).",
+    "Coverage (acct-a, every calendar, bound by the grant, month [10-01 00:00, 11-01 00:00]): the first look at 13:30 (no changesSince), then passes at 14:05 and 14:40 that compared with it (changesSince 13:30).",
+    "Rows: o1 'Board dinner' (10-08 19:00, calendar.created) and o3 'Dentist' (10-07 09:00, calendar.created) are what the first look found, first seen 13:30. o2 is 'Board dinner' gone: calendar.deleted (10-08 19:00), first seen by the 14:05 comparison. Same rowKey as o1, other type → another contentHash (§10).",
+    "c1: muse says at 14:02 it deleted 'Board dinner' (targetAt 10-08 19:00). Window [10-05 19:00, 10-11 19:00]; change span [14:00, 14:33]. Candidates of its type: o2. Applicable: timeProximity 2500, subjectOverlap 1500 (no counterparty: neither address nor name features apply); Σw = 4000. tp 1 (o2 starts at targetAt); subject {board, dinner} = {board, dinner} → 1. S = 4000/4000 = 1/1 → verified. FINAL (§8): an entry synced 14:40 ≥ end + graceMin = 14:33.",
+    "c2: muse says at 14:02 it deleted 'Dentist' (targetAt 10-07 09:00). Window [10-04 09:00, 10-10 09:00] ⊆ the month. o2 is c1's (assigned at 1/1) → c2 has no candidate → match.none, score null.",
+    "c2 coverage: all three entries overlap the window and all are capped (coverage.change_unprovable), so coverage is partial, never full. graceElapsed (14:40 ≥ 14:33). Rules: verified, partial no; pending no; partial_coverage: coverage partial and bestScoreLt partial (no candidate) → UNVERIFIABLE. PENDING (§8): partial_coverage finalises only at end + finalizeUnverifiableHours = 10-07 14:03. Reasons: coverage.partial {source: gcal.event}, coverage.change_unprovable {source: gcal.event}, match.none.",
+    "v1.9 and v1.10 graded c2 NOT_FOUND, FINAL here: the 14:40 entry had followed changes from 13:30 through 14:40. The Calendar simulator (CAL-SIM-1, CAL-SIM-6) showed why that was false: an event deleted, or moved between two followed ranges, or changed and changed again between two passes leaves no row of the claimed type, and the chain spans the gap. v1.11 changes this file's expectation for c2 for that reason (Hard Rule 5).",
+    "Orphans: o2 is assigned. o1 and o3 were first seen at 13:30, when the 13:30 entry (no changesSince, lastSyncAt 13:30) began comparing → no orphan (§3 v1.9). No activity anyway."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.deleted",
+        "subjectHint": "Board dinner",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T19:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.deleted",
+        "subjectHint": "Dentist",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-07T09:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Board dinner",
+        "occurredAt": "2026-10-08T19:00:00-04:00",
+        "observedAt": "2026-10-06T13:30:00-04:00",
+        "rowKey": "evt-board-dinner"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.deleted",
+        "subjectHint": "Board dinner",
+        "occurredAt": "2026-10-08T19:00:00-04:00",
+        "observedAt": "2026-10-06T14:05:00-04:00",
+        "rowKey": "evt-board-dinner"
+      },
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "occurredAt": "2026-10-07T09:00:00-04:00",
+        "observedAt": "2026-10-06T13:30:00-04:00",
+        "rowKey": "evt-dentist"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T13:30:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:05:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T13:30:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T13:30:00-04:00"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o2"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o2" } }
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.change_unprovable", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.change_unprovable": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    }
+  ]
+}

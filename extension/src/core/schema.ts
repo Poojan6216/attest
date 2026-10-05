@@ -1,11 +1,10 @@
 /**
- * The canonical schemas (docs/grading.md §3, §7, §13, §15; build_spec §7 with the §14 deviations).
- *
- * Every object is strict: an unknown key is an error, so nothing outside the allowlist reaches storage, the
- * bus or a hash (Hard Rule 2). Every free-text string and every array is capped (SCHEMA_LIMITS, SECURITY-4).
- * Ids, hashes and timestamps are branded, so a plain string cannot pass for a `Ulid` without a parse.
- * Counterparty, merchant, subject, allowlist and scope text is one line (SEC-3); component ids, versions, health
- * reasons and a vendor's conversation id are tokens (OBS-1; all in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
+ * The canonical schemas (docs/grading.md §3, §7, §13, §15; build_spec §7 with the §14 deviations). Every object is
+ * strict: an unknown key is an error, so nothing outside the allowlist reaches storage, the bus or a hash (Hard
+ * Rule 2). Every free-text string and every array is capped (SCHEMA_LIMITS, SECURITY-4). Ids, hashes and timestamps
+ * are branded, so a plain string cannot pass for a `Ulid` without a parse. Counterparty, merchant, subject,
+ * allowlist and scope text is one line (SEC-3); component ids, versions, health reasons and a vendor's conversation
+ * id are tokens (OBS-1; all in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
  * re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
  *
  * This file is exempt from the core no-literal rule for SCHEMA_LIMITS only: a length cap is schema, not policy.
@@ -200,8 +199,9 @@ export const ObserverCoverage = z
     windowEnd: IsoTs,
     /** SHA-256 of the account identifier; never the identifier itself. */
     accountHash: Sha256.optional(),
-    /** gcal.event only: true iff every calendar was visible. */
+    /** gcal.event only (§3): every calendar was visible; since when changes were followed (set by the ledger). */
     allCalendars: z.boolean().optional(),
+    changesSince: IsoTs.optional(),
   })
   .superRefine(refineWith(coverageProblems));
 

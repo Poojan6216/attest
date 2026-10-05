@@ -115,8 +115,9 @@ describe('gradeBatch: an orphan lies in a window its own source was seen in (§3
   it('never makes an orphan of a row from a source its type does not list, even inside its own window (§3)', async () => {
     // o2 is an email.sent row from the calendar observer. email.sent's relevant source is gmail.sent, so o2 can
     // neither verify a claim (§4.1) nor accuse an agent, although gcal.event saw 12:00–15:00 and muse's signals
-    // score it 7/10 (Sprint 1 close).
-    const calendar = { ...GMAIL, source: 'gcal.event', allCalendars: true };
+    // score it 7/10 (Sprint 1 close). The calendar view followed changes from 12:00, so o2, first seen at 15:00, is
+    // a change it saw happen (§3 v1.9) and the source rule alone decides.
+    const calendar = { ...GMAIL, source: 'gcal.event', allCalendars: true, changesSince: GMAIL.windowStart };
     const loaded = load({
       observations: [{ ...ORPHAN, ref: 'o2', source: 'gcal.event' }],
       coverage: [calendar, GMAIL],
@@ -300,7 +301,7 @@ describe('seenWindows: the windows each source was seen in (§3)', () => {
       ],
     });
     const ms = (time: string) => Date.parse(at(time));
-    expect(Object.fromEntries(seenWindows(coverage))).toEqual({
+    expect(Object.fromEntries(seenWindows(coverage).bySource)).toEqual({
       'gmail.sent': [
         { startMs: ms('12:00'), endMs: ms('14:00') },
         { startMs: ms('14:30'), endMs: ms('14:45') },

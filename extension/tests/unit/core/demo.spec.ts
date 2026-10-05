@@ -237,11 +237,17 @@ describe('§2.4 at 15:00: Calendar → NOT_FOUND, after grace', () => {
 describe('§2.5 at 15:00: the 14:03 send to vendor@ → UNASKED (likely Muse)', () => {
   const ledger = buildDemo();
 
-  it('cannot be the email claim: S = 2500 / 6500 = 5/13 < 5000 bp, so it is never assigned and stays an orphan (§4.3)', () => {
-    // 14:03 is inside [14:02, 14:03]; "priya" is not a token of "vendor"; "Re: invoice" → {invoice}.
+  it('cannot be the email claim: it matches on time alone, so S = 0 (§5.3 content gate), never assigned, an orphan (§4.3)', () => {
+    // 14:03 is inside [14:02, 14:03]; "priya" is not a token of "vendor"; "Re: invoice" → {invoice}. No content
+    // feature scores above 0, so the score is 0 (v1.11; the weighted mean alone would be 2500 / 6500 = 5/13).
     const pair = features(ledger.emailClaim, ledger.vendorRow, POLICY);
-    expect(pair.signals).toMatchObject({ timeProximity: 1, counterpartyName: 0, subjectOverlap: 0 });
-    expect(compareRatio(pair.score, ratio(5, 13))).toBe(0);
+    expect(pair.signals).toMatchObject({
+      timeProximity: 1,
+      counterpartyName: 0,
+      subjectOverlap: 0,
+      score: 0,
+    });
+    expect(compareRatio(pair.score, ratio(0, 1))).toBe(0);
     expect(ratioGteBasisPoints(pair.score, POLICY.bp.thresholds.partial)).toBe(false);
   });
 
@@ -333,7 +339,7 @@ describe('§9 replay: each receipt is graded again from what the ledger stores',
       const { grant, context } = stored(receipt);
       return grade(claim, candidates, grant, POLICY, graded.coverage, context);
     };
-    // The email claim's candidates are both rows in its window (§4.1): the vendor row, at 5/13, is assigned to no
+    // The email claim's candidates are both rows in its window (§4.1): the vendor row, at 0, is assigned to no
     // claim, so it stays the email claim's candidate (§4.3) and is also the orphan. inputsHash binds both.
     expect(regrade(ledger.emailClaim, [ledger.priyaRow, ledger.vendorRow], graded.email)).toEqual(
       graded.email,

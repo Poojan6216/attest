@@ -1,13 +1,13 @@
 # Golden scenarios
 
 Hand-written grading scenarios with hand-computed expectations, written from `docs/grading.md` **alone** (v1.5;
-`69` re-derived and `98` written under v1.6), never from `src/core`. They are the independent statement of what
+`69` re-derived and `98` written under v1.6; `99`–`103` written and `86` updated under v1.9), never from `src/core`. They are the independent statement of what
 `grade()` and `gradeBatch()` must do: the code is written to satisfy them, not the other way round (sprint 1: "write
 scenarios first").
 
 | File                                    | Role                                                                                              |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NN-slug.json`                          | One scenario, in the §15 format.                                                                  |
+| `NN-slug.json`, `NNN-slug.json`         | One scenario, in the §15 format (three digits from `100` on, v1.9).                               |
 | `scenario-schema.ts`                    | Strict Zod schema for a scenario file, and the §15 params table. Unknown keys fail.               |
 | `load.ts`                               | Builds schema-valid core inputs from a file: defaults, ids, hashes, receipt ids, reasons.         |
 | `build.ts`                              | Per-object builders (claim, observation, grant, coverage) and the policy merge patch.             |
@@ -21,11 +21,15 @@ scenarios first").
 | `v12-rules.ts`                          | One `contract:<tag>` per v1.2 rule (as it still reads in v1.3), with its proof.                   |
 | `v13-rules*.ts` (rules, evidence, text) | One `contract:<tag>` per v1.3 rule, with a proof that the tagged file exercises it.               |
 | `v14-rules*.ts` (rules, events)         | One `contract:<tag>` per v1.4 rule, with a proof that the tagged file exercises it.               |
+| `v19-rules.ts`                          | One `contract:<tag>` per v1.9 rule (receipt points, followed calendar changes), with its proof.   |
+| `v110-rules.ts`                         | One `contract:<tag>` per v1.10 rule (first-look markers, views looked at too early), with proof.  |
 | `ids.ts`, `write-ids.ts`                | The ids snapshot and the script that writes it.                                                   |
 | `scenarios.spec.ts`                     | Validates every file, the coverage requirements, and the loader output.                           |
 | `checks.spec.ts`                        | Mutation tests: every check and v1.2 proof rejects a broken copy of a real expectation.           |
 | `v13-rules.spec.ts`                     | Every v1.3 tag is exercised, every proof and check fails on a broken copy, every tag has a proof. |
 | `v14-rules.spec.ts`                     | The same for the v1.4 tags, and the v1.4 checks (grants, late claims, events, params) bite.       |
+| `v19-rules.spec.ts`                     | The same for the v1.9 tags.                                                                       |
+| `v110-rules.spec.ts`                    | The same for the v1.10 tags, and broken copies graded: without a marker the row is UNASKED.       |
 | `loader.spec.ts`                        | Pins the loader defaults, `claimedAtEnd`, row-key hashing, reason params and time helpers.        |
 | `__snapshots__/ids.json`                | Every claim and observation id per scenario, so a hashing change is a reviewed diff.              |
 | `runner.ts`, `golden.spec.ts`           | The runner: grades every file through the core (gradeBatch or grade, then the events).            |
@@ -56,8 +60,8 @@ scenarios first").
     "grants": [{ "ref": "g1", "agent": "muse", "allowedTypes": [], "counterpartyAllowlist": [],
                  "spendCeilingCents": 5000, "spendCurrency": "USD", "declaredScopes": [], "observedScopes": [],
                  "accounts": { "gmail.sent": ["acct-a"] }, "updatedAt": "…" }],
-    "coverage": [{ "source": "gmail.sent", "lastSyncAt": "…", "windowStart": "…", "windowEnd": "…",
-                   "accountHash": "acct-a", "allCalendars": true }],
+    "coverage": [{ "source": "gcal.event", "lastSyncAt": "…", "windowStart": "…", "windowEnd": "…",
+                   "accountHash": "acct-a", "allCalendars": true, "changesSince": "…" }],
     "activity": { "sessions": [], "idle": [], "entries": [], "adapterSyncs": [], "claims": ["c1"] },
     "fixed": [{ "claim": "c9", "observation": "o9" }, { "claim": null, "observation": "o3" }],
     "grade": { "claim": null, "candidates": ["o1"], "agent": "muse", "priorSpendCents": 0, "scope": "…" }
@@ -151,12 +155,68 @@ Everything is exact: basis points and reduced fractions, never floats (§5.3). W
 6. **State (§8).** PARTIAL is FINAL once `graceElapsed`: a sync ≥ end + 30 min and ≥ end + 45 min.
 7. **Reasons (§15).** The rule's own code (including `coverage.never_completed`, the `pending` rule's code once
    it finalises), then `allowlist.unchecked` if emitted, then coverage reasons (`coverage.account_unbound` and
-   the caps `calendars_hidden`, `multiple_accounts`, `no_account`, `no_parser`), then `match.*`/`cp.*`, each
+   the caps `calendars_hidden`, `changes_unfollowed`, `change_unprovable`, `account_partial`, `multiple_accounts`,
+   `no_account`, `no_parser`), then
+   `match.*`/`cp.*`, each
    group in table order; `override.user` and `superseded` last (`74`, `80`).
 
 `timeProximity` = 1 within `toleranceMin`, else `(edge − Δ)/(edge − tolerance)` in ms, with edge 120 000 before
 the unit, 2 700 000 after it, 259 200 000 around a calendar target. `28` and `29` exercise the millisecond
 boundaries (9503999/9504000, 17/20 exactly, 8078399/9504000).
+
+## What v1.11 changed in the files
+
+v1.11 is the Sprint 2 wave E contract (the status note of `docs/grading.md`). Each rule below has a `contract:<tag>`
+with a proof in `v111-rules.ts`; `v111-rules.spec.ts` also grades changed copies of `109`–`111`, to show what
+decides each file.
+
+- **Calendar change claims are never NOT_FOUND (§6.1).** Every `gcal.event` entry over a `calendar.updated` or
+  `calendar.deleted` claim's window is capped `coverage.change_unprovable`; a change row still verifies. `102`'s cap
+  is now that code (same grade), `103`'s c2 is `partial_coverage`, PENDING where it was NOT_FOUND, and `109` shows a
+  move that reached the ledger as a created and a deleted row: the update claim is `partial_coverage`, while a
+  created claim under the same whole, fresh views is NOT_FOUND.
+- **Per-account coverage (§6.1).** Under a grant binding two accounts, a window only their views together contain
+  is `partial_coverage` with `coverage.account_partial`; one each account's own views contain is NOT_FOUND (`110`,
+  Calendar and Gmail Sent).
+- **No evidence on time alone (§5.3).** A pair none of whose content features scores above 0 scores `0/1`: never
+  assigned, so a false calendar claim no longer takes a real event as PARTIAL evidence, and the event stays an
+  orphan (`111`). `78` and `85` now expect `0/1` for a best candidate that matched on time alone (5/14 and 5/18
+  before), and `13`'s notes say so for c1 × o2; no grade changed in them.
+
+## What v1.10 changed in the files
+
+v1.10 is the Sprint 2 wave D contract (the status note of `docs/grading.md`). No file from `01` to `103` changed.
+Each rule below has a `contract:<tag>` with a proof in `v110-rules.ts`; `v110-rules.spec.ts` also grades broken
+copies of the files, to show the marker and the cap decide their outcomes.
+
+- **First-look markers (§3, §7).** Every row a Calendar pass stores as a first sighting comes with a `gcal.event`
+  entry at its start (a point) whose `lastSyncAt` and `changesSince` are its first sighting. A file writes the
+  marker as an ordinary coverage entry. With it, the row a first look found is no orphan even when no window of its
+  pass holds its start: an event that began before the visible range (`104`), one on a day hidden behind "N more"
+  (`105`), one from a pass the ledger refused and a later pass derived again (`106`, all or none), one from a pass
+  that recorded no window (`107`). Each file also has a change acct-a's view followed, which is UNASKED.
+- **Views looked at too early (§6.1).** A `gcal.event` entry synced before a calendar claim's grace sync
+  (`end(p,t) + graceMin`) is capped `coverage.changes_unfollowed`: never NOT_FOUND from it, while a row it saw
+  still verifies and a view synced after the grace sync still finds NOT_FOUND (`108`).
+
+## What v1.9 changed in the files
+
+v1.9 is the Sprint 2 wave C contract (the status note of `docs/grading.md`). Each rule below has a
+`contract:<tag>` with a proof in `v19-rules.ts`.
+
+- **`changesSince` (§3).** A coverage entry may carry it (`gcal.event` only, never after `lastSyncAt`): since when
+  that Calendar view followed the window's changes.
+- **`86` updated.** Its two Calendar passes now continue a comparison begun at 13:00 (`changesSince`), so its rows,
+  first seen at 14:05 and 14:50, stay changes Attest saw happen and the expectation is unchanged. Without it, both
+  rows would be what a first look found, and no orphan (§3 v1.9).
+- **Receipt points (§3, §6.1).** A `gmail.receipt` pass covers its message's instant only: an exact receipt still
+  verifies, a purchase with no receipt read is never NOT_FOUND (`99`), and an unclaimed receipt read at its own
+  instant can be UNASKED (`100`).
+- **Followed calendar changes (§3, §6.1, §7).** A first look's rows are no orphans (`101`); a deletion claimed
+  before Attest first looked is capped `coverage.changes_unfollowed`, never NOT_FOUND (`102`); a followed view
+  verifies the deletion it saw and finds an unseen one NOT_FOUND (`103`).
+- **File names.** Two digits ran out at `99`: files from `100` on have three (`NNN-slug.json`), and the suite sorts
+  them by number.
 
 ## What v1.7 changed in the files
 

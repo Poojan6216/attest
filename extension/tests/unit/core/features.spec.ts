@@ -116,10 +116,16 @@ describe('applicableFeatures() reads the claim alone (§5.2)', () => {
 
   it('never applies modelScore (Sprint 5), even when a policy lists it', () => {
     const withModel = patched({
-      featuresByType: { ...defaultPolicyJson.featuresByType, [EMAIL]: ['timeProximity', 'modelScore'] },
-      identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: ['timeProximity'] },
+      featuresByType: {
+        ...defaultPolicyJson.featuresByType,
+        [EMAIL]: ['timeProximity', 'subjectOverlap', 'modelScore'],
+      },
+      identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: ['subjectOverlap'] },
     });
-    expect(applicableFeatures(claim({ type: EMAIL }), withModel)).toEqual(['timeProximity']);
+    expect(applicableFeatures(claim({ type: EMAIL, subjectHint: 'Q3 deck' }), withModel)).toEqual([
+      'timeProximity',
+      'subjectOverlap',
+    ]);
   });
 });
 
@@ -241,8 +247,17 @@ describe('features(): scores of particular pairs', () => {
     expect(result.signals).toEqual({ timeProximity: 1, amountExact: 0, merchantMatch: 0.5, score: 0.5 });
   });
 
-  it('an observation with nothing but a time scores only on time', () => {
-    expect(text(features(DOMAIN_CLAIM, observation(), DEFAULT_POLICY).score)).toBe('5/18');
+  it('an observation with nothing but a time scores 0: no evidence on time alone (§5.3 content gate, v1.11)', () => {
+    const result = features(DOMAIN_CLAIM, observation(), DEFAULT_POLICY);
+    expect(text(result.score)).toBe('0/1');
+    // The features are still shown as valued; only the score is 0 (the weighted mean alone is 2500/9000 = 5/18).
+    expect(result.signals).toEqual({
+      timeProximity: 1,
+      counterpartyExact: 0,
+      counterpartyDomain: 0,
+      subjectOverlap: 0,
+      score: 0,
+    });
   });
 
   it('signals hold only the applicable features and the score', () => {

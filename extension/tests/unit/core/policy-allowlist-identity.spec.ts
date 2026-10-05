@@ -5,7 +5,8 @@
  *    `currency`, `subjectHint`, `occurredAt`) and the derived markers `rowKeyHash` and `contentHash`; never
  *    `id`, `source`, `type` or `observedAt` (redact.ts computes them); `occurredAt` is required in every entry.
  *  - a type with sources must have a non-empty `identityFeatures` list, so every claim that can be assigned has a
- *    weighted identity feature (and `features()` never meets Σw = 0 on an assignable claim).
+ *    weighted identity feature (and `features()` never meets Σw = 0 on an assignable claim); `timeProximity` is
+ *    never an identity feature (v1.11), so that feature is always one the §5.3 content gate reads.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -100,15 +101,31 @@ const IDENTITY_VALID: readonly (readonly [string, unknown])[] = [
   [
     'a no-source type with an identity list',
     patched({
-      featuresByType: { ...policyJson.featuresByType, other: ['timeProximity'] },
-      identityFeatures: { ...policyJson.identityFeatures, other: ['timeProximity'] },
+      featuresByType: { ...policyJson.featuresByType, other: ['timeProximity', 'subjectOverlap'] },
+      identityFeatures: { ...policyJson.identityFeatures, other: ['subjectOverlap'] },
     }),
   ],
   ['a single identity feature', identity('purchase.made', ['merchantMatch'])],
-  ['time as the identity feature', identity('email.sent', ['timeProximity'])],
+  ['the subject as the identity feature', identity('email.sent', ['subjectOverlap'])],
 ];
 
+/** v1.11: time says when, never which action, so it is never an identity feature (§5.3 content gate). */
+const WHEN = '"timeProximity" says when, never which action';
+
 const IDENTITY_INVALID: readonly (readonly [string, unknown, readonly string[]])[] = [
+  [
+    'time as the identity feature',
+    identity('email.sent', ['timeProximity']),
+    [`identityFeatures["email.sent"][0]: ${WHEN}`],
+  ],
+  [
+    'time beside a content feature, for a no-source type',
+    patched({
+      featuresByType: { ...policyJson.featuresByType, other: ['timeProximity', 'subjectOverlap'] },
+      identityFeatures: { ...policyJson.identityFeatures, other: ['subjectOverlap', 'timeProximity'] },
+    }),
+    [`identityFeatures.other[1]: ${WHEN}`],
+  ],
   ['email.sent', identity('email.sent', []), [`identityFeatures["email.sent"]: ${IDENTITY}`]],
   [
     'calendar.created',
@@ -173,7 +190,7 @@ describe('identityFeatures: required for a type with sources (§5.3 v1.3)', () =
     expect(issuesOf(raw)).toEqual([]);
   });
 
-  it.each(IDENTITY_INVALID)('an empty list for %s is rejected at its path', (_label, raw, expected) => {
+  it.each(IDENTITY_INVALID)('%s is rejected at its path', (_label, raw, expected) => {
     expect(issuesOf(raw)).toEqual(expected);
   });
 

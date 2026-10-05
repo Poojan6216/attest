@@ -6,7 +6,7 @@
     "Muse: 'Sent email to Priya with Q3 deck. Created calendar event Q3 review Thu 2pm.' Gmail shows a send to priya@ at 14:02 and an unclaimed send to vendor@ at 14:03; Calendar (checked 14:10 and 14:40) shows no new event.",
     "c1 is a name claim: applicable tp 2500, counterpartyName 2500, subjectOverlap 1500; Σw = 6500.",
     "c1 × o1: tp 1; 'priya' is a token of local part priya → cn 1; {q3, deck} vs {q3, deck, final} → so 2/3. S = (2500 + 2500 + 1000)/6500 = 6000/6500 = 12/13 → verified. FINAL: gmail.sent synced 14:50 ≥ 14:33.",
-    "c1 × o2: tp 1 (14:03 is inside [14:02, 14:03]); local part 'vendor' → cn 0; 'Re: invoice' → {invoice} → so 0. S = 2500/6500 = 5/13 < 1/2 → not assigned → o2 is an orphan.",
+    "c1 × o2: tp 1 (14:03 is inside [14:02, 14:03]); local part 'vendor' → cn 0; 'Re: invoice' → {invoice} → so 0. Only timeProximity scored above 0, so the §5.3 content gate (v1.11) makes S = 0 (the weighted mean alone, as v1.10 had it, is 2500/6500 = 5/13 < 1/2) → not assigned → o2 is an orphan.",
     "c2 (calendar.created, targetAt Thu 10-08 14:00): window [10-05 14:00, 10-11 14:00] ⊆ both gcal.event entries (one account, allCalendars) → full. No calendar observation → no candidate. graceElapsed (calendar): a sync ≥ end(14:03) + 30 = 14:33 → 14:40. Rule not_found, FINAL, coverage.account_unbound.",
     "o2: muse session 14:01 within ±10 min, idle [13:55, 14:20] covers [14:01, 14:03] → 4000 + 3000 = 7/10 ≥ 6/10 → UNASKED with two signals. FINAL: adapter synced 14:50 ≥ 14:35."
   ],

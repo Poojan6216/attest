@@ -98,6 +98,7 @@ function compareObservers(a: ObserverCoverage, b: ObserverCoverage): number {
     compareText(a.observerId, b.observerId) ||
     compareOptional(a.accountHash, b.accountHash) ||
     compareOptional(a.allCalendars, b.allCalendars) ||
+    compareOptional(a.changesSince, b.changesSince) ||
     compareText(canonicalJson(a), canonicalJson(b))
   );
 }

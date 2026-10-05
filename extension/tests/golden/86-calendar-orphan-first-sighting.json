@@ -5,6 +5,7 @@
   "notes": [
     "§7 v1.4: for calendar.* observations the anchor of every attribution window is the EARLIEST observedAt of the observation (when the change was first seen), not occurredAt (the event start).",
     "No claims. Two gcal.event passes (acct-a, allCalendars) at 14:05 and 14:50 saw [10-05 00:00, 10-12 00:00]; both are synced by evaluatedAt 15:00, so every event below is an orphan of a covered type (§3).",
+    "§3 v1.9: both passes continue a comparison begun at 13:00 (changesSince 13:00), and no pass began comparing at 14:05 or 14:50, so each event below, first seen at 14:05 or 14:50, is a change Attest saw happen and may be an orphan.",
     "o1 and o2 are two sightings of one event ('Board dinner', starts 10-08 19:00): same content → same contentHash and id (assertIds), counted once (§4.1). First seen 14:05 (o1), seen again 14:50 (o2). Anchor = 14:05.",
     "o1 at 14:05: muse session at 14:00 (within ±10 min) → 4000; idle [14:00, 14:10] covers [14:03, 14:05] → 3000; no activity entries. muse = 7000 bp = 7/10 ≥ 6/10 → UNASKED, reasons unasked.session, unasked.idle.",
     "Wrong anchors: the event start 10-08 19:00 (v1.3) has no session or idle near it → no receipt; the later sighting 14:50 has none either (session 50 min away, idle ended 14:10).",
@@ -48,7 +49,8 @@
         "windowStart": "2026-10-05T00:00:00-04:00",
         "windowEnd": "2026-10-12T00:00:00-04:00",
         "accountHash": "acct-a",
-        "allCalendars": true
+        "allCalendars": true,
+        "changesSince": "2026-10-06T13:00:00-04:00"
       },
       {
         "source": "gcal.event",
@@ -56,7 +58,8 @@
         "windowStart": "2026-10-05T00:00:00-04:00",
         "windowEnd": "2026-10-12T00:00:00-04:00",
         "accountHash": "acct-a",
-        "allCalendars": true
+        "allCalendars": true,
+        "changesSince": "2026-10-06T13:00:00-04:00"
       }
     ],
     "activity": {

@@ -1,50 +1,51 @@
 /**
- * Coverage eligibility, coverage level and grace (docs/grading.md §6.1, §8). Internal to conditions.ts: import
- * from there.
+ * Coverage eligibility and grace (docs/grading.md §6.1, §8). Internal to conditions.ts: import from there. The
+ * coverage level of a claim window is conditions-level.ts.
  *
  * An observer entry is ELIGIBLE for a claim when its source is relevant (`policy.sourcesByType[claim.type]`),
  * `lastSyncAt ≤ evaluatedAt`, and its account is acceptable: when `grant.accounts[source]` is set the entry's
  * `accountHash` must be in it; when it is not set, an entry with no `accountHash` and every entry of a source
  * seen with more than one distinct account hash are CAPPED (they count at most as `partial`). A `gcal.event`
  * entry without `allCalendars: true` is capped, and so is a `gmail.receipt` entry for a claim whose normalised
- * counterparty has no receipt parser (`policy.receiptMerchants`; a claim with no counterparty has none).
+ * counterparty has no receipt parser (`policy.receiptMerchants`; a claim with no counterparty has none). When the
+ * grant binds several accounts to a source, each entry keeps its account: one account's view never vouches for
+ * another's (`EligibleCoverage.accounts`, v1.11).
  *
- * Levels are decided per relevant source and then combined: a source is `none` when no eligible interval
- * overlaps the claim window, `full` when the union of its eligible uncapped intervals contains the whole window,
- * else `partial`. The claim is `full` only when every relevant source is full (Attest says NOT_FOUND only after
- * every place the action could appear was seen), `none` when every source is none (always, for a type with no
- * sources), else `partial`. Capped entries still count for grace: they prove the observer synced.
+ * Capped entries still count for grace: they prove the observer synced.
  *
  * Every instant is integer epoch milliseconds; nothing here is a floating-point decision (§5.3).
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
 import { instantMs, name } from './normalize';
+import { compareText } from './order';
 import type { CoverageLevel, Policy } from './policy';
 import type { Claim, Coverage, Grant, ObservationSource, ObserverCoverage } from './schema';
 import { MS_PER_MINUTE } from './units';
-import { claimWindow, type ClaimWindow, isCalendarType, precisionBounds } from './window';
+import { isCalendarType, precisionBounds } from './window';
 
-/** Why an entry counts at most as `partial` (§6.1), as its §15 reason code. */
+/** Why an entry, or a source's view, counts at most as `partial` (§6.1), as its §15 reason code. */
 export type CoverageCap =
-  'coverage.calendars_hidden' | 'coverage.multiple_accounts' | 'coverage.no_account' | 'coverage.no_parser';
-
-/** §15 table order. */
-const CAP_ORDER: readonly CoverageCap[] = [
-  'coverage.calendars_hidden',
-  'coverage.multiple_accounts',
-  'coverage.no_account',
-  'coverage.no_parser',
-];
+  | 'coverage.calendars_hidden'
+  | 'coverage.changes_unfollowed'
+  | 'coverage.change_unprovable'
+  | 'coverage.account_partial'
+  | 'coverage.multiple_accounts'
+  | 'coverage.no_account'
+  | 'coverage.no_parser';
 
 /** The policy fields coverage and grace read. A loaded `Policy` satisfies it. */
 export type CoveragePolicy = Pick<Policy, 'sourcesByType' | 'windows' | 'receiptMerchants'>;
 
-/** One eligible observer entry, in epoch ms. `caps` is empty for an entry that can make coverage full. */
+/**
+ * One eligible observer entry, in epoch ms. `caps` is empty for an entry that can make coverage full (a calendar
+ * claim may still cap it, conditions-level.ts `coverageFrom`). `account` is its `accountHash`, null without one.
+ */
 export interface EligibleEntry {
   readonly source: ObservationSource;
   readonly startMs: number;
   readonly endMs: number;
   readonly syncMs: number;
+  readonly account: string | null;
   readonly caps: readonly CoverageCap[];
 }
 
@@ -52,13 +53,18 @@ export interface EligibleEntry {
 export interface EligibleCoverage {
   readonly sources: readonly ObservationSource[];
   readonly entries: ReadonlyMap<ObservationSource, readonly EligibleEntry[]>;
+  /**
+   * The sources whose grant binds two or more distinct accounts, each with those accounts in code-unit order: such a
+   * source is full only when every bound account's own entries are (§6.1 v1.11). Absent for every other source.
+   */
+  readonly accounts: ReadonlyMap<ObservationSource, readonly string[]>;
   readonly evaluatedMs: number;
 }
 
 export interface SourceCoverage {
   readonly source: ObservationSource;
   readonly level: CoverageLevel;
-  /** Distinct, in §15 order; non-empty only when `level` is `partial` and a capped entry overlaps the window. */
+  /** Distinct, in §15 order; non-empty only when `level` is `partial` and a cap held over the window. */
   readonly caps: readonly CoverageCap[];
 }
 
@@ -107,14 +113,9 @@ const ENTRY_INSTANTS = new WeakMap<ObserverCoverage, EntryInstants>();
 /** `entry`'s `lastSyncAt`, `windowStart` and `windowEnd` as epoch ms, parsed once per object and text. */
 export function entryInstants(entry: ObserverCoverage): EntryInstants {
   const held = ENTRY_INSTANTS.get(entry);
-  const [sync, start, end] = held?.texts ?? [];
-  if (
-    held !== undefined &&
-    sync === entry.lastSyncAt &&
-    start === entry.windowStart &&
-    end === entry.windowEnd
-  ) {
-    return held;
+  if (held !== undefined) {
+    const [sync, start, end] = held.texts;
+    if (sync === entry.lastSyncAt && start === entry.windowStart && end === entry.windowEnd) return held;
   }
   const parsed: EntryInstants = {
     texts: [entry.lastSyncAt, entry.windowStart, entry.windowEnd],
@@ -164,8 +165,24 @@ function sourceEntries(
     const caps = entryCaps(entry, account, noParser);
     if (caps === null) return [];
     const { startMs, endMs, syncMs } = entryInstants(entry);
-    return [{ source, startMs, endMs, syncMs, caps }];
+    return [{ source, startMs, endMs, syncMs, account: entry.accountHash ?? null, caps }];
   });
+}
+
+/**
+ * §6.1 (v1.11): the sources of `sources` whose grant binds two or more distinct accounts, each with those accounts
+ * in code-unit order. A view of one bound account never vouches for another's calendars or mail.
+ */
+function boundAccounts(
+  sources: readonly ObservationSource[],
+  grant: Grant,
+): ReadonlyMap<ObservationSource, readonly string[]> {
+  const accounts = new Map<ObservationSource, readonly string[]>();
+  for (const source of sources) {
+    const bound = [...new Set(grant.accounts?.[source] ?? [])].sort(compareText);
+    if (bound.length > 1) accounts.set(source, bound);
+  }
+  return accounts;
 }
 
 /**
@@ -192,74 +209,7 @@ export function eligibleCoverage(
   const entries = new Map(
     sources.map((source) => [source, sourceEntries(source, coverage, evaluatedMs, grant, noParser)] as const),
   );
-  return { sources, entries, evaluatedMs };
-}
-
-/** True iff the union of the closed intervals contains `[fromMs, toMs]` (a gap of even 1 ms breaks it). */
-function covers(intervals: readonly EligibleEntry[], fromMs: number, toMs: number): boolean {
-  const ordered = [...intervals].sort((a, b) => a.startMs - b.startMs);
-  let reached = fromMs;
-  for (const interval of ordered) {
-    if (interval.startMs > reached) return false;
-    reached = Math.max(reached, interval.endMs);
-    if (reached >= toMs) return true;
-  }
-  return false;
-}
-
-function sourceCoverage(
-  source: ObservationSource,
-  entries: readonly EligibleEntry[],
-  window: ClaimWindow | null,
-): SourceCoverage {
-  if (window === null) return { source, level: 'none', caps: [] };
-  const overlapping: EligibleEntry[] = [];
-  const uncapped: EligibleEntry[] = [];
-  for (const entry of entries) {
-    if (entry.startMs > window.toMs || entry.endMs < window.fromMs) continue;
-    overlapping.push(entry);
-    if (entry.caps.length === 0) uncapped.push(entry);
-  }
-  if (overlapping.length === 0) return { source, level: 'none', caps: [] };
-  if (covers(uncapped, window.fromMs, window.toMs)) return { source, level: 'full', caps: [] };
-  const present = new Set<CoverageCap>();
-  for (const entry of overlapping) for (const cap of entry.caps) present.add(cap);
-  return { source, level: 'partial', caps: CAP_ORDER.filter((cap) => present.has(cap)) };
-}
-
-function combinedLevel(sources: readonly SourceCoverage[]): CoverageLevel {
-  let full = sources.length > 0;
-  let none = true;
-  for (const source of sources) {
-    if (source.level !== 'full') full = false;
-    if (source.level !== 'none') none = false;
-  }
-  if (full) return 'full';
-  return none ? 'none' : 'partial';
-}
-
-/** §6.1 coverage of the claim window from its eligible entries (a calendar claim with no target has none). */
-export function coverageFrom(eligible: EligibleCoverage, window: ClaimWindow | null): CoverageResult {
-  const sources: SourceCoverage[] = [];
-  for (const source of eligible.sources) {
-    sources.push(sourceCoverage(source, eligible.entries.get(source) ?? [], window));
-  }
-  const capReasons: CapReason[] = [];
-  for (const code of CAP_ORDER) {
-    for (const source of sources)
-      if (source.caps.includes(code)) capReasons.push({ code, source: source.source });
-  }
-  return { level: combinedLevel(sources), sources, capReasons };
-}
-
-/** §6.1 `coverage`: the level of the claim window, and why it was capped at `partial` (§15). */
-export function coverageLevel(
-  claim: Claim,
-  grant: Grant,
-  coverage: Coverage,
-  policy: CoveragePolicy,
-): CoverageResult {
-  return coverageFrom(eligibleCoverage(claim, grant, coverage, policy), claimWindow(claim, policy));
+  return { sources, entries, accounts: boundAccounts(sources, grant), evaluatedMs };
 }
 
 /** `end(p,t) + graceMin`: the sync that finalises a VERIFIED receipt (§8). */

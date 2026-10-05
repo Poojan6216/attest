@@ -1,0 +1,67 @@
+{
+  "name": "an unclaimed receipt read at its own instant is an orphan and likely UNASKED; one whose pass wrote no coverage is not",
+  "covers": ["contract:receipt_point_orphan"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.9: a gmail.receipt pass that parsed an opened receipt covers only that message's instant. One such pass (acct-a): the Stripe receipt sent 14:03, opened and parsed at 14:10. No claims.",
+    "o1 (Stripe 4999 USD, 14:03): its own source saw its occurredAt (the 14:03 point, synced 14:10 ≤ evaluatedAt 15:00), gmail.receipt is listed for purchase.made, no claim took it → an orphan (§3). Anchor = occurredAt 14:03 (§7, not a calendar row).",
+    "Attribution (§7): muse session at 14:00, within ±10 min of 14:03 → agentSessionActive 4000; idle [13:55, 14:10] covers [14:01, 14:03] → userIdle 3000; no signatures, no activity entries. muse = 7000 bp = 7/10 ≥ 6000 → UNASKED, attribution 'likely', reasons unasked.session, unasked.idle (agent muse).",
+    "Finality (§7): muse's adapter synced 14:50 ≥ anchor + beforeClaimMin + graceMin = 14:35 → FINAL.",
+    "o2 (Uber 1250 USD, sent 14:04:30, stored at 14:20): the pass that read it wrote no coverage (a refused row, §3), and no point holds 14:04:30, so o2 is no orphan although muse's session and the idle interval would score it 7/10 too. A point says only that its own message was read."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Stripe",
+        "amountCents": 4999,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T14:03:00-04:00",
+        "observedAt": "2026-10-06T14:10:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Uber",
+        "amountCents": 1250,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T14:04:30-04:00",
+        "observedAt": "2026-10-06T14:20:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-06T14:03:00-04:00",
+        "windowEnd": "2026-10-06T14:03:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "activity": {
+      "sessions": [{ "agent": "muse", "at": "2026-10-06T14:00:00-04:00" }],
+      "idle": [{ "from": "2026-10-06T13:55:00-04:00", "to": "2026-10-06T14:10:00-04:00" }],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T14:50:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o1",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

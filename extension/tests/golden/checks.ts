@@ -45,6 +45,9 @@ export function atLeast(score: string, bp: number): boolean {
 const COVERAGE_GROUP: readonly ReasonCode[] = [
   'coverage.account_unbound',
   'coverage.calendars_hidden',
+  'coverage.changes_unfollowed',
+  'coverage.change_unprovable',
+  'coverage.account_partial',
   'coverage.multiple_accounts',
   'coverage.no_account',
   'coverage.no_parser',

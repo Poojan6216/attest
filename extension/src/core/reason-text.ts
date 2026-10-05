@@ -206,6 +206,22 @@ const TEXT: Readonly<Record<ReasonCode, Render>> = Object.freeze({
     (source) => `Not every calendar was visible when Attest read ${source}.`,
     'Not every calendar was visible when Attest checked.',
   ),
+  'coverage.changes_unfollowed': bySource(
+    (source) =>
+      `Attest was not following changes in ${source} for the whole time this change could have happened.`,
+    'Attest was not following changes for the whole time this change could have happened.',
+  ),
+  'coverage.change_unprovable': bySource(
+    (source) =>
+      `Attest reads ${source} as snapshots, so it can see a change that was made but cannot show one never was.`,
+    'Attest reads snapshots, so it can see a change that was made but cannot show one never was.',
+  ),
+  'coverage.account_partial': bySource(
+    (service) =>
+      `Attest did not see this claim's whole time window in every ${service} account set for this agent.`,
+    "Attest did not see this claim's whole time window in every account set for this agent.",
+    ACCOUNT_LABEL,
+  ),
   'coverage.multiple_accounts': bySource(
     (service) => `Attest saw more than one ${service} account, and none is set for this agent.`,
     'Attest saw more than one account, and none is set for this agent.',

@@ -72,17 +72,22 @@ const entryArb = fc
     lag: fc.integer({ min: 0, max: 1_600 }),
     accountHash: optional(fc.constantFrom(...ACCOUNTS)),
     allCalendars: optional(fc.boolean()),
+    /** gcal.event: how long before its sync the calendar's changes were followed (§6.1 v1.9). */
+    followed: optional(fc.integer({ min: 0, max: 9_000 })),
   })
-  .map(({ source, start, length, lag, accountHash, allCalendars }) => {
+  .map(({ source, start, length, lag, accountHash, allCalendars, followed }) => {
     const at = (minutes: number) => isoWithOffset(BASE_MS + minutes * MS_PER_MINUTE, -240);
+    const calendar = source === 'gcal.event';
+    const syncMinutes = start + length + lag;
     return ScenarioCoverage.parse(
       defined({
         source,
         windowStart: at(start),
         windowEnd: at(start + length),
-        lastSyncAt: at(start + length + lag),
+        lastSyncAt: at(syncMinutes),
         accountHash,
-        allCalendars: source === 'gcal.event' ? allCalendars : undefined,
+        allCalendars: calendar ? allCalendars : undefined,
+        changesSince: calendar && followed !== undefined ? at(syncMinutes - followed) : undefined,
       }),
     );
   });
@@ -119,6 +124,7 @@ const coveredArb: fc.Arbitrary<Case> = fc
           lastSyncAt: at(3_010),
           accountHash: 'acct-a',
           allCalendars: source === 'gcal.event' ? true : undefined,
+          changesSince: source === 'gcal.event' ? at(-4_400) : undefined,
         }),
       ),
     );

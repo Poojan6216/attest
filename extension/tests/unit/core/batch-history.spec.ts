@@ -176,7 +176,8 @@ const adjacencyScenario = (listed: readonly string[]) =>
         ruleId: 'not_found',
         state: 'FINAL',
         observationRefs: [],
-        score: '1/3',
+        // raj@other.org × priya@company.com matches on time alone: 0 by the §5.3 content gate (v1.11; was 1/3).
+        score: '0/1',
         reasonCodes: ['coverage.account_unbound', 'match.best'],
       },
     ],

@@ -2,8 +2,8 @@
  * docs/grading.md v1.3 §5.3, across random policies (fast-check, 1,000 runs): the loader and features()
  * together leave no claim that can be assigned without a weighted feature.
  *  - The loader accepts a policy exactly when an independent oracle says it should: every type with sources
- *    names at least one identity feature, every identity feature is listed for its type with weight > 0, and
- *    every non-empty featuresByType list has a positive total weight.
+ *    names at least one identity feature, every identity feature is listed for its type with weight > 0 and is not
+ *    `timeProximity` (v1.11), and every non-empty featuresByType list has a positive total weight.
  *  - Under every policy it accepts, features() scores every assignable claim with an exact value in [0, 1]
  *    and never throws; a claim that is not assignable either scores or throws RatioError('zero_weight_sum').
  *  - Receipt signals are the §5.1 feature names plus `score`, and `cp.*` reasons come only from an address
@@ -40,25 +40,28 @@ const weightsArb = fc.record(
   >,
 );
 
-/** An identity list per type: a subset of the type's listed features, empty now and then. */
+/**
+ * An identity list per type: a subset of the type's listed features, empty now and then, and now and then one that
+ * may name `timeProximity` (refused since v1.11), so the loader's identity rules are exercised both ways.
+ */
 const identityArb = fc.record(
   Object.fromEntries(
-    TYPES.map((type) => [
-      type,
-      fc.oneof(
-        { weight: 1, arbitrary: fc.constant<string[]>([]) },
-        {
-          weight: 24,
-          arbitrary: fc.subarray(defaultPolicyJson.featuresByType[type], {
-            minLength: Math.min(1, defaultPolicyJson.featuresByType[type].length),
-          }),
-        },
-      ),
-    ]),
+    TYPES.map((type) => {
+      const listed: readonly string[] = defaultPolicyJson.featuresByType[type];
+      const content = listed.filter((feature) => feature !== 'timeProximity');
+      return [
+        type,
+        fc.oneof(
+          { weight: 1, arbitrary: fc.constant<string[]>([]) },
+          { weight: 1, arbitrary: fc.subarray([...listed], { minLength: Math.min(1, listed.length) }) },
+          { weight: 48, arbitrary: fc.subarray(content, { minLength: Math.min(1, content.length) }) },
+        ),
+      ];
+    }),
   ) as Record<TypeKey, fc.Arbitrary<string[]>>,
 );
 
-/** §5.3 v1.3 written out directly from the contract, without the loader. */
+/** §5.3 v1.3 (and v1.11: time is never an identity feature) written out directly from the contract, without the loader. */
 function oracleAccepts(bp: Record<FeatureKey, number>, identity: Record<TypeKey, string[]>): boolean {
   const weights = new Map<string, number>(Object.entries(bp));
   const weightOf = (feature: string): number => weights.get(feature) ?? 0;
@@ -68,7 +71,9 @@ function oracleAccepts(bp: Record<FeatureKey, number>, identity: Record<TypeKey,
     const total = listed.reduce((sum, feature) => sum + weightOf(feature), 0);
     if (listed.length > 0 && total === 0) return false;
     if (hasSources && identity[type].length === 0) return false;
-    return identity[type].every((feature) => listed.includes(feature) && weightOf(feature) > 0);
+    return identity[type].every(
+      (feature) => listed.includes(feature) && weightOf(feature) > 0 && feature !== 'timeProximity',
+    );
   });
 }
 

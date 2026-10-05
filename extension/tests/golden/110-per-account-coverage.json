@@ -1,0 +1,142 @@
+{
+  "name": "with two bound accounts, coverage is full only when each account's own views contain the window",
+  "covers": ["contract:per_account_coverage", "edge:two_bound_accounts"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.11: when grant.accounts[source] binds two or more accounts, the source is full only when every bound account's own eligible, uncapped entries contain the claim window; one account's view never vouches for another's calendars or mail. A window that only several accounts' views together contain is partial, with coverage.account_partial {source}. With one bound account, or none, nothing changes (an unbound grant keeps the coverage.multiple_accounts cap).",
+    "The grant binds both acct-a and acct-b, for gcal.event and for gmail.sent. evaluatedAt 10:00.",
+    "Calendar (the Calendar simulator's CAL-SIM-4). acct-b's view: [10-04 00:00, 10-18 00:00], every calendar, changesSince 08:00, last synced 09:50. acct-a's view: only [10-11 00:00, 10-18 00:00], every calendar, changesSince 08:30, last synced 09:45. Both fresh for a claim at 09:00 (≥ end(09:01) + graceMin 30 = 09:31).",
+    "c1 (muse, calendar.created, 'Board prep', claimed 09:00, targetAt Wed 10-07 13:00): muse created it in acct-a's calendar, which Attest never saw that week. Window [10-04 13:00, 10-10 13:00]. acct-b's entry contains it; acct-a's does not overlap it. v1.10 unioned the bound accounts' entries → full → not_found, FINAL: acct-b's view vouched for acct-a's calendar. v1.11: acct-b's own entries contain the window, acct-a's do not → partial, with coverage.account_partial because the union alone would have. No candidate → match.none. graceElapsed (09:50 ≥ 09:31) → partial_coverage → UNVERIFIABLE, PENDING (10:00 < end + 24 h = 10-07 09:01). Reasons: coverage.partial {gcal.event}, coverage.account_partial {gcal.event}, match.none.",
+    "c2 (muse, calendar.created, 'Q3 review', claimed 09:00, targetAt Wed 10-14 14:00): window [10-11 14:00, 10-17 14:00]. acct-a's own entry contains it and so does acct-b's → full. No candidate; graceElapsed → not_found → NOT_FOUND, FINAL; both sources' accounts are bound → no coverage.account_unbound. Reasons: match.none.",
+    "Gmail. gmail.sent entries (each from the head of the Sent list, windowEnd = lastSyncAt = 10:00): acct-a [07:00, 10:00], acct-b [08:00, 10:00].",
+    "c3 (muse, email.sent, priya@company.com, 'Q3 deck', claimed 07:32): unit [07:32, 07:33], window [07:30, 08:18]. acct-a's entry contains it, acct-b's starts at 08:00 → partial, coverage.account_partial (the union alone would contain it). No candidate. graceElapsed: 10:00 ≥ end + 30 = 08:03 and ≥ end + 45 = 08:18 → partial_coverage → UNVERIFIABLE, PENDING (10:00 < 10-07 07:33). Reasons: coverage.partial {gmail.sent}, coverage.account_partial {gmail.sent}, match.none.",
+    "c4 (muse, email.sent, raj@company.com, 'Budget', claimed 08:32): window [08:30, 09:18]; each account's own entry contains it → full. No candidate; graceElapsed (10:00 ≥ 09:03 and ≥ 09:18) → not_found → NOT_FOUND, FINAL. Reasons: match.none.",
+    "No observations, so no orphans."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T10:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Board prep",
+        "claimedAt": "2026-10-06T09:00:00-04:00",
+        "targetAt": "2026-10-07T13:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T09:00:00-04:00",
+        "targetAt": "2026-10-14T14:00:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T07:32:00-04:00"
+      },
+      {
+        "ref": "c4",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Budget",
+        "claimedAt": "2026-10-06T08:32:00-04:00"
+      }
+    ],
+    "observations": [],
+    "grants": [
+      {
+        "agent": "muse",
+        "accounts": { "gcal.event": ["acct-a", "acct-b"], "gmail.sent": ["acct-a", "acct-b"] }
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:50:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-18T00:00:00-04:00",
+        "accountHash": "acct-b",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:45:00-04:00",
+        "windowStart": "2026-10-11T00:00:00-04:00",
+        "windowEnd": "2026-10-18T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:30:00-04:00"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T10:00:00-04:00",
+        "windowStart": "2026-10-06T07:00:00-04:00",
+        "windowEnd": "2026-10-06T10:00:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T10:00:00-04:00",
+        "windowStart": "2026-10-06T08:00:00-04:00",
+        "windowEnd": "2026-10-06T10:00:00-04:00",
+        "accountHash": "acct-b"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.account_partial", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.account_partial": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    },
+    {
+      "ref": "c3",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.account_partial", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gmail.sent" },
+        "coverage.account_partial": { "source": "gmail.sent" },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c4",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "name": "a first look at a calendar range accuses no agent of the events already there; a change seen later can be UNASKED",
+  "covers": ["contract:calendar_first_look_no_orphan"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.9: a gcal.event row is an orphan candidate only if a gcal.event entry whose window holds its start followed the window's changes from strictly before the row's first sighting through it (changesSince < first sighting ≤ lastSyncAt), and no such entry began comparing at that first sighting (changesSince, or lastSyncAt without one, equal to it).",
+    "Coverage (acct-a, every calendar, week [10-05 00:00, 10-12 00:00]): the first look at 14:05 compared nothing (no changesSince); the next pass at 14:50 compared with it (changesSince 14:05, as the ledger records from the snapshot chain). No claims.",
+    "o1 'Board dinner' (10-08 19:00) and o2 'Dentist' (10-07 09:00) are what the first look found already there: first seen 14:05. The first look began comparing at 14:05 (no changesSince, lastSyncAt 14:05) and the 14:50 pass's changesSince is 14:05, not before it → neither is an orphan, so no receipt. Without the v1.9 rule both would be UNASKED: anchored at their first sighting 14:05 (§7), muse's session at 14:02 is within ±10 min (4000) and idle [14:00, 14:10] covers [14:03, 14:05] (3000) → 7/10.",
+    "o3 'Team lunch' (10-07 12:30), first seen 14:50: the 14:50 pass followed changes since 14:05 < 14:50 ≤ 14:50, and no entry began comparing at 14:50 → a change Attest saw happen, an orphan (§3). Anchor 14:50 (§7): muse session at 14:48 (4000), idle [14:45, 14:55] covers [14:48, 14:50] (3000) → 7/10 ≥ 6/10 → UNASKED, reasons unasked.session, unasked.idle.",
+    "o3 finality (§7): muse's adapter synced 15:30 ≥ anchor + 2 + 30 min = 15:22 → FINAL (evaluatedAt 16:00)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T16:00:00-04:00",
+    "claims": [],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Board dinner",
+        "occurredAt": "2026-10-08T19:00:00-04:00",
+        "observedAt": "2026-10-06T14:05:00-04:00",
+        "rowKey": "evt-board-dinner"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "occurredAt": "2026-10-07T09:00:00-04:00",
+        "observedAt": "2026-10-06T14:05:00-04:00",
+        "rowKey": "evt-dentist"
+      },
+      {
+        "ref": "o3",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Team lunch",
+        "occurredAt": "2026-10-07T12:30:00-04:00",
+        "observedAt": "2026-10-06T14:50:00-04:00",
+        "rowKey": "evt-team-lunch"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:05:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:50:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:05:00-04:00"
+      }
+    ],
+    "activity": {
+      "sessions": [
+        { "agent": "muse", "at": "2026-10-06T14:02:00-04:00" },
+        { "agent": "muse", "at": "2026-10-06T14:48:00-04:00" }
+      ],
+      "idle": [
+        { "from": "2026-10-06T14:00:00-04:00", "to": "2026-10-06T14:10:00-04:00" },
+        { "from": "2026-10-06T14:45:00-04:00", "to": "2026-10-06T14:55:00-04:00" }
+      ],
+      "adapterSyncs": [{ "agent": "muse", "lastSyncAt": "2026-10-06T15:30:00-04:00" }]
+    }
+  },
+  "expect": [
+    {
+      "ref": "o3",
+      "grade": "UNASKED",
+      "ruleId": "unasked",
+      "state": "FINAL",
+      "observationRefs": ["o3"],
+      "score": null,
+      "reasonCodes": ["unasked.session", "unasked.idle"],
+      "reasonParams": { "unasked.session": { "agent": "muse" }, "unasked.idle": { "agent": "muse" } },
+      "agent": "muse",
+      "attributionScore": "7/10"
+    }
+  ]
+}

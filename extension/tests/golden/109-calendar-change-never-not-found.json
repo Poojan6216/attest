@@ -1,0 +1,101 @@
+{
+  "name": "a calendar change claim is never NOT_FOUND, even under whole, fresh, followed views; a created claim still is",
+  "covers": ["contract:calendar_change_unprovable", "edge:calendar_update_as_created_row"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.11: a calendar.updated or calendar.deleted claim counts no gcal.event entry towards full coverage: every entry overlapping its window is capped, coverage.change_unprovable. Calendar is read as snapshots, so a change made between two looks and then moved, changed again or removed leaves nothing to compare. A change row a view saw still verifies (verified comes before partial_coverage, §6.2). A calendar.created claim keeps NOT_FOUND, with the meaning §6.1 states: in whole, fresh views of its window (synced at or after end(p,t) + graceMin, every calendar, each bound account), no matching event Attest had not already seen before the claim was on the calendar.",
+    "Story (the Calendar simulator's CAL-SIM-1, probe 1). acct-a is bound and every calendar is shown. Attest follows two weeks, each first looked at 08:00 and compared since: week [10-04 00:00, 10-11 00:00] and week [10-11 00:00, 10-18 00:00], each with changesSince 08:00 and last synced 09:50 (the passes of 08:10, 09:05, 09:15, 09:40 and 09:50 merged: one window, one changesSince). At 09:00 muse moves 'Board prep' from Fri 10-09 10:00 to Tue 10-13 10:00 and says so. The two weeks are compared range by range, so the move reaches the ledger as a calendar.created row in the second week (o1, 10-13 10:00, first seen 09:05) and a calendar.deleted row in the first (o2, 10-09 10:00, first seen 09:05). No calendar.updated row exists.",
+    "c1 (muse, calendar.updated, 'Board prep', claimed 09:00, minute, targetAt 10-13 10:00): window targetAt ± calendarDays 3 = [10-10 10:00, 10-16 10:00]. Its candidates are calendar.updated rows in the window: none (o1 is calendar.created, o2 calendar.deleted) → match.none, score null.",
+    "c1 coverage: both weeks overlap the window and together contain it, both fresh (09:50 ≥ end(09:01) + graceMin 30 = 09:31), both followed from 08:00 ≤ the old change span start 08:58, every calendar, the bound account. v1.10 counted them uncapped → full → not_found, FINAL: a false NOT_FOUND for a move that really happened. v1.11 caps both (coverage.change_unprovable) → partial.",
+    "c1 rules: no_target no; underspecified no (subjectOverlap applies); no_coverage no (partial); verified, partial no (no candidate); pending no (graceElapsed: an entry synced 09:50 ≥ 09:31); partial_coverage: partial and bestScoreLt partial → UNVERIFIABLE. PENDING (§8): partial_coverage finalises at end + finalizeUnverifiableHours = 10-07 09:01 > evaluatedAt 10:00. Reasons: coverage.partial {gcal.event}, coverage.change_unprovable {gcal.event}, match.none.",
+    "c2 (muse, calendar.created, 'Q3 review', claimed 09:00, targetAt Wed 10-07 14:00): window [10-04 14:00, 10-10 14:00] ⊆ the first week, which is fresh (09:50 ≥ 09:31), shows every calendar and is the bound account's → full (the second week does not overlap it). Candidates: calendar.created rows in the window: none (o1 is at 10-13) → match.none. graceElapsed → not_found → NOT_FOUND, FINAL; the grant binds gcal.event → no coverage.account_unbound. Reasons: match.none.",
+    "Orphans: o1 and o2 are changes a followed view saw (changesSince 08:00 < 09:05 ≤ 09:50; no entry began comparing at 09:05), assigned to no claim. No activity → no attribution → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T10:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.updated",
+        "subjectHint": "Board prep",
+        "claimedAt": "2026-10-06T09:00:00-04:00",
+        "targetAt": "2026-10-13T10:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T09:00:00-04:00",
+        "targetAt": "2026-10-07T14:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-13T10:00:00-04:00",
+        "observedAt": "2026-10-06T09:05:00-04:00",
+        "rowKey": "evt-board-prep"
+      },
+      {
+        "ref": "o2",
+        "source": "gcal.event",
+        "type": "calendar.deleted",
+        "subjectHint": "Board prep",
+        "occurredAt": "2026-10-09T10:00:00-04:00",
+        "observedAt": "2026-10-06T09:05:00-04:00",
+        "rowKey": "evt-board-prep"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:50:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T09:50:00-04:00",
+        "windowStart": "2026-10-11T00:00:00-04:00",
+        "windowEnd": "2026-10-18T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:00:00-04:00"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.change_unprovable", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.change_unprovable": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

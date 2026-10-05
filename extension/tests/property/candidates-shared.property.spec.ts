@@ -10,7 +10,8 @@
  *    which sends a type down the claim-by-claim path);
  *  - orphan discovery (batch-orphans.ts `coveredObservations` over `visibleAt`) against §3 written out with
  *    Date.parse: first seen by evaluatedAt, from a source the policy lists for its type, inside a window of a pass of
- *    its own source synced by evaluatedAt, once per content hash (the representative), in candidate order.
+ *    its own source synced by evaluatedAt, once per content hash (the representative), in candidate order, and for
+ *    a gcal.event representative a change a pass followed (v1.9; the oracle is orphan-oracle.ts).
  * The last two run over the memory index and the ledger's Dexie index (Sprint 2.6), each given the rows it holds.
  */
 import fc from 'fast-check';
@@ -28,6 +29,7 @@ import { loadPolicy } from '../../src/core/policy';
 import { type ActionType, type Claim, Coverage, Observation, Ulid } from '../../src/core/schema';
 import type { Interval } from '../../src/core/window';
 import { buildClaim, isoAt, MS_PER_MINUTE } from '../tools/attest-world';
+import { orphanOracle, seenByOwnSource } from './orphan-oracle';
 import { INDEX_IMPLEMENTATIONS } from '../unit/ledger/index-implementations';
 
 const RUNS = 1_000;
@@ -317,6 +319,8 @@ const passArb = fc.record({
   lengthMinutes: fc.integer({ min: 0, max: 2 * 24 * 60 }),
   /** Synced after evaluatedAt: a pass the batch must not count. */
   late: fc.oneof({ arbitrary: fc.constant(false), weight: 3 }, { arbitrary: fc.constant(true), weight: 1 }),
+  /** gcal.event only: minutes of followed changes before the sync (null: a first look, no changesSince, v1.9). */
+  followed: rarely(fc.integer({ min: 0, max: 3 * 24 * 60 }), 1),
 });
 
 function buildCoverage(passes: readonly Generated<typeof passArb>[]): Coverage {
@@ -329,41 +333,12 @@ function buildCoverage(passes: readonly Generated<typeof passArb>[]): Coverage {
       lastSyncAt: minutesAt(sync),
       windowStart: minutesAt(Math.min(pass.startMinutes, endMinutes)),
       windowEnd: minutesAt(endMinutes),
+      ...(pass.source === 'gcal.event' && pass.followed !== null
+        ? { changesSince: minutesAt(sync - pass.followed) }
+        : {}),
     };
   });
   return Coverage.parse({ evaluatedAt: isoAt(EVALUATED_MS), observers });
-}
-
-/** Whether a pass of `o`'s own source synced by evaluatedAt saw its `occurredAt`. */
-function seenByOwnSource(o: Observation, coverage: Coverage): boolean {
-  const t = Date.parse(o.occurredAt);
-  return coverage.observers.some(
-    (e) =>
-      e.source === o.source &&
-      Date.parse(e.lastSyncAt) <= EVALUATED_MS &&
-      Date.parse(e.windowStart) <= t &&
-      t <= Date.parse(e.windowEnd),
-  );
-}
-
-/** §3 written out with Date.parse, for every row: no window merge, no index, no shared helper. */
-function orphanOracle(observations: readonly Observation[], coverage: Coverage) {
-  const covered = observations.filter((o) => {
-    if (Date.parse(o.observedAt) > EVALUATED_MS) return false;
-    return POLICY.sourcesByType[o.type].includes(o.source) && seenByOwnSource(o, coverage);
-  });
-  const groups = new Map<string, Observation[]>();
-  for (const o of covered) groups.set(o.contentHash, [...(groups.get(o.contentHash) ?? []), o]);
-  const kept = [...groups.values()].flatMap((group) => {
-    const best = firstBySpec(group);
-    return best === undefined ? [] : [{ observation: best, atMs: Date.parse(best.occurredAt) }];
-  });
-  return kept.sort(
-    (a, b) =>
-      a.atMs - b.atMs ||
-      compareText(a.observation.id, b.observation.id) ||
-      compareText(a.observation.contentHash, b.observation.contentHash),
-  );
 }
 
 eachIndex('orphan discovery against §3 written out ($name index)', ({ createIndex, held }) => {
@@ -377,7 +352,7 @@ eachIndex('orphan discovery against §3 written out ($name index)', ({ createInd
           const observations = held(buildRows(rows));
           const coverage = buildCoverage(passes);
           const index = visibleAt(createIndex(observations, bucket), EVALUATED_MS);
-          const expected = orphanOracle(observations, coverage);
+          const expected = orphanOracle(observations, coverage, POLICY, EVALUATED_MS, firstBySpec);
           expect(await coveredObservations(index, coverage, POLICY)).toEqual(expected);
           tally.orphans += expected.length;
           // Rows a window of their own source saw, from a source their type does not list: excluded.
@@ -386,7 +361,7 @@ eachIndex('orphan discovery against §3 written out ($name index)', ({ createInd
               Date.parse(o.observedAt) <= EVALUATED_MS &&
               POLICY.sourcesByType[o.type].length > 0 &&
               !POLICY.sourcesByType[o.type].includes(o.source) &&
-              seenByOwnSource(o, coverage),
+              seenByOwnSource(o, coverage, EVALUATED_MS),
           ).length;
         },
       ),

@@ -14,7 +14,7 @@
     "c2 'Corner Shop' 1250 USD (11:02) × o2 receipt 'Corner Shop' 1250 USD (11:02): applicable timeProximity 2500, amountExact 2500, merchantMatch 2000; Σw = 7000; all 1 → 1/1 → verified, FINAL. name('Corner Shop') = 'corner shop' ∉ receiptMerchants: the cap does not stop positive evidence.",
     "c3 'Corner Shop' 990 USD (13:02), no receipt in [13:00, 13:48] → no candidate; graceElapsed → pending does not fire → rule partial_coverage → UNVERIFIABLE, reasons coverage.partial, coverage.no_parser, match.none. PENDING (§8): 10-07 10:00 < end(13:03) + 24 h = 10-07 13:03.",
     "c4 4200 USD, no counterparty (08:02), no receipt in [08:00, 08:48] → rule partial_coverage as c3, but FINAL: 10-07 10:00 ≥ end(08:03) + 24 h = 10-07 08:03.",
-    "c5 'Corner Shop' 2000 USD (15:02) × o5 receipt 'Other Mart' 1500 USD (15:02): tp 1; amountExact 0 (2000 ≠ 1500); merchantMatch: names differ, Jaccard {corner, shop} vs {other, mart} = 0 → S = 2500/7000 = 5/14 < 1/2 → not assigned, named by match.best (§8). Coverage partial and best below partial → rule partial_coverage, PENDING (10-07 10:00 < 10-07 15:03): never not_found, which needs full coverage.",
+    "c5 'Corner Shop' 2000 USD (15:02) × o5 receipt 'Other Mart' 1500 USD (15:02): tp 1; amountExact 0 (2000 ≠ 1500); merchantMatch: names differ, Jaccard {corner, shop} vs {other, mart} = 0. Only timeProximity scored above 0, so the §5.3 content gate (v1.11: no evidence on time alone) makes S = 0/1 (v1.10 had 2500/7000 = 5/14, also below 1/2) → not assigned, named by match.best (§8). Coverage partial and best below partial → rule partial_coverage, PENDING (10-07 10:00 < 10-07 15:03): never not_found, which needs full coverage.",
     "Each observation lies only in its own claim's window (two hours apart). o5 is an orphan with no activity → no receipt."
   ],
   "input": {
@@ -148,7 +148,7 @@
       "ruleId": "partial_coverage",
       "state": "PENDING",
       "observationRefs": [],
-      "score": "5/14",
+      "score": "0/1",
       "reasonCodes": ["coverage.partial", "coverage.no_parser", "match.best"]
     }
   ]

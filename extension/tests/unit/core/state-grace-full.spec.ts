@@ -6,10 +6,12 @@
  * window ends at end(p,t) + afterClaimMin, and afterClaimMin > graceMin), so a grace bug can hide behind the
  * coverage rule. Here coverage is fresh AND full well before grace, so a NOT_FOUND before grace would be a grace
  * bug and nothing else:
- *  - a calendar claim whose calendar view shows the whole ±calendarDays window from the first sync: grace is
- *    end(p,t) + graceMin = 14:03 + 30 = 14:33 (calendar types do not wait for afterClaimMin);
  *  - an email claim under a policy with graceMin 60 > afterClaimMin 45: coverage is full from the 14:48 sync,
  *    grace is end(p,t) + max(60, 45) = 15:03.
+ * A calendar claim whose view shows the whole ±calendarDays window from the first sync is walked too: grace is
+ * end(p,t) + graceMin = 14:03 + 30 = 14:33 (calendar types do not wait for afterClaimMin). Since v1.10 (§6.1) its
+ * coverage is full only from that same sync: a view last synced before end(p,t) + graceMin is capped
+ * (`coverage.changes_unfollowed`), because it cannot say the event was never created.
  * Each case walks minute by minute: PENDING by rule `pending` until grace (installed by regrade), FINAL NOT_FOUND
  * at grace, and then a regrade of the FINAL receipt is refused.
  */
@@ -69,7 +71,8 @@ const CALENDAR: GraceCase = {
       ],
       syncedAt,
     ),
-  fullFrom: CLAIMED_AT,
+  // v1.10 (§6.1): a view synced before end(p,t) + graceMin is capped, so full only from the grace sync.
+  fullFrom: '2026-10-06T14:33:00-04:00',
   graceAt: '2026-10-06T14:33:00-04:00',
 };
 
@@ -131,7 +134,7 @@ function expectRefusedRegrade(receipt: Receipt, next: Receipt): void {
 }
 
 describe('grace, not coverage, holds a fully covered receipt at PENDING', () => {
-  it.each(CASES)('$label: coverage is full before grace', (c) => {
+  it.each([EMAIL_LONG_GRACE])('$label: coverage is full before grace', (c) => {
     expect(instantMs(c.fullFrom)).toBeLessThan(instantMs(c.graceAt));
     expect(coverageAt(c, c.fullFrom)).toBe('full');
     expect(coverageAt(c, shiftIso(c.graceAt, -MS_PER_SECOND))).toBe('full');
@@ -184,5 +187,19 @@ describe('grace, not coverage, holds a fully covered receipt at PENDING', () => 
       }),
       { numRuns: 1_000 },
     );
+  });
+});
+
+describe('a calendar claim: coverage and grace arrive at the same sync (§6.1 v1.10)', () => {
+  it('a view synced before end(p,t) + graceMin is capped, and full from that sync', () => {
+    const c = CALENDAR;
+    for (const at of [CLAIMED_AT, shiftIso(c.graceAt, -1)]) {
+      const result = coverageLevel(c.claim, GRANT, c.coverageAt(at), c.policy);
+      expect(result).toMatchObject({
+        level: 'partial',
+        capReasons: [{ code: 'coverage.changes_unfollowed', source: 'gcal.event' }],
+      });
+    }
+    expect(coverageAt(c, c.graceAt)).toBe('full');
   });
 });

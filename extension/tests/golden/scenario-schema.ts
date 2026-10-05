@@ -22,6 +22,9 @@ export const REASON_CODES = [
   'coverage.partial',
   'coverage.account_unbound',
   'coverage.calendars_hidden',
+  'coverage.changes_unfollowed',
+  'coverage.change_unprovable',
+  'coverage.account_partial',
   'coverage.multiple_accounts',
   'coverage.no_account',
   'coverage.no_parser',
@@ -79,6 +82,9 @@ export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, 
   'coverage.partial': SOURCE,
   'coverage.account_unbound': SOURCE,
   'coverage.calendars_hidden': SOURCE,
+  'coverage.changes_unfollowed': SOURCE,
+  'coverage.change_unprovable': SOURCE,
+  'coverage.account_partial': SOURCE,
   'coverage.multiple_accounts': SOURCE,
   'coverage.no_account': SOURCE,
   // §15 v1.4: coverage.no_parser carries {source} like the other coverage caps.
@@ -247,6 +253,8 @@ export const ScenarioCoverage = z.strictObject({
   windowEnd: IsoTs,
   accountHash: Label.optional(),
   allCalendars: z.boolean().optional(),
+  /** §3 v1.9: gcal.event only, since when the window's changes were followed (the ledger sets it). */
+  changesSince: IsoTs.optional(),
 });
 export type ScenarioCoverage = z.infer<typeof ScenarioCoverage>;
 

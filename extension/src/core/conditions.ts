@@ -6,21 +6,22 @@
  * and has the written value (§6.1: all must hold); first match wins (§6). Claim-less evaluation: with no claim
  * only `unaskedLikely` and `observedScopeExceedsDeclared` are applicable; with a claim those two are not.
  *
- * Split for size: conditions-coverage.ts (eligibility, `coverage`, `graceElapsed`), conditions-scope.ts (grant
- * and permission conditions), conditions-finality.ts (`isFinalizable`, §8). Import from here.
+ * Split for size: conditions-coverage.ts (eligibility, `graceElapsed`), conditions-level.ts (`coverage`),
+ * conditions-scope.ts (grant and permission conditions), conditions-finality.ts (`isFinalizable`, §8). Import from
+ * here.
  *
  * Every grade-relevant comparison is exact: scores against thresholds in BigInt basis points (ratio.ts), times in
  * integer milliseconds, amounts in integer cents (§5.3). PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
 import {
   type CoverageResult,
-  coverageFrom,
   type EligibleCoverage,
   eligibleCoverage,
   graceSyncMs,
   type SourceGrace,
   syncedSources,
 } from './conditions-coverage';
+import { calendarBound, coverageFrom } from './conditions-level';
 import {
   type AllowlistCheck,
   amountAboveCeiling,
@@ -42,7 +43,6 @@ import { claimWindow } from './window';
 export {
   type CapReason,
   type CoverageCap,
-  coverageLevel,
   type CoveragePolicy,
   type CoverageResult,
   type EligibleCoverage,
@@ -55,6 +55,7 @@ export {
   type SourceCoverage,
   type SourceGrace,
 } from './conditions-coverage';
+export { type CalendarBound, calendarBound, coverageLevel } from './conditions-level';
 export { type Finality, type FinalityInput, isFinalizable } from './conditions-finality';
 export {
   type AllowlistCheck,
@@ -233,7 +234,12 @@ class ClaimConditions implements Conditions {
 
   coverage(): CoverageResult {
     if (this.#coverage === NOT_YET) {
-      this.#coverage = coverageFrom(this.eligible(), claimWindow(this.claim, this.facts.policy));
+      const { policy } = this.facts;
+      this.#coverage = coverageFrom(
+        this.eligible(),
+        claimWindow(this.claim, policy),
+        calendarBound(this.claim, policy),
+      );
     }
     return this.#coverage;
   }

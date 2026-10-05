@@ -27,6 +27,7 @@ import {
   receiptIdFor,
   SCENARIO_FILE,
   scenarioFiles,
+  scenarioNumber,
 } from './load';
 import {
   ACTION_TYPES,
@@ -114,11 +115,13 @@ const tagged = (tag: string): (readonly [string, Scenario])[] =>
 const allExpectations = SCENARIOS.flatMap(([, scenario]) => scenario.expect);
 
 describe('golden scenario files', () => {
-  it('there are at least 40, each named NN-slug.json with a unique number', () => {
+  it('there are at least 40, each named NN-slug.json (NNN-slug.json from 100) with a unique number', () => {
     expect(FILES.length).toBeGreaterThanOrEqual(40);
     for (const file of FILES) expect(file).toMatch(SCENARIO_FILE);
-    const numbers = FILES.map((file) => file.slice(0, 2));
+    const numbers = FILES.map(scenarioNumber);
     expect(new Set(numbers).size).toBe(numbers.length);
+    expect(scenarioNumber('100-x.json')).toBe(100);
+    expect(scenarioNumber('07-x.json')).toBe(7);
   });
 
   it.each(FILES)('%s parses with the strict scenario schema', (file) => {

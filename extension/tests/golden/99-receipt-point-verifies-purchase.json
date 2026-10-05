@@ -1,0 +1,89 @@
+{
+  "name": "a receipt read at its own instant verifies the purchase; a purchase whose receipt was never read is never NOT_FOUND",
+  "covers": ["contract:receipt_point_coverage"],
+  "mode": "batch",
+  "policyPatch": {
+    "receiptMerchants": ["stripe", "amazon"]
+  },
+  "notes": [
+    "§3 v1.9: a gmail.receipt pass that parsed an opened receipt covers only that message's instant (windowStart = windowEnd). Two such passes, both acct-a (one account, so no account cap; the grant binds none): the Stripe receipt sent 14:03, opened and parsed at 14:10; and another receipt sent 09:15, opened at 14:50. receiptMerchants is patched to ['stripe', 'amazon'], so no claim below is capped by coverage.no_parser: the points alone decide.",
+    "c1 'Stripe' 4999 USD at 14:02 (minute): unit [14:02, 14:03], window [14:00, 14:48]. o1 merchant 'Stripe' 4999 USD at 14:03 lies in the window. Applicable: timeProximity 2500, amountExact 2500, merchantMatch 2000 (no subject); Σw = 7000. tp 1 (Δ = 0, inside the unit); amountExact 1 (4999 USD both); merchantMatch 1 (name 'stripe' = 'stripe') → S = 7000/7000 = 1/1 ≥ 8500 bp → assigned.",
+    "c1 coverage (§6.1): the 14:03 point overlaps the window but a point never contains a window of positive length → partial, so no_coverage does not fire and verified does: VERIFIED. FINAL (§8): a gmail.receipt entry synced 14:50 ≥ end + graceMin = 14:33. Before the 14:50 pass the only receipt sync was 14:10 < 14:33: VERIFIED but PENDING, until the next receipt the user opens.",
+    "c2 'Amazon' 2000 USD at 14:02: window [14:00, 14:48]. o1 is assigned to c1 and leaves c2's candidates (§4.3) → match.none, score null. Coverage: the 14:03 point overlaps → partial (the 09:15 point is outside). graceElapsed: 14:50 ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48 → pending does not fire. partial_coverage (coverage partial, bestScoreLt partial: no candidate) → UNVERIFIABLE, reasons coverage.partial {source: gmail.receipt}, match.none. PENDING: 15:00 < end + 24 h. Never NOT_FOUND: Attest read one message in that window, not the inbox (Hard Rule 5).",
+    "No activity → no orphan receipt; o1 is assigned anyway."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Stripe",
+        "amountCents": 4999,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "purchase.made",
+        "counterparty": "Amazon",
+        "amountCents": 2000,
+        "currency": "USD",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Stripe",
+        "amountCents": 4999,
+        "currency": "USD",
+        "occurredAt": "2026-10-06T14:03:00-04:00",
+        "observedAt": "2026-10-06T14:10:00-04:00"
+      }
+    ],
+    "grants": [{ "agent": "muse" }],
+    "coverage": [
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-06T14:03:00-04:00",
+        "windowEnd": "2026-10-06T14:03:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.receipt",
+        "lastSyncAt": "2026-10-06T14:50:00-04:00",
+        "windowStart": "2026-10-06T09:15:00-04:00",
+        "windowEnd": "2026-10-06T09:15:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } }
+    },
+    {
+      "ref": "c2",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "match.none"],
+      "reasonParams": { "coverage.partial": { "source": "gmail.receipt" }, "match.none": {} }
+    }
+  ]
+}

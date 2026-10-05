@@ -1,0 +1,74 @@
+{
+  "name": "a deletion claimed before Attest first looked at the calendar is never NOT_FOUND: the change was not followed",
+  "covers": ["contract:calendar_change_unfollowed"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.11: a calendar.updated or calendar.deleted claim counts no gcal.event entry towards full coverage: every entry overlapping its window is capped, coverage.change_unprovable. Calendar is read as snapshots, so a change made between two looks and then moved, changed again or removed leaves nothing to compare, and no view can say a change was never made. (v1.9 and v1.10 capped only an entry that had not followed changes over the change span [start(p,t) − beforeClaimMin, end(p,t) + graceMin], with coverage.changes_unfollowed; this file's two entries were both such entries, so its grade is unchanged and only the cap's code changed.)",
+    "c1: muse says at 14:02 (minute) that it deleted 'Board dinner' (targetAt 10-08 19:00). Window [10-05 19:00, 10-11 19:00] (± calendarDays 3). Change span [14:00, 14:33].",
+    "Coverage (acct-a, every calendar, bound by the grant, week [10-05 00:00, 10-12 00:00] ⊇ the window): Attest first looked at 14:10 (no changesSince) and compared again at 14:50 (changesSince 14:10). The event was already gone at 14:10, so no pass could see it deleted. Both entries are capped (change_unprovable), as every entry of a change claim is.",
+    "o1 'Dentist' (10-07 09:00) is what the first look found (calendar.created, first seen 14:10): not of c1's type, so no candidate; a first-look row, so no orphan (§3 v1.9). c1 has no candidate → match.none, score null.",
+    "Rules: no_target no (targetAt set); underspecified no (subjectOverlap applies); no_coverage no (two entries overlap the window: partial); verified, partial no (no candidate); pending no: graceElapsed needs an entry synced ≥ end + graceMin = 14:33, and the 14:50 entry is (a capped entry still proves the sync); partial_coverage: coverage partial and bestScoreLt partial (no candidate) → UNVERIFIABLE.",
+    "Reasons: coverage.partial {source: gcal.event}, the cap coverage.change_unprovable {source: gcal.event}, match.none. PENDING (§8): partial_coverage finalises only at end + finalizeUnverifiableHours = 10-07 14:03.",
+    "Under v1.8 the same entries were full coverage (every calendar, the account bound) and c1 was NOT_FOUND, FINAL: a false NOT_FOUND for a deletion that happened before Attest looked (Hard Rule 5)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.deleted",
+        "subjectHint": "Board dinner",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T19:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "occurredAt": "2026-10-07T09:00:00-04:00",
+        "observedAt": "2026-10-06T14:10:00-04:00",
+        "rowKey": "evt-dentist"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:10:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:50:00-04:00",
+        "windowStart": "2026-10-05T00:00:00-04:00",
+        "windowEnd": "2026-10-12T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:10:00-04:00"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.change_unprovable", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.change_unprovable": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    }
+  ]
+}

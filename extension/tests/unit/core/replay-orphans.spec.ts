@@ -4,7 +4,8 @@
  * a claim's candidates obey, §4.1) whose `occurredAt` lies in a window of its own source (§3). gradeBatch and replay
  * read that rule from one predicate (batch-orphans.ts `isOrphanCandidate`): a row from a source the policy does not
  * list for its type neither verifies a claim nor accuses an agent (Hard Rule 5; Sprint 1 close), and a stored
- * UNASKED receipt for one is reported `uncovered`.
+ * UNASKED receipt for one is reported `uncovered`. So is one for a `gcal.event` row that no view saw change: a row
+ * a first look found already on the calendar (v1.9, Hard Rule 7).
  *
  * Each ledger is graded by gradeBatch exactly as batch-orphans.spec.ts grades it, then replayed.
  */
@@ -30,7 +31,13 @@ const GMAIL = {
   windowEnd: EVALUATED_AT,
   accountHash: 'acct-a',
 } as const;
-const CALENDAR = { ...GMAIL, source: 'gcal.event', allCalendars: true } as const;
+/** A calendar view that followed changes from 12:00 (§3 v1.9): a row it first saw later is a change it saw happen. */
+const CALENDAR = {
+  ...GMAIL,
+  source: 'gcal.event',
+  allCalendars: true,
+  changesSince: GMAIL.windowStart,
+} as const;
 const MUSE_ACTIVE = {
   sessions: [{ agent: 'muse', at: '2026-10-06T14:00:00-04:00' }],
   idle: [{ from: '2026-10-06T13:55:00-04:00', to: '2026-10-06T14:10:00-04:00' }],
@@ -203,6 +210,106 @@ describe('replay of a stored UNASKED receipt that is no orphan by §3 reports `u
     const report = await replay({ ...ledger, receiptInputs });
     expect(report.mismatches).toEqual([
       { receiptId: receipt.id, field: 'orphan', stored: observation(loaded, 'o1').id, replayed: 'uncovered' },
+    ]);
+  });
+});
+
+/**
+ * o3: an event starting 14:03, first seen 14:03. Under CALENDAR (changes followed from 12:00) it is a change Attest saw
+ * happen; under a first look at 14:03 it is an event that was already there, which never accuses an agent (§3 v1.9).
+ */
+const EVENT = {
+  ...ORPHAN,
+  ref: 'o3',
+  source: 'gcal.event',
+  type: 'calendar.created',
+  observedAt: ORPHAN.occurredAt,
+} as const;
+
+/** The UNASKED receipt `grade` builds for o3 of `loaded` under `coverage`, replayed against its own inputs. */
+async function replayEventUnder(loaded: LoadedScenario, coverage: LoadedScenario['coverage']) {
+  const policy = loadPolicy(loaded.policyJson);
+  const o3 = observation(loaded, 'o3');
+  const attribution = attribute(o3, loaded.activity, policy, EVALUATED_AT);
+  const [grant] = loaded.grants;
+  if (attribution === null || grant === undefined) throw new Error('muse is likely, under one grant');
+  const context = { priorSpendCents: 0, attribution };
+  const receipt = grade(null, [o3], grant, policy, coverage, context);
+  expect(receipt.grade).toBe('UNASKED');
+  const report = await replay({
+    claims: [],
+    observations: [o3],
+    receipts: [receipt],
+    receiptInputs: new Map([
+      [receipt.inputsHash, { coverage, grant, context, policyHash: policy.policyHash }],
+    ]),
+    policies: new Map([[policy.policyHash, policy]]),
+  });
+  return { report, receipt, o3 };
+}
+
+describe('replay of a stored UNASKED receipt for a calendar row a first look found (§3 v1.9)', () => {
+  const followed = load({ observations: [EVENT], coverage: [CALENDAR], activity: MUSE_ACTIVE });
+
+  it('reproduces the receipt under a view that followed changes from before the first sighting', async () => {
+    const ledger = await ledgerOf(followed);
+    expect(graded(ledger)).toEqual([['UNASKED', observation(followed, 'o3').id]]);
+    const { report } = await replayEventUnder(followed, followed.coverage);
+    expect(report).toMatchObject({ reproduced: 1, mismatched: 0 });
+  });
+
+  it('reports `uncovered` when the view began comparing at the first sighting, or compared nothing after it', async () => {
+    const firstLooks = [
+      { ...CALENDAR, changesSince: ORPHAN.occurredAt },
+      {
+        source: 'gcal.event',
+        lastSyncAt: EVALUATED_AT,
+        windowStart: GMAIL.windowStart,
+        windowEnd: EVALUATED_AT,
+      },
+    ];
+    for (const entry of firstLooks) {
+      const loaded = load({ observations: [EVENT], coverage: [entry], activity: MUSE_ACTIVE });
+      expect(graded(await ledgerOf(loaded))).toEqual([]);
+      const { report, receipt, o3 } = await replayEventUnder(followed, loaded.coverage);
+      expect(report.mismatches).toEqual([
+        { receiptId: receipt.id, field: 'orphan', stored: o3.id, replayed: 'uncovered' },
+      ]);
+    }
+  });
+});
+
+/** o3's first-look marker (§3 v1.10): a point at its start, changesSince = lastSyncAt = its first sighting. */
+const MARKER = {
+  source: 'gcal.event',
+  lastSyncAt: EVENT.observedAt,
+  windowStart: EVENT.occurredAt,
+  windowEnd: EVENT.occurredAt,
+  accountHash: 'acct-b',
+  allCalendars: true,
+  changesSince: EVENT.observedAt,
+} as const;
+
+describe('replay with first-look markers in the stored coverage (§3 v1.10)', () => {
+  it('a batch whose coverage holds the marker of another row replays exactly', async () => {
+    const other = {
+      ...MARKER,
+      windowStart: '2026-10-06T14:30:00-04:00',
+      windowEnd: '2026-10-06T14:30:00-04:00',
+    };
+    const loaded = load({ observations: [EVENT], coverage: [CALENDAR, other], activity: MUSE_ACTIVE });
+    const ledger = await ledgerOf(loaded);
+    expect(graded(ledger)).toEqual([['UNASKED', observation(loaded, 'o3').id]]);
+    expect(await replay(ledger)).toMatchObject({ reproduced: 1, mismatched: 0 });
+  });
+
+  it('reports `uncovered` for a stored UNASKED receipt of a row its marker covers (gradeBatch issues none)', async () => {
+    const marked = load({ observations: [EVENT], coverage: [CALENDAR, MARKER], activity: MUSE_ACTIVE });
+    expect(graded(await ledgerOf(marked))).toEqual([]);
+    const followed = load({ observations: [EVENT], coverage: [CALENDAR], activity: MUSE_ACTIVE });
+    const { report, receipt, o3 } = await replayEventUnder(followed, marked.coverage);
+    expect(report.mismatches).toEqual([
+      { receiptId: receipt.id, field: 'orphan', stored: o3.id, replayed: 'uncovered' },
     ]);
   });
 });

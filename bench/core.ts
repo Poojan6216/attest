@@ -9,7 +9,9 @@
  * into RESULTS.md (Hard Rule 12); it exits non-zero when a gate fails. Grading reuses the lookup's observations
  * and claim timings; a second seeded stream gives each claim an agent and an identity (40% restate a real
  * observation, 10% are vague), plus one coverage pass per source per day, a grant per agent bound to one account,
- * and modest agent activity, so some orphans become UNASKED.
+ * and modest agent activity, so some orphans become UNASKED. The Calendar coverage also holds a first-look marker
+ * for every other `gcal.event` row, up to the coverage limit (docs/grading.md §3 v1.10: the ledger stores one with
+ * each first sighting), so the gate measures the orphan rule's marker lookup too.
  */
 import { median, round, summarize, timed, type Timed } from './timing';
 
@@ -17,7 +19,7 @@ import { type BatchReceipt, gradeBatch } from '../extension/src/core/batch';
 import { candidates, createMemoryIndex, type ObservationIndex } from '../extension/src/core/candidates';
 import { idFromHash } from '../extension/src/core/hash';
 import { DEFAULT_POLICY } from '../extension/src/core/policy';
-import { Activity, Claim, Coverage, Grant, Observation } from '../extension/src/core/schema';
+import { Activity, Claim, Coverage, Grant, Observation, SCHEMA_LIMITS } from '../extension/src/core/schema';
 import type { ActionType, ClaimPrecision, Receipt } from '../extension/src/core/schema';
 import type { WindowClaim } from '../extension/src/core/window';
 
@@ -235,7 +237,8 @@ function gradingCoverage(): Coverage {
     Array.from({ length: SPAN_DAYS + 1 }, (_, day) => {
       const fromMs = START_MS + day * MS_PER_DAY;
       const toMs = fromMs + MS_PER_DAY + MS_PER_HOUR;
-      const calendars = source === 'gcal.event' ? { allCalendars: true } : {};
+      const calendars =
+        source === 'gcal.event' ? { allCalendars: true, changesSince: isoAt(START_MS - MS_PER_DAY, 0) } : {};
       const at = { lastSyncAt: isoAt(toMs, 0), windowStart: isoAt(fromMs, 0), windowEnd: isoAt(toMs, 0) };
       return { observerId: source, source, ...at, accountHash: ACCOUNT, ...calendars };
     }),
@@ -281,7 +284,29 @@ export function buildGradingWorkload(seed = SEED): GradingWorkload {
   const random = seededRandom(seed + 1);
   const claims = core.claims.map((timing, i) => gradingClaim(random, i, timing, core.observations));
   const activity = gradingActivity(random, claims);
-  return { ...core, claims, grants: gradingGrants(), coverage: gradingCoverage(), activity };
+  const coverage = withMarkers(gradingCoverage(), core.observations);
+  return { ...core, claims, grants: gradingGrants(), coverage, activity };
+}
+
+/**
+ * The first-look marker (docs/grading.md §3 v1.10) of every other `gcal.event` row, up to the coverage limit: a point
+ * at the row's start whose `lastSyncAt` and `changesSince` are its first sighting, of the bound account.
+ */
+function withMarkers(coverage: Coverage, observations: readonly Observation[]): Coverage {
+  const room = SCHEMA_LIMITS.GRADING_INPUT - coverage.observers.length;
+  const rows = observations.filter((o) => o.source === 'gcal.event').filter((_, i) => i % 2 === 0);
+  const markers = rows.slice(0, room).map((o) => {
+    const seen = o.sightedAt ?? o.observedAt;
+    const at = { lastSyncAt: seen, windowStart: o.occurredAt, windowEnd: o.occurredAt, changesSince: seen };
+    return {
+      observerId: 'gcal.event',
+      source: 'gcal.event',
+      ...at,
+      accountHash: ACCOUNT,
+      allCalendars: true,
+    };
+  });
+  return Coverage.parse({ ...coverage, observers: [...coverage.observers, ...markers] });
 }
 
 /** `gradeBatch` over the whole workload (all PENDING, nothing fixed, shipped policy): receipts with their inputs. */

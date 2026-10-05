@@ -7,6 +7,8 @@
  * The values are exactly features.ts's §5.1 definitions: `timeProximity` (features-time.ts), the address features
  * from one `addressVerdict`, `counterpartyName` (`nameMatches`), `subjectOverlap` and `merchantMatch` as Jaccard
  * |A∩B| / |A∪B| (0/1 when both sets are empty), `amountExact` (`sameMoney`), and 0 for `modelScore`.
+ * `contentMatched` reads the §5.3 content gate (v1.11) from the same values: a pair none of whose content features
+ * scores above 0 matched on time alone, and scores 0.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
@@ -51,6 +53,11 @@ export interface ClaimPlan {
   /** `facts.subject` and the merchant's name tokens, as arrays (each set's members once). */
   readonly subjectTokens: readonly string[];
   readonly merchantTokens: readonly string[];
+  /**
+   * The positions in `applicable` of the content features (§5.3 content gate, v1.11): every applicable feature but
+   * `timeProximity`, the ones that say which action an observation is (its counterparty, subject, amount, merchant).
+   */
+  readonly content: readonly number[];
 }
 
 /** The policy fields valuing reads. A loaded `Policy` satisfies it. */
@@ -131,4 +138,14 @@ export function fillParts(
     valueInto(applicable[i], plan, observed, verdict, policy, nums, dens, i);
   }
   return verdict;
+}
+
+/**
+ * §5.3 content gate (v1.11): whether some content feature of the plan (`ClaimPlan.content`) scored above 0 in the
+ * values `fillParts` just wrote (`nums[i] / dens[i]`, `dens[i] > 0`). A pair for which none did matched the claim on
+ * time alone: time says when, never which action, so the pair is no evidence and its score is 0.
+ */
+export function contentMatched(plan: ClaimPlan, nums: ArrayLike<number>): boolean {
+  for (const i of plan.content) if ((nums[i] ?? 0) > 0) return true;
+  return false;
 }

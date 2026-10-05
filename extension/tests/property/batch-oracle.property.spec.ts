@@ -115,13 +115,16 @@ const worldArb = fc
       .tuple(claimArb(1), claimArb(2), claimArb(3))
       .chain((claims) => fc.subarray(claims, { minLength: 1 })),
     rows: fc.tuple(rowArb(1), rowArb(2), rowArb(3), rowArb(4), rowArb(5)).chain((rows) => fc.subarray(rows)),
+    /** §6.1 v1.9: since when the calendar's changes were followed (minutes; null: never, a first look). */
+    followed: fc.constantFrom(null, -4_000, 100),
   })
-  .map(({ policy, claims, rows }): World => {
+  .map(({ policy, claims, rows, followed }): World => {
     const window = { lastSyncAt: EVAL, windowStart: at(-4_000, 0), windowEnd: EVAL, accountHash: 'a' };
+    const changes = followed === null ? {} : { changesSince: at(followed, 0) };
     const coverage = buildCoverage(
       [
         { source: 'gmail.sent', ...window },
-        { source: 'gcal.event', ...window, allCalendars: true },
+        { source: 'gcal.event', ...window, allCalendars: true, ...changes },
       ],
       EVAL,
     );

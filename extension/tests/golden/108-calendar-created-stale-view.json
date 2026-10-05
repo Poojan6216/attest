@@ -1,0 +1,109 @@
+{
+  "name": "a calendar view last looked at before a created claim's grace sync never makes it NOT_FOUND; a fresh one can",
+  "covers": ["contract:calendar_stale_view_capped", "edge:calendar_created_from_stale_view"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.10: a gcal.event entry counts towards full coverage for a calendar.* claim only if its lastSyncAt ≥ end(p,t) + graceMin; any other overlapping entry is capped with coverage.changes_unfollowed. A view looked at before the claimed event could have been created cannot say it never was (Hard Rule 5). A capped entry still counts for grace and still lets the row it saw verify.",
+    "Coverage (acct-a, every calendar, bound by the grant): the October view [10-01 00:00, 11-01 00:00], followed since 09:00 and last synced 14:00, when the user switched to November; the November view [11-01 00:00, 12-01 00:00], first looked at 14:35 (changesSince 14:35) and last synced 14:40.",
+    "c1: muse says at 14:02 (minute) it created 'Q4 planning' (targetAt 10-15 10:00). Window [10-12 10:00, 10-18 10:00]; end(p,t) + graceMin = 14:03 + 30 = 14:33. The only entry overlapping the window is the October view, synced 14:00 < 14:33 → capped. Coverage partial; no candidate (match.none). Rules: no_coverage no (partial); verified, partial no; pending no: graceElapsed reads any eligible gcal.event entry, and the November view synced 14:40 ≥ 14:33; partial_coverage → UNVERIFIABLE. PENDING until end + finalizeUnverifiableHours = 10-07 14:03. Reasons coverage.partial, coverage.changes_unfollowed (both {source: gcal.event}), match.none.",
+    "Under v1.9 the October view was full coverage of c1 and c1 was NOT_FOUND, FINAL: a false NOT_FOUND from a view looked at two minutes before the claim (Hard Rule 5).",
+    "c2: muse says at 13:00 it created 'Budget review' (targetAt 10-20 15:00). Window [10-17 15:00, 10-23 15:00] ⊂ the October view; end + graceMin = 13:31 ≤ 14:00 → not capped: full. graceElapsed (14:00 ≥ 13:31), no candidate → not_found → NOT_FOUND, FINAL at evaluatedAt 15:00. The grant binds acct-a, so no coverage.account_unbound; reasons match.none.",
+    "c3: muse says at 13:58 it created 'Offsite' (targetAt 10-27 09:00). Window [10-24 09:00, 10-30 09:00]; end + graceMin = 14:29 > 14:00 → the October view is capped for c3 too. o1 'Offsite' (10-27 09:00), first seen 14:00 ≥ start(p,t) − beforeClaimMin = 13:56, is its candidate: timeProximity 1 (Δ 0), subjectOverlap 1 ({offsite}); counterparty features not applicable → S = (2500 + 1500) / 4000 = 1/1 → verified (it comes before partial_coverage). FINAL: an eligible gcal.event entry synced ≥ 14:29 (November, 14:40). Reasons match.best {observationId: o1}."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Q4 planning",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-15T10:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Budget review",
+        "claimedAt": "2026-10-06T13:00:00-04:00",
+        "targetAt": "2026-10-20T15:00:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Offsite",
+        "claimedAt": "2026-10-06T13:58:00-04:00",
+        "targetAt": "2026-10-27T09:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Offsite",
+        "occurredAt": "2026-10-27T09:00:00-04:00",
+        "observedAt": "2026-10-06T14:00:00-04:00",
+        "rowKey": "evt-offsite"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:00:00-04:00",
+        "windowStart": "2026-10-01T00:00:00-04:00",
+        "windowEnd": "2026-11-01T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T09:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T14:40:00-04:00",
+        "windowStart": "2026-11-01T00:00:00-04:00",
+        "windowEnd": "2026-12-01T00:00:00-05:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T14:35:00-04:00"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.changes_unfollowed", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.changes_unfollowed": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    },
+    {
+      "ref": "c3",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": { "match.best": { "observationId": "o1" } }
+    }
+  ]
+}
