@@ -121,7 +121,7 @@ function tallyPage(counts: Counts, f: LabelledFixture): void {
     const reasons = health.status === 'OK' ? [] : [...health.reasons];
     count(counts.health, health.status === fact.status && reasons.join() === fact.reasons.join());
   }
-  const windows = observer.visibleWindows(doc, ctxOf(f));
+  const windows = observer.visibleWindows(doc, ctxOf(f)) ?? [];
   const labelled = f.coverage.map((c) => `${c.windowStart}/${c.windowEnd}`);
   const read = windows.map((w) => `${w.windowStart}/${w.windowEnd}`);
   for (const span of labelled) count(counts.windows, read.includes(span));

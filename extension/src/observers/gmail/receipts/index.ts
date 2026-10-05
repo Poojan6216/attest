@@ -5,10 +5,11 @@
  *
  *   health() (./health.ts) → extract() (./extract.ts) → redact.project() (../../plan.ts) → bus (../../base.ts)
  *
- * Coverage: none, by design (`coverage: 'none'`). A `gmail.receipt` interval would assert that every message from
- * a registry sender in its span was parsed (docs/grading.md §3); an opened message is one message and says nothing
- * about the others, so this observer never posts a `coverage.ping` and never reads an account or a window. Its
- * receipts are positive evidence only: they can verify a purchase, never make Attest say NOT_FOUND (Hard Rule 5).
+ * Coverage (sprint_2 2.7; docs/grading.md §3; Hard Rule 5): a clean pass that parsed an opened receipt posts one
+ * `coverage.ping` per parsed message, whose window is that message's own instant (`windowStart = windowEnd` = its
+ * date, ./extract.ts `receiptWindows`). It asserts only that this message was read: an opened message says nothing
+ * about the other mail around it. A list view, or an opened conversation with nothing parsed, posts no coverage
+ * (OK, by design). The account is the switcher's address (./message.ts); only its hash leaves.
  *
  * Read-only and pure over the DOM (Hard Rule 3; `attest/no-act` lints src/observers/**). Landmarks, sender lists,
  * subject kinds and total labels are versioned in ./selectors.json; `version` is that file's version.
@@ -16,7 +17,7 @@
 import { OBSERVER_HOSTS } from '../../../config';
 import type { Observer } from '../../types';
 import { classify, parserFor } from './classify';
-import { extractReceipts } from './extract';
+import { extractReceipts, receiptWindows } from './extract';
 import { receiptHealth } from './health';
 import { readPage } from './message';
 import type { Verdict } from './parser';
@@ -38,12 +39,10 @@ export const receiptObserver: Observer = Object.freeze({
   version: RECEIPT_SELECTORS.version,
   hosts: OBSERVER_HOSTS.gmail,
   source: 'gmail.receipt',
-  coverage: 'none',
   health: receiptHealth,
   extract: extractReceipts,
-  // Never called: an observer with `coverage: 'none'` reports no window and no account (../../plan.ts).
-  account: () => null,
-  visibleWindow: () => null,
+  account: (doc: Document) => readPage(doc).account,
+  visibleWindows: receiptWindows,
 });
 
 /** One expanded message and what its parser said: for tests and the bench (never posted). */

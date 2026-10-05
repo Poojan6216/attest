@@ -69,6 +69,7 @@ describe('runPass: a clean pass', () => {
         type: 'coverage.ping',
         ping: {
           observerId: 'synthetic.sent',
+          source: 'gmail.sent',
           accountHash: accountHashOf('priya.raman@example.com'),
           lastSyncAt: NOW,
           windowStart: '2026-10-01T13:10:00-04:00',
@@ -239,7 +240,7 @@ describe('passMessages', () => {
     const plan = {
       status: 'OK' as const,
       observations: [],
-      coverage: { windowStart: 'not a time' as IsoTs, windowEnd: at },
+      coverage: [{ windowStart: 'not a time' as IsoTs, windowEnd: at }] as const,
     };
     expect(passMessages(sentObserver(), plan, at, true)).toEqual([
       {
@@ -276,6 +277,10 @@ describe('assertObserver', () => {
     ['an extract that is not a function', 'extract', 'rows'],
     ['no account()', 'account', undefined],
     ['a visibleWindow that is not a function', 'visibleWindow', { windowStart: NOW, windowEnd: NOW }],
+    ['no window reader at all', 'visibleWindow', undefined],
+    ['a second window reader beside visibleWindow', 'visibleWindows', () => []],
+    ['allCalendars on a Gmail observer', 'allCalendars', () => true],
+    ['a snapshot on a Gmail observer', 'snapshot', () => null],
   ])('refuses %s with ObserverError(invalid_observer)', (_label, member, value) => {
     const observer = sentObserver();
     Object.defineProperty(observer, member, { value });

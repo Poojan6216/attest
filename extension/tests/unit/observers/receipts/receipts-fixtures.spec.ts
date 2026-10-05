@@ -6,7 +6,8 @@
  *    hint, occurredAt, type, row key), with the generic parser's declared confidence;
  *  - the generic parser has at least 3 positives and 3 negatives, and every negative stays unparsed;
  *  - every page reports the labelled gmail.receipt health; a list view is neutral (OK, nothing read);
- *  - no pass ever asserts coverage, and nothing a pass reports holds a seeded secret (Hard Rules 2, 5).
+ *  - coverage is exactly the labelled one: the single instant of each parsed receipt, and nothing on a page with
+ *    no receipt parsed (sprint_2 2.7); nothing a pass reports holds a seeded secret (Hard Rules 2, 5).
  * The same holds with the page at a blank address (DOM landmarks only) as at its live `#inbox/<id>` address.
  */
 import { describe, expect, it } from 'vitest';
@@ -14,8 +15,10 @@ import { describe, expect, it } from 'vitest';
 import seededJson from '../../../fixtures/secrets/seeded.json';
 import type { LabelledFixture } from '../../fixtures/fixture-labels';
 import {
+  expectedReceiptCoverage,
   expectedReceipts,
   gmailFixtures,
+  planCoverage,
   receiptHealthLabel,
   type ReceiptRun,
   runReceipts,
@@ -39,8 +42,12 @@ const lists = fixtures.filter((f) => f.page.view.startsWith('gmail.list.'));
 describe('each parser passes its labelled fixture', () => {
   it.each(positives.map((f) => [f.file, f] as const))('%s', (_file, f) => {
     const run = runOf(f);
-    expect(run.plan.status).toBe('OK_NO_COVERAGE');
+    expect(run.plan.status).toBe('OK');
     expect(run.plan.observations).toEqual(expectedReceipts(f));
+    expect(planCoverage(run.plan)).toEqual(expectedReceiptCoverage(f));
+    expect(planCoverage(run.plan).map((c) => [c.windowStart, c.windowEnd])).toEqual(
+      run.plan.observations.map((o) => [o.occurredAt, o.occurredAt]),
+    );
     const [fact] = receiptFacts(f);
     const claimed = run.verdicts.filter((v) => v.verdict.kind === 'receipt');
     expect(claimed.map((v) => [v.key, v.parser])).toEqual([[fact?.rowKey, fact?.parser]]);
@@ -99,8 +106,12 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
     expect(run.verdicts).toEqual([]);
   });
 
-  it('no fixture pass asserts coverage: every plan is OK_NO_COVERAGE, never OK with a window', () => {
-    for (const f of fixtures) expect(runOf(f).plan.status, f.file).toBe('OK_NO_COVERAGE');
+  it('coverage only where a receipt was parsed: exactly the labelled windows, OK_NO_COVERAGE everywhere else', () => {
+    for (const f of fixtures) {
+      const plan = runOf(f).plan;
+      expect(planCoverage(plan), f.file).toEqual(expectedReceiptCoverage(f));
+      if (receiptFacts(f).length === 0) expect(plan.status, f.file).toBe('OK_NO_COVERAGE');
+    }
   });
 
   it('reads the same at a blank address as at the live address (DOM landmarks alone suffice)', () => {

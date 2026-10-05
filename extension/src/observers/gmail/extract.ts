@@ -14,8 +14,15 @@
  * read still count as evidence: the 2.0 contract (src/observers/plan.ts; Sprint 1 close, SEC-3; Hard Rule 5).
  *
  * The visible window (docs/grading.md §3) runs from the oldest row's time to the pass instant at the head of the
- * list (`#sent`, `Newer` off), else to the newest row's time. It is null, so the pass gives no coverage, when the
- * page is not the Sent list or any row's time is unknown: an unread row could be the oldest or the newest.
+ * list (`#sent`, `Newer` off), else to the newest row's time. It is null when the page is not the Sent list or any
+ * row's time is unknown: an unread row could be the oldest or the newest.
+ *
+ * Coverage (`sentWindows`; sprint_2 2.7; Hard Rule 5): only the head of the list asserts its window. Any other
+ * Sent page posts its rows and no coverage, by design (OK, never DEGRADED). In conversation view Gmail lists a
+ * thread once, under its latest message: a send from a later page's span whose thread later got a reply is listed
+ * on an earlier page, under the reply's date, so that span is not every send in it. The head lists every thread
+ * whose latest message is at or after its oldest row, and a row holding more than one message is refused
+ * (./sent-time.ts, so the pass asserts nothing): a send in the head's span is a row on the page.
  */
 import { instantMs } from '../../core/normalize';
 import { clampSubjectHint } from '../../core/redact';
@@ -52,7 +59,7 @@ export function extractSent(doc: Document, ctx: ExtractContext): RawRow[] {
   return page.ok ? page.rows.flatMap((row) => rawRows(row, ctx)) : [];
 }
 
-/** `Observer.visibleWindow`: the span the list shows (header), or null when it cannot be known. */
+/** The span the list shows (header), or null when it cannot be known. */
 export function sentWindow(doc: Document, ctx: ExtractContext): VisibleWindow | null {
   const page = readSentPage(doc);
   if (!page.ok) return null;
@@ -67,4 +74,16 @@ export function sentWindow(doc: Document, ctx: ExtractContext): VisibleWindow | 
   const newest = byInstant[byInstant.length - 1];
   if (oldest === undefined || newest === undefined) return null;
   return { windowStart: oldest, windowEnd: page.head ? ctx.observedAt : newest };
+}
+
+/**
+ * `Observer.visibleWindows`: the head of the Sent list asserts its span; any other Sent page asserts none, by
+ * design (header). Null when the page is not the Sent list, or the head's span cannot be known (`window.unknown`).
+ */
+export function sentWindows(doc: Document, ctx: ExtractContext): VisibleWindow[] | null {
+  const page = readSentPage(doc);
+  if (!page.ok) return null;
+  if (!page.head) return [];
+  const span = sentWindow(doc, ctx);
+  return span === null ? null : [span];
 }

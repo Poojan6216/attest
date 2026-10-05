@@ -98,12 +98,19 @@ describe('what the skeleton posts', () => {
       type: 'coverage.ping',
       ping: {
         observerId: 'gmail.sent',
+        source: 'gmail.sent',
         lastSyncAt: '2026-10-03T10:15:00-04:00',
         windowStart: '2026-09-29T17:55:00-04:00',
         windowEnd: '2026-10-03T10:15:00-04:00',
         accountHash: accountHashOf('avery.founder@example.com'),
       },
     });
+  });
+
+  it('Sent page 2: health OK and its observations, never a ping (only the head asserts coverage)', async () => {
+    const messages = await postedFor('synthetic-sent-page-2.html');
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations']);
+    expect(messages[0]).toMatchObject({ health: { adapterId: 'gmail.sent', status: 'OK', reasons: [] } });
   });
 
   it('Drafts: only a DEGRADED health report, naming the observer and its version', async () => {

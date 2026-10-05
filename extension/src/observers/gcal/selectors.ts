@@ -38,6 +38,8 @@ const CalendarSelectorsFile = z.strictObject({
     dayButton: Selector,
     calendar: Selector,
     account: Selector,
+    busy: Selector,
+    progress: Selector,
   }),
   attributes: z.strictObject({
     eventId: Attribute,

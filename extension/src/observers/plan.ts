@@ -1,44 +1,40 @@
 /**
- * One observer pass, decided (sprint_2 2.0; docs/grading.md §3 "Observer obligations"; Hard Rules 2, 3, 5, 6).
+ * One observer pass, decided (sprint_2 2.0, 2.7; docs/grading.md §3 "Observer obligations"; Hard Rules 2, 3, 5, 6).
  *
- * `planPass` runs `health()` → `extract()` → `redact.project()` → `account()` / `visibleWindow()` over one
- * synchronous read of the page and says what the pass may report. It posts nothing (./base.ts does) and never
- * throws: every failure becomes a reason code on a DEGRADED plan.
+ * `planPass` runs `health()` → `extract()` → `redact.project()` → the windows, `allCalendars()`, the snapshot and
+ * `account()` (./coverage.ts) over one synchronous read of the page and says what the pass may report. It posts
+ * nothing (./base.ts does) and never throws: every failure becomes a reason code on a DEGRADED plan.
  *
  *  - health DEGRADED (or `health()` threw or answered badly): nothing is extracted, no coverage.
  *  - `extract()` threw or returned something that is not a list of rows of this source: no observations, no coverage.
  *    An extractor that answers badly is broken, so none of its rows is trusted.
  *  - `project()` refused a row (`RedactError`): DEGRADED, no coverage for the window (a refused row is not evidence
  *    of absence, Hard Rule 5; Sprint 1 close, SEC-3). The rows it accepted are still reported: they are evidence.
- *  - the account or the window could not be read: DEGRADED, no coverage.
+ *  - the account, a window, `allCalendars` or the snapshot could not be read: DEGRADED, no coverage, no snapshot.
  *  - a Gmail window (`gmail.sent`, `gmail.receipt`) that ends after the pass instant: DEGRADED (`window.future`), no
  *    coverage. A list of what already happened cannot have been seen past the moment it was read (§3: `windowEnd`
  *    is `lastSyncAt` or the newest visible row); a window that claims more would let a later ping's sync time
  *    finalise a claim nobody looked at as NOT_FOUND (§6.1, Hard Rule 5). Only a calendar sees ahead.
- *  - otherwise OK, with the coverage facts. A coverage entry exists only for a clean pass whose health was OK.
- *  - an observer that asserts no coverage by design (`Observer.coverage: 'none'`): the same steps up to
- *    `project()`, then `OK_NO_COVERAGE` (health OK, rows, never coverage) or DEGRADED for a refused row. Its
- *    account and window are never read: nothing it reports is a window (Hard Rule 5).
+ *  - otherwise OK, with one set of coverage facts per window. A coverage entry exists only for a clean pass whose
+ *    health was OK.
+ *  - a clean pass whose observer reports no window, by design (`visibleWindows()` answered []: a Sent page past the
+ *    head of the list, a Gmail view with no receipt open, a Calendar grid still drawing): `OK_NO_COVERAGE`, health
+ *    OK and the rows, never DEGRADED (Hard Rule 6 must not cry wolf over a page that is fine).
+ * A clean pass of a Calendar observer whose account is known also carries the snapshot it read (sprint_2 2.7).
  *
  * Every observation carries `observedAt = ctx.observedAt`, the instant the pass read the page (§3, §10): never the
  * instant the background writes it. Observations with one `contentHash` are reported once (§10: the same row read
  * twice is one observation).
  */
-import { instantMs } from '../core/normalize';
 import type { Policy } from '../core/policy';
 import { z } from 'zod';
 
 import { project, RedactError } from '../core/redact';
-import {
-  ActionType,
-  HealthReport,
-  IsoTs,
-  type Observation,
-  type ObservationSource,
-  type Sha256,
-} from '../core/schema';
-import { accountHashOf } from './account';
+import { ActionType, HealthReport, type Observation } from '../core/schema';
+import { type CoverageFacts, fail, ok, type PassCoverage, readCoverage, type Step } from './coverage';
 import type { ExtractContext, HealthCheck, Observer, RawRow } from './types';
+
+export type { CoverageFacts } from './coverage';
 
 /**
  * Every reason a pass itself can give (an observer's `health()` adds its own, such as `not_sent_folder`). Codes,
@@ -60,37 +56,32 @@ export const PASS_REASONS = Object.freeze([
   'window.unknown',
   'window.invalid',
   'window.future',
+  'calendars.threw',
+  'calendars.unknown',
+  'calendars.invalid',
+  'snapshot.threw',
   'message.invalid',
 ] as const);
-
-/**
- * The sources whose visible window may end after the pass instant: a calendar shows days to come. Every other
- * source is a list of what already happened, so its window ends at the pass instant at the latest (§3).
- */
-const SEES_AHEAD: ReadonlySet<ObservationSource> = new Set<ObservationSource>(['gcal.event']);
 
 export type PassReason = (typeof PASS_REASONS)[number];
 
 /** The parts of the loaded policy a pass reads: the allowlist and which source serves which type. */
 export type PassPolicy = Pick<Policy, 'allowlistedFields' | 'sourcesByType'>;
 
-/** What the coverage ping asserts about a clean pass (the skeleton adds the observer, the instant and activity). */
-export interface CoverageFacts {
-  readonly windowStart: IsoTs;
-  readonly windowEnd: IsoTs;
-  readonly accountHash?: Sha256;
-}
-
 export type PassPlan =
   | {
       readonly status: 'OK';
       readonly observations: readonly Observation[];
-      readonly coverage: CoverageFacts;
+      /** One entry per window the pass saw (./base.ts posts one coverage.ping each). */
+      readonly coverage: readonly [CoverageFacts, ...CoverageFacts[]];
+      /** The Calendar snapshot to post after the coverage, when the account is known. */
+      readonly snapshot?: unknown;
     }
   | {
-      /** A clean pass of an observer that asserts no coverage by design: health OK, the rows, no coverage. */
+      /** A clean pass that asserts no coverage by design: health OK, the rows, no ping. */
       readonly status: 'OK_NO_COVERAGE';
       readonly observations: readonly Observation[];
+      readonly snapshot?: unknown;
     }
   | {
       readonly status: 'DEGRADED';
@@ -104,11 +95,6 @@ export interface PassInput {
   readonly ctx: ExtractContext;
   readonly policy: PassPolicy;
 }
-
-type Step<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: PassReason };
-
-const ok = <T>(value: T): Step<T> => ({ ok: true, value });
-const fail = <T>(reason: PassReason): Step<T> => ({ ok: false, reason });
 
 /**
  * A `HealthCheck` as the contract allows it: OK, or DEGRADED with 1 to SCHEMA_LIMITS.REASONS reason codes. A reason
@@ -189,56 +175,12 @@ function projectRows(
   return { observations, reasons: [...reasons] };
 }
 
-/** The account's hash, undefined when the page shows none. */
-function readAccount(input: PassInput): Step<Sha256 | undefined> {
-  let raw: unknown;
-  try {
-    raw = input.observer.account(input.doc);
-  } catch {
-    return fail('account.threw');
-  }
-  if (raw === null) return ok(undefined);
-  const hash = typeof raw === 'string' ? accountHashOf(raw) : null;
-  return hash === null ? fail('account.invalid') : ok(hash);
-}
-
-/**
- * The visible window: two ISO instants with an offset, the start not after the end, and (except for a source that
- * sees ahead) the end not after the pass instant.
- */
-function readWindow(input: PassInput): Step<{ windowStart: IsoTs; windowEnd: IsoTs }> {
-  let span: unknown;
-  try {
-    span = input.observer.visibleWindow(input.doc, input.ctx);
-  } catch {
-    return fail('window.threw');
-  }
-  if (span === null) return fail('window.unknown');
-  if (typeof span !== 'object') return fail('window.invalid');
-  const { windowStart, windowEnd } = span as Partial<Record<'windowStart' | 'windowEnd', unknown>>;
-  const start = IsoTs.safeParse(windowStart);
-  const end = IsoTs.safeParse(windowEnd);
-  if (!start.success || !end.success) return fail('window.invalid');
-  if (instantMs(end.data) < instantMs(start.data)) return fail('window.invalid');
-  const ahead = instantMs(end.data) > instantMs(input.ctx.observedAt);
-  if (ahead && !SEES_AHEAD.has(input.observer.source)) return fail('window.future');
-  return ok({ windowStart: start.data, windowEnd: end.data });
-}
-
-function coverageFacts(input: PassInput): Step<CoverageFacts> {
-  const account = readAccount(input);
-  if (!account.ok) return account;
-  const span = readWindow(input);
-  if (!span.ok) return span;
-  return ok(account.value === undefined ? span.value : { ...span.value, accountHash: account.value });
-}
-
-/** The plan of an observer that asserts no coverage: OK_NO_COVERAGE, or DEGRADED when `project()` refused a row. */
-function uncoveredPlan(observations: readonly Observation[], reasons: readonly PassReason[]): PassPlan {
-  const [first, ...rest] = reasons;
-  return first === undefined
-    ? { status: 'OK_NO_COVERAGE', observations }
-    : { status: 'DEGRADED', reasons: [first, ...rest], observations };
+/** The clean plan: OK with its windows, or OK_NO_COVERAGE when it asserts none; the snapshot either way. */
+function cleanPlan(observations: readonly Observation[], facts: PassCoverage): PassPlan {
+  const snapshot = facts.snapshot === undefined ? {} : { snapshot: facts.snapshot };
+  const [first, ...rest] = facts.coverage;
+  if (first === undefined) return { status: 'OK_NO_COVERAGE', observations, ...snapshot };
+  return { status: 'OK', observations, coverage: [first, ...rest], ...snapshot };
 }
 
 /** Decides one pass over `input.doc`. Never throws. */
@@ -248,11 +190,11 @@ export function planPass(input: PassInput): PassPlan {
   const rows = extractRows(input);
   if (!rows.ok) return { status: 'DEGRADED', reasons: [rows.reason], observations: [] };
   const { observations, reasons } = projectRows(input, rows.value);
-  if (input.observer.coverage === 'none') return uncoveredPlan(observations, reasons);
-  const coverage = coverageFacts(input);
-  const [first, ...rest] = coverage.ok ? reasons : [...reasons, coverage.reason];
+  // Read even after a refused row, so the report names every reason; a refused row still voids it (Hard Rule 5).
+  const facts: Step<PassCoverage> = readCoverage(input);
+  const [first, ...rest] = facts.ok ? reasons : [...reasons, facts.reason];
   if (first !== undefined) return { status: 'DEGRADED', reasons: [first, ...rest], observations };
-  // Unreachable when coverage failed (its reason is in the list above); spelled out for the type checker.
-  if (!coverage.ok) return { status: 'DEGRADED', reasons: [coverage.reason], observations };
-  return { status: 'OK', observations, coverage: coverage.value };
+  // Unreachable when the coverage failed (its reason is in the list above); spelled out for the type checker.
+  if (!facts.ok) return { status: 'DEGRADED', reasons: [facts.reason], observations };
+  return cleanPlan(observations, facts.value);
 }

@@ -257,7 +257,7 @@ describe('a registry sender is matched by domain, and only its receipts are rece
     const plan = onPage(page, (doc) =>
       planPass({ observer: receiptObserver, doc, ctx, policy: DEFAULT_POLICY }),
     );
-    expect(plan.status).toBe('OK_NO_COVERAGE');
+    expect(plan.status).toBe('OK');
     expect(plan.observations.map((o) => o.merchant)).toEqual(['Larkspur Tea Co.']);
   });
 
@@ -302,7 +302,10 @@ describe('which line and which date cell decide', () => {
     const plan = withPage(extra, THREAD_URL, (doc) =>
       planPass({ observer: receiptObserver, doc, ctx, policy: DEFAULT_POLICY }),
     );
-    expect(plan.status).toBe('OK_NO_COVERAGE');
+    expect(plan.status).toBe('OK');
     expect(plan.observations.map((o) => o.occurredAt)).toEqual(['2026-10-02T16:17:00-04:00']);
+    expect(plan.status === 'OK' && plan.coverage.map((c) => [c.windowStart, c.windowEnd])).toEqual([
+      ['2026-10-02T16:17:00-04:00', '2026-10-02T16:17:00-04:00'],
+    ]);
   });
 });

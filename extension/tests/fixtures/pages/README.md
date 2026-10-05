@@ -5,12 +5,12 @@
 
 ## Status
 
-Tasks 2.1 and 2.4 are `BLOCKED(MANUAL)` until the founder captures real pages with `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal` (see `docs/adapters.md`; the loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked). Until then every file here is a hand-written structural stand-in named `synthetic-*.html`, modelled on the Gmail and Google Calendar web DOM as best known in October 2026. When real captures arrive they go in their own date folder beside these, labelled the same way. The synthetic files stay as regression cases for the edge cases a real capture rarely contains.
+Tasks 2.1 and 2.4 are `BLOCKED(MANUAL)` until the founder captures real pages with `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal` (see `docs/adapters.md` §6, the capture, label, test and version loop; the loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked). Until then every file here is a hand-written structural stand-in named `synthetic-*.html`, modelled on the Gmail and Google Calendar web DOM as best known in October 2026. When real captures arrive they go in their own date folder beside these, labelled the same way. The synthetic files stay as regression cases for the edge cases a real capture rarely contains.
 
 Everything here is a test fixture, never live data:
 
 - Every person and personal address is fake (`@example.com`, `@example.org`, `@example.net`).
-- Vendor sender addresses are kept real (`@stripe.com`, `@amazon.com`, `@facebookmail.com`, `@opentable.com`, `@instacart.com`, `@uber.com`, `@t.shopifyemail.com`), because the receipt parsers match senders. So the founder's `@` check in `docs/adapters.md` does not apply to `synthetic-*` files. The capture sanitiser keeps sender domains in the receipt-parser registry (`src/observers/gmail/receipts/selectors.json`) with a fake local part, and business display names beside them (never at `facebookmail.com`), so real receipt captures stay parseable.
+- Vendor sender addresses are kept real (`@stripe.com`, `@amazon.com`, `@facebookmail.com`, `@opentable.com`, `@instacart.com`, `@uber.com`, `@t.shopifyemail.com`), because the receipt parsers match senders. The founder's `@` check (`docs/adapters.md` §6.3) is for captures, not for `synthetic-*` files. The capture sanitiser keeps sender domains in the receipt-parser registry (`src/observers/gmail/receipts/selectors.json`) with a fake local part, and a business's display name beside them (a `+tag` machine sender, or a name holding a registry brand; never at `facebookmail.com`), so real receipt captures stay parseable, and the `@` check accepts those domains.
 - Class names and `:id`s are random **per file**. An extractor that passes one fixture and fails another of the same view is anchored on a class. Anchor on `role`, `aria-*`, `data-*`, text landmarks and structure only.
 - Each fixture holds exactly three seeded secrets from `tests/fixtures/secrets/seeded.json`, in visible text (drawn on screen, not only in screen-reader text), each wrapped in an element with `data-attest-seeded="<id>"`. They sit where real secrets sit (snippets, message bodies, addresses, event locations, an open event dialog), never in a field an extractor should read. A copy may also sit in hidden text the page carries anyway: a Gmail row's visually hidden summary, a Calendar chip's accessible label (where the location is, next to the title and times an extractor does read). `url_with_token` is never used, because `tests/unit/tools/capture-url.spec.ts` (SECURITY-2) forbids a token query in any committed fixture.
 
@@ -21,7 +21,7 @@ Everything here is a test fixture, never live data:
 | Fixture | View | What it tests |
 |---|---|---|
 | `synthetic-sent-page-1.html` | Sent list, head (Newer disabled) | 10 rows, 11 observations: two recipients on one row, mixed-case address, `(no subject)`, a subject over 80 code points, an emoji subject, U+202F before AM/PM |
-| `synthetic-sent-page-2.html` | Sent list, rows 11 to 20 | Rows 9 and 10 of page 1 again (same ids and fields): dedup by contentHash; window ends at the newest row |
+| `synthetic-sent-page-2.html` | Sent list, rows 11 to 20 | Rows 9 and 10 of page 1 again (same ids and fields): dedup by contentHash; not the head of the list, so rows and health OK but no coverage |
 | `synthetic-sent-thread.html` | Opened sent thread | No list on the page: gmail.sent DEGRADED `not_sent_list`, no coverage |
 | `synthetic-drafts.html` | Drafts | Negative: rows look sent but are drafts. DEGRADED `not_sent_folder` |
 | `synthetic-inbox.html` | Inbox | Negative: an "Alex, me (2)" thread and a receipt row with an amount in its snippet |
@@ -91,7 +91,7 @@ One file per folder, keyed by fixture file, in the capture tool's format (`tests
 { "<name>.html": { "capturedAt": "2026-10-03", "selectorsVersion": null, "seededSecrets": ["…", "…", "…"], "expected": [ … ], "notes": "…" } }
 ```
 
-`expected` is a list of facts, each with a `kind`. The schema is `tests/unit/fixtures/fixture-labels.ts`.
+`expected` is a list of facts, each with a `kind`. The schema is `tests/unit/fixtures/fixture-labels.ts`. `selectorsVersion` names the selectors the facts were checked against, as `<observer>@<version>` (`gmail.receipt@1.0.1`), or `null` where none is recorded yet; when an observer's `selectors.json` version changes, re-check its fixtures and update it (`docs/adapters.md` §5).
 
 | `kind` | Fields | Meaning |
 |---|---|---|
@@ -110,8 +110,9 @@ Field rules:
 - `counterparty`: the address exactly as read (case kept, `normalize.email()` compares later). One observation per recipient (Gmail); one per event (Calendar), naming the event's first guest in ASCII-lowercase order (the account left out), or none; an update that added guests names the first guest it added.
 - `rowKey`: Gmail list rows use `data-legacy-last-message-id` (every fixture thread holds one message, so it equals the thread id); opened messages use `data-legacy-message-id`; Calendar uses `data-eventid` as written, and its observer's row key is SHA-256 of it (core `hashRowKey`), so a Calendar observation fact projects with `rowKey = hashRowKey(rowKey)` (`tests/unit/observers/gcal/gcal-fixtures.ts` `expectedObservation`).
 - Receipts: `merchant` is the business the user dealt with. A platform parser uses its canonical name (`Amazon`, `Uber`, `Instacart`, `Facebook Marketplace`). Stripe, Shopify and the generic parser use the sender's display name (for Shopify, the store), OpenTable the restaurant named in the subject. `amountCents` is the charged total in integer minor units, with `currency` in ISO 4217, shown in the message on a line that names it (`Total`, `Order total`, `Amount paid`, `Amount charged`, `Total charged`); a `listing.posted` carries the listing price. `parser` names the parser that must claim the message, and `confidence` is 0.6 for `generic`.
-- Coverage, Gmail Sent: `windowStart` is the oldest visible row and `windowEnd` the newest visible row, or `lastSyncAt` when the page is the head of the list (`Newer` disabled). A Drafts, Inbox or opened-message page covers nothing. An opened receipt covers nothing either: one message says nothing about the other messages in its span.
-- Coverage, Calendar: from 00:00 of the first visible day to 00:00 after the last, with a day that hides events behind "N more" left out (two windows). `allCalendars` is true only when every calendar in the list is checked.
+- Coverage, Gmail Sent: only the head of the list (`#sent`, `Newer` disabled) has a coverage fact, from its oldest visible row (`windowStart`) to `lastSyncAt`. A later page has none, though its rows are facts and its health is OK: in conversation view a send from its span can be listed on page 1 under a later reply's date (sprint_2 2.7). A Drafts, Inbox or opened-message page covers nothing for Sent.
+- Coverage, receipts: an opened message a parser claims has one `gmail.receipt` coverage fact whose `windowStart` and `windowEnd` are both its `occurredAt`. It says only that this message was read, nothing about the other mail around it (sprint_2 2.7). A page with nothing parsed has none.
+- Coverage, Calendar: from 00:00 of the first visible day to 00:00 after the last, with a day that hides events behind "N more" left out (two windows, each its own coverage ping). `allCalendars` is true only when every calendar in the list is checked. A page whose every day hides events behind its own "N more", and a grid still drawing (`aria-busy="true"` or a progress bar in the main region), have no coverage fact, and their health is OK (sprint_2 2.7).
 - Diffs compare events by `data-eventid`, only within calendars visible in both snapshots. An event that appears or disappears because its calendar was switched on or off is neither created nor deleted.
 
 Fixtures are independent: only fixtures joined by a `dedup` or `diff` fact share a mailbox or calendar.
@@ -134,4 +135,5 @@ The readers parse the page model above. When a real capture shows a different sh
 
 - The capture sanitiser keeps sender domains in the receipt-parser registry (fake local part) and business display names, so real receipt captures stay parseable (2.3).
 - `gmail.receipt` on a list view reports OK, reads nothing and posts no coverage (2.3), so no Gmail view keeps a yellow banner up for an observer with nothing to read.
+- A Sent page past the head of the list reports its rows, health OK and no coverage; an opened receipt reports one point of coverage at its own date (2.7). Every reason code a health fact can name is listed in `docs/adapters.md` §4.
 - The generic receipt rule is tightened: a trigger, no refusal marker (promotions, cart reminders, orders still to confirm), an unambiguous total line, and no impersonation of a registry merchant (`src/observers/gmail/receipts/`). Every labelled negative stays unparsed.

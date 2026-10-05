@@ -75,16 +75,18 @@ describe('earlier views kept in the DOM in other ways', () => {
       },
     });
     expect(plan).toEqual(await planVariant());
-    expect(plan.status === 'OK' && plan.coverage.windowEnd).toBe('2026-10-03T10:15:00-04:00');
+    expect(plan.status === 'OK' && plan.coverage.map((c) => c.windowEnd)).toEqual([
+      '2026-10-03T10:15:00-04:00',
+    ]);
   });
 
-  it('a Newer control marked aria-disabled="false" is enabled: not the head of the list', async () => {
+  it('a Newer control marked aria-disabled="false" is enabled: not the head, so rows and no coverage', async () => {
     const plan = await planVariant({
       mutate: (doc) => {
         one(doc, '[aria-label="Newer"]').setAttribute('aria-disabled', 'false');
       },
     });
-    expect(plan.status === 'OK' && plan.coverage.windowEnd).toBe('2026-10-03T09:41:00-04:00');
+    expect(plan).toEqual({ status: 'OK_NO_COVERAGE', observations: (await planVariant()).observations });
   });
 });
 
@@ -164,7 +166,7 @@ describe('the account switcher', () => {
   const ACCOUNT = accountHashOf('avery.founder@example.com');
   const hashOf = async (mutate: (doc: Document) => void) => {
     const plan = await planVariant({ mutate });
-    return plan.status === 'OK' ? plan.coverage.accountHash : plan.status;
+    return plan.status === 'OK' ? plan.coverage[0].accountHash : plan.status;
   };
 
   it('the address is the parenthesised one at the end, not one inside the display name', async () => {

@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 import { runGmailBench } from '../../../../../bench/observers/gmail';
 import { gmailSentObserver } from '../../../../src/observers/gmail/sent-observer';
-import type { Observer, RawRow } from '../../../../src/observers/types';
+import { sentWindow } from '../../../../src/observers/gmail/extract';
+import type { ExtractContext, Observer, RawRow } from '../../../../src/observers/types';
 import { loadSeeds } from '../../../e2e/support/leaks';
 
 const wrap = (change: Partial<Observer>): Observer => ({ ...gmailSentObserver, ...change });
@@ -34,6 +35,15 @@ describe('every bench gate can fail', () => {
 
   it('coverage: a window for the wrong account fails the coverage gate', async () => {
     const metrics = await runGmailBench(wrap({ account: () => 'someone.else@example.org' }));
+    expect(metrics.gmailSentCoverageGatePassed).toBe(false);
+  });
+
+  it('coverage: asserting a window past the head of the list (page 2) fails the coverage gate', async () => {
+    const everyPage = (doc: Document, ctx: ExtractContext) => {
+      const span = sentWindow(doc, ctx);
+      return span === null ? null : [span];
+    };
+    const metrics = await runGmailBench(wrap({ visibleWindows: everyPage }));
     expect(metrics.gmailSentCoverageGatePassed).toBe(false);
   });
 

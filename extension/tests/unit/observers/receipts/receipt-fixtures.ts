@@ -13,9 +13,10 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
+import { accountHashOf } from '../../../../src/observers/account';
 import { project } from '../../../../src/core/redact';
 import { IsoTs, type Observation } from '../../../../src/core/schema';
-import { type PassPlan, planPass } from '../../../../src/observers/plan';
+import { type CoverageFacts, type PassPlan, planPass } from '../../../../src/observers/plan';
 import type { ExtractContext, HealthCheck } from '../../../../src/observers/types';
 import {
   type MessageVerdict,
@@ -82,6 +83,27 @@ export function expectedReceipts(f: LabelledFixture): Observation[] {
       const { source, raw, ctx } = projectArgs(o, f.page.readAt);
       return project(source, raw, ctx, DEFAULT_POLICY);
     });
+}
+
+/** The labelled gmail.receipt coverage, as the pass plan holds it (one instant per parsed receipt, sprint_2 2.7). */
+export function expectedReceiptCoverage(f: LabelledFixture): CoverageFacts[] {
+  return f.coverage
+    .filter((c) => c.source === 'gmail.receipt')
+    .map((c) => {
+      const accountHash = accountHashOf(c.account);
+      if (accountHash === null || c.windowEnd === 'lastSyncAt')
+        throw new Error(`${f.file}: bad coverage label`);
+      return {
+        windowStart: IsoTs.parse(c.windowStart),
+        windowEnd: IsoTs.parse(c.windowEnd),
+        accountHash,
+      };
+    });
+}
+
+/** The coverage a plan asserts: its windows when OK, none otherwise. */
+export function planCoverage(plan: PassPlan): readonly CoverageFacts[] {
+  return plan.status === 'OK' ? plan.coverage : [];
 }
 
 /** What the receipt observer does with one fixture: its health, its pass plan and each message's verdict. */

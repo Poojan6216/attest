@@ -151,17 +151,41 @@ describe('a recognised receipt whose total cannot be read is DEGRADED, never gue
 describe('a conversation with several messages', () => {
   const receiptBody = rows([['Total', '$23.84']]);
 
-  it('reads every expanded message by its own id, and never a collapsed one', () => {
+  it('reads every expanded message by its own id, and never a collapsed one; each covers its own instant', () => {
+    const later = 'Fri, Oct 2, 2026, 5:02 PM';
     const messages: MessageSpec[] = [
       { from: 'noreply@uber.com', body: receiptBody, key: '1a0000000000000a' },
-      { from: 'noreply@uber.com', body: receiptBody, key: '1a0000000000000b', expanded: 'false' },
-      { from: 'noreply@uber.com', body: receiptBody, key: '1a0000000000000c', expanded: null },
+      {
+        from: 'noreply@uber.com',
+        body: receiptBody,
+        key: '1a0000000000000b',
+        expanded: 'false',
+        title: later,
+      },
+      { from: 'noreply@uber.com', body: receiptBody, key: '1a0000000000000c', expanded: null, title: later },
     ];
     const result = onPage({ subject: 'Your Thursday evening trip with Uber', messages }, (doc) =>
       planPass({ observer: receiptObserver, doc, ctx, policy: DEFAULT_POLICY }),
     );
-    expect(result.status).toBe('OK_NO_COVERAGE');
+    expect(result.status).toBe('OK');
     expect(result.observations).toHaveLength(2);
     expect(new Set(result.observations.map((o) => o.rowKeyHash)).size).toBe(2);
+    const spans = result.status === 'OK' ? result.coverage.map((c) => [c.windowStart, c.windowEnd]) : [];
+    expect(spans).toEqual([
+      ['2026-10-02T16:17:00-04:00', '2026-10-02T16:17:00-04:00'],
+      ['2026-10-02T17:02:00-04:00', '2026-10-02T17:02:00-04:00'],
+    ]);
+  });
+
+  it('two receipts sent in the same minute cover that one instant once', () => {
+    const messages: MessageSpec[] = [
+      { from: 'noreply@uber.com', body: receiptBody, key: '1a0000000000000a' },
+      { from: 'noreply@uber.com', body: rows([['Total', '$9.10']]), key: '1a0000000000000c' },
+    ];
+    const result = onPage({ subject: 'Your Thursday evening trip with Uber', messages }, (doc) =>
+      planPass({ observer: receiptObserver, doc, ctx, policy: DEFAULT_POLICY }),
+    );
+    expect(result.observations).toHaveLength(2);
+    expect(result.status === 'OK' && result.coverage).toHaveLength(1);
   });
 });

@@ -69,21 +69,18 @@ describe('gcal.event coverage and account on the labelled fixtures', () => {
       const doc = docOf(f);
       const windows = observer.visibleWindows(doc, ctxOf(f));
       expect(windows).toEqual(f.coverage.map(({ windowStart, windowEnd }) => ({ windowStart, windowEnd })));
-      const widest = observer.visibleWindow(doc, ctxOf(f));
-      expect(windows).toContainEqual(widest);
       for (const fact of f.coverage) expect(observer.allCalendars(doc)).toBe(fact.allCalendars);
     },
   );
 
-  it('the month view reports its longest whole run as its one window (the "2 more" day splits it)', () => {
+  it('the month view reports both runs the "2 more" day splits it into, in order', () => {
     const month = GCAL_FIXTURES.find((f) => f.page.view === 'gcal.month');
     expect(month).toBeDefined();
     if (!month) return;
-    const widest = observerFor(month).visibleWindow(docOf(month), ctxOf(month));
-    expect(widest).toEqual({
-      windowStart: '2026-11-13T00:00:00-05:00',
-      windowEnd: '2026-12-06T00:00:00-05:00',
-    });
+    expect(observerFor(month).visibleWindows(docOf(month), ctxOf(month))).toEqual([
+      { windowStart: '2026-11-01T00:00:00-04:00', windowEnd: '2026-11-12T00:00:00-05:00' },
+      { windowStart: '2026-11-13T00:00:00-05:00', windowEnd: '2026-12-06T00:00:00-05:00' },
+    ]);
   });
 
   it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(

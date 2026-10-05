@@ -52,11 +52,14 @@ describe('a clean pass', () => {
       expect(contentHashOf(observation)).toBe(observation.contentHash);
     }
     expect(result.observations[0]?.subjectHint).toBe('Q3 deck and plan');
-    expect(result.coverage).toEqual({
-      windowStart: '2026-10-01T13:10:00-04:00',
-      windowEnd: NOW,
-      accountHash: accountHashOf('priya.raman@example.com'),
-    });
+    expect(result.coverage).toEqual([
+      {
+        windowStart: '2026-10-01T13:10:00-04:00',
+        windowEnd: NOW,
+        accountHash: accountHashOf('priya.raman@example.com'),
+      },
+    ]);
+    expect(result).not.toHaveProperty('snapshot');
   });
 
   it('never carries a seeded secret or the raw account address (Hard Rule 2)', () => {
@@ -80,7 +83,7 @@ describe('a clean pass', () => {
   it('with no account shown, is OK and sends coverage without an account hash', () => {
     const result = plan(sentObserver(), syntheticDocument({ account: null }));
     expect(result.status).toBe('OK');
-    if (result.status === 'OK') expect(result.coverage).not.toHaveProperty('accountHash');
+    if (result.status === 'OK') expect(result.coverage[0]).not.toHaveProperty('accountHash');
   });
 });
 
@@ -258,7 +261,8 @@ describe('window shapes', () => {
     });
     const result = plan(calendar);
     expect(result.status).toBe('OK');
-    if (result.status === 'OK') expect(result.coverage.windowEnd).toBe(ahead.windowEnd);
+    if (result.status === 'OK')
+      expect(result.coverage).toEqual([{ ...ahead, accountHash: accountHashOf('priya.raman@example.com') }]);
   });
 });
 

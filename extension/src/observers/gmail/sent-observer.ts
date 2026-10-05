@@ -3,13 +3,16 @@
  * `health()` → `extract()` → `redact.project()` → bus. Its version is ./selectors.json's: a selector change bumps
  * it, and every health report and observation message names it (agents/adapter_engineer.md rule 3).
  *
+ * Coverage only at the head of the list (`#sent`, `Newer` off): any other Sent page posts its rows and no
+ * coverage, OK by design (./extract.ts `sentWindows`; Hard Rule 5).
+ *
  * Read-only and pure over the DOM (Hard Rule 3): the content script (Sprint 2.7) only calls
  * `startObserver(gmailSentObserver)`.
  */
 import { OBSERVER_HOSTS } from '../../config';
 import type { Observer } from '../types';
 import { gmailAccount } from './account';
-import { extractSent, sentWindow } from './extract';
+import { extractSent, sentWindows } from './extract';
 import { sentHealth } from './health';
 import { SENT_SELECTORS } from './selectors';
 
@@ -22,5 +25,5 @@ export const gmailSentObserver: Observer = Object.freeze({
   health: sentHealth,
   extract: extractSent,
   account: gmailAccount,
-  visibleWindow: sentWindow,
+  visibleWindows: sentWindows,
 });

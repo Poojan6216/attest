@@ -12,8 +12,9 @@
  *
  * Further gates, each a whole-corpus check: health status and reasons equal the label on every Gmail fixture; no
  * page other than the Sent list yields an observation; coverage is sent exactly where labelled (window and account
- * hash) and nowhere else; dedup facts hold (the overlapping second page); no subjectHint is over 80 code points; no
- * seeded secret (value or canary, tests/e2e/support/leaks.ts matching) or account address is in any pass output.
+ * hash: only the head of the list asserts a window, sprint_2 2.7) and nowhere else; dedup facts hold (the
+ * overlapping second page); no subjectHint is over 80 code points; no seeded secret (value or canary,
+ * tests/e2e/support/leaks.ts matching) or account address is in any pass output.
  * The corpus is synthetic until the founder's captures land (2.1 BLOCKED(MANUAL)); `gmailSentRealFixtures` says so.
  */
 import { asciiLower } from '../../extension/src/core/normalize';
@@ -94,22 +95,31 @@ function scoreFixture(fixture: LabelledFixture, plan: PassPlan, tally: Tally): v
 const sameReasons = (a: readonly string[], b: readonly string[]): boolean =>
   [...a].sort().join('\n') === [...b].sort().join('\n');
 
+/** The health a pass posts: OK for a clean pass, with or without coverage (src/observers/base.ts). */
+const postedStatus = (plan: PassPlan): 'OK' | 'DEGRADED' => (plan.status === 'DEGRADED' ? 'DEGRADED' : 'OK');
+
 function healthMatches(fixture: LabelledFixture, plan: PassPlan): boolean {
   const fact = fixture.health.find((h) => h.observer === 'gmail.sent');
   if (fact === undefined) return false;
   const reasons = plan.status === 'DEGRADED' ? plan.reasons : [];
-  return fact.status === plan.status && sameReasons(fact.reasons, reasons);
+  return fact.status === postedStatus(plan) && sameReasons(fact.reasons, reasons);
 }
 
+/** The pass asserts exactly the labelled gmail.sent windows (each with its account hash), in order, and no other. */
 function coverageMatches(fixture: LabelledFixture, plan: PassPlan): boolean {
-  const fact = fixture.coverage.find((c) => c.source === 'gmail.sent');
-  if (fact === undefined) return plan.status !== 'OK';
-  if (plan.status !== 'OK') return false;
-  const windowEnd = fact.windowEnd === 'lastSyncAt' ? fixture.page.readAt : fact.windowEnd;
+  const facts = fixture.coverage.filter((c) => c.source === 'gmail.sent');
+  const asserted = plan.status === 'OK' ? plan.coverage : [];
   return (
-    plan.coverage.windowStart === fact.windowStart &&
-    plan.coverage.windowEnd === windowEnd &&
-    plan.coverage.accountHash === accountHashOf(fact.account)
+    asserted.length === facts.length &&
+    facts.every((fact, i) => {
+      const windowEnd = fact.windowEnd === 'lastSyncAt' ? fixture.page.readAt : fact.windowEnd;
+      const got = asserted[i];
+      return (
+        got?.windowStart === fact.windowStart &&
+        got.windowEnd === windowEnd &&
+        got.accountHash === accountHashOf(fact.account)
+      );
+    })
   );
 }
 

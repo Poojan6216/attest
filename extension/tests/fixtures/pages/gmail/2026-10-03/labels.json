@@ -109,9 +109,16 @@
         "occurredAt": "2026-10-02T20:41:00-04:00",
         "rowKey": "1a0ff35056028ec5",
         "parser": "amazon"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-02T20:41:00-04:00",
+        "windowEnd": "2026-10-02T20:41:00-04:00"
       }
     ],
-    "notes": "Amazon order confirmation. The total is the Order Total line, not the item price or subtotal ($59.99) or the tax. Merchant is the canonical \"Amazon\"."
+    "notes": "Amazon order confirmation. The total is the Order Total line, not the item price or subtotal ($59.99) or the tax. Merchant is the canonical \"Amazon\". Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-generic-bakery.html": {
     "capturedAt": "2026-10-03",
@@ -160,9 +167,16 @@
         "rowKey": "1a101af7b40e2410",
         "parser": "generic",
         "confidence": 0.6
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-03T08:14:00-04:00",
+        "windowEnd": "2026-10-03T08:14:00-04:00"
       }
     ],
-    "notes": "Generic positive: the sender has no \"order\" but the subject says receipt and an amount is present."
+    "notes": "Generic positive: the sender has no \"order\" but the subject says receipt and an amount is present. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-generic-booking-cad.html": {
     "capturedAt": "2026-10-03",
@@ -211,9 +225,16 @@
         "rowKey": "1a0f278d4009300a",
         "parser": "generic",
         "confidence": 0.6
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-30T09:20:00-04:00",
+        "windowEnd": "2026-09-30T09:20:00-04:00"
       }
     ],
-    "notes": "Generic positive in another currency: CA$ is CAD, never USD. The subject uses an en dash."
+    "notes": "Generic positive in another currency: CA$ is CAD, never USD. The subject uses an en dash. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-generic-order-confirmation.html": {
     "capturedAt": "2026-10-03",
@@ -262,9 +283,16 @@
         "rowKey": "1a0e3d0ff40aa50b",
         "parser": "generic",
         "confidence": 0.6
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-27T13:02:00-04:00",
+        "windowEnd": "2026-09-27T13:02:00-04:00"
       }
     ],
-    "notes": "Generic positive: sender contains \"order\", subject says confirmation, and an amount is on a total line. Merchant is the sender display name."
+    "notes": "Generic positive: sender contains \"order\", subject says confirmation, and an amount is on a total line. Merchant is the sender display name. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-generic-order-eur.html": {
     "capturedAt": "2026-10-03",
@@ -313,9 +341,16 @@
         "rowKey": "1a0df3fde60b0471",
         "parser": "generic",
         "confidence": 0.6
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-26T15:45:00-04:00",
+        "windowEnd": "2026-09-26T15:45:00-04:00"
       }
     ],
-    "notes": "Generic positive with a decimal comma: €42,50 is 4250 EUR cents."
+    "notes": "Generic positive with a decimal comma: €42,50 is 4250 EUR cents. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-instacart.html": {
     "capturedAt": "2026-10-03",
@@ -363,9 +398,16 @@
         "occurredAt": "2026-09-29T18:05:00-04:00",
         "rowKey": "1a0ef331ee040121",
         "parser": "instacart"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-29T18:05:00-04:00",
+        "windowEnd": "2026-09-29T18:05:00-04:00"
       }
     ],
-    "notes": "Instacart receipt; the total includes fees, tip and tax. Two fees share the same $3.99."
+    "notes": "Instacart receipt; the total includes fees, tip and tax. Two fees share the same $3.99. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-marketplace-listing.html": {
     "capturedAt": "2026-10-03",
@@ -413,9 +455,16 @@
         "occurredAt": "2026-10-01T14:22:00-04:00",
         "rowKey": "1a0f8b3ad40c6399",
         "parser": "marketplace"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-01T14:22:00-04:00",
+        "windowEnd": "2026-10-01T14:22:00-04:00"
       }
     ],
-    "notes": "\"Your listing is live\" → listing.posted with the listing price. The $5.00 boost upsell is not the listing price and not a purchase."
+    "notes": "\"Your listing is live\" → listing.posted with the listing price. The $5.00 boost upsell is not the listing price and not a purchase. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-negative-newsletter.html": {
     "capturedAt": "2026-10-03",
@@ -615,9 +664,16 @@
         "occurredAt": "2026-09-30T12:48:00-04:00",
         "rowKey": "1a0f33742001efd2",
         "parser": "opentable"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-30T12:48:00-04:00",
+        "windowEnd": "2026-09-30T12:48:00-04:00"
       }
     ],
-    "notes": "OpenTable prepaid experience. The merchant is the restaurant. occurredAt is when the receipt was sent (the message date), never the reservation time (Sat 10 Oct 7:30 PM)."
+    "notes": "OpenTable prepaid experience. The merchant is the restaurant. occurredAt is when the receipt was sent (the message date), never the reservation time (Sat 10 Oct 7:30 PM). Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-shopify.html": {
     "capturedAt": "2026-10-03",
@@ -665,9 +721,16 @@
         "occurredAt": "2026-09-28T10:30:00-04:00",
         "rowKey": "1a0e86c3240d1f47",
         "parser": "shopify"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-09-28T10:30:00-04:00",
+        "windowEnd": "2026-09-28T10:30:00-04:00"
       }
     ],
-    "notes": "Shopify store order confirmation sent through Shopify (t.shopifyemail.com). The merchant is the store. The total carries an explicit \"USD\"."
+    "notes": "Shopify store order confirmation sent through Shopify (t.shopifyemail.com). The merchant is the store. The total carries an explicit \"USD\". Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-stripe-subscription.html": {
     "capturedAt": "2026-10-03",
@@ -715,9 +778,16 @@
         "occurredAt": "2026-10-01T11:05:00-04:00",
         "rowKey": "1a0f7ff516003aa7",
         "parser": "stripe"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-01T11:05:00-04:00",
+        "windowEnd": "2026-10-01T11:05:00-04:00"
       }
     ],
-    "notes": "Stripe subscription change (plan switch) → subscription.changed, not purchase.made. Amount paid and the renewal price are the same $20.00, so the amount is unambiguous."
+    "notes": "Stripe subscription change (plan switch) → subscription.changed, not purchase.made. Amount paid and the renewal price are the same $20.00, so the amount is unambiguous. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-stripe.html": {
     "capturedAt": "2026-10-03",
@@ -765,9 +835,16 @@
         "occurredAt": "2026-10-02T16:17:00-04:00",
         "rowKey": "1a0fe435260eb853",
         "parser": "stripe"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-02T16:17:00-04:00",
+        "windowEnd": "2026-10-02T16:17:00-04:00"
       }
     ],
-    "notes": "Stripe-hosted receipt for a one-off charge. The merchant is the business that charged (the sender name and the \"Receipt from\" line), not Stripe. The amount appears four times; the card digits and a full card-shaped seed sit near it."
+    "notes": "Stripe-hosted receipt for a one-off charge. The merchant is the business that charged (the sender name and the \"Receipt from\" line), not Stripe. The amount appears four times; the card digits and a full card-shaped seed sit near it. Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-receipt-uber.html": {
     "capturedAt": "2026-10-03",
@@ -815,9 +892,16 @@
         "occurredAt": "2026-10-01T21:14:00-04:00",
         "rowKey": "1a0fa2cdfc00dbb6",
         "parser": "uber"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "avery.founder@example.com",
+        "windowStart": "2026-10-01T21:14:00-04:00",
+        "windowEnd": "2026-10-01T21:14:00-04:00"
       }
     ],
-    "notes": "Uber trip receipt: Total first, then the breakdown. Merchant is the canonical \"Uber\"."
+    "notes": "Uber trip receipt: Total first, then the breakdown. Merchant is the canonical \"Uber\". Coverage: only this message's own instant (windowStart = windowEnd = its date, sprint_2 2.7); it says nothing about other mail."
   },
   "synthetic-sent-account-2.html": {
     "capturedAt": "2026-10-03",
@@ -1327,19 +1411,12 @@
         "rowKey": "1a0c88ed9002b15e"
       },
       {
-        "kind": "coverage",
-        "source": "gmail.sent",
-        "account": "avery.founder@example.com",
-        "windowStart": "2026-09-22T06:00:00-04:00",
-        "windowEnd": "2026-09-30T10:00:00-04:00"
-      },
-      {
         "kind": "dedup",
         "with": "synthetic-sent-page-1.html",
         "shared": 2
       }
     ],
-    "notes": "Sent list, second page (rows 11-20 of 26). Two messages were sent between the two reads, so the first two rows here are rows 9 and 10 of page 1, with the same row ids and fields: they must project to the same contentHash (the dedup fact). Not the head of the list, so the coverage window ends at the newest visible row, not lastSyncAt."
+    "notes": "Sent list, second page (rows 11-20 of 26). Two messages were sent between the two reads, so the first two rows here are rows 9 and 10 of page 1, with the same row ids and fields: they must project to the same contentHash (the dedup fact). Not the head of the list, so the pass posts its rows and health OK but no coverage, by design (sprint_2 2.7): in conversation view a send from this span can be listed on page 1 under a later reply's date, so this page's span is not every send in it."
   },
   "synthetic-sent-thread.html": {
     "capturedAt": "2026-10-03",

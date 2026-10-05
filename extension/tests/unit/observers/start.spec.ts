@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import { listen } from '../../../src/bus/listen';
-import type { BusMessage } from '../../../src/bus/messages';
+import { ACK_OK, ackRefused, type BusAck, type BusMessage } from '../../../src/bus/messages';
+import { postAcked } from '../../../src/bus/send';
 import { isoWithLocalOffset } from '../../../src/clock';
 import { OBSERVER_DEBOUNCE_MS, OBSERVER_MAX_WAIT_MS } from '../../../src/config';
 import { type ObserverHandle, startObserver } from '../../../src/observers/base';
@@ -258,22 +259,42 @@ describe('through the real bus', () => {
     connectAs(contentScript());
   });
 
-  it('the service worker receives health, observations and the ping, all valid, no secret among them', async () => {
+  /** Records every message the service worker receives and answers it with `answer(message)`. */
+  function serviceWorker(answer: (message: BusMessage) => BusAck = () => ACK_OK) {
     const received: BusMessage[] = [];
-    const record = (message: BusMessage): void => {
+    const record = (message: BusMessage): BusAck => {
       received.push(message);
+      return answer(message);
     };
     const unlisten = listen({
       'adapter.health': record,
       'observer.observations': record,
       'coverage.ping': record,
     });
-    handle = startObserver(sentObserver(), { now });
+    return { received, unlisten };
+  }
+
+  it('the service worker receives health, observations and the ping, all valid, no secret among them', async () => {
+    const worker = serviceWorker();
+    handle = startObserver(sentObserver(), { now, post: postAcked });
     await vi.advanceTimersByTimeAsync(OBSERVER_DEBOUNCE_MS);
     await handle.settled();
-    unlisten();
-    expect(types(received)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
-    expect(received.at(-1)).toMatchObject({ ping: { observerId: 'synthetic.sent', userActive: false } });
-    expect(leaks(received)).toEqual([]);
+    worker.unlisten();
+    expect(types(worker.received)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
+    expect(worker.received.at(-1)).toMatchObject({
+      ping: { observerId: 'synthetic.sent', source: 'gmail.sent', userActive: false },
+    });
+    expect(leaks(worker.received)).toEqual([]);
+  });
+
+  it('rows the service worker refuses (late_sighting) end the pass: no coverage ping follows them', async () => {
+    const worker = serviceWorker((message) =>
+      message.type === 'observer.observations' ? ackRefused('late_sighting') : ACK_OK,
+    );
+    handle = startObserver(sentObserver(), { now, post: postAcked });
+    await vi.advanceTimersByTimeAsync(OBSERVER_DEBOUNCE_MS);
+    await handle.settled();
+    worker.unlisten();
+    expect(types(worker.received)).toEqual(['adapter.health', 'observer.observations']);
   });
 });

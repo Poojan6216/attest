@@ -88,21 +88,34 @@ describe('only the region Gmail shows is read', () => {
   });
 });
 
-describe('the head of the list (docs/grading.md §3: the window ends at lastSyncAt only there)', () => {
-  const NEWEST = '2026-10-03T09:41:00-04:00';
-
-  it('#sent with Newer off is the head; #sent/p2 or an enabled Newer is not', async () => {
+describe('the head of the list (docs/grading.md §3; sprint_2 2.7: only the head asserts coverage)', () => {
+  it('#sent with Newer off is the head: its window ends at lastSyncAt', async () => {
     const head = await planVariant();
-    expect(head.status === 'OK' && head.coverage.windowEnd).toBe('2026-10-03T10:15:00-04:00');
-    const page2 = await planVariant({ url: `${SENT}/p2` });
-    expect(page2.status === 'OK' && page2.coverage.windowEnd).toBe(NEWEST);
-    const newer = await planVariant({
-      mutate: (doc) => {
-        one(doc, '[aria-label="Newer"]').removeAttribute('aria-disabled');
-      },
-    });
-    expect(newer.status === 'OK' && newer.coverage.windowEnd).toBe(NEWEST);
+    expect(head.status === 'OK' && head.coverage.map((c) => c.windowEnd)).toEqual([
+      '2026-10-03T10:15:00-04:00',
+    ]);
   });
+
+  it.each<[string, Parameters<typeof planVariant>[0]]>([
+    ['#sent/p2', { url: `${SENT}/p2` }],
+    [
+      'an enabled Newer',
+      {
+        mutate: (doc) => {
+          one(doc, '[aria-label="Newer"]').removeAttribute('aria-disabled');
+        },
+      },
+    ],
+  ])(
+    '%s is not the head: the same rows, health OK, no coverage (by design, never DEGRADED)',
+    async (_, variant) => {
+      const head = await planVariant();
+      expect(await planVariant(variant)).toEqual({
+        status: 'OK_NO_COVERAGE',
+        observations: head.observations,
+      });
+    },
+  );
 });
 
 const LANDMARK_CASES: [string, (doc: Document) => void][] = [

@@ -72,28 +72,49 @@ export interface VisibleWindow {
 /**
  * An observer: one source, one coverage stream. A content script that reads two sources (Gmail's Sent list and an
  * opened receipt) runs two observers, each with its own health and coverage.
+ *
+ * Coverage (docs/grading.md §3; Hard Rule 5): an observer reads its windows with exactly one of `visibleWindow` (one
+ * span per pass) or `visibleWindows` (several, or none by design). The skeleton posts one `coverage.ping` per window
+ * of a clean pass, each naming this observer's `source`; `src/observers/base.ts` `assertObserver` refuses an
+ * observer with both or neither.
  */
 export interface Observer extends Adapter<RawRow> {
   readonly source: ObservationSource;
   /**
-   * Coverage by design. Absent: a clean pass asserts its `visibleWindow()` as seen (§3). `'none'`: the observer
-   * never asserts coverage, because what it reads cannot say that everything in a span was read (an opened Gmail
-   * message is one message; a `gmail.receipt` interval would assert that every message from a registry sender in
-   * it was parsed, docs/grading.md §3). Its clean passes post their health and observations and never a
-   * `coverage.ping`; `account()` and `visibleWindow()` are never called (Hard Rule 5).
-   */
-  readonly coverage?: 'none';
-  /**
    * The signed-in account's address as the page shows it (the account switcher's email), or null when the page
    * shows none. Only its SHA-256 leaves the content script (./account.ts). A value that is not an address makes
-   * the pass DEGRADED (`account.invalid`); null sends coverage without an account (graded as capped coverage).
+   * the pass DEGRADED (`account.invalid`); null sends coverage without an account (graded as capped coverage). Read
+   * only when the pass has a window or a snapshot to post.
    */
   readonly account: (doc: Document) => string | null;
   /**
    * The span this pass could see (§3: for a newest-first list whose pass saw its head, `windowEnd` is
-   * `ctx.observedAt`; otherwise the newest visible row; a calendar's visible date range). Null when the page does
-   * not show it: the pass is then DEGRADED (`window.unknown`) and writes no coverage (Hard Rule 5). Only a
-   * `gcal.event` window may end after `ctx.observedAt`; any other that does is DEGRADED (`window.future`).
+   * `ctx.observedAt`; otherwise the newest visible row). Null when the page does not show it: the pass is then
+   * DEGRADED (`window.unknown`) and writes no coverage (Hard Rule 5). Only a `gcal.event` window may end after
+   * `ctx.observedAt`; any other that does is DEGRADED (`window.future`).
    */
-  readonly visibleWindow: (doc: Document, ctx: ExtractContext) => VisibleWindow | null;
+  readonly visibleWindow?: ((doc: Document, ctx: ExtractContext) => VisibleWindow | null) | undefined;
+  /**
+   * Every span this pass saw whole, each checked as `visibleWindow`'s is, each posted as its own `coverage.ping`
+   * (a Calendar range split by a day that hides events; one instant per opened receipt). An empty list is a clean
+   * pass that asserts no coverage by design: health OK, its rows, no ping (a Sent page past the head of the list, a
+   * list view with no receipt open, a Calendar grid still drawing). Null when the observer should know its windows
+   * and cannot read them: DEGRADED `window.unknown`, no coverage (Hard Rules 5, 6).
+   */
+  readonly visibleWindows?:
+    ((doc: Document, ctx: ExtractContext) => readonly VisibleWindow[] | null) | undefined;
+  /**
+   * `gcal.event` only: true when every calendar the page lists is shown, so an event missing from the grid is not
+   * one on a calendar switched off (docs/grading.md §6.1: an entry without `allCalendars: true` counts at most as
+   * partial). Read once per pass that has a window, and sent on each of its pings. Null when the list cannot be
+   * read: DEGRADED `calendars.unknown`, no coverage.
+   */
+  readonly allCalendars?: ((doc: Document) => boolean | null) | undefined;
+  /**
+   * `gcal.event` only: the snapshot of the range this pass read (src/observers/gcal/snapshot.ts), which the skeleton
+   * posts as `calendar.snapshot` after the pass's observations and coverage, only for a clean pass whose account
+   * is known (sprint_2 2.7). Null: nothing to store (the grid was still drawing). Read in the same synchronous read
+   * of the page as the rows and the windows, so the snapshot is the page the rows describe.
+   */
+  readonly snapshot?: ((doc: Document, ctx: ExtractContext) => unknown) | undefined;
 }

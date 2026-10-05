@@ -9,13 +9,14 @@
  * observations are the labelled facts after `redact.project()`. It reports, per parser, the labelled fixtures, how
  * many the observer reproduced exactly (the labelled parser claims the message, every projected field and hash
  * equal) and the field accuracy over type, merchant, amountCents, currency, subjectHint and occurredAt; and overall,
- * the negatives left unparsed, the list views left neutral (health OK, nothing read), the passes that asserted
- * coverage (must be 0: the observer posts none by design) and the pages whose health matched its label.
+ * the negatives left unparsed, the list views left neutral (health OK, nothing read), the pages whose asserted
+ * coverage is exactly the labelled one (the instant of each parsed receipt and nothing else, sprint_2 2.7) and the
+ * pages whose health matched its label.
  *
  * Gate `receiptParsersGatePassed`: all eight parsers (stripe, amazon, marketplace, opentable, instacart, uber,
  * shopify, generic) reproduce every labelled fixture exactly, the generic parser has at least 3 positives and the
- * corpus at least 3 negatives, every negative stays unparsed, every list view is neutral, no pass asserts
- * coverage, and every labelled health matches.
+ * corpus at least 3 negatives, every negative stays unparsed, every list view is neutral, every page asserts
+ * exactly its labelled coverage (none where nothing was parsed), and every labelled health matches.
  *
  * The DOM lib reference above types the extension code this bench runs (it takes a DOM `Document`); nothing here
  * touches a real browser or the network.
@@ -25,8 +26,10 @@ import type { MetricValue } from '../results';
 import type { Observation } from '../../extension/src/core/schema';
 import type { LabelledFixture } from '../../extension/tests/unit/fixtures/fixture-labels';
 import {
+  expectedReceiptCoverage,
   expectedReceipts,
   gmailFixtures,
+  planCoverage,
   receiptHealthLabel,
   type ReceiptRun,
   runReceipts,
@@ -87,7 +90,9 @@ interface Overall {
   negativesUnparsed: number;
   listViews: number;
   listViewsNeutral: number;
-  coverageAsserted: number;
+  coveragePages: number;
+  coveragePagesExact: number;
+  coverageWindows: number;
   healthLabelled: number;
   healthMatched: number;
 }
@@ -110,7 +115,11 @@ function scoreOverall(f: LabelledFixture, run: ReceiptRun, overall: Overall): vo
     overall.listViews += 1;
     overall.listViewsNeutral += run.health.status === 'OK' && run.plan.observations.length === 0 ? 1 : 0;
   }
-  overall.coverageAsserted += run.plan.status === 'OK' ? 1 : 0;
+  const asserted = planCoverage(run.plan);
+  overall.coveragePages += 1;
+  overall.coveragePagesExact +=
+    JSON.stringify(asserted) === JSON.stringify(expectedReceiptCoverage(f)) ? 1 : 0;
+  overall.coverageWindows += asserted.length;
   const health = healthMatches(f, run);
   if (health !== null) {
     overall.healthLabelled += 1;
@@ -137,7 +146,7 @@ function gatePassed(tallies: Map<Parser, ParserTally>, overall: Overall): boolea
     overall.negatives >= MIN_NEGATIVES &&
     overall.negativesUnparsed === overall.negatives &&
     overall.listViewsNeutral === overall.listViews &&
-    overall.coverageAsserted === 0 &&
+    overall.coveragePagesExact === overall.coveragePages &&
     overall.healthMatched === overall.healthLabelled
   );
 }
@@ -152,7 +161,9 @@ export function runReceiptsBench(): Promise<Readonly<Record<string, MetricValue>
     negativesUnparsed: 0,
     listViews: 0,
     listViewsNeutral: 0,
-    coverageAsserted: 0,
+    coveragePages: 0,
+    coveragePagesExact: 0,
+    coverageWindows: 0,
     healthLabelled: 0,
     healthMatched: 0,
   };

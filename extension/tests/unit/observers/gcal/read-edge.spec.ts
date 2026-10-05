@@ -172,16 +172,16 @@ describe('gcal.event: calendars named twice, equal runs, a later stored snapshot
     expect(plan).toMatchObject({ status: 'OK', observations: [] });
   });
 
-  it('two equal runs of whole days: the one window reported is the earlier', () => {
+  it('two equal runs of whole days: both are reported, the earlier first', () => {
     const html = edited(
       htmlOf(WEEK),
       '<div role="gridcell" data-datekey="28999" class="xOh">',
       '<div role="gridcell" data-datekey="28999" class="xOh"><div role="button">2 more</div>',
     );
-    expect(observer(WEEK).visibleWindow(parseDocument(html), ctxOf(WEEK))).toEqual({
-      windowStart: '2026-10-04T00:00:00-04:00',
-      windowEnd: '2026-10-07T00:00:00-04:00',
-    });
+    expect(observer(WEEK).visibleWindows(parseDocument(html), ctxOf(WEEK))).toEqual([
+      { windowStart: '2026-10-04T00:00:00-04:00', windowEnd: '2026-10-07T00:00:00-04:00' },
+      { windowStart: '2026-10-08T00:00:00-04:00', windowEnd: '2026-10-11T00:00:00-04:00' },
+    ]);
   });
 
   it('a stored snapshot read after this pass: the chain restarts here, never a baseline after the read', () => {

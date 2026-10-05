@@ -1,8 +1,9 @@
 /**
  * The Gmail receipt observer as an observer (sprint_2 2.3; build_spec §7 adapter contract; docs/grading.md §3):
  *
- *  - it asserts no coverage, by design: a pass posts its health and observations and never a coverage.ping, and
- *    never reads an account or a window (an opened message says nothing about the other mail in its span);
+ *  - its coverage is the instant of each receipt it parsed (sprint_2 2.7): a pass posts its health, its observations
+ *    and one coverage.ping per parsed message whose window is that message's date and nothing more (an opened
+ *    message says nothing about the other mail around it); a list view, or a pass that parsed nothing, posts none;
  *  - health is neutral where there is nothing to read (a list view), and DEGRADED, naming the landmark, where a
  *    conversation is open but a landmark the parsers need is missing (Hard Rule 6);
  *  - it is read-only: a pass leaves the page byte for byte as it found it (Hard Rule 3);
@@ -13,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BusMessage } from '../../../../src/bus/messages';
 import { DEFAULT_POLICY } from '../../../../src/core/policy';
 import { ComponentId, IsoTs } from '../../../../src/core/schema';
+import { accountHashOf } from '../../../../src/observers/account';
 import { assertObserver, runPass } from '../../../../src/observers/base';
 import { ObserverError } from '../../../../src/observers/errors';
 import { ReceiptError } from '../../../../src/observers/gmail/receipts/errors';
@@ -50,45 +52,64 @@ async function pass(observer: Observer, spec: PageSpec, url = THREAD_URL): Promi
   return messages;
 }
 
-describe('no coverage, by design (docs/grading.md §3; Hard Rule 5)', () => {
-  it('a clean pass posts health OK and its observations, and never a coverage.ping', async () => {
+const AT = '2026-10-02T16:17:00-04:00';
+
+describe('coverage: the instant of each parsed receipt (sprint_2 2.7; docs/grading.md §3; Hard Rule 5)', () => {
+  it('a clean pass posts health OK, its observation, then one ping whose window is the message instant', async () => {
     const messages = await pass(receiptObserver, UBER);
-    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations']);
-    const [health] = messages;
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
+    const [health, , ping] = messages;
     expect(health?.type === 'adapter.health' ? health.health : null).toMatchObject({
       adapterId: 'gmail.receipt',
       version: RECEIPT_SELECTORS.version,
       status: 'OK',
       reasons: [],
     });
+    expect(ping?.type === 'coverage.ping' ? ping.ping : null).toEqual({
+      observerId: 'gmail.receipt',
+      source: 'gmail.receipt',
+      lastSyncAt: NOW,
+      windowStart: AT,
+      windowEnd: AT,
+      accountHash: accountHashOf('avery.founder@example.com'),
+      userActive: true,
+    });
   });
 
-  it('a pass with nothing to read (a list view) posts only its health, OK', async () => {
-    const messages = await pass(receiptObserver, { subject: null, messages: [] }, LIST_URL);
+  it('a pass with nothing to read (a list view) posts only its health, OK, and never reads the account', async () => {
+    const account = vi.fn(() => 'avery.founder@example.com');
+    const spied: Observer = { ...receiptObserver, account };
+    const messages = await pass(spied, { subject: null, messages: [] }, LIST_URL);
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health']);
+    expect(account).not.toHaveBeenCalled();
+  });
+
+  it('an opened message that is no receipt posts its health, OK, and no coverage', async () => {
+    const note = { from: 'friend@example.org', body: rows([['Lunch', 'Thursday']]) };
+    const messages = await pass(receiptObserver, { subject: 'Lunch?', messages: [note] });
     expect(messages.map((m) => m.type)).toEqual(['adapter.health']);
   });
+});
 
-  it('never calls account() or visibleWindow(): it reports no window', async () => {
-    const account = vi.fn(() => 'avery.founder@example.com');
-    const visibleWindow = vi.fn(() => ({ windowStart: NOW, windowEnd: NOW }));
-    const spied: Observer = { ...receiptObserver, account, visibleWindow };
-    expect((await pass(spied, UBER)).map((m) => m.type)).not.toContain('coverage.ping');
-    expect(account).not.toHaveBeenCalled();
-    expect(visibleWindow).not.toHaveBeenCalled();
+describe('receipt coverage: accounts, the contract, refusals', () => {
+  it('a page with no account switcher still covers the instant, without an account hash', async () => {
+    const messages = await pass(receiptObserver, { ...UBER, account: null });
+    const ping = messages.find((m) => m.type === 'coverage.ping');
+    expect(ping?.type === 'coverage.ping' ? ping.ping : null).not.toHaveProperty('accountHash');
   });
 
-  it('is a valid observer, and an unknown coverage mode is a developer error', () => {
+  it('is a valid observer with one window reader, and a second one is a developer error', () => {
     expect(() => {
       assertObserver(receiptObserver);
     }).not.toThrow();
-    expect(receiptObserver.coverage).toBe('none');
-    const bogus = { ...receiptObserver, coverage: 'window' } as unknown;
+    expect(receiptObserver.visibleWindow).toBeUndefined();
+    const both = { ...receiptObserver, visibleWindow: () => null };
     expect(() => {
-      assertObserver(bogus as Observer);
+      assertObserver(both);
     }).toThrow(new ObserverError('invalid_observer'));
   });
 
-  it('a row project() refuses (a merchant over 120 characters) makes the pass DEGRADED, still with no coverage', async () => {
+  it('a row project() refuses (a merchant over 120 characters) makes the pass DEGRADED, with no coverage', async () => {
     const shopify = {
       from: 'store+1@t.shopifyemail.com',
       name: 'S'.repeat(121),
@@ -97,6 +118,13 @@ describe('no coverage, by design (docs/grading.md §3; Hard Rule 5)', () => {
     const messages = await pass(receiptObserver, { subject: 'Order #1 confirmed', messages: [shopify] });
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({ health: { status: 'DEGRADED', reasons: ['redact.invalid_field'] } });
+  });
+
+  it('a receipt dated after the pass is DEGRADED window.future: a Gmail window never ends in the future', async () => {
+    const future = { ...RECEIPT, title: 'Sat, Oct 3, 2026, 10:31 AM' };
+    const messages = await pass(receiptObserver, { subject: SUBJECT, messages: [future] });
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations']);
+    expect(messages[0]).toMatchObject({ health: { status: 'DEGRADED', reasons: ['window.future'] } });
   });
 });
 

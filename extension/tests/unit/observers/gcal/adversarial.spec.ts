@@ -91,11 +91,11 @@ function labelledEvents(f: LabelledFixture, rename: (subject: string) => string 
     .sort();
 }
 
-function coverageOf(plan: Run['plan']): [string, string] | null {
-  return plan.status === 'OK' ? [plan.coverage.windowStart, plan.coverage.windowEnd] : null;
+function coverageOf(plan: Run['plan']): [string, string][] | null {
+  return plan.status === 'OK' ? plan.coverage.map((c) => [c.windowStart, c.windowEnd]) : null;
 }
 
-const WEEK_WINDOW: [string, string] = ['2026-10-04T00:00:00-04:00', '2026-10-11T00:00:00-04:00'];
+const WEEK_WINDOW: [string, string][] = [['2026-10-04T00:00:00-04:00', '2026-10-11T00:00:00-04:00']];
 
 describe('gcal.event reads drifted markup the same way', () => {
   it('reordered attributes, an aria-label on the chip, and odd white space in labels', () => {
@@ -186,7 +186,7 @@ describe('gcal.event: days that hide events, zones, dates', () => {
     const html = edited(htmlOf(MONTH), MORE_BUTTON, control);
     const observer = createGcalObserver({ offsetAt: zoneOffset(MONTH.page.timeZone), previous: () => null });
     const windows = observer.visibleWindows(parseDocument(html), ctxOf(MONTH));
-    expect(windows.map((w) => [w.windowStart, w.windowEnd])).toEqual(twoWindows);
+    expect(windows?.map((w) => [w.windowStart, w.windowEnd])).toEqual(twoWindows);
   });
 
   it('an event moved onto the "2 more" day, where it is hidden, is not deleted', () => {
@@ -246,7 +246,7 @@ describe('gcal.event: accounts', () => {
       .replaceAll('avery.founder@example.com)', `${second})`)
       .replaceAll('/u/0/', '/u/1/');
     const { plan, asked } = run(html);
-    expect(plan.status === 'OK' && plan.coverage.accountHash).toBe(accountHashOf(second));
+    expect(plan.status === 'OK' && plan.coverage.map((c) => c.accountHash)).toEqual([accountHashOf(second)]);
     expect(asked.length).toBeGreaterThan(0);
     for (const args of asked) expect(args).toEqual(['2026-10-04/2026-10-10', accountHashOf(second)]);
   });
@@ -265,6 +265,7 @@ describe('gcal.event: accounts', () => {
     const plan = planPass({ observer, doc: parseDocument(html), ctx: ctxOf(WEEK), policy: DEFAULT_POLICY });
     expect(asked).toEqual([]);
     expect(plan.observations).toHaveLength(WEEK.events.length);
-    expect(plan.status === 'OK' && plan.coverage.accountHash).toBeUndefined();
+    expect(plan.status === 'OK' && plan.coverage.map((c) => c.accountHash)).toEqual([undefined]);
+    expect(plan).not.toHaveProperty('snapshot');
   });
 });

@@ -8,9 +8,12 @@
  * `normalize.resolveRelative` against the pass instant in the browser's zone (agents/adapter_engineer.md rule 7),
  * never a date in the body. A date that does not name one minute (none, or a clock time a DST change makes
  * ambiguous) throws `ReceiptError('time_unresolved')`: the pass is DEGRADED and no time is guessed (Hard Rule 5).
+ *
+ * `receiptWindows` is the observer's coverage (./index.ts): one window per parsed receipt, the single instant of
+ * that message (its occurredAt), and none where nothing was parsed.
  */
 import { resolveRelative } from '../../../core/normalize';
-import type { ExtractContext, RawRow } from '../../types';
+import type { ExtractContext, RawRow, VisibleWindow } from '../../types';
 import { classify } from './classify';
 import { ReceiptError } from './errors';
 import { type MessageView, readPage } from './message';
@@ -49,4 +52,18 @@ export function extractReceipts(doc: Document, ctx: ExtractContext): RawRow[] {
       },
     ];
   });
+}
+
+/**
+ * `Observer.visibleWindows`: the instant of each message a parser claimed as a receipt, as a window of its own
+ * (`windowStart = windowEnd`), each once. It asserts only that that message was read (sprint_2 2.7; Hard Rule 5).
+ * A list view, or a conversation with no receipt in it, asserts none (OK by design).
+ */
+export function receiptWindows(doc: Document, ctx: ExtractContext): VisibleWindow[] {
+  const page = readPage(doc);
+  const instants = new Set<string>();
+  for (const message of page.messages) {
+    if (classify(message, page.account).kind === 'receipt') instants.add(occurredAt(message, ctx));
+  }
+  return [...instants].map((at) => ({ windowStart: at, windowEnd: at }));
 }

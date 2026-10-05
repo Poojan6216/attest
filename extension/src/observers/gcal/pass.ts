@@ -4,9 +4,9 @@
  *
  * Coverage (Hard Rule 5): a window runs from the first instant of a visible day (local midnight, in the zone the
  * times are read in) to the first instant of the day after the last one, so a week reaching into the future is
- * covered into the future (only `gcal.event` may: src/observers/plan.ts). A day that hides events behind "N more"
- * was not seen whole, so it is left out and the range splits into several windows. A clean pass with no whole day
- * reports none.
+ * covered into the future (only `gcal.event` may: src/observers/coverage.ts). A day that hides events behind "N
+ * more" was not seen whole, so it is left out and the range splits into several windows, each its own coverage.ping
+ * (sprint_2 2.7). A clean pass with no whole day reports none: OK, no coverage.
  */
 import { instantMs, type OffsetAt } from '../../core/normalize';
 import type { VisibleWindow } from '../types';
@@ -97,19 +97,6 @@ export function coverageWindows(facts: PageFacts, offsetAt: OffsetAt): VisibleWi
     if (first === undefined || after === null) return [];
     return [{ windowStart: dayStart(first.day, offsetAt).iso, windowEnd: dayStart(after, offsetAt).iso }];
   });
-}
-
-/**
- * The one window src/observers/types.ts `visibleWindow` can report: the longest (the earliest of equals), or null
- * when no day was seen whole. A subset of what was seen, never more (Hard Rule 5); `coverageWindows` has them all.
- */
-export function widestWindow(windows: readonly VisibleWindow[]): VisibleWindow | null {
-  let best: { span: VisibleWindow; length: number } | null = null;
-  for (const span of windows) {
-    const length = instantMs(span.windowEnd) - instantMs(span.windowStart);
-    if (best === null || length > best.length) best = { span, length };
-  }
-  return best?.span ?? null;
 }
 
 /** A previous snapshot as the store returned it: parsed (Zod at the boundary), or null when absent or invalid. */

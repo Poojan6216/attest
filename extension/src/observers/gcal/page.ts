@@ -63,6 +63,21 @@ export function mainOf(doc: Document): Element | 'missing' | 'ambiguous' {
 }
 
 /**
+ * True while the page is still drawing the range it shows: the shown `role="main"`, one of its shown grids, or an
+ * ancestor of either says `aria-busy="true"`, or a shown progress bar sits in `role="main"`. A half-drawn week read
+ * as it stands would report every event not yet drawn as deleted (Hard Rule 5), so a busy page is not read at all:
+ * its pass is health OK with no rows, no coverage and no snapshot, and the mutations that end the drawing start
+ * the next pass (src/observers/batch.ts). Busy is never a fault, so it is never DEGRADED (Hard Rule 6 must not cry
+ * wolf on every week the user opens). A page with no single shown main is not busy: `health()` names what is wrong.
+ */
+export function pageBusy(doc: Document): boolean {
+  const main = mainOf(doc);
+  if (typeof main === 'string') return false;
+  if ([main, ...gridsOf(main)].some((el) => el.closest(S.busy) !== null)) return true;
+  return shownOnly(main.querySelectorAll(S.progress)).length > 0;
+}
+
+/**
  * The shown grids in `role="main"` (the side panel's mini month is another grid, outside it). A view may split its
  * days over several (an all-day grid and a timed one); a year view draws one per month, so the days of every grid
  * are read together (`gridDays`) and a year is too long to read (./read.ts `range.too_long`).
@@ -97,6 +112,16 @@ function strayMore(main: Element): boolean {
   return Array.from(main.querySelectorAll(S.dayButton)).some(
     (el) => isMoreControl(el) && el.closest(S.day) === null,
   );
+}
+
+/**
+ * True when the shown `role="main"` holds a "more" control outside every day: a layout the reader does not know,
+ * where no day can be vouched for. Unlike days that each hide events behind their own "N more" (a page read
+ * whole, with nothing wrong), its windows are unknown (./observer.ts), so the pass is DEGRADED (Hard Rule 6).
+ */
+export function moreOutsideDays(doc: Document): boolean {
+  const main = mainOf(doc);
+  return typeof main !== 'string' && strayMore(main);
 }
 
 /** The shown day cells of `grids`, by day; null when a day key is not a date. */

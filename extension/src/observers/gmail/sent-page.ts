@@ -1,6 +1,6 @@
 /**
  * Finding the Sent list on a Gmail page (sprint_2 2.2; agents/adapter_engineer.md rules 2, 4; Hard Rules 3, 5, 6).
- * The one structural reader `health()`, `extract()` and `visibleWindow()` share, so all three see the same rows.
+ * The one structural reader `health()`, `extract()` and `visibleWindows()` share, so all three see the same rows.
  *
  * The Sent list is read only when it is the view Gmail shows:
  *  1. the page address is Gmail's and its fragment routes to the Sent list (`#sent`, `#sent/p2`; ./route.ts).

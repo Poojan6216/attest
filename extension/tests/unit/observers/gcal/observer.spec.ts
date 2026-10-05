@@ -1,9 +1,9 @@
 /**
  * The Calendar observer through the 2.0 skeleton (src/observers/base.ts `runPass`): health → extract → project →
  * bus, on the labelled fixtures. The created event arrives as exactly one observation with the label's contentHash,
- * the coverage ping carries the labelled window and only the account's hash, an unchanged page posts no
- * observation, and nothing the page holds beyond the allowlist (seeds, event ids, calendar names, the account
- * address) crosses the bus (Hard Rules 2, 5, 6, 10).
+ * one coverage ping per labelled window carries the source, allCalendars and only the account's hash, the range's
+ * snapshot follows last (sprint_2 2.7), an unchanged page posts no observation, and nothing the page holds beyond
+ * the allowlist (seeds, event ids, calendar names, the account address) crosses the bus (Hard Rules 2, 5, 6, 10).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -71,11 +71,17 @@ describe('gcal.event through runPass', () => {
     expect(observer.source).toBe('gcal.event');
   });
 
-  it('after the event was created: one calendar.created with the label contentHash, then coverage', async () => {
+  it('after the event was created: one calendar.created with the label contentHash, coverage, the snapshot', async () => {
     const f = fixture('synthetic-gcal-week-after-create.html');
-    const { result, messages } = await pass(f, snapshotOfFixture(fixture('synthetic-gcal-week-before.html')));
+    const previous = snapshotOfFixture(fixture('synthetic-gcal-week-before.html'));
+    const { result, messages } = await pass(f, previous);
     expect(result).toMatchObject({ status: 'OK', complete: true });
-    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'observer.observations', 'coverage.ping']);
+    expect(messages.map((m) => m.type)).toEqual([
+      'adapter.health',
+      'observer.observations',
+      'coverage.ping',
+      'calendar.snapshot',
+    ]);
     const [diff] = f.diffs;
     const want = (diff?.observations ?? []).map((o) => expectedObservation(o, f.page.readAt));
     expect(observationsIn(messages)).toEqual(want);
@@ -83,20 +89,29 @@ describe('gcal.event through runPass', () => {
     const [coverage] = f.coverage;
     expect(ping?.type === 'coverage.ping' && ping.ping).toEqual({
       observerId: 'gcal.event',
+      source: 'gcal.event',
       lastSyncAt: f.page.readAt,
       windowStart: coverage?.windowStart,
       windowEnd: coverage?.windowEnd,
       accountHash: accountHashOf(f.page.account),
+      allCalendars: false,
       userActive: true,
     });
+    const stored = observerFor(f, previous).snapshot(docOf(f), ctxOf(f));
+    expect(messages.at(-1)).toEqual({
+      type: 'calendar.snapshot',
+      observerId: 'gcal.event',
+      snapshot: stored,
+    });
+    expect(stored?.baselineAt).toBe(previous.baselineAt);
   });
 });
 
 describe('gcal.event through runPass: changes and first sightings', () => {
-  it('an unchanged page posts its health and its coverage, and no observation', async () => {
+  it('an unchanged page posts its health, its coverage and its snapshot, and no observation', async () => {
     const f = fixture('synthetic-gcal-week-unchanged.html');
     const { messages } = await pass(f, snapshotOfFixture(fixture('synthetic-gcal-week-after-create.html')));
-    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'coverage.ping']);
+    expect(messages.map((m) => m.type)).toEqual(['adapter.health', 'coverage.ping', 'calendar.snapshot']);
   });
 
   it('asks the store for the snapshot of its range and its account (the hash, never the address)', () => {
@@ -153,13 +168,35 @@ describe('gcal.event through runPass: changes and first sightings', () => {
 });
 
 describe('gcal.event through runPass: coverage and the allowlist', () => {
-  it('the month view pings its widest whole window', async () => {
+  it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(
+    '%s: one ping per labelled window, each with the source, allCalendars and the account hash',
+    async (_, f) => {
+      const { messages } = await pass(f, null);
+      const pings = messages.flatMap((m) => (m.type === 'coverage.ping' ? [m.ping] : []));
+      expect(pings).toEqual(
+        f.coverage.map((c) => ({
+          observerId: 'gcal.event',
+          source: 'gcal.event',
+          lastSyncAt: f.page.readAt,
+          windowStart: c.windowStart,
+          windowEnd: c.windowEnd,
+          accountHash: accountHashOf(c.account),
+          allCalendars: c.allCalendars,
+          userActive: true,
+        })),
+      );
+    },
+  );
+
+  it('the month view pings both runs the "2 more" day splits it into', async () => {
     const f = fixture('synthetic-gcal-month-november.html');
     const { messages } = await pass(f, null);
-    const ping = messages.find((m) => m.type === 'coverage.ping');
-    expect(ping?.type === 'coverage.ping' && [ping.ping.windowStart, ping.ping.windowEnd]).toEqual([
-      '2026-11-13T00:00:00-05:00',
-      '2026-12-06T00:00:00-05:00',
+    const spans = messages.flatMap((m) =>
+      m.type === 'coverage.ping' ? [[m.ping.windowStart, m.ping.windowEnd]] : [],
+    );
+    expect(spans).toEqual([
+      ['2026-11-01T00:00:00-04:00', '2026-11-12T00:00:00-05:00'],
+      ['2026-11-13T00:00:00-05:00', '2026-12-06T00:00:00-05:00'],
     ]);
   });
 

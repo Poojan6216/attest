@@ -54,18 +54,17 @@ describe('Sent lists: the pass posts exactly the labelled observations, health a
     const plan = await runSentPass(fixture);
     expect([...plan.observations].sort(byHash)).toEqual(expectedObservations(fixture));
     const health = fixture.health.find((h) => h.observer === 'gmail.sent');
-    expect(plan.status).toBe(health?.status);
+    // The health a pass posts: a clean pass without coverage (a page past the head) reports OK.
+    expect(plan.status === 'DEGRADED' ? 'DEGRADED' : 'OK').toBe(health?.status);
     expect(plan.status === 'DEGRADED' ? plan.reasons : []).toEqual(health?.reasons);
-    const coverage = fixture.coverage.find((c) => c.source === 'gmail.sent');
-    const expected =
-      coverage === undefined
-        ? undefined
-        : {
-            windowStart: coverage.windowStart,
-            windowEnd: coverage.windowEnd === 'lastSyncAt' ? fixture.page.readAt : coverage.windowEnd,
-            accountHash: accountHashOf(coverage.account),
-          };
-    expect(plan.status === 'OK' ? plan.coverage : undefined).toEqual(expected);
+    const expected = fixture.coverage
+      .filter((c) => c.source === 'gmail.sent')
+      .map((coverage) => ({
+        windowStart: coverage.windowStart,
+        windowEnd: coverage.windowEnd === 'lastSyncAt' ? fixture.page.readAt : coverage.windowEnd,
+        accountHash: accountHashOf(coverage.account),
+      }));
+    expect(plan.status === 'OK' ? plan.coverage : []).toEqual(expected);
   });
 });
 
