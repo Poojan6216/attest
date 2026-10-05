@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-04 with `pnpm bench`.
+Measured 2026-10-05 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,20 +12,20 @@ Measured 2026-10-04 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 387.9 |
-| lookupMinMs | 352.3 |
-| lookupMaxMs | 472.9 |
-| lookupCpuMedianMs | 408.7 |
-| indexBuildMedianMs | 154.8 |
-| buildPlusLookupMedianMs | 534.3 |
+| lookupMedianMs | 365.3 |
+| lookupMinMs | 331.3 |
+| lookupMaxMs | 448.8 |
+| lookupCpuMedianMs | 395.2 |
+| indexBuildMedianMs | 147.4 |
+| buildPlusLookupMedianMs | 512 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1108.6 |
-| gradingMinMs | 1078 |
-| gradingMaxMs | 1338.8 |
-| gradingCpuMedianMs | 1280.1 |
+| gradingMedianMs | 1060.8 |
+| gradingMinMs | 985.2 |
+| gradingMaxMs | 1258.3 |
+| gradingCpuMedianMs | 1336.5 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,17 +33,17 @@ Measured 2026-10-04 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
+| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gcal
 
-Measured 2026-10-04 with `pnpm bench`.
+Measured 2026-10-05 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gcalSelectorsVersion | 1.2.0 |
+| gcalSelectorsVersion | 1.3.0 |
 | gcalFixtures | 8 |
 | gcalSyntheticFixtures | 8 |
 | gcalEventsLabelled | 56 |
@@ -59,23 +59,24 @@ Measured 2026-10-04 with `pnpm bench`.
 | gcalHealthCorrect | 8/8 |
 | gcalCoverageWindowsCorrect | 9/9 |
 | gcalAllCalendarsCorrect | 9/9 |
-| gcalDiffsExact | 6/6 |
-| gcalDiffRowsCorrect | 3/3 |
-| gcalDiffRowsSpurious | 0 |
+| gcalStepDiffsExact | 6/6 |
+| gcalStepRowsCorrect | 3/3 |
+| gcalStepRowsSpurious | 0 |
+| gcalStepRowsUnmarked | 0 |
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
+| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gmail-sent
 
-Measured 2026-10-04 with `pnpm bench`.
+Measured 2026-10-05 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailSentSelectorsVersion | 1.0.0 |
+| gmailSentSelectorsVersion | 1.1.0 |
 | gmailFixtureFolders | 2026-10-03 |
 | gmailFixtures | 25 |
 | gmailSentListFixtures | 6 |
@@ -97,17 +98,18 @@ Measured 2026-10-04 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
+| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## receipts
 
-Measured 2026-10-04 with `pnpm bench`.
+Measured 2026-10-05 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
 | gmailFixtures | 25 |
+| receiptRealFixtures | 0 |
 | stripeFixtures | 2 |
 | stripeExact | 2 |
 | stripeFieldAccuracy | 1 |
@@ -139,10 +141,10 @@ Measured 2026-10-04 with `pnpm bench`.
 | listViewsNeutral | 8 |
 | coveragePages | 25 |
 | coveragePagesExact | 25 |
-| coverageWindows | 12 |
+| coverageWindows | 8 |
 | healthLabelled | 17 |
 | healthMatched | 17 |
 | receiptParsersGatePassed | true |
-| commit | 71c6a48ebbf51844491585c6d1274a6f518bd8f3 |
+| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
 | commitDirty | false |
 | node | v22.14.0 |
