@@ -3,10 +3,15 @@
  * host_permissions as exactly Gmail and Google Calendar, from src/config.ts OBSERVER_HOSTS, and nothing else that
  * widens access. tests/e2e/built-bundle.spec.ts checks the same in the manifest of the build that ships.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_HOSTS, OBSERVER_HOSTS } from '../../src/config';
 import config from '../../wxt.config';
+
+// wxt.config.ts imports `defineConfig` from 'wxt', which loads WXT and, in the background, its optional `web-ext` peer
+// (not installed: an unhandled rejection under CI's coverage run). `defineConfig` returns its argument, so a stub that
+// does the same keeps this file's reads exact and never loads WXT.
+vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }));
 
 /** The manifest block of wxt.config.ts, as an object (it is a literal there, not a function). */
 function manifest(): Record<string, unknown> {

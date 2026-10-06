@@ -5,10 +5,16 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { VITEST_INCLUDE } from '../../vitest.config';
 import { VITEST_PERF_INCLUDE } from '../../vitest.perf.config';
+
+// vitest.config.ts calls WXT's Vitest plugin as it loads, and the plugin then imports WXT's optional `web-ext` peer in
+// the background. It is not installed, so on CI's slower coverage run that import's rejection landed while this file
+// ran (three unhandled errors failed the step though every test passed). This file reads only the configs, so the
+// plugin is stubbed and WXT never loads here.
+vi.mock('wxt/testing/vitest-plugin', () => ({ WxtVitest: () => ({ name: 'wxt-vitest-stub' }) }));
 
 const TESTS = path.resolve(import.meta.dirname, '..');
 const TEST_FILE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;

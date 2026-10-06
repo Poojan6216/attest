@@ -12,9 +12,14 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { build, type Plugin } from 'vite';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { zodJsonSchemaNames, zodWithoutJsonSchema } from '../../../wxt.config';
+
+// wxt.config.ts imports `defineConfig` from 'wxt', which loads WXT and, in the background, its optional `web-ext` peer
+// (not installed: an unhandled rejection under CI's coverage run). `defineConfig` returns its argument, so a stub that
+// does the same keeps this file's reads exact and never loads WXT.
+vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }));
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const work = mkdtempSync(path.join(os.tmpdir(), 'attest-zod-'));

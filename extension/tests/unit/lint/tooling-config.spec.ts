@@ -26,7 +26,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import vitestConfig, { CORE_COVERAGE_LINES, TEST_TIMEOUT_MS } from '../../../vitest.config';
 import perfConfig from '../../../vitest.perf.config';
@@ -38,6 +38,10 @@ import poisonConfig, {
   POISON_SETUP,
   TIMEOUT_SETUP,
 } from '../../../vitest.poison.config';
+
+// The configs only: WXT's Vitest plugin would import WXT's uninstalled optional `web-ext` peer in the background (an
+// unhandled rejection under CI's coverage run; see tests/unit/test-layout.spec.ts).
+vi.mock('wxt/testing/vitest-plugin', () => ({ WxtVitest: () => ({ name: 'wxt-vitest-stub' }) }));
 
 const EXTENSION = path.resolve(import.meta.dirname, '../../..');
 const REPO = path.resolve(EXTENSION, '..');

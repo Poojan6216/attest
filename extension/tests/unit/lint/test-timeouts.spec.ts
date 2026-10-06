@@ -11,11 +11,17 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TEST_TIMEOUT_MS } from '../../../vitest.config';
 import { checkTimeout, SUITE_TIMEOUT_MS } from './test-timeout-setup';
 import { offending, specFiles, TESTS, timeoutsIn } from './test-timeouts-scan';
+
+// vitest.config.ts calls WXT's Vitest plugin as it loads, and the plugin then imports WXT's optional `web-ext` peer in
+// the background. It is not installed, so on CI's slower coverage run that import's rejection landed while this file
+// ran (three unhandled errors failed the step though every test passed). This file reads only the configs, so the
+// plugin is stubbed and WXT never loads here.
+vi.mock('wxt/testing/vitest-plugin', () => ({ WxtVitest: () => ({ name: 'wxt-vitest-stub' }) }));
 
 describe('test timeouts: one suite-wide bound (TECH-R3)', () => {
   const files = ['unit', 'property', 'golden'].flatMap((dir) => specFiles(path.join(TESTS, dir)));
