@@ -146,6 +146,25 @@ async function installProbe(page: Page): Promise<void> {
   }, OBSERVED_EVENTS);
 }
 
+/** A page script ticks one box and unticks the other: the properties change, the markup does not. */
+async function tickLiveBoxes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const box = (marker: string): HTMLInputElement | null => document.querySelector(`input[${marker}]`);
+    const unticked = box('data-live-unticked');
+    const ticked = box('data-live-ticked');
+    if (unticked === null || ticked === null) throw new Error('harness boxes missing');
+    unticked.checked = false;
+    ticked.checked = true;
+  });
+}
+
+/** The fixture records each box as the page showed it (Google Calendar's calendar list changes properties only). */
+function expectLiveTicks(html: string): void {
+  const checked = /\schecked(?:=""|[\s/>])/;
+  expect(/<input[^>]*data-live-ticked[^>]*>/.exec(html)?.[0]).toMatch(checked);
+  expect(/<input[^>]*data-live-unticked[^>]*>/.exec(html)?.[0]).not.toMatch(checked);
+}
+
 function liveState(
   page: Page,
 ): Promise<{ html: string; scroll: number[]; active: string | null; url: string }> {
@@ -240,6 +259,7 @@ test('captures read-only and writes a fixture that renders standalone with zero 
   const chrome = await launchCdpChrome(fixtures);
   try {
     await installProbe(chrome.live);
+    await tickLiveBoxes(chrome.live);
     const before = await liveState(chrome.live);
     const liveRequests: string[] = [];
     const recordLive = (request: Request): void => {
@@ -272,6 +292,7 @@ test('captures read-only and writes a fixture that renders standalone with zero 
     expect(findForeignAts(html)).toEqual([]);
     expect(html).toContain('@example.');
     expect(html).toContain('data-late-row');
+    expectLiveTicks(html);
     for (const original of ORIGINALS) expect(html, original).not.toContain(original);
     expect(result.stats).toMatchObject({ card: 1 });
     expect(JSON.parse(await readFile(result.labelsPath, 'utf8'))).toEqual({

@@ -74,6 +74,12 @@ export function snapshotDocument(config: SnapshotConfig): PageSnapshot {
     if (!(liveNode instanceof Element) || !(copyNode instanceof Element)) continue;
     elementCount += 1;
     if (liveNode.closest('head') !== null) continue;
+    // A box's ticked state as the page shows it, not as its markup began: a page script that ticks or unticks a box
+    // changes the `checked` property only, and the copy keeps attributes (Google Calendar's calendar list does this).
+    if (liveNode instanceof HTMLInputElement && (liveNode.type === 'checkbox' || liveNode.type === 'radio')) {
+      if (liveNode.checked) copyNode.setAttribute('checked', '');
+      else copyNode.removeAttribute('checked');
+    }
     const style = getComputedStyle(liveNode);
     const parentValues = liveNode.parentElement === null ? undefined : computed.get(liveNode.parentElement);
     const display = style.getPropertyValue('display');
