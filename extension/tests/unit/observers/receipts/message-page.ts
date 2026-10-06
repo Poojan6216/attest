@@ -25,6 +25,11 @@ export interface MessageSpec {
   readonly noDate?: boolean;
   /** Leave out the sender span entirely. */
   readonly noSender?: boolean;
+  /**
+   * Draw the message as real Gmail does (capture of 2026-10-06): the key on an element inside the list item, not on
+   * it, and a list of attachment chips inside the message.
+   */
+  readonly nestedKey?: boolean;
 }
 
 export interface PageSpec {
@@ -67,12 +72,17 @@ function messageHtml(m: MessageSpec, index: number): string {
       : m.expanded === null
         ? ''
         : ` aria-expanded="${m.expanded}"`;
+  const ids = `data-message-id="#msg-f:${String(index)}" data-legacy-message-id="${key}"`;
+  const attachments =
+    m.nestedKey === true ? '<div role="list"><div role="listitem">invoice.pdf</div></div>' : '';
   return [
-    `<div class="${cls()}" role="listitem"${expanded} tabindex="-1" data-message-id="#msg-f:${String(index)}" data-legacy-message-id="${key}">`,
+    `<div class="${cls()}" role="listitem"${expanded} tabindex="-1"${m.nestedKey === true ? '' : ` ${ids}`}>`,
+    m.nestedKey === true ? `<div class="${cls()}" ${ids}>` : '',
     `<div><table cellpadding="0" class="${cls()}"><tbody><tr><td>${senderHtml(m)}</td><td>${dateHtml(m)}</td>`,
     `<td><div role="button" aria-label="Reply" tabindex="0" class="${cls()}"></div></td></tr>`,
     `<tr><td colspan="3"><span>to <span email="${ACCOUNT}" name="me">me</span></span></td></tr></tbody></table></div>`,
-    `<div class="${cls()}"><div dir="ltr">${m.body}</div></div></div>`,
+    `<div class="${cls()}"><div dir="ltr">${m.body}</div>${attachments}</div>`,
+    m.nestedKey === true ? '</div></div>' : '</div>',
   ].join('');
 }
 

@@ -3,10 +3,11 @@
  * §6.1 grant `accounts`): the one reader `gmail.sent`, `gmail.receipt` and `gcal.event` share, each with the
  * selector and attribute its own selectors.json names.
  *
- * The switcher is a control in `role="banner"` whose label ends with the address in parentheses ("Google Account:
- * Avery Founder\n(avery@example.com)"). The words before it are localised; the parenthesised address is not, so the
- * rule reads no word of any language. An address inside the display name ("Avery (x@y.org)\n(avery@example.com)") is
- * not the one at the end. Two different addresses (compared as §5.1 compares them: ASCII-lowercased) are ambiguous,
+ * The switcher is a control in `role="banner"` whose label holds the address in parentheses ("Google Account:
+ * Avery Founder\n(avery@example.com)"), usually at its end; a second signed-in account can carry words after it (a
+ * note such as ", needs attention": real capture of 2026-10-06). The words around it are localised; the
+ * parenthesised address is not, so the rule reads no word of any language: the label's last parenthesised address is
+ * the account. An address inside the display name ("Avery (x@y.org)\n(avery@example.com)") comes before it. Two different addresses (compared as §5.1 compares them: ASCII-lowercased) are ambiguous,
  * as with an account chooser drawn open: coverage must belong to one account, so the caller refuses to guess (Hard
  * Rule 5). The address is returned only to the observer, which hashes it before anything leaves the content script
  * (./account.ts; Hard Rules 2, 10). Pure over the DOM (Hard Rule 3): it reads attributes only.
@@ -33,16 +34,21 @@ export type AccountRead =
   { readonly ok: true; readonly address: string } | { readonly ok: false; readonly reason: AccountReason };
 
 /**
- * The parenthesised address at the end of a label: one `@`, no parenthesis or space. No two quantified runs can
- * share a character, so it runs in linear time on any label.
+ * A parenthesised address: one `@`, no parenthesis or space. No two quantified runs can share a character, so it
+ * runs in linear time on any label.
  */
-const ADDRESS_AT_END = /\(([^()\s@]+@[^()\s@]+)\)\s*$/u;
+const PARENTHESISED_ADDRESS = /\(([^()\s@]+@[^()\s@]+)\)/gu;
 
-/** Every address a label of `selectors` ends with, one per account, as first read (case kept). */
+/** The last parenthesised address in `label` (see the module comment), or undefined. */
+function lastAddress(label: string): string | undefined {
+  return [...label.matchAll(PARENTHESISED_ADDRESS)].at(-1)?.[1];
+}
+
+/** Every address a label of `selectors` names as its account, one per account, as first read (case kept). */
 function labelledAddresses(doc: Document, selectors: AccountSelectors): string[] {
   const byKey = new Map<string, string>();
   for (const labelled of Array.from(doc.querySelectorAll(selectors.selector))) {
-    const found = ADDRESS_AT_END.exec(labelled.getAttribute(selectors.attribute) ?? '')?.[1];
+    const found = lastAddress(labelled.getAttribute(selectors.attribute) ?? '');
     const parsed = found === undefined ? null : email(found);
     if (parsed !== null && !byKey.has(asciiLower(parsed.address))) {
       byKey.set(asciiLower(parsed.address), parsed.address);

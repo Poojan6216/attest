@@ -94,6 +94,7 @@ describe('the attributes a read depends on (TECH-2: the watcher starts a pass on
       'data-datekey',
       'data-eventid',
       'role',
+      'type',
     ]);
     expect(createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone) }).attributes).toBe(GCAL_ATTRIBUTES);
   });

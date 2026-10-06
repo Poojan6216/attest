@@ -12,9 +12,13 @@
  * Conversation view: a list row stands for a whole conversation, and its time is the newest message's, which can
  * be a reply the user received. A row's time is a send time only when the row provably holds one message: Gmail's
  * legacy thread id is the id of the conversation's first message, so a row whose thread id, last message id and
- * last non-draft message id are one id holds exactly that message, which is in Sent, so the user sent it. Any other
- * row (a reply in the thread, a draft on it, an id missing) cannot be timed from the list, and is refused: no row
- * beats a send recorded at a reply's time (Hard Rule 5).
+ * last non-draft message id are one id holds exactly that message, which is in Sent, so the user sent it.
+ *
+ * A row whose ids are all there but differ is a conversation of several messages (a reply, a draft on it): the
+ * list cannot time the user's sends in it, only that each was at or before the row's own minute. Real Sent lists
+ * are mostly such rows (48 of 50 on the first page of the capture of 2026-10-06), so they are not refused: they give
+ * no row, and the window starts after the newest one (./extract.ts), so it never holds a send it did not time
+ * (Hard Rule 5). A row missing an id cannot be told apart, and is refused (DEGRADED: a markup change is loud).
  */
 import { resolveRelative } from '../../core/normalize';
 import { oneLine } from '../text';
@@ -46,7 +50,19 @@ export function holdsOneMessage(row: SentRowParts): boolean {
   return row.threadId === row.rowKey && row.lastNonDraftId === row.rowKey;
 }
 
-/** The instant the row's one message was sent, or null when the list cannot say (header). */
-export function sentAt(row: SentRowParts, ctx: ExtractContext): string | null {
-  return holdsOneMessage(row) ? minuteOf(row.time, ctx) : null;
+/**
+ * What the list says of a row's time (header): the minute of its one send; a conversation of several messages, with
+ * its newest message's minute (null when unreadable); or nothing it can read, which refuses the row.
+ */
+export type RowTime =
+  | { readonly kind: 'send'; readonly at: string }
+  | { readonly kind: 'conversation'; readonly latest: string | null }
+  | { readonly kind: 'unreadable' };
+
+/** The row's time as the list shows it, read at `ctx.observedAt` (header). */
+export function rowTime(row: SentRowParts, ctx: ExtractContext): RowTime {
+  if (row.threadId === null || row.lastNonDraftId === null) return { kind: 'unreadable' };
+  const minute = minuteOf(row.time, ctx);
+  if (!holdsOneMessage(row)) return { kind: 'conversation', latest: minute };
+  return minute === null ? { kind: 'unreadable' } : { kind: 'send', at: minute };
 }

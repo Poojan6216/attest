@@ -142,10 +142,14 @@ function cellsOf(row: Element): Element[] {
   });
 }
 
-/** Recipient elements in `cells`: those matching the selector with no matching ancestor inside the same cell. */
-function recipientElements(cells: readonly Element[]): Element[] {
+/**
+ * Shown recipient elements in `cells`: those matching the selector with no matching ancestor inside the same cell.
+ * Gmail repeats a row's recipients and subject in a summary it keeps hidden for screen readers; only what is shown
+ * is read.
+ */
+function recipientElements(cells: readonly Element[], shown: ShownCheck): Element[] {
   return cells.flatMap((cell) =>
-    Array.from(cell.querySelectorAll(S.recipient)).filter((el) => {
+    shownOnly(cell.querySelectorAll(S.recipient), shown).filter((el) => {
       const outer = el.parentElement?.closest(S.recipient) ?? null;
       return outer === null || !cell.contains(outer);
     }),
@@ -171,9 +175,9 @@ function timeElement(cells: readonly Element[]): Element | null {
   return null;
 }
 
-/** Step 4 for one row. */
-function rowParts(row: Element): Step<SentRowParts> {
-  const anchors = Array.from(row.querySelectorAll(S.subject));
+/** Step 4 for one row: its shown subject anchor (one), the shown recipients before it, the time after it. */
+function rowParts(row: Element, shown: ShownCheck): Step<SentRowParts> {
+  const anchors = shownOnly(row.querySelectorAll(S.subject), shown);
   const [subject, ...otherAnchors] = anchors;
   const rowKey = subject?.getAttribute(A.lastMessageId) ?? '';
   if (subject === undefined || rowKey === '') return fail('selector.missing.subject');
@@ -181,7 +185,7 @@ function rowParts(row: Element): Step<SentRowParts> {
   const cells = cellsOf(row);
   const at = cells.findIndex((cell) => cell.contains(subject));
   if (at < 0) return fail('selector.missing.cell');
-  const recipients = recipientElements(cells.slice(0, at));
+  const recipients = recipientElements(cells.slice(0, at), shown);
   if (recipients.length === 0) return fail('selector.missing.recipient');
   const addresses = recipients.map(recipientAddress);
   if (!addresses.every((address): address is string => address !== null))
@@ -225,7 +229,7 @@ export function readSentPage(doc: Document): SentPage {
   if (rows.length === 0) return { ok: false, reason: 'selector.missing.row' };
   const parts: SentRowParts[] = [];
   for (const row of rows) {
-    const read = rowParts(row);
+    const read = rowParts(row, shown);
     if (!read.ok) return read;
     parts.push(read.value);
   }

@@ -1,15 +1,16 @@
 {
   "$comment": "Google Calendar observer (gcal.event) selectors and label words. role, aria-*, data-* and structure only, never a class name. Bump `version` on any change and record it with the fixture folder date in Decisions.md (agents/adapter_engineer.md rule 3). Parsed by ./selectors.ts.",
   "observer": "gcal.event",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "fixtures": ["tests/fixtures/pages/gcal/2026-10-03"],
   "selectors": {
     "main": "[role=\"main\"]",
     "grid": "[role=\"grid\"]",
     "day": "[data-datekey]",
-    "chip": "[role=\"button\"][data-eventid]",
+    "chip": "[role=\"button\"][data-eventid], [data-eventid]:has(> [role=\"button\"])",
     "dayButton": "[role=\"button\"], button, [role=\"link\"], a",
-    "calendar": "[role=\"complementary\"] [role=\"list\"] [role=\"checkbox\"]",
+    "calendar": "[role=\"complementary\"] [role=\"list\"] [role=\"checkbox\"], [role=\"complementary\"] [role=\"list\"] input[type=\"checkbox\"]",
+    "calendarList": "[role=\"complementary\"] [role=\"list\"][aria-label]",
     "account": "[role=\"banner\"] a[aria-label]",
     "busy": "[aria-busy=\"true\"]",
     "progress": "[role=\"progressbar\"]"

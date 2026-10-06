@@ -22,15 +22,21 @@ import {
 import { RECEIPT_HEALTH_REASONS } from '../../../../src/observers/gmail/receipts/health';
 import { type PassPlan, planPass } from '../../../../src/observers/plan';
 import type { HealthCheck } from '../../../../src/observers/types';
-import { ACCOUNT, LIST_URL, messagePage, type PageSpec, rows, THREAD_URL } from './message-page';
+import {
+  ACCOUNT,
+  LIST_URL,
+  type MessageSpec,
+  messagePage,
+  type PageSpec,
+  rows,
+  THREAD_URL,
+} from './message-page';
 import { withPage } from './receipt-fixtures';
 
 const ctx = { observedAt: IsoTs.parse('2026-10-03T10:30:00-04:00'), offsetAt: () => -240 };
 const AT = '2026-10-02T16:17:00-04:00';
-const UBER: PageSpec = {
-  subject: 'Your Thursday evening trip with Uber',
-  messages: [{ from: 'noreply@uber.com', body: rows([['Total', '$23.84']]) }],
-};
+const UBER_RECEIPT: MessageSpec = { from: 'noreply@uber.com', body: rows([['Total', '$23.84']]) };
+const UBER: PageSpec = { subject: 'Your Thursday evening trip with Uber', messages: [UBER_RECEIPT] };
 const MAIN_TAG = /<div class="[^"]*" role="main">/u;
 
 interface Run {
@@ -46,6 +52,24 @@ const run = (html: string, url = THREAD_URL): Run =>
 
 const reasonsOf = (health: HealthCheck): readonly string[] =>
   health.status === 'DEGRADED' ? health.reasons : [];
+
+describe('a message drawn as real Gmail draws it (capture of 2026-10-06)', () => {
+  it('the key on an element inside the list item: the receipt is read by that key, with the same row and point', () => {
+    const flat = run(messagePage(UBER));
+    const nested = run(messagePage({ ...UBER, messages: [{ ...UBER_RECEIPT, nestedKey: true }] }));
+    expect(flat.plan.status).toBe('OK');
+    expect(nested.health).toEqual({ status: 'OK' });
+    expect(nested.plan).toEqual(flat.plan);
+  });
+
+  it('a list inside a message (attachment chips) is no message: nothing missing, nothing extra', () => {
+    const nested = run(
+      messagePage({ ...UBER, messages: [{ ...UBER_RECEIPT, nestedKey: true, expanded: null }] }),
+    );
+    expect(nested.health).toEqual({ status: 'OK' });
+    expect(nested.plan.observations).toHaveLength(1);
+  });
+});
 
 describe('only the main landmark Gmail shows is read (TECH-5)', () => {
   it('a conversation kept hidden beside a shown list is not read: OK, nothing reported', () => {

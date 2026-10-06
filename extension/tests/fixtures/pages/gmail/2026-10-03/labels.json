@@ -1,7 +1,7 @@
 {
   "synthetic-drafts.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "base64_blob",
@@ -33,7 +33,7 @@
   },
   "synthetic-inbox.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_local_part",
       "base64_blob",
@@ -65,7 +65,7 @@
   },
   "synthetic-receipt-amazon.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "street_address",
@@ -122,7 +122,7 @@
   },
   "synthetic-receipt-generic-bakery.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "passphrase",
@@ -173,7 +173,7 @@
   },
   "synthetic-receipt-generic-booking-cad.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -224,7 +224,7 @@
   },
   "synthetic-receipt-generic-order-confirmation.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "token_lowercase",
       "street_address",
@@ -275,7 +275,7 @@
   },
   "synthetic-receipt-generic-order-eur.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "person_name_1",
@@ -326,7 +326,7 @@
   },
   "synthetic-receipt-instacart.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "passphrase_hyphenated",
@@ -383,7 +383,7 @@
   },
   "synthetic-receipt-marketplace-listing.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -440,7 +440,7 @@
   },
   "synthetic-receipt-negative-newsletter.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_local_part",
       "base64_blob",
@@ -478,7 +478,7 @@
   },
   "synthetic-receipt-negative-no-currency.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "ssn_shape",
       "person_name_1",
@@ -516,7 +516,7 @@
   },
   "synthetic-receipt-negative-promo-order.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "token_lowercase",
       "email_local_part",
@@ -554,7 +554,7 @@
   },
   "synthetic-receipt-negative-shipping.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "street_address",
       "phone_number",
@@ -592,7 +592,7 @@
   },
   "synthetic-receipt-opentable.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "phone_number",
@@ -649,7 +649,7 @@
   },
   "synthetic-receipt-shopify.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_2",
       "person_name_2",
@@ -706,7 +706,7 @@
   },
   "synthetic-receipt-stripe-subscription.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "api_key_aws_shape",
@@ -763,7 +763,7 @@
   },
   "synthetic-receipt-stripe.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -820,7 +820,7 @@
   },
   "synthetic-receipt-uber.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_1",
       "street_address",
@@ -877,7 +877,7 @@
   },
   "synthetic-sent-account-2.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "person_name_2",
       "passphrase",
@@ -959,7 +959,7 @@
   },
   "synthetic-sent-dst-auckland.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "card_shape",
       "email_body_3",
@@ -1041,7 +1041,7 @@
   },
   "synthetic-sent-midnight.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "ssn_shape",
       "phone_number",
@@ -1123,7 +1123,7 @@
   },
   "synthetic-sent-page-1.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "phone_number",
       "email_body_2",
@@ -1258,7 +1258,7 @@
   },
   "synthetic-sent-page-2.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_3",
       "ssn_shape",
@@ -1392,7 +1392,7 @@
   },
   "synthetic-sent-thread.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "email_body_1",
       "api_key_openai_shape",
@@ -1430,7 +1430,7 @@
   },
   "synthetic-sent-time-unresolved.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gmail.receipt@1.1.0 gmail.sent@1.1.0",
+    "selectorsVersion": "gmail.receipt@1.2.0 gmail.sent@1.1.0",
     "seededSecrets": [
       "api_key_openai_shape",
       "street_address",

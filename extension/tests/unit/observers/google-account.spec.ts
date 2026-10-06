@@ -69,7 +69,20 @@ describe('the shared reader (any display language; Hard Rule 5)', () => {
     });
   });
 
-  it('only the parenthesised address at the end counts, and only inside the banner', () => {
+  it('words after the address (a second account’s note, real capture of 2026-10-06) do not hide it', () => {
+    const noted = 'Google Account: Avery Founder&#10;(avery.founder@example.com), needs attention';
+    expect(withBanner([noted], (doc) => readGoogleAccount(doc, SENT))).toEqual({
+      ok: true,
+      address: 'avery.founder@example.com',
+    });
+    const both = [noted, 'Google Account: Sam Lee&#10;(sam.lee@example.org)'];
+    expect(withBanner(both, (doc) => readGoogleAccount(doc, SENT))).toEqual({
+      ok: false,
+      reason: 'selector.ambiguous.account',
+    });
+  });
+
+  it('only the last parenthesised address counts, and only inside the banner', () => {
     const inName = 'Google Account: Avery (someone.else@example.org)&#10;(avery.founder@example.com)';
     expect(withBanner([inName], (doc) => readGoogleAccount(doc, SENT))).toMatchObject({
       address: 'avery.founder@example.com',

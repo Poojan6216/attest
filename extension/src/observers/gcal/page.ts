@@ -59,7 +59,8 @@ export function mainOf(doc: Document): Element | 'missing' | 'ambiguous' {
 
 /**
  * True while the page is still drawing the range it shows: the shown `role="main"`, one of its shown grids, or an
- * ancestor of either says `aria-busy="true"`, or a shown progress bar sits in `role="main"`. A half-drawn week read
+ * ancestor of either says `aria-busy="true"`, a shown progress bar sits in `role="main"`, or the side panel's
+ * calendar lists are drawn but still empty (`calendarListsEmpty`). A half-drawn week read
  * as it stands would report every event not yet drawn as deleted (Hard Rule 5), so a busy page is not read at all:
  * its pass is health OK with no rows, no coverage and no snapshot, and the mutations that end the drawing start
  * the next pass (src/observers/batch.ts). Busy is never a fault, so it is never DEGRADED (Hard Rule 6 must not cry
@@ -69,7 +70,7 @@ export function pageBusy(doc: Document): boolean {
   const main = mainOf(doc);
   if (typeof main === 'string') return false;
   if ([main, ...gridsOf(main)].some((el) => el.closest(S.busy) !== null)) return true;
-  return shownOnly(main.querySelectorAll(S.progress)).length > 0;
+  return shownOnly(main.querySelectorAll(S.progress)).length > 0 || calendarListsEmpty(doc);
 }
 
 /**
@@ -170,8 +171,31 @@ export function calendarsOf(doc: Document): ListedCalendar[] | null {
   if (boxes.length === 0) return null;
   return boxes.map((box) => ({
     name: oneLine(box.getAttribute(A.label) ?? ''),
-    shown: box.getAttribute(A.checked) === 'true',
+    shown: ticked(box),
   }));
+}
+
+/**
+ * Whether a calendar's box is ticked. Real Google Calendar draws the list as native checkboxes (capture of
+ * 2026-10-06) and ticking one changes its `checked` property only, so a native box is read by its live state; a
+ * `role="checkbox"` element by `aria-checked`.
+ */
+function ticked(box: Element): boolean {
+  const live: unknown = Reflect.get(box, 'checked');
+  return box.localName === 'input' && typeof live === 'boolean'
+    ? live
+    : box.getAttribute(A.checked) === 'true';
+}
+
+/**
+ * True when the side panel's calendar lists are drawn but every one is still empty (no item at all). Real Google
+ * Calendar fills them seconds after the grid (about 9 s in the capture of 2026-10-06), and only while the tab is
+ * shown: the page is still drawing, not missing its list. A list whose items hold no box this reader knows is a
+ * markup change instead, and stays DEGRADED `selector.missing.calendar_list` (Hard Rule 6).
+ */
+function calendarListsEmpty(doc: Document): boolean {
+  const lists = Array.from(doc.querySelectorAll(S.calendarList));
+  return lists.length > 0 && lists.every((list) => list.childElementCount === 0);
 }
 
 /** Every UTC offset (minutes) a "GMT-04" hint in `role="main"` names, outside the event chips. */
@@ -229,8 +253,15 @@ function chipLabel(chip: Element): string {
   return oneLine(aria !== null && aria.trim() !== '' ? aria : spokenText(chip));
 }
 
+/** Every event id a shown element in `role="main"` carries: what the chips must account for (./read.ts). */
+export function shownEventIds(main: Element): Set<string> {
+  const carriers = shownOnly(main.querySelectorAll(`[${A.eventId}]`), shownChecker());
+  return new Set(carriers.map((el) => el.getAttribute(A.eventId) ?? ''));
+}
+
 /**
- * The shown event chips in `role="main"`, one entry per `data-eventid`, in page order. A hidden chip (in a view the
+ * The shown event chips in `role="main"`, one entry per `data-eventid`, in page order. A chip is a button carrying the
+ * id (week and day views) or an element carrying it around its button (month view: capture of 2026-10-06). A hidden chip (in a view the
  * app keeps hidden, or one it hides) is not on the page the user sees, so it is not read.
  */
 export function chipsOf(main: Element): Chip[] {

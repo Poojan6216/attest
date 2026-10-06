@@ -189,6 +189,28 @@ function headingOf(item: Element, main: Element): Element | null {
   return null;
 }
 
+/**
+ * A message's key (`data-legacy-message-id`): on the message item itself, or, as real Gmail draws it (capture of
+ * 2026-10-06), on the first element inside it that carries one.
+ */
+function messageKeyOf(item: Element): string {
+  return (
+    item.getAttribute(L.messageKey) ??
+    item.querySelector(`[${L.messageKey}]`)?.getAttribute(L.messageKey) ??
+    ''
+  );
+}
+
+/**
+ * Whether a list item is a message of the conversation: it carries a message key (on itself or inside it) or an
+ * expanded state. Real Gmail keys only the expanded messages, and a list inside a message (attachments) has neither.
+ */
+const isMessageItem = (item: Element): boolean => item.hasAttribute(L.expanded) || messageKeyOf(item) !== '';
+
+/** The conversation's message items in `main`. */
+const messageItems = (main: Element): Element[] =>
+  Array.from(main.querySelectorAll(L.message)).filter(isMessageItem);
+
 function messageView(item: Element, main: Element, missing: Set<Landmark>): MessageView | null {
   const heading = headingOf(item, main);
   const sender = item.querySelector(L.sender);
@@ -198,7 +220,7 @@ function messageView(item: Element, main: Element, missing: Set<Landmark>): Mess
   if (date === null) missing.add('date');
   if (heading === null || sender === null || date === null) return null;
   return {
-    key: item.getAttribute(L.messageKey) ?? '',
+    key: messageKeyOf(item),
     subject: oneLine(heading.textContent),
     sender: email(sender.getAttribute(L.senderAddress) ?? ''),
     senderName: oneLine(sender.getAttribute(L.senderName) ?? sender.textContent),
@@ -214,7 +236,7 @@ function unread(opened: boolean, missing: readonly Landmark[], ambiguous: readon
 
 /** True when `main` holds a message or the subject heading: a conversation is open in it. */
 const holdsConversation = (main: Element): boolean =>
-  main.querySelector(L.message) !== null || main.querySelector(L.subject) !== null;
+  messageItems(main).length > 0 || main.querySelector(L.subject) !== null;
 
 /** Reads the opened conversation, if any. Never throws for a page that lacks something: it reports it missing. */
 export function readPage(doc: Document): PageView {
@@ -224,7 +246,7 @@ export function readPage(doc: Document): PageView {
   const [main, ...others] = mains;
   if (main === undefined) return unread(true, ['main'], []);
   if (others.length > 0) return unread(true, [], ['main']);
-  const items = Array.from(main.querySelectorAll(L.message));
+  const items = messageItems(main);
   const missing = new Set<Landmark>();
   if (main.querySelector(L.subject) === null) missing.add('subject');
   if (items.length === 0) missing.add('message');

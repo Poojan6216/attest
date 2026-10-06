@@ -38,6 +38,7 @@ import {
   calendarsOf,
   type Chip,
   chipsOf,
+  shownEventIds,
   type GridDay,
   gridDays,
   gridsOf,
@@ -189,6 +190,10 @@ function readEvents(main: Element, ctx: EventContext): ReadEvent[] | GcalReason[
   if (chips.length > SCHEMA_LIMITS.BATCH) return ['event.too_many'];
   const events: ReadEvent[] = [];
   const reasons = new Set<GcalReason>();
+  // An event the page shows that no chip reads (a layout this reader does not know) would be missing from the
+  // snapshot while a window vouches for its day: NOT_FOUND for an event that exists (Hard Rule 5). Fail loud instead.
+  const read = new Set(chips.map((chip) => chip.eventId));
+  if ([...shownEventIds(main)].some((id) => !read.has(id))) reasons.add('event.unreadable');
   for (const chip of chips) {
     const event = readEvent(chip, ctx);
     if (typeof event === 'string') reasons.add(event);

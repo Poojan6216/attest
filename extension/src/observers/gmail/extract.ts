@@ -11,7 +11,8 @@
  *
  * A row whose send time cannot be read (./sent-time.ts) is returned as a row without content. `redact.project`
  * refuses it (`redact.missing_occurred_at`), so the pass is DEGRADED and writes no coverage while the rows it could
- * read still count as evidence: the 2.0 contract (src/observers/plan.ts; Sprint 1 close, SEC-3; Hard Rule 5).
+ * read still count as evidence: the 2.0 contract (src/observers/plan.ts; Sprint 1 close, SEC-3; Hard Rule 5). A
+ * conversation of several messages (./sent-time.ts) gives no row: the list cannot time the user's sends in it.
  *
  * The visible window (docs/grading.md §3) ends at the pass instant at the head of the list (`#sent`, `Newer` off),
  * else at the newest row's time. It starts at the oldest row's minute when the page is provably the last of the
@@ -26,8 +27,10 @@
  * Sent page posts its rows and no coverage, by design (OK, never DEGRADED). In conversation view Gmail lists a
  * thread once, under its latest message: a send from a later page's span whose thread later got a reply is listed
  * on an earlier page, under the reply's date, so that span is not every send in it. The head lists every thread
- * whose latest message is at or after its oldest row, and a row holding more than one message is refused
- * (./sent-time.ts, so the pass asserts nothing): a send in the head's span is a row on the page.
+ * whose latest message is at or after its oldest row. A conversation row's sends were made at or before its own
+ * minute, so the window starts one minute after the newest conversation row (real capture of 2026-10-06): every send
+ * in the window is then a one-message row the pass timed. A conversation row whose time cannot be read leaves the
+ * window unknown.
  *
  * Each row's time is read once per pass and context: the rows and the window share it (TECH-2).
  */
@@ -37,7 +40,7 @@ import { MS_PER_MINUTE } from '../../core/units';
 import { oneLine } from '../text';
 import type { ExtractContext, RawRow, VisibleWindow } from '../types';
 import { type SentList, sentPageOf, type SentRowParts } from './sent-page';
-import { sentAt } from './sent-time';
+import { type RowTime, rowTime } from './sent-time';
 import { SENT_SELECTORS } from './selectors';
 
 const NO_SUBJECT: ReadonlySet<string> = new Set(SENT_SELECTORS.text.noSubject);
@@ -48,25 +51,28 @@ export function subjectHintOf(subject: Element): string | undefined {
   return line === '' || NO_SUBJECT.has(line) ? undefined : clampSubjectHint(line);
 }
 
-/** Each row's send time (null: unknown), per list read and pass context. */
-const TIMES = new WeakMap<SentList, WeakMap<ExtractContext, readonly (string | null)[]>>();
+/** Each row's time (./sent-time.ts `rowTime`), per list read and pass context. */
+const TIMES = new WeakMap<SentList, WeakMap<ExtractContext, readonly RowTime[]>>();
 
-function timesOf(list: SentList, ctx: ExtractContext): readonly (string | null)[] {
+function timesOf(list: SentList, ctx: ExtractContext): readonly RowTime[] {
   let byContext = TIMES.get(list);
   if (byContext === undefined) {
-    byContext = new WeakMap<ExtractContext, readonly (string | null)[]>();
+    byContext = new WeakMap<ExtractContext, readonly RowTime[]>();
     TIMES.set(list, byContext);
   }
   const known = byContext.get(ctx);
   if (known !== undefined) return known;
-  const times = list.rows.map((row) => sentAt(row, ctx));
+  const times = list.rows.map((row) => rowTime(row, ctx));
   byContext.set(ctx, times);
   return times;
 }
 
-function rawRows(row: SentRowParts, occurredAt: string | null): RawRow[] {
+function rawRows(row: SentRowParts, time: RowTime): RawRow[] {
+  // A conversation's sends cannot be timed from the list: no row, and the window starts after it (spanOf).
+  if (time.kind === 'conversation') return [];
   // Refused by project() (no occurredAt): the pass says DEGRADED instead of dropping a send in silence.
-  if (occurredAt === null) return [{ type: 'email.sent', rowKey: row.rowKey, fields: {} }];
+  if (time.kind === 'unreadable') return [{ type: 'email.sent', rowKey: row.rowKey, fields: {} }];
+  const occurredAt = time.at;
   const subjectHint = subjectHintOf(row.subject);
   return row.recipients.map((counterparty) => ({
     type: 'email.sent',
@@ -81,25 +87,36 @@ export function extractSent(doc: Document, ctx: ExtractContext): RawRow[] {
   const list = sentPageOf(doc);
   if (!list.ok) return [];
   const times = timesOf(list, ctx);
-  return list.rows.flatMap((row, at) => rawRows(row, times[at] ?? null));
+  return list.rows.flatMap((row, at) => rawRows(row, times[at] ?? { kind: 'unreadable' }));
 }
+
+/** The row's minute as the list shows it (a send's, or a conversation's newest), or null when unreadable. */
+const minuteOf = (time: RowTime): string | null =>
+  time.kind === 'send' ? time.at : time.kind === 'conversation' ? time.latest : null;
 
 /** The list's span (header); `none` when it holds no whole minute; null when a row's time is unknown. */
 function spanOf(list: SentList, ctx: ExtractContext): VisibleWindow | 'none' | null {
   let oldest: string | null = null;
   let newest: string | null = null;
-  for (const at of timesOf(list, ctx)) {
+  let conversation: string | null = null;
+  for (const time of timesOf(list, ctx)) {
+    const at = minuteOf(time);
     if (at === null) return null;
     if (oldest === null || instantMs(at) < instantMs(oldest)) oldest = at;
     if (newest === null || instantMs(at) > instantMs(newest)) newest = at;
+    if (time.kind === 'conversation' && (conversation === null || instantMs(at) > instantMs(conversation)))
+      conversation = at;
   }
   if (oldest === null || newest === null) return null;
   const windowEnd = list.head ? ctx.observedAt : newest;
-  if (!list.mayContinue) return { windowStart: oldest, windowEnd };
-  const startMs = instantMs(oldest) + MS_PER_MINUTE;
+  const startMs = Math.max(
+    instantMs(oldest) + (list.mayContinue ? MS_PER_MINUTE : 0),
+    conversation === null ? Number.NEGATIVE_INFINITY : instantMs(conversation) + MS_PER_MINUTE,
+  );
   const endMs = instantMs(windowEnd);
-  // Every row is in the minute being read, and the list goes on: no whole minute was seen.
+  // No whole minute after the oldest row (QA-1) and the newest conversation was seen.
   if (startMs > endMs && instantMs(oldest) <= endMs) return 'none';
+  if (startMs === instantMs(oldest)) return { windowStart: oldest, windowEnd };
   return { windowStart: isoWithOffset(startMs, ctx.offsetAt(startMs)), windowEnd };
 }
 

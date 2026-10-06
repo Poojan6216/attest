@@ -1,12 +1,12 @@
 {
   "$comment": "Gmail receipt parsers (sprint 2.3). Bump version on any change; record it with the fixture folder date in Decisions.md. Landmarks are role, aria-*, data-* and structure only, never class names. Regexes are read case-insensitively ('iu') and must run in linear time on any subject (no quantified run next to an overlapping one: a stranger writes the subject). Sender lists are domains: an address matches its own domain and any subdomain of it. See ./index.ts.",
   "observer": "gmail.receipt",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "fixtures": ["tests/fixtures/pages/gmail/2026-10-03"],
   "landmarks": {
     "main": "[role=\"main\"]",
     "subject": "h2[data-legacy-thread-id]",
-    "message": "[role=\"listitem\"][data-legacy-message-id]",
+    "message": "[role=\"listitem\"]",
     "messageKey": "data-legacy-message-id",
     "expanded": "aria-expanded",
     "sender": "h3 [email]",

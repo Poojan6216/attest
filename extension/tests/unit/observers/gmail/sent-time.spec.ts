@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { minuteOf } from '../../../../src/observers/gmail/sent-time';
+import type { PassPlan } from '../../../../src/observers/plan';
 import { fixtureCtx, fixtureNamed, openFixture, runSentPass } from './sent-fixtures';
 import { newYorkCtx, one, planVariant, row, setRowTime } from './variants';
 
@@ -97,7 +98,7 @@ describe('which text decides', () => {
   });
 });
 
-describe('conversation view: a row is a send only when it holds one message', () => {
+describe('conversation view: a row of several messages gives no row and bounds the window (capture of 2026-10-06)', () => {
   const ids = (thread: string, last: string, nonDraft: string | null) => (doc: Document) => {
     const subject = one(row(doc, 0), '[data-legacy-last-message-id]');
     subject.setAttribute('data-legacy-thread-id', thread);
@@ -105,18 +106,45 @@ describe('conversation view: a row is a send only when it holds one message', ()
     if (nonDraft === null) subject.removeAttribute('data-legacy-last-non-draft-message-id');
     else subject.setAttribute('data-legacy-last-non-draft-message-id', nonDraft);
   };
+  const reply = ids('1a101ff21e04e756', '1a1020aa00000001', '1a1020aa00000001');
+  const startsOf = (plan: PassPlan): string[] =>
+    plan.status === 'OK' ? plan.coverage.map((c) => c.windowStart) : [];
 
   it.each([
-    [
-      'a received reply is the newest message',
-      ids('1a101ff21e04e756', '1a1020aa00000001', '1a1020aa00000001'),
-    ],
+    ['a received reply is the newest message', reply],
     ['a draft sits on the thread', ids('1a101ff21e04e756', '1a1020aa00000002', '1a101ff21e04e756')],
-    ['a row without its non-draft id', ids('1a101ff21e04e756', '1a101ff21e04e756', null)],
-  ])('%s: that row is refused, the others kept, no coverage', async (_name, mutate) => {
-    const plan = await planVariant({ mutate });
+  ])(
+    '%s: that row gives no row, the others are kept, the window starts after its minute',
+    async (_name, mutate) => {
+      const plan = await planVariant({ mutate });
+      expect(plan.status).toBe('OK');
+      expect(plan.observations).toHaveLength(10);
+      expect(plan.observations.map((o) => o.counterparty)).not.toContain('alex.rivera@example.com');
+      // Row 0 is the newest (09:41): any send of the user's in it was made by then.
+      expect(startsOf(plan)).toEqual(['2026-10-03T09:42:00-04:00']);
+    },
+  );
+
+  it('a row missing an id cannot be told apart: refused, no coverage (a markup change is loud)', async () => {
+    const plan = await planVariant({ mutate: ids('1a101ff21e04e756', '1a101ff21e04e756', null) });
     expect(plan).toMatchObject(UNTIMED);
     expect(plan.observations).toHaveLength(10);
-    expect(plan.observations.map((o) => o.counterparty)).not.toContain('alex.rivera@example.com');
+  });
+
+  it('a conversation in the minute being read leaves no whole minute: OK, no coverage', async () => {
+    const plan = await planVariant({ mutate: reply, ctx: newYorkCtx('2026-10-03T09:41:30-04:00') });
+    expect(plan.status).toBe('OK_NO_COVERAGE');
+    expect(plan.observations).toHaveLength(10);
+  });
+
+  it('a conversation whose time cannot be read leaves the window unknown: DEGRADED', async () => {
+    const plan = await planVariant({
+      mutate: (doc) => {
+        reply(doc);
+        setRowTime(row(doc, 0), { title: null, label: '' });
+      },
+    });
+    expect(plan).toMatchObject({ status: 'DEGRADED', reasons: ['window.unknown'] });
+    expect(plan.observations).toHaveLength(10);
   });
 });

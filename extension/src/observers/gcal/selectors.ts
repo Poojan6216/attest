@@ -38,6 +38,7 @@ const CalendarSelectorsFile = z.strictObject({
     chip: Selector,
     dayButton: Selector,
     calendar: Selector,
+    calendarList: Selector,
     account: Selector,
     busy: Selector,
     progress: Selector,
