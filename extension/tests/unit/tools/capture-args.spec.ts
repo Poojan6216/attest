@@ -14,6 +14,35 @@ import { FIXTURE_PAGES_ROOT } from '../../tools/serve-fixtures';
 
 const NOW = new Date(2026, 9, 1, 0, 30); // 1 Oct 2026, 00:30 local time
 
+/** Every option once, `--redact-selector` and `--keep-selector` twice, blanks in `--names`, after a leading `--`. */
+const EVERY_OPTION = [
+  '--',
+  '--vendor=gmail',
+  '--name',
+  'sent-list',
+  '--cdp',
+  'http://localhost:9333',
+  '--seed',
+  's1',
+  '--date',
+  '2024-02-29',
+  '--tab',
+  'mail.google.com',
+  '--names',
+  ' Priya Raman, Daniel Okafor ,,',
+  '--redact-selector',
+  '[data-subject]',
+  '--redact-selector',
+  '.snippet',
+  '--keep-selector',
+  'td.xW',
+  '--keep-selector',
+  'h2[data-legacy-thread-id]',
+  '--out-root',
+  '/tmp/fixtures',
+  '--force',
+];
+
 describe('parseCaptureArgs', () => {
   it('applies the defaults for a minimal command', () => {
     expect(parseCaptureArgs(['--vendor', 'muse', '--name', 'activity'], NOW)).toEqual({
@@ -24,38 +53,14 @@ describe('parseCaptureArgs', () => {
       date: '2026-10-01',
       names: [],
       redactSelectors: [],
+      keepSelectors: [],
       outRoot: FIXTURE_PAGES_ROOT,
       force: false,
     });
   });
 
-  it('reads every option, repeats --redact-selector, splits --names, and tolerates a leading --', () => {
-    const options = parseCaptureArgs(
-      [
-        '--',
-        '--vendor=gmail',
-        '--name',
-        'sent-list',
-        '--cdp',
-        'http://localhost:9333',
-        '--seed',
-        's1',
-        '--date',
-        '2024-02-29',
-        '--tab',
-        'mail.google.com',
-        '--names',
-        ' Priya Raman, Daniel Okafor ,,',
-        '--redact-selector',
-        '[data-subject]',
-        '--redact-selector',
-        '.snippet',
-        '--out-root',
-        '/tmp/fixtures',
-        '--force',
-      ],
-      NOW,
-    );
+  it('reads every option, repeats --redact-selector and --keep-selector, splits --names, tolerates a leading --', () => {
+    const options = parseCaptureArgs(EVERY_OPTION, NOW);
     expect(options).toEqual({
       vendor: 'gmail',
       name: 'sent-list',
@@ -65,6 +70,7 @@ describe('parseCaptureArgs', () => {
       tab: 'mail.google.com',
       names: ['Priya Raman', 'Daniel Okafor'],
       redactSelectors: ['[data-subject]', '.snippet'],
+      keepSelectors: ['td.xW', 'h2[data-legacy-thread-id]'],
       outRoot: '/tmp/fixtures',
       force: true,
     });

@@ -104,7 +104,7 @@ export async function captureFixture(input: CaptureOptionsInput): Promise<Captur
   const options = resolveCaptureOptions(input, new Date());
   const target = fixtureTarget(options.outRoot, options.vendor, options.date, options.name);
   await assertWritable(target, options.force);
-  assertSelectorsValid(options.redactSelectors);
+  assertSelectorsValid([...options.redactSelectors, ...options.keepSelectors]);
   const seeds = await loadSeeds(options.seedsPath ?? SEEDS_PATH);
   const snapshot = await snapshotTab(options.cdp, options.tab);
   const sanitized = sanitizeHtml(snapshot.html, {
@@ -112,6 +112,7 @@ export async function captureFixture(input: CaptureOptionsInput): Promise<Captur
     seeds,
     names: options.names,
     redactSelectors: options.redactSelectors,
+    keepSelectors: options.keepSelectors,
   });
   await writeFixture(
     target,

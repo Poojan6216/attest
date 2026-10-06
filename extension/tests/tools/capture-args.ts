@@ -40,6 +40,7 @@ export const CaptureOptionsSchema = z.strictObject({
   tab: z.string().min(1).max(500).optional(),
   names: z.array(z.string().trim().min(2).max(100)).max(500).default([]),
   redactSelectors: z.array(z.string().trim().min(1).max(500)).max(100).default([]),
+  keepSelectors: z.array(z.string().trim().min(1).max(500)).max(100).default([]),
   outRoot: z.string().min(1).default(FIXTURE_PAGES_ROOT),
   force: z.boolean().default(false),
   seedsPath: z.string().min(1).optional(),
@@ -69,6 +70,8 @@ export const HELP = `Capture a sanitised fixture from a page open in your own Ch
   --tab <text>               capture the one tab whose URL contains <text> (default: first web page)
   --names <a,b>              real names to replace everywhere, comma-separated
   --redact-selector <css>    replace the text and labels of matching elements (repeatable)
+  --keep-selector <css>      areas a redacted text is never replaced in elsewhere (names, emails, amounts still are;
+                             repeatable): a hidden list's dates, an open receipt's subject and body
   --seed <text>              seed for fakes and injected secrets (default ${DEFAULT_SEED})
   --date <yyyy-mm-dd>        fixture folder date (default: today, local time)
   --out-root <dir>           fixture root (default tests/fixtures/pages)
@@ -86,6 +89,7 @@ const ARG_OPTIONS = {
   tab: { type: 'string' },
   names: { type: 'string' },
   'redact-selector': { type: 'string', multiple: true },
+  'keep-selector': { type: 'string', multiple: true },
   'out-root': { type: 'string' },
   force: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
@@ -113,6 +117,7 @@ export function parseCaptureArgs(argv: readonly string[], now: Date): CaptureOpt
       .map((name) => name.trim())
       .filter((name) => name !== ''),
     redactSelectors: values['redact-selector'] ?? [],
+    keepSelectors: values['keep-selector'] ?? [],
     force: values.force ?? false,
     ...(values.cdp === undefined ? {} : { cdp: values.cdp }),
     ...(values.seed === undefined ? {} : { seed: values.seed }),

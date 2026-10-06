@@ -22,7 +22,7 @@
  * machine `+tag` sender, the merchant a parser reads, or a name holding a registry brand). Every other address and
  * name is faked.
  */
-import type { Document, Element, Text } from 'happy-dom';
+import type { Document, Element } from 'happy-dom';
 
 import { RECEIPT_SENDER_DOMAINS, RECEIPT_SENDER_NAME_DOMAINS } from '../../src/observers/gmail/receipts';
 
@@ -37,6 +37,7 @@ import {
   trimUrl,
 } from './capture-dom';
 import { CaptureError } from './capture-error';
+import { type Redactions, redactSelected, selectAll } from './capture-redact';
 import { Faker } from './capture-fakes';
 import { stripForeignRawText } from './capture-html-guard';
 import { learnNames, localNamesFor, type NameBook } from './capture-names';
@@ -80,6 +81,12 @@ export interface SanitizeOptions {
   readonly names?: readonly string[];
   /** CSS selectors whose text and labels become fake phrases (--redact-selector). */
   readonly redactSelectors?: readonly string[];
+  /**
+   * CSS selectors of areas a redacted text is never replaced in elsewhere (--keep-selector): a redacted text also
+   * replaces the same text anywhere on the page, which would turn a hidden summary's dates into every row's date, or a
+   * hidden list's subject into the open receipt's. Names, emails, amounts and addresses are still replaced there.
+   */
+  readonly keepSelectors?: readonly string[];
   /** Receipt senders to keep (default RECEIPT_SENDERS; `{ domains: [], nameDomains: [] }` keeps none). */
   readonly keepSenders?: KeptSenders;
 }
@@ -101,15 +108,6 @@ export interface SanitizeResult {
 }
 
 export const SEEDS_PER_FIXTURE = 3;
-const MIN_LITERAL_LENGTH = 4;
-const REDACTED_ATTRIBUTES = 'title aria-label aria-description alt data-tooltip placeholder value'.split(' ');
-
-interface Redactions {
-  readonly literals: Map<string, string>;
-  readonly texts: Set<Text>;
-  readonly attributes: Map<Element, Set<string>>;
-}
-
 function emptyStats(): SanitizeStats {
   return {
     removedElements: 0,
@@ -122,17 +120,6 @@ function emptyStats(): SanitizeStats {
   };
 }
 
-function selectAll(doc: Document, selector: string): Element[] {
-  try {
-    return Array.from(doc.querySelectorAll(selector));
-  } catch {
-    throw new CaptureError(
-      'bad_selector',
-      `--redact-selector ${JSON.stringify(selector)} is not a valid CSS selector.`,
-    );
-  }
-}
-
 /** Throws CaptureError('bad_selector') for the first selector happy-dom cannot parse. */
 export function assertSelectorsValid(selectors: readonly string[]): void {
   const window = createInertWindow();
@@ -141,43 +128,6 @@ export function assertSelectorsValid(selectors: readonly string[]): void {
   } finally {
     closeWindow(window);
   }
-}
-
-function redactElement(element: Element, faker: Faker, redactions: Redactions, stats: SanitizeStats): void {
-  for (const node of textNodes(element)) {
-    const original = node.data.trim();
-    if (original === '' || redactions.texts.has(node)) continue;
-    const fake = faker.phrase(original);
-    node.data = node.data.replace(original, () => fake);
-    redactions.texts.add(node);
-    if (original.length >= MIN_LITERAL_LENGTH) redactions.literals.set(original, fake);
-    stats.redactedTexts += 1;
-  }
-  for (const target of [element, ...Array.from(element.querySelectorAll('*'))]) {
-    const done = redactions.attributes.get(target) ?? new Set<string>();
-    for (const name of REDACTED_ATTRIBUTES) {
-      const original = target.getAttribute(name)?.trim() ?? '';
-      if (original === '' || done.has(name)) continue;
-      const fake = faker.phrase(original);
-      target.setAttribute(name, fake);
-      done.add(name);
-      if (original.length >= MIN_LITERAL_LENGTH) redactions.literals.set(original, fake);
-    }
-    redactions.attributes.set(target, done);
-  }
-}
-
-function redactSelected(
-  doc: Document,
-  selectors: readonly string[],
-  faker: Faker,
-  stats: SanitizeStats,
-): Redactions {
-  const redactions: Redactions = { literals: new Map(), texts: new Set(), attributes: new Map() };
-  for (const selector of selectors) {
-    for (const element of selectAll(doc, selector)) redactElement(element, faker, redactions, stats);
-  }
-  return redactions;
 }
 
 function scrubAttributes(
@@ -220,14 +170,26 @@ function scrubAttributes(
   }
 }
 
+/** The page's scrubber, and the one for the areas --keep-selector names (the same, but no redacted literals). */
+interface Scrubbers {
+  readonly page: Scrubber;
+  readonly kept: Scrubber;
+  readonly keep: string;
+}
+
+function scrubberFor(element: Element | null, scrubbers: Scrubbers): Scrubber {
+  return scrubbers.keep !== '' && element?.closest(scrubbers.keep) != null ? scrubbers.kept : scrubbers.page;
+}
+
 function scrubDocument(
   doc: Document,
-  scrubber: Scrubber,
+  scrubbers: Scrubbers,
   book: NameBook,
   redactions: Redactions,
   stats: SanitizeStats,
 ): void {
   for (const element of Array.from(doc.querySelectorAll('*'))) {
+    const scrubber = scrubberFor(element, scrubbers);
     if (element.localName === 'style') {
       const css = sanitizeCss(element.textContent);
       stats.neutralisedResources += css.urlsNeutralised + css.atRulesRemoved;
@@ -238,9 +200,16 @@ function scrubDocument(
   for (const node of textNodes(doc)) {
     const parent = node.parentElement;
     if (redactions.texts.has(node) || parent?.localName === 'style') continue;
-    const scrubbed = scrubber.scrub(node.data, localNamesFor(parent, book));
+    const scrubbed = scrubberFor(parent, scrubbers).scrub(node.data, localNamesFor(parent, book));
     if (scrubbed !== node.data) node.data = scrubbed;
   }
+}
+
+/** The two scrubbers' counts together. */
+function sumStats(a: ScrubStats, b: ScrubStats): ScrubStats {
+  const sum = emptyScrubStats();
+  for (const key of Object.keys(sum) as (keyof ScrubStats)[]) sum[key] = a[key] + b[key];
+  return sum;
 }
 
 /**
@@ -365,14 +334,18 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
     keepSenderNames(doc, book, kept, options.names ?? []);
     faker.reserve(book.tokens);
     const redactions = redactSelected(doc, options.redactSelectors ?? [], faker, stats);
-    const scrubber = new Scrubber(faker, {
+    const scrubberOptions = {
       globalNames: book.global,
       nameTokens: book.tokens,
-      literals: redactions.literals,
       keptDomains: kept.domains,
       keptNameDomains: kept.nameDomains,
-    });
-    scrubDocument(doc, scrubber, book, redactions, stats);
+    };
+    const scrubbers: Scrubbers = {
+      page: new Scrubber(faker, { ...scrubberOptions, literals: redactions.literals }),
+      kept: new Scrubber(faker, { ...scrubberOptions, literals: new Map() }),
+      keep: (options.keepSelectors ?? []).join(', '),
+    };
+    scrubDocument(doc, scrubbers, book, redactions, stats);
     ensureCharset(doc);
     injectSeeds(doc, chosen);
     const output = `<!DOCTYPE html>\n${doc.documentElement.outerHTML}\n`;
@@ -386,7 +359,7 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
     return {
       html: output,
       seededSecrets: chosen.map((secret) => secret.id),
-      stats: { ...stats, ...scrubber.stats },
+      stats: { ...stats, ...sumStats(scrubbers.page.stats, scrubbers.kept.stats) },
     };
   } finally {
     closeWindow(window);

@@ -3,7 +3,9 @@
  *
  *  - Percent-encoded: `from%3Alena%40corp.io` in a Gmail search #fragment or a link path.
  *  - Base64 / base64url: Google Calendar's event ids (`eid=…`, `data-eventid="…"`) are base64 of
- *    "<event id> <calendar owner's email>", so a fixture would carry the owner's address in plain sight.
+ *    "<event id> <calendar owner's email>", so a fixture would carry the owner's address in plain sight. Google
+ *    writes some calendar ids short there: `<name>@m` for `<name>@gmail.com` (real capture of 2026-10-06), `@g` for
+ *    a group calendar; the name part is faked and the short form kept.
  * Both are rewritten in place with the same fake the plain address gets, re-encoded the same way, so ids stay
  * well-formed and every copy of one address still maps to one fake.
  */
@@ -24,6 +26,16 @@ export const BASE64_RUN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_-]{16,}={0,2}(?![A-
 const MIN_BASE64_LENGTH = 16;
 /** An address inside decoded bytes (read as latin1, so only ASCII addresses are matched). */
 const DECODED_EMAIL = new RegExp(String.raw`[A-Za-z0-9._%+-]+@${ASCII_DOMAIN}`, 'g');
+/** A short calendar id inside a decoded event id: `<name>@<one letter>`. Group 1: the name, group 2: the letter. */
+const SHORT_CALENDAR_ID = /(?<![A-Za-z0-9._%+-])([A-Za-z0-9._%+-]+)@([a-z])(?![A-Za-z0-9.@-])/g;
+/** The domains Google shortens in event ids; another letter is faked as `<letter>.calendar.google.com`. */
+const SHORT_DOMAINS: Readonly<Record<string, string>> = { m: 'gmail.com', g: 'group.calendar.google.com' };
+
+/** A short calendar id with its name faked as the full address is (`fakeEmail`), the short form kept. */
+function fakeShortId(name: string, letter: string, fakeEmail: (email: string) => string): string {
+  const fake = fakeEmail(`${name}@${SHORT_DOMAINS[letter] ?? `${letter}.calendar.google.com`}`);
+  return `${fake.slice(0, fake.indexOf('@'))}@${letter}`;
+}
 
 /** The fake for a percent-encoded match, `%40` kept. `fakeEmail` maps a plain address to its fake. */
 export function fakePercentEmail(match: RegExpExecArray, fakeEmail: (email: string) => string): string {
@@ -52,7 +64,11 @@ function fakeInside(token: string, fakeEmail: (email: string) => string): string
   const decoded = decodeBase64(token);
   if (decoded?.includes('@') !== true) return null;
   // A fake never equals its original (Faker), so an unchanged string means no address was found.
-  const replaced = decoded.replace(DECODED_EMAIL, (email) => fakeEmail(email));
+  const replaced = decoded
+    .replace(DECODED_EMAIL, (email) => fakeEmail(email))
+    .replace(SHORT_CALENDAR_ID, (_match, name: string, letter: string) =>
+      fakeShortId(name, letter, fakeEmail),
+    );
   return replaced === decoded ? null : encodeLike(token, replaced);
 }
 

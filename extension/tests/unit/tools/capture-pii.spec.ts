@@ -100,6 +100,18 @@ describe('encoded emails (invisible to a search for "@")', () => {
     for (const faked of tokens) expect(decode(faked)).toBe(`5pap18padh0q9eg4 ${plainFake(out)}`);
   });
 
+  it('a short calendar id inside an event id (`name@m` is name@gmail.com, real capture 2026-10-06) → name faked', () => {
+    const token = b64url('hdalruj674un0ue7vtjjb6h5jk lena.hoffmann@m');
+    const out = main(`<b>lena.hoffmann@gmail.com</b><div data-eventid="${token}">e</div>`);
+    const faked = /data-eventid="([A-Za-z0-9_-]+)"/.exec(out)?.[1] ?? '';
+    expect(decode(faked)).not.toContain('lena');
+    expect(decode(faked)).toBe(`hdalruj674un0ue7vtjjb6h5jk ${plainFake(out).split('@')[0] ?? ''}@m`);
+    const group = b64url('k2v0pmrq5bgd6lq9 ab12cdtokenx@g');
+    expect(
+      decode(/data-eventid="([A-Za-z0-9_-]+)"/.exec(main(`<div data-eventid="${group}">e</div>`))?.[1] ?? ''),
+    ).toMatch(/^k2v0pmrq5bgd6lq9 [a-z.]+@g$/);
+  });
+
   it('inside a standard base64 value with "/" and padding → stays standard and padded', () => {
     const token = Buffer.concat([Buffer.from([0xff, 0xfe, 0xfd]), Buffer.from(' ann@corp.io;')]).toString(
       'base64',
