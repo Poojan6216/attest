@@ -319,6 +319,8 @@ async function expectRendersStandalone(seededSecrets: readonly string[]): Promis
     expect(opened.requests).toBeGreaterThan(0);
     expect(opened.errors).toEqual([]);
     await expect(view.locator('script')).toHaveCount(0);
+    // The page's stylesheets are not copied: the inlined computed styles stand in for them.
+    await expect(view.locator('style')).toHaveCount(0);
     const handlers = await view.evaluate(() =>
       Array.from(document.querySelectorAll('*')).flatMap((element) =>
         element.getAttributeNames().filter((name) => name.toLowerCase().startsWith('on')),

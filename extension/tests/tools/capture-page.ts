@@ -29,7 +29,12 @@ export interface SnapshotConfig {
   readonly gridContainer: readonly string[];
   readonly flexItem: readonly string[];
   readonly defaults: Readonly<Record<string, string>>;
-  /** Removed from the copy: they execute or embed, and SVG <style> trips the Node-side parser. */
+  /**
+   * Removed from the copy: they execute or embed. The page's own stylesheets go too: each element's computed
+   * critical styles are inlined (`display` and `visibility` among them, all a reader checks), and a real Gmail page
+   * carries about 4 MB of style text, which a test DOM recomputes for over a second per element (capture of
+   * 2026-10-06). SVG <style> also trips the Node-side parser.
+   */
   readonly dropSelector: string;
 }
 
@@ -55,7 +60,7 @@ export const SNAPSHOT_CONFIG: SnapshotConfig = {
     'flex-shrink': '1',
     'flex-basis': 'auto',
   },
-  dropSelector: 'script, noscript, template, iframe, frame, object, embed, svg style',
+  dropSelector: 'script, noscript, template, iframe, frame, object, embed, style',
 };
 
 /** Runs in the page. Returns the serialized clone with the critical computed styles inlined. */
