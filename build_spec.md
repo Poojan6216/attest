@@ -533,6 +533,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-07] [2.gate] Every automated check re-run on the committed code, all green: 9,652 tests, the browser tests (47 of 47; nothing left the browser), the time-zone and coverage runs, and the bench on 4 real Sent pages and 9 real Calendar pages. 10 commits wait for your push; the gate still waits on the live check (2.8) and the receipt re-captures (2.1).
 [2026-10-07] [ci] CI had been red since 4 October. Two earlier causes were already fixed; the last was memory: the Calendar tests kept every page they read alive, more than the 2 GB CI gives each test process (your Mac gives 4 GB, so it passed here). Each page is now let go when its test ends, and every test run gets CI's 2 GB, so a leak fails on the Mac too; the whole suite passes on one process under that limit. CI turns green on your next push.
 [2026-10-07] [ci] Your push was refused by its own check: a test that fails at random (about 1 run in 150). Measuring all 64 such checks found two more (about 1 in 50 and 1 in 750) and one test that expected the wrong thing in a rare case (the grading code was right). All four fixed; none was loosened.
+[2026-10-07] [ci] With the tests passing, CI's single job ran out of its 30 minutes before reaching the browser tests; it now runs as five jobs side by side, each well inside the limit, with every check unchanged.
 ```
 
 ---
