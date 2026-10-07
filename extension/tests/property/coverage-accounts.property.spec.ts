@@ -4,7 +4,8 @@
  * source is full only when each bound account's own eligible, uncapped entries contain the claim window, and a
  * window that only their union contains is `partial` with `coverage.account_partial`. One bound account, or none (the
  * `coverage.multiple_accounts` and `coverage.no_account` caps), is unchanged. For a Gmail Sent claim and a Calendar
- * created claim (whose entries synced before its grace sync are capped, v1.10), so the rule holds for every source.
+ * created claim, whose entries synced before the claim's grace sync are capped (`coverage.list_unsettled` since
+ * v1.14, `coverage.changes_unfollowed` since v1.10), so the rule holds for every source.
  * Each run's tallies are asserted, so no property can pass without reaching its cases.
  */
 import fc from 'fast-check';
@@ -26,13 +27,21 @@ const CLAIMED = 600;
 
 /** The claim window (§4.1) and grace sync of each kind, in minutes from BASE. */
 const KINDS = {
-  email: { type: 'email.sent', source: 'gmail.sent', from: CLAIMED - 2, to: CLAIMED + 1 + 45, grace: null },
+  email: {
+    type: 'email.sent',
+    source: 'gmail.sent',
+    from: CLAIMED - 2,
+    to: CLAIMED + 1 + 45,
+    grace: CLAIMED + 1 + 45,
+    cap: 'coverage.list_unsettled',
+  },
   calendar: {
     type: 'calendar.created',
     source: 'gcal.event',
     from: 2_880 - 3 * 1_440,
     to: 2_880 + 3 * 1_440,
     grace: CLAIMED + 1 + 30,
+    cap: 'coverage.changes_unfollowed',
   },
 } as const;
 type Kind = keyof typeof KINDS;
@@ -81,20 +90,26 @@ function contains(entries: readonly Entry[], a: number, b: number): boolean {
 
 /** §6.1 v1.11 written out for one source: the level and the cap codes. */
 function oracle(kind: Kind, entries: readonly Entry[], bound: readonly string[] | null) {
-  const { from, to, grace } = KINDS[kind];
+  const { from, to, grace, cap: staleCap } = KINDS[kind];
   const seen = entries.filter((e) => e.sync <= 900);
   const eligible = seen.filter((e) => bound === null || (e.account !== null && bound.includes(e.account)));
   const overlapping = eligible.filter((e) => Math.min(e.from, e.to) <= to && Math.max(e.from, e.to) >= from);
   if (overlapping.length === 0) return { level: 'none', caps: [] as string[] };
   const accounts = new Set(seen.flatMap((e) => (e.account === null ? [] : [e.account])));
   const caps = new Set<string>();
-  const capsOf = (e: Entry): string[] => [
-    ...(grace !== null && e.sync < grace ? ['coverage.changes_unfollowed'] : []),
+  const groupCaps = (e: Entry): string[] => [
     ...(bound === null && accounts.size > 1 ? ['coverage.multiple_accounts'] : []),
     ...(bound === null && e.account === null ? ['coverage.no_account'] : []),
   ];
-  for (const e of overlapping) for (const cap of capsOf(e)) caps.add(cap);
-  const uncapped = overlapping.filter((e) => capsOf(e).length === 0);
+  const stale = (e: Entry): boolean => e.sync < grace;
+  // A stale entry names its cap only for a span no fresh entry (synced at or after the grace sync) saw (v1.14).
+  const fresh = overlapping.filter((e) => !stale(e));
+  for (const e of overlapping) {
+    for (const cap of groupCaps(e)) caps.add(cap);
+    const seen = [Math.max(Math.min(e.from, e.to), from), Math.min(Math.max(e.from, e.to), to)] as const;
+    if (stale(e) && !contains(fresh, seen[0], seen[1])) caps.add(staleCap);
+  }
+  const uncapped = overlapping.filter((e) => !stale(e) && groupCaps(e).length === 0);
   const distinct = [...new Set(bound ?? [])];
   const union = contains(uncapped, from, to);
   const each =
@@ -110,6 +125,7 @@ function oracle(kind: Kind, entries: readonly Entry[], bound: readonly string[] 
   if (union) caps.add('coverage.account_partial');
   const order = [
     'coverage.changes_unfollowed',
+    'coverage.list_unsettled',
     'coverage.account_partial',
     'coverage.multiple_accounts',
     'coverage.no_account',

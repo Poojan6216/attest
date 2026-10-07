@@ -21,6 +21,7 @@ import { V14_RULES } from './v14-rules';
 import { V110_RULES } from './v110-rules';
 import { V111_RULES } from './v111-rules';
 import { V112_RULES } from './v112-rules';
+import { V114_RULES } from './v114-rules';
 import { V19_RULES } from './v19-rules';
 
 const FILES = scenarioFiles();
@@ -189,7 +190,7 @@ const DESCRIPTIVE_TAGS = [
 ];
 
 describe('contract tags', () => {
-  it('every contract:<tag> a file carries is a proved v1.2/v1.3/v1.4/v1.9/v1.10/v1.11/v1.12 rule or a listed descriptive tag', () => {
+  it('every contract:<tag> a file carries is a proved v1.2/v1.3/v1.4/v1.9/v1.10/v1.11/v1.12/v1.14 rule or a listed descriptive tag', () => {
     const proved = new Set(
       [
         ...V12_RULES,
@@ -199,6 +200,7 @@ describe('contract tags', () => {
         ...V110_RULES,
         ...V111_RULES,
         ...V112_RULES,
+        ...V114_RULES,
       ].map(([tag]) => tag),
     );
     const unproved = SCENARIOS.flatMap(([file, s]) =>

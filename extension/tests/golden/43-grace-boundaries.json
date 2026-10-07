@@ -6,7 +6,7 @@
     "Two gmail.sent entries (acct-a): E0 saw [11:00, 12:30] (synced 12:30); E1 saw [13:00, 14:48] (synced 14:48). evaluatedAt 14:48.",
     "c1 (14:02): window [14:00, 14:48] ⊆ E1 → full. graceElapsed needs a sync ≥ end + 30 = 14:33 and ≥ end + 45 = 14:48; E1 synced exactly 14:48 (inclusive) → rule not_found, FINAL, coverage.account_unbound.",
     "c2 (14:03): window [14:01, 14:49]; E1 ends 14:48 → partial. graceElapsed needs ≥ 14:49 → false → rule pending (it precedes partial_coverage), grace.waiting, PENDING.",
-    "c3 (12:02): window [12:00, 12:48]; E0 overlaps up to 12:30, E1 starts 13:00 → partial (a gap). graceElapsed: E1 synced 14:48 ≥ 12:48 → true. No candidate → rule partial_coverage, coverage.partial; PENDING until 10-07 12:03."
+    "c3 (12:02): window [12:00, 12:48]; E0 overlaps up to 12:30, E1 starts 13:00 → partial (a gap). Since v1.14 (§6.1) E0, synced 12:30 before c3's grace sync (12:03 + max(30, 45) = 12:48), is also capped (coverage.list_unsettled): the gap stands either way. graceElapsed: E1 synced 14:48 ≥ 12:48 → true. No candidate → rule partial_coverage, coverage.partial, coverage.list_unsettled; PENDING until 10-07 12:03."
   ],
   "input": {
     "evaluatedAt": "2026-10-06T14:48:00-04:00",
@@ -37,7 +37,11 @@
       }
     ],
     "observations": [],
-    "grants": [{ "agent": "muse" }],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
     "coverage": [
       {
         "source": "gmail.sent",
@@ -81,7 +85,7 @@
       "state": "PENDING",
       "observationRefs": [],
       "score": null,
-      "reasonCodes": ["coverage.partial", "match.none"]
+      "reasonCodes": ["coverage.partial", "coverage.list_unsettled", "match.none"]
     }
   ]
 }

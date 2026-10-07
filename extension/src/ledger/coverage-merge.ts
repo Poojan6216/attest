@@ -73,12 +73,20 @@ export function touches(a: PlacedEntry, b: PlacedEntry): boolean {
 }
 
 /**
+ * Sources whose entries §6.1 caps by when they synced: a calendar claim's `gcal.event` entries synced before its
+ * grace (v1.10), and every claim's `gmail.sent` entries synced before its grace (v1.14). A union that moved such an
+ * entry's sync over a span the later pass did not see would lift that cap, so their unions are bounded (`mergeable`).
+ */
+const SYNC_CAPPED: ReadonlySet<string> = new Set(['gcal.event', 'gmail.sent']);
+
+/**
  * Whether the union of `a` and `b` (one group, touching) says only what each of them said (see the header): always
- * for Gmail; for Calendar, only when they synced at one instant, or the earlier-synced window lies inside the
- * later-synced one.
+ * for receipts; for Calendar and Gmail Sent, only when they synced at one instant, or the earlier-synced window lies
+ * inside the later-synced one (a Sent list read before a reply sent elsewhere showed on it must stay its own, early,
+ * interval: tech re-review TECH-R2).
  */
 export function mergeable(a: PlacedEntry, b: PlacedEntry): boolean {
-  if (a.entry.source !== 'gcal.event' || a.syncMs === b.syncMs) return true;
+  if (!SYNC_CAPPED.has(a.entry.source) || a.syncMs === b.syncMs) return true;
   const [earlier, later] = a.syncMs < b.syncMs ? [a, b] : [b, a];
   return earlier.startMs >= later.startMs && earlier.endMs <= later.endMs;
 }

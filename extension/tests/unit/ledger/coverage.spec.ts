@@ -132,6 +132,43 @@ describe('recordCoverage: a gap is never bridged', () => {
 
 describe('recordCoverage: merging within one group', () => {
   it('merges overlapping and touching passes: earliest start, latest end, latest sync', async () => {
+    // Receipt passes merge freely; a Sent or Calendar pass merges only into one that contains it (below).
+    const receipt = (overrides: Partial<ObserverCoverageInput> = {}) =>
+      pass({ observerId: 'gmail.receipts', source: 'gmail.receipt', ...overrides });
+    await recordCoverage(db, receipt());
+    await recordCoverage(
+      db,
+      receipt({
+        windowStart: '2026-10-01T10:00:00Z',
+        windowEnd: '2026-10-01T12:00:00Z',
+        lastSyncAt: '2026-10-01T12:00:00Z',
+      }),
+    );
+    // A late-arriving earlier pass that overlaps both: the union keeps the latest sync.
+    await recordCoverage(
+      db,
+      receipt({
+        windowStart: '2026-10-01T08:00:00Z',
+        windowEnd: '2026-10-01T09:30:00Z',
+        lastSyncAt: '2026-10-01T09:30:00Z',
+      }),
+    );
+    const receipts = await coverageFor(
+      db,
+      { type: 'purchase.made', window: DAY, evaluatedAt: EVALUATED_AT },
+      DEFAULT_POLICY,
+    );
+    expect(spans(receipts)).toEqual([
+      ['2026-10-01T08:00:00Z', '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z'],
+    ]);
+    expect(await db.coverageIntervals.count()).toBe(1);
+  });
+});
+
+describe('recordCoverage: Sent passes merge only into a pass that contains them (v1.14)', () => {
+  it('a Sent pass merges only into one synced at the same instant or that contains it (v1.14)', async () => {
+    // The same three passes as above, on Gmail Sent: no later pass contains an earlier one, so none merge, and an
+    // early view keeps its early sync (§6.1 caps a Sent view synced before a claim's grace sync).
     await recordCoverage(db, pass());
     await recordCoverage(
       db,
@@ -141,7 +178,6 @@ describe('recordCoverage: merging within one group', () => {
         lastSyncAt: '2026-10-01T12:00:00Z',
       }),
     );
-    // A late-arriving earlier pass that overlaps both: the union keeps the latest sync.
     await recordCoverage(
       db,
       pass({
@@ -150,12 +186,23 @@ describe('recordCoverage: merging within one group', () => {
         lastSyncAt: '2026-10-01T09:30:00Z',
       }),
     );
+    expect(await db.coverageIntervals.count()).toBe(3);
+    // A later pass that contains them all takes them in.
+    await recordCoverage(
+      db,
+      pass({
+        windowStart: '2026-10-01T07:00:00Z',
+        windowEnd: '2026-10-01T12:30:00Z',
+        lastSyncAt: '2026-10-01T12:30:00Z',
+      }),
+    );
     expect(spans(await all())).toEqual([
-      ['2026-10-01T08:00:00Z', '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z'],
+      ['2026-10-01T07:00:00Z', '2026-10-01T12:30:00Z', '2026-10-01T12:30:00Z'],
     ]);
-    expect(await db.coverageIntervals.count()).toBe(1);
   });
+});
 
+describe('recordCoverage: what never merges', () => {
   it('a pass inside a stored interval changes nothing, and recording it twice is a no-op', async () => {
     await recordCoverage(db, pass());
     const [before] = await db.coverageIntervals.toCollection().primaryKeys();

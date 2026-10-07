@@ -114,6 +114,10 @@ describe('a calendar view synced before the grace sync is capped (§6.1 v1.10)',
     expect(level(created, [early, late])).toMatchObject({ level: 'partial', capReasons: [STALE_CAP] });
     expect(level(created, [early, late, october(at('14:40'))]).level).toBe('full');
   });
+});
+
+describe('which views the stale-view cap bounds, and grace (§6.1 v1.10, v1.14)', () => {
+  const created = claimOf('calendar.created');
 
   it('is a gcal.event fact: another source a custom policy lists for the type is never capped by it', () => {
     const policy = loadPolicy({
@@ -124,15 +128,29 @@ describe('a calendar view synced before the grace sync is capped (§6.1 v1.10)',
       { agent: 'muse', accounts: { 'gcal.event': ['acct-a'], 'gmail.sent': ['acct-a'] } },
       EVAL,
     );
-    const sent: ScenarioCoverage = {
+    // Synced after the claim's own grace sync (14:48 for a non-calendar source), so only the calendar bound could
+    // cap it; v1.14's cap on an earlier Sent view is checked below.
+    const sent = (lastSyncAt: string): ScenarioCoverage => ({
       source: 'gmail.sent',
-      lastSyncAt: at('14:00'),
+      lastSyncAt,
       windowStart: at('00:00', '01'),
       windowEnd: '2026-11-01T00:00:00-04:00',
       accountHash: 'acct-a',
-    };
-    const result = coverageLevel(created, both, buildCoverage([october(at('14:40')), sent], EVAL), policy);
+    });
+    const result = coverageLevel(
+      created,
+      both,
+      buildCoverage([october(at('14:40')), sent(at('14:50'))], EVAL),
+      policy,
+    );
     expect(result).toMatchObject({ level: 'full', capReasons: [] });
+    const early = coverageLevel(
+      created,
+      both,
+      buildCoverage([october(at('14:40')), sent(at('14:00'))], EVAL),
+      policy,
+    );
+    expect(early.capReasons).toEqual([{ code: 'coverage.list_unsettled', source: 'gmail.sent' }]);
   });
 
   it('still counts a capped view for grace: the observer synced', () => {

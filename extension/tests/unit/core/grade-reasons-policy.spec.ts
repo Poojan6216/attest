@@ -65,8 +65,10 @@ describe('§15: grace.waiting accompanies graceElapsed: false while PENDING, and
   it('a pending rule naming only coverage: partial gives coverage.partial, never grace.waiting', () => {
     const receipt = run(pendingWhen({ coverage: 'partial' }));
     expect(summary(receipt)).toEqual(['UNVERIFIABLE', 'pending', 'PENDING']);
+    // v1.14: the 14:30 Sent view, synced before the claim's 14:48 grace sync, is capped.
     expect(receipt.reasons).toEqual([
       { code: 'coverage.partial', params: SOURCE },
+      { code: 'coverage.list_unsettled', params: SOURCE },
       { code: 'match.none', params: {} },
     ]);
   });
@@ -74,9 +76,11 @@ describe('§15: grace.waiting accompanies graceElapsed: false while PENDING, and
   it('a pending rule naming both gives both, in §15 table order', () => {
     const receipt = run(pendingWhen({ coverage: 'partial', graceElapsed: false }));
     expect(summary(receipt)).toEqual(['UNVERIFIABLE', 'pending', 'PENDING']);
+    // The rule's own codes first, then coverage caps (v1.14: the 14:30 Sent view is capped), then match (§15).
     expect(receipt.reasons.map((reason) => reason.code)).toEqual([
       'coverage.partial',
       'grace.waiting',
+      'coverage.list_unsettled',
       'match.none',
     ]);
   });
@@ -85,6 +89,7 @@ describe('§15: grace.waiting accompanies graceElapsed: false while PENDING, and
     const receipt = run(pendingWhen({ coverage: 'partial' }), partlySeen(EVAL, false));
     expect(receipt.reasons).toEqual([
       { code: 'coverage.partial', params: SOURCE },
+      { code: 'coverage.list_unsettled', params: SOURCE },
       { code: 'coverage.no_account', params: SOURCE },
       { code: 'match.none', params: {} },
     ]);

@@ -1,0 +1,120 @@
+{
+  "name": "a Sent list seen before an email claim's grace sync never makes it NOT_FOUND; a later one can",
+  "covers": ["contract:sent_list_unsettled_capped", "edge:reply_sent_before_list_refresh"],
+  "mode": "batch",
+  "notes": [
+    "§6.1 v1.14: a gmail.sent entry counts towards full coverage only if its lastSyncAt ≥ the claim's grace sync, max(end(p,t) + graceMin, end(p,t) + afterClaimMin); any other overlapping entry is capped with coverage.list_unsettled. A Sent list read before it shows a reply sent elsewhere (an agent replying through the API: Gmail lists the reply under its conversation's newest minute once the list refreshes, and a conversation row is never a row, contract v1.13) vouches for a span it has not settled (tech re-review TECH-R2). A capped entry still counts for grace, and a row it saw still verifies.",
+    "Coverage (acct-a, bound by the grant): E1, a pass at 14:06 that read a list not yet refreshed: [09:01, 14:06], synced 14:06. E2, a pass at 15:00 after the refresh: the reply's conversation is now listed at 14:05, so the window starts a minute after it: [14:06, 15:00], synced 15:00. evaluatedAt 15:00.",
+    "c1: muse says at 14:05 (minute) it replied to bob@northwind.example 'Re: plan'. Window [14:03, 14:51] (start 14:05 − 2, end 14:06 + 45); grace sync = 14:06 + max(30, 45) = 14:51. E1 synced 14:06 < 14:51 → capped; E2 is uncapped but starts 14:06, so [14:03, 14:06) is seen by no uncapped entry → coverage partial. No candidate (o1 is to another domain, no shared subject word: no content feature, the content gate). Rules: verified, partial no; pending no (E2 synced 15:00 ≥ 14:51); partial_coverage → UNVERIFIABLE, PENDING until end + finalizeUnverifiableHours. Reasons coverage.partial, coverage.list_unsettled (both {source: gmail.sent}), match.none.",
+    "Under v1.13 the union of E1 and E2 contained c1's window and c1 was NOT_FOUND, FINAL: a false NOT_FOUND for a reply the list had not shown yet (Hard Rule 5).",
+    "c2: muse says at 13:00 it emailed dana@fabrikam.example 'Invoice'. Window [12:58, 13:46]; grace sync 13:01 + 45 = 13:46. E1 synced 14:06 ≥ 13:46 → not capped, and [09:01, 14:06] contains the window → full. graceElapsed (E1 14:06 ≥ 13:46). No candidate → not_found → NOT_FOUND, FINAL at evaluatedAt 15:00. The grant binds acct-a, so no coverage.account_unbound; reasons match.none.",
+    "c3: muse says at 14:04 it emailed carol@company.com 'Agenda'. o1 (seen by E1's pass, observedAt 14:06): identical address and subject, inside [14:04, 14:05] → timeProximity 1, counterpartyExact 1, counterpartyDomain 1, subjectOverlap 1: S = 9000/9000 = 1/1 → verified (it precedes every coverage rule). FINAL (§8 VERIFIED): E2 synced 15:00 ≥ end + graceMin = 14:05 + 30 = 14:35. Reasons match.best {observationId: o1}."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "bob@northwind.example",
+        "subjectHint": "Re: plan",
+        "claimedAt": "2026-10-06T14:05:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "dana@fabrikam.example",
+        "subjectHint": "Invoice",
+        "claimedAt": "2026-10-06T13:00:00-04:00"
+      },
+      {
+        "ref": "c3",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "carol@company.com",
+        "subjectHint": "Agenda",
+        "claimedAt": "2026-10-06T14:04:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "carol@company.com",
+        "subjectHint": "Agenda",
+        "occurredAt": "2026-10-06T14:04:00-04:00",
+        "observedAt": "2026-10-06T14:06:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse",
+        "accounts": {
+          "gmail.sent": ["acct-a"]
+        }
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T14:06:00-04:00",
+        "windowStart": "2026-10-06T09:01:00-04:00",
+        "windowEnd": "2026-10-06T14:06:00-04:00",
+        "accountHash": "acct-a"
+      },
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T14:06:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.list_unsettled", "match.none"],
+      "reasonParams": {
+        "coverage.partial": {
+          "source": "gmail.sent"
+        },
+        "coverage.list_unsettled": {
+          "source": "gmail.sent"
+        },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    },
+    {
+      "ref": "c3",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/1",
+      "reasonCodes": ["match.best"],
+      "reasonParams": {
+        "match.best": {
+          "observationId": "o1"
+        }
+      }
+    }
+  ]
+}

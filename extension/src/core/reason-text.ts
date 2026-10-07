@@ -211,6 +211,11 @@ const TEXT: Readonly<Record<ReasonCode, Render>> = Object.freeze({
       `Attest was not following changes in ${source} for the whole time this change could have happened.`,
     'Attest was not following changes for the whole time this change could have happened.',
   ),
+  'coverage.list_unsettled': bySource(
+    (source) =>
+      `Attest last looked at ${source} too soon after this claim for a message sent from elsewhere to show there.`,
+    'Attest last looked too soon after this claim for a message sent from elsewhere to show there.',
+  ),
   'coverage.change_unprovable': bySource(
     (source) =>
       `Attest reads ${source} as snapshots, so it can see a change that was made but cannot show one never was.`,

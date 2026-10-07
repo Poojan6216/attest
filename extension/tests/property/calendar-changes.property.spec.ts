@@ -213,7 +213,8 @@ function reaches(entries: readonly Entry[], from: number, to: number): boolean {
 
 /**
  * §6.1 v1.11 written out: every entry is eligible and uncapped but for the calendar caps. A change claim's overlapping
- * entries are all `unprovable`; a created claim's stale ones (synced before the grace sync) `unfollowed`.
+ * entries are all `unprovable`; a created claim's stale ones (synced before the grace sync) `unfollowed`, named only
+ * for a span no fresh one saw (v1.14).
  * `followedWhole`: the change claim's window is held by entries that followed changes over its change span and
  * synced at or after its end, the case v1.9 and v1.10 called full.
  */
@@ -242,8 +243,14 @@ function levelOracle(
       followedWhole: reaches(followed, from, to),
     };
   }
-  if (reaches(overlapping.filter(fresh), from, to)) return { level: 'full', cap: null, followedWhole: false };
-  const stale = overlapping.some((e) => !fresh(e));
+  const freshOnes = overlapping.filter(fresh);
+  if (reaches(freshOnes, from, to)) return { level: 'full', cap: null, followedWhole: false };
+  // A stale view names its cap only for a span no fresh view saw (v1.14).
+  const stale = overlapping.some(
+    (e) =>
+      !fresh(e) &&
+      !reaches(freshOnes, Math.max(Date.parse(e.windowStart), from), Math.min(Date.parse(e.windowEnd), to)),
+  );
   return { level: 'partial', cap: stale ? 'coverage.changes_unfollowed' : null, followedWhole: false };
 }
 

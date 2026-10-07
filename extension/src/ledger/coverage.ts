@@ -7,10 +7,11 @@
  * the same observer, source, account, `allCalendars`, `changesSince`, and first-look marker or not). `recordCoverage`
  * (./coverage-store.ts) merges a pass into every stored interval of its group that it overlaps or touches and may
  * merge with (closed intervals: a 1 ms gap is never bridged, as conditions-coverage.ts `covers` reads them): the
- * union keeps the earliest start, the latest end and the latest `lastSyncAt`. Two `gcal.event` intervals merge only
- * when they synced at one instant or the earlier-synced window lies inside the later-synced one, so a union never
- * moves a `lastSyncAt` over Calendar days the later pass did not see (./coverage-merge.ts `mergeable`; §6.1 caps a
- * calendar claim's entries synced before its grace). A union is sound for every batch evaluated at or after the
+ * union keeps the earliest start, the latest end and the latest `lastSyncAt`. Two `gcal.event` or two `gmail.sent`
+ * intervals merge only when they synced at one instant or the earlier-synced window lies inside the later-synced one,
+ * so a union never moves a `lastSyncAt` over a span the later pass did not see (./coverage-merge.ts `mergeable`; §6.1
+ * caps a calendar claim's entries synced before its grace, v1.10, and every Sent entry synced before a claim's grace,
+ * v1.14). A union is sound for every batch evaluated at or after the
  * latest sync it merged: "by `lastSyncAt` the observer had seen `windowStart..windowEnd`" stays true of it;
  * eligibility, caps and the account count read the group's fields, which the union keeps; and grace (§6.1
  * `graceElapsed`) reads the latest sync, which it keeps. A batch evaluated before that sync (stamped before the

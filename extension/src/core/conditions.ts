@@ -239,6 +239,7 @@ class ClaimConditions implements Conditions {
         this.eligible(),
         claimWindow(this.claim, policy),
         calendarBound(this.claim, policy),
+        graceSyncMs(this.claim, policy),
       );
     }
     return this.#coverage;

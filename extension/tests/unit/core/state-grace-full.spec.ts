@@ -4,10 +4,12 @@
  *
  * In state-grace.spec.ts an email claim's coverage becomes full at the same sync that ends grace (14:48: the
  * window ends at end(p,t) + afterClaimMin, and afterClaimMin > graceMin), so a grace bug can hide behind the
- * coverage rule. Here coverage is fresh AND full well before grace, so a NOT_FOUND before grace would be a grace
- * bug and nothing else:
- *  - an email claim under a policy with graceMin 60 > afterClaimMin 45: coverage is full from the 14:48 sync,
- *    grace is end(p,t) + max(60, 45) = 15:03.
+ * coverage rule. Here the window is seen whole well before grace, so a NOT_FOUND before grace would be a grace or a
+ * coverage bug:
+ *  - an email claim under a policy with graceMin 60 > afterClaimMin 45: its Sent view contains the window from the
+ *    14:48 sync, grace is end(p,t) + max(60, 45) = 15:03. Since v1.14 (§6.1) that view is capped until 15:03
+ *    (`coverage.list_unsettled`): a Sent list read before the grace sync may not show a reply sent elsewhere yet, so
+ *    coverage too is full only from the grace sync, as for a calendar claim.
  * A calendar claim whose view shows the whole ±calendarDays window from the first sync is walked too: grace is
  * end(p,t) + graceMin = 14:03 + 30 = 14:33 (calendar types do not wait for afterClaimMin). Since v1.10 (§6.1) its
  * coverage is full only from that same sync: a view last synced before end(p,t) + graceMin is capped
@@ -100,7 +102,8 @@ const EMAIL_LONG_GRACE: GraceCase = {
       ],
       syncedAt,
     ),
-  fullFrom: '2026-10-06T14:48:00-04:00',
+  // v1.14 (§6.1): a Sent view synced before the grace sync is capped, so full only from the grace sync.
+  fullFrom: '2026-10-06T15:03:00-04:00',
   graceAt: '2026-10-06T15:03:00-04:00',
 };
 
@@ -134,11 +137,22 @@ function expectRefusedRegrade(receipt: Receipt, next: Receipt): void {
 }
 
 describe('grace, not coverage, holds a fully covered receipt at PENDING', () => {
-  it.each([EMAIL_LONG_GRACE])('$label: coverage is full before grace', (c) => {
-    expect(instantMs(c.fullFrom)).toBeLessThan(instantMs(c.graceAt));
-    expect(coverageAt(c, c.fullFrom)).toBe('full');
-    expect(coverageAt(c, shiftIso(c.graceAt, -MS_PER_SECOND))).toBe('full');
-  });
+  it.each([EMAIL_LONG_GRACE])(
+    '$label: the window is seen whole from 14:48, but coverage is capped until the grace sync (v1.14)',
+    (c) => {
+      const early = '2026-10-06T14:48:00-04:00';
+      const justBefore = shiftIso(c.graceAt, -MS_PER_SECOND);
+      for (const at of [early, justBefore]) {
+        const result = coverageLevel(c.claim, GRANT, c.coverageAt(at), c.policy);
+        expect(result.level, at).toBe('partial');
+        expect(
+          result.capReasons.map((reason) => reason.code),
+          at,
+        ).toEqual(['coverage.list_unsettled']);
+      }
+      expect(coverageAt(c, c.graceAt)).toBe('full');
+    },
+  );
 
   const walk = '$label: PENDING at every sync before grace, FINAL NOT_FOUND at grace';
   it.each(CASES)(walk, (c) => {
@@ -166,7 +180,9 @@ describe('grace, not coverage, holds a fully covered receipt at PENDING', () => 
     expectRefusedRegrade(receipt, gradeAt(c, shiftIso(c.graceAt, MS_PER_HOUR)));
     expect(receipt).toStrictEqual(final);
   });
+});
 
+describe('grace, not coverage, holds a receipt at PENDING: the property', () => {
   it('property: any sync in [claimedAt, grace) is PENDING; any in [grace, grace + 7 days] is FINAL NOT_FOUND', () => {
     const arb = fc.constantFrom(...CASES).chain((c) =>
       fc.record({

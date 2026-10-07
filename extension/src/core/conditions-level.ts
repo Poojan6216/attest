@@ -15,7 +15,11 @@
  *  - a `calendar.updated` or `calendar.deleted` claim caps every `gcal.event` entry (`coverage.change_unprovable`,
  *    v1.11): Calendar is read as snapshots, so a change made between two looks and then moved, changed again or
  *    removed leaves nothing to compare. A change row a view saw still verifies such a claim; nothing makes it
- *    NOT_FOUND.
+ *    NOT_FOUND;
+ *  - every claim caps each `gmail.sent` entry last synced before its grace sync (`coverage.list_unsettled`, v1.14):
+ *    a Sent list read before it shows a send made elsewhere (a reply an agent sent through the API, listed under its
+ *    conversation's newest minute once the list refreshes) vouches for a span it has not settled. A send the view
+ *    saw still verifies; only NOT_FOUND waits for a view taken after the grace sync.
  * Per source: when the grant binds two or more accounts to it, the source is full only when every bound account's
  * own uncapped entries contain the window (v1.11). A window that only several accounts' views together contain is
  * `partial` with `coverage.account_partial`: one account's view never vouches for another's.
@@ -42,6 +46,8 @@ import { claimWindow, type ClaimWindow, isCalendarType } from './window';
 const UNFOLLOWED: CoverageCap = 'coverage.changes_unfollowed';
 /** Every `gcal.event` entry of a calendar change claim (§6.1 v1.11). */
 const UNPROVABLE: CoverageCap = 'coverage.change_unprovable';
+/** A `gmail.sent` entry synced before the claim's grace sync (§6.1 v1.14). */
+const UNSETTLED: CoverageCap = 'coverage.list_unsettled';
 /** A window only several bound accounts' views together contain (§6.1 v1.11). */
 const ACCOUNT_PARTIAL: CoverageCap = 'coverage.account_partial';
 
@@ -50,11 +56,32 @@ const CAP_ORDER: readonly CoverageCap[] = [
   'coverage.calendars_hidden',
   UNFOLLOWED,
   UNPROVABLE,
+  UNSETTLED,
   ACCOUNT_PARTIAL,
   'coverage.multiple_accounts',
   'coverage.no_account',
   'coverage.no_parser',
 ];
+
+/** The union of the closed intervals as sorted, disjoint spans: touching intervals join, a 1 ms gap does not. */
+function unionOf(intervals: readonly EligibleEntry[]): (readonly [number, number])[] {
+  const spans: [number, number][] = [];
+  for (const interval of [...intervals].sort((a, b) => a.startMs - b.startMs)) {
+    const last = spans[spans.length - 1];
+    if (last !== undefined && interval.startMs <= last[1]) last[1] = Math.max(last[1], interval.endMs);
+    else spans.push([interval.startMs, interval.endMs]);
+  }
+  return spans;
+}
+
+/** True iff one of the sorted, disjoint `spans` contains `[fromMs, toMs]`. */
+function spansContain(spans: readonly (readonly [number, number])[], fromMs: number, toMs: number): boolean {
+  for (const [startMs, endMs] of spans) {
+    if (startMs > fromMs) return false;
+    if (endMs >= toMs) return true;
+  }
+  return false;
+}
 
 /** True iff the union of the closed intervals contains `[fromMs, toMs]` (a gap of even 1 ms breaks it). */
 function covers(intervals: readonly EligibleEntry[], fromMs: number, toMs: number): boolean {
@@ -96,6 +123,11 @@ function calendarCap(entry: EligibleEntry, bound: CalendarBound | null): Coverag
   return entry.syncMs < bound.syncMs ? UNFOLLOWED : null;
 }
 
+/** The cap a claim's grace sync puts on a `gmail.sent` entry synced before it (§6.1 v1.14), else null. */
+function sentCap(entry: EligibleEntry, sentSyncMs: number): CoverageCap | null {
+  return entry.source === 'gmail.sent' && entry.syncMs < sentSyncMs ? UNSETTLED : null;
+}
+
 /**
  * Whether the uncapped entries contain the window: their union does, and, for a source the grant binds to several
  * accounts (`accounts`), so does each bound account's own. Adds `ACCOUNT_PARTIAL` to `present` when only the union
@@ -120,19 +152,36 @@ function sourceCoverage(
   entries: readonly EligibleEntry[],
   window: ClaimWindow | null,
   bound: CalendarBound | null,
+  sentSyncMs: number,
   accounts: readonly string[] | undefined,
 ): SourceCoverage {
   if (window === null) return { source, level: 'none', caps: [] };
   let overlapping = 0;
+  const fresh: EligibleEntry[] = [];
   const uncapped: EligibleEntry[] = [];
+  const stale: (readonly [EligibleEntry, CoverageCap])[] = [];
   const present = new Set<CoverageCap>();
   for (const entry of entries) {
     if (entry.startMs > window.toMs || entry.endMs < window.fromMs) continue;
     overlapping += 1;
     for (const cap of entry.caps) present.add(cap);
-    const cap = calendarCap(entry, bound);
-    if (cap !== null) present.add(cap);
-    else if (entry.caps.length === 0) uncapped.push(entry);
+    const cap = calendarCap(entry, bound) ?? sentCap(entry, sentSyncMs);
+    if (cap === UNPROVABLE) present.add(cap);
+    else if (cap !== null) stale.push([entry, cap]);
+    else {
+      fresh.push(entry);
+      if (entry.caps.length === 0) uncapped.push(entry);
+    }
+  }
+  // A view synced too early names its cap only for a span no later view saw (v1.14): one a later view contains adds
+  // nothing to the window, which is also why the ledger may merge it into that view (src/ledger/coverage-merge.ts).
+  // The later views' union is built once per source, not per early view (perf gate, task 1.5).
+  if (stale.length > 0) {
+    const seen = unionOf(fresh);
+    for (const [entry, cap] of stale) {
+      if (!spansContain(seen, Math.max(entry.startMs, window.fromMs), Math.min(entry.endMs, window.toMs)))
+        present.add(cap);
+    }
   }
   if (overlapping === 0) return { source, level: 'none', caps: [] };
   if (fullyCovered(uncapped, window, accounts, present)) return { source, level: 'full', caps: [] };
@@ -152,17 +201,19 @@ function combinedLevel(sources: readonly SourceCoverage[]): CoverageLevel {
 
 /**
  * §6.1 coverage of the claim window from its eligible entries (a calendar claim with no target has none), with the
- * claim's calendar bound (`calendarBound`, null for a claim of another type).
+ * claim's calendar bound (`calendarBound`, null for a claim of another type) and its grace sync (`graceSyncMs`), which
+ * bounds every `gmail.sent` entry (v1.14).
  */
 export function coverageFrom(
   eligible: EligibleCoverage,
   window: ClaimWindow | null,
   bound: CalendarBound | null,
+  sentSyncMs: number,
 ): CoverageResult {
   const sources: SourceCoverage[] = [];
   for (const source of eligible.sources) {
     const entries = eligible.entries.get(source) ?? [];
-    sources.push(sourceCoverage(source, entries, window, bound, eligible.accounts.get(source)));
+    sources.push(sourceCoverage(source, entries, window, bound, sentSyncMs, eligible.accounts.get(source)));
   }
   const capReasons: CapReason[] = [];
   for (const code of CAP_ORDER) {
@@ -180,5 +231,10 @@ export function coverageLevel(
   policy: CoveragePolicy,
 ): CoverageResult {
   const eligible = eligibleCoverage(claim, grant, coverage, policy);
-  return coverageFrom(eligible, claimWindow(claim, policy), calendarBound(claim, policy));
+  return coverageFrom(
+    eligible,
+    claimWindow(claim, policy),
+    calendarBound(claim, policy),
+    graceSyncMs(claim, policy),
+  );
 }
