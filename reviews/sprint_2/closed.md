@@ -337,4 +337,30 @@ Against the Sprint 2 gate (sprints/sprint_2.md):
 - The six config tests keep their own WXT stub (TECH-R9): a shared setup file would stub WXT for every test.
 - A Google One price in rupees and a recipient shown as "US" stay in the Gmail captures (SEC-R15): not identifying beyond the calendar names the founder accepted.
 
-**VERIFIED CLEAN.** The second security pass over the 17 kept captures and both labels files found no personal value in any layer. The full gate ran last, on the final tree (below in the Progress Log).
+**VERIFIED CLEAN.** The second security pass over the 17 kept captures and both labels files found no personal value in any layer. The full gate ran last, on the committed tree (below).
+
+### The gate, on the re-closed tree
+
+Run on 2026-10-07 on `aa762ac` with a clean tree (its code is `fb87912`'s; `aa762ac` adds only RESULTS.md and the bench results).
+
+| Check | Result |
+|---|---|
+| `pnpm lint`, `pnpm typecheck` | pass; the pre-commit hook ran both on each of the four commits. `check-docs`: 372 relative links, 613 Decisions.md lines checked for wording |
+| `pnpm test` (unit, property, golden, then the perf gates) | 9,652 passed, 7 skipped by design. gradeBatch over 5,000 claims × 50,000 observations: median 1,433.6 ms of CPU (gate 2,000). Candidate lookup: median 437.1 ms of CPU. Coverage rows read: 7 for a Calendar week (gate 64), 2 for a Gmail head (gate 16), 2,150 for 100 claims (gate 3,000) |
+| `pnpm test:poison` | 6,213 passed; 99.39% of src/core's lines ran under the poisoned globals (gate 95%) |
+| `pnpm --dir extension run test:tz` | 6,425 passed (7 skipped) in Pacific/Kiritimati and in America/St_Johns |
+| `pnpm test:coverage` | 9,652 passed; src/core 99.42% of lines (gate 95%) |
+| `pnpm test:coverage:observers` | 1,217 passed; src/observers 99.05% of lines (gate 85%) |
+| `pnpm e2e` | 47 of 47 passed, all 5 `@mandatory`; the real Sent list and Calendar week are among the no-leak, network and no-input-events pages. The Gmail Sent pass over 10,000 rows: median 696.8 ms of CPU (gate 2,000). Content scripts: gmail.js 67,558 B and gcal.js 62,833 B gzipped (budget 75,000) |
+| `pnpm bench` | every gate passed, on `fb87912`. Gmail Sent (1.2.0): 33 pages, 4 real; 53 of 53 observations, 159 of 159 fields. Receipts: 0 real pages (held out); 14 of 14 list views neutral. Calendar (1.5.0): 17 pages, 9 real; 65 of 65 events, 325 of 325 fields; step diffs 12/12 exact, rows 6/6 correct |
+| `pnpm build`, `pnpm build:release` | pass; the release zip is 1.26 MB |
+
+Still open against the Sprint 2 gate, all in MANUAL.md: the live smoke (2.8) and the independent re-check it brings, the receipt captures that complete 2.1 (12 real Gmail pages; 8 are labelled), and the push.
+
+### Commits
+
+- `f2c1d83` fix(capture): cut other sites' links, phone links, card endings and handles
+- `1b2b698` fix(core): grading contract v1.14, a Sent list looked at too early is not settled
+- `fb87912` fix(observers): read the real Gmail and Calendar captures of 2026-10-06
+- `aa762ac` chore(bench): RESULTS.md on the real captures of 2026-10-06
+- the next commit: this gate record and MANUAL.md's push note
