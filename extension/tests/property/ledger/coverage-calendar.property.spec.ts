@@ -3,7 +3,8 @@
  * Hard Rule 5). §6.1 counts a `gcal.event` entry towards a calendar claim's full coverage only if it synced at or
  * after the claim's `end(p,t) + graceMin`, so a union must never carry a later sync over days only an earlier pass
  * saw. For random Calendar passes (runs of whole days, synced out of order, with and without `changesSince`, two
- * accounts) and random `calendar.created` claims:
+ * accounts) and random `calendar.created` claims, a third of the cases with a pass that covers the claim so that full
+ * coverage is checked often (`caseArb`):
  *  - after every pass synced, the coverage level and grace read from the stored (merged) intervals equal those read
  *    from the raw passes as recorded, unmerged;
  *  - `coverageForClaim` decides exactly as every stored interval would.
@@ -49,6 +50,38 @@ const claimArb = fc.record({
 });
 
 type Generated<A> = A extends fc.Arbitrary<infer Value> ? Value : never;
+type Pass = Generated<typeof passArb>;
+type ClaimShape = Generated<typeof claimArb>;
+
+/** A pass that shows the claim's day, synced last, on the granted account, comparing nothing. */
+const coveringPassArb = (targetDay: number): fc.Arbitrary<Pass> =>
+  fc
+    .integer({ min: Math.max(0, targetDay - 6), max: Math.min(10, targetDay) })
+    .map((startDay) => ({ startDay, lengthDays: 7, syncMinutes: 600, since: null, account: 0 }));
+
+/**
+ * Random passes and a random claim; a third of the cases also hold, at a random place among up to five random
+ * passes, one pass that covers the claim. Fully random cases reach full coverage about 6% of the time (1,192 of
+ * 20,000 sampled), so 200 runs fell to 3 such cases once (a pre-push run on 2026-10-07) under the tally's floor
+ * below; these cases reach it about a third of the time, every other case stays random.
+ */
+const caseArb: fc.Arbitrary<[Pass[], ClaimShape]> = fc.oneof(
+  { weight: 2, arbitrary: fc.tuple(fc.array(passArb, { minLength: 1, maxLength: 6 }), claimArb) },
+  {
+    weight: 1,
+    arbitrary: claimArb.chain((claim) =>
+      fc.tuple(
+        fc
+          .tuple(coveringPassArb(claim.targetDay), fc.array(passArb, { maxLength: 5 }), fc.nat())
+          .map(([cover, rest, at]): Pass[] => {
+            const i = at % (rest.length + 1);
+            return [...rest.slice(0, i), cover, ...rest.slice(i)];
+          }),
+        fc.constant(claim),
+      ),
+    ),
+  },
+);
 
 function toPass(p: Generated<typeof passArb>): ObserverCoverage {
   const lastSyncAt = clock(p.syncMinutes);
@@ -107,7 +140,7 @@ describe('merged Calendar coverage decides as the raw passes (property)', () => 
   it('level and grace after the last sync equal those of the unmerged passes; coverageFor equals the store', async () => {
     const tally = { full: 0, partial: 0, merged: 0, kept: 0 };
     await fc.assert(
-      fc.asyncProperty(fc.array(passArb, { minLength: 1, maxLength: 6 }), claimArb, async (generated, c) => {
+      fc.asyncProperty(caseArb, async ([generated, c]) => {
         await db.coverageIntervals.clear();
         const passes = generated.map(toPass);
         for (const p of passes) await recordCoverage(db, p);

@@ -63,6 +63,51 @@ interface Entry {
   readonly sync: number;
 }
 
+/**
+ * For a grant of two accounts, one fresh entry over the whole window of each (synced after both kinds' grace sync,
+ * by evaluatedAt), at random places among up to three random entries: a full level under two bound accounts needs
+ * both, and random entries alone reached it in about 2% of the runs, so 1,000 runs fell to the `twoBoundFull` floor
+ * about once in 50 (measured, 2026-10-07).
+ */
+const twoBoundCaseArb = fc
+  .tuple(
+    fc.constantFrom<Kind>('email', 'calendar'),
+    fc.constantFrom(GRANTS[2], GRANTS[3]),
+    fc.array(entryArb, { maxLength: 3 }),
+    fc.integer({ min: 650, max: 900 }),
+    fc.integer({ min: 650, max: 900 }),
+    fc.nat(),
+    fc.nat(),
+  )
+  .map(([kind, bound, rest, syncA, syncB, atA, atB]) => {
+    const entries: Entry[] = [...rest];
+    entries.splice(atA % (entries.length + 1), 0, {
+      account: 'acct-a',
+      from: -4_000,
+      to: 8_000,
+      sync: syncA,
+    });
+    entries.splice(atB % (entries.length + 1), 0, {
+      account: 'acct-b',
+      from: -4_000,
+      to: 8_000,
+      sync: syncB,
+    });
+    return [kind, bound, entries] as const;
+  });
+
+const caseArb = fc.oneof(
+  {
+    weight: 4,
+    arbitrary: fc.tuple(
+      fc.constantFrom<Kind>('email', 'calendar'),
+      fc.constantFrom(...GRANTS),
+      fc.array(entryArb, { minLength: 1, maxLength: 5 }),
+    ),
+  },
+  { weight: 1, arbitrary: twoBoundCaseArb },
+);
+
 function entryOf(kind: Kind, entry: Entry): ScenarioCoverage {
   const { source } = KINDS[kind];
   const [from, to] = entry.from <= entry.to ? [entry.from, entry.to] : [entry.to, entry.from];
@@ -76,13 +121,17 @@ function entryOf(kind: Kind, entry: Entry): ScenarioCoverage {
   };
 }
 
-/** True iff the union of the closed [from, to] windows contains [a, b]. */
+/**
+ * True iff the union of the closed [from, to] windows contains [a, b]. A point (a = b: a stale entry that touches the
+ * claim window at one end) is contained only by a window that holds it, never by one that ends before it.
+ */
 function contains(entries: readonly Entry[], a: number, b: number): boolean {
   const spans = entries.map((e) => ({ from: Math.min(e.from, e.to), to: Math.max(e.from, e.to) }));
   let reached = a;
   for (const span of [...spans].sort((x, y) => x.from - y.from)) {
     if (span.from > reached) return false;
-    reached = Math.max(reached, span.to);
+    if (span.to < reached) continue;
+    reached = span.to;
     if (reached >= b) return true;
   }
   return false;
@@ -138,45 +187,40 @@ const tally = { full: 0, pieced: 0, twoBoundFull: 0, unbound: 0 };
 describe('per-account coverage (§6.1 v1.11)', () => {
   it('coverageLevel equals the account rule written out, for Gmail Sent and Calendar alike', () => {
     fc.assert(
-      fc.property(
-        fc.constantFrom<Kind>('email', 'calendar'),
-        fc.constantFrom(...GRANTS),
-        fc.array(entryArb, { minLength: 1, maxLength: 5 }),
-        (kind, bound, entries) => {
-          const { type, source } = KINDS[kind];
-          const claim = buildClaim(
-            ScenarioClaim.parse({
-              ref: 'c1',
-              agent: 'muse',
-              type,
-              counterparty: 'priya@company.com',
-              subjectHint: 'Q3 deck',
-              claimedAt: at(CLAIMED),
-              ...(kind === 'calendar' ? { targetAt: at(2_880) } : {}),
-            }),
-          );
-          const grant = buildGrant(
-            { agent: 'muse', ...(bound === null ? {} : { accounts: { [source]: [...bound] } }) },
+      fc.property(caseArb, ([kind, bound, entries]) => {
+        const { type, source } = KINDS[kind];
+        const claim = buildClaim(
+          ScenarioClaim.parse({
+            ref: 'c1',
+            agent: 'muse',
+            type,
+            counterparty: 'priya@company.com',
+            subjectHint: 'Q3 deck',
+            claimedAt: at(CLAIMED),
+            ...(kind === 'calendar' ? { targetAt: at(2_880) } : {}),
+          }),
+        );
+        const grant = buildGrant(
+          { agent: 'muse', ...(bound === null ? {} : { accounts: { [source]: [...bound] } }) },
+          EVAL,
+        );
+        const result = coverageLevel(
+          claim,
+          grant,
+          buildCoverage(
+            entries.map((e) => entryOf(kind, e)),
             EVAL,
-          );
-          const result = coverageLevel(
-            claim,
-            grant,
-            buildCoverage(
-              entries.map((e) => entryOf(kind, e)),
-              EVAL,
-            ),
-            DEFAULT_POLICY,
-          );
-          const expected = oracle(kind, entries, bound);
-          expect(result.level).toBe(expected.level);
-          expect(result.capReasons.map((cap) => cap.code)).toEqual(expected.caps);
-          if (result.level === 'full') tally.full += 1;
-          if (expected.caps.includes('coverage.account_partial')) tally.pieced += 1;
-          if (result.level === 'full' && bound !== null && new Set(bound).size > 1) tally.twoBoundFull += 1;
-          if (bound === null && result.level !== 'none') tally.unbound += 1;
-        },
-      ),
+          ),
+          DEFAULT_POLICY,
+        );
+        const expected = oracle(kind, entries, bound);
+        expect(result.level).toBe(expected.level);
+        expect(result.capReasons.map((cap) => cap.code)).toEqual(expected.caps);
+        if (result.level === 'full') tally.full += 1;
+        if (expected.caps.includes('coverage.account_partial')) tally.pieced += 1;
+        if (result.level === 'full' && bound !== null && new Set(bound).size > 1) tally.twoBoundFull += 1;
+        if (bound === null && result.level !== 'none') tally.unbound += 1;
+      }),
       { numRuns: RUNS },
     );
     expect(tally.full).toBeGreaterThan(RUNS / 20);

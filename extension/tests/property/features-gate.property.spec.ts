@@ -64,8 +64,12 @@ const claimArb: fc.Arbitrary<FeatureClaim> = fc.record(
 
 const observationArb: fc.Arbitrary<FeatureObservation> = fc.record(
   {
-    /** Mostly near (where time alone can reach thresholds.partial), sometimes days away. */
-    occurredAt: fc.oneof(instant(MS_PER_MINUTE * 50), instant(MS_PER_DAY * 4)),
+    /**
+     * Mostly near (where time alone can reach thresholds.partial), sometimes days away. The 5-minute range keeps the
+     * pairs the gate stops on time alone (`nearGated`) about 3% of the runs: with only the 50-minute one they were
+     * about 2.4%, and 1,000 runs fell to its floor about once in 750 (measured, 2026-10-07).
+     */
+    occurredAt: fc.oneof(instant(MS_PER_MINUTE * 5), instant(MS_PER_MINUTE * 50), instant(MS_PER_DAY * 4)),
     counterparty: fc.constantFrom(...ADDRESSES, ...NAMES),
     merchant: fc.constantFrom('Acme', 'Acme Store', 'Globex'),
     subjectHint: subject,

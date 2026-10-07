@@ -200,15 +200,20 @@ const claimArb = fc.record({
 
 type Entry = Coverage['observers'][number];
 
-/** True iff the union of the entries' closed windows contains [from, to]. */
+/**
+ * True iff the union of the entries' closed windows contains [from, to]. A point (from = to; §3: a stale view's part
+ * of the window can be one) is contained only by a window that holds it: none, or one that ends before it, does not.
+ */
 function reaches(entries: readonly Entry[], from: number, to: number): boolean {
   const ordered = [...entries].sort((a, b) => Date.parse(a.windowStart) - Date.parse(b.windowStart));
   let reached = from;
   for (const e of ordered) {
     if (Date.parse(e.windowStart) > reached) break;
-    reached = Math.max(reached, Date.parse(e.windowEnd));
+    if (Date.parse(e.windowEnd) < reached) continue;
+    reached = Date.parse(e.windowEnd);
+    if (reached >= to) return true;
   }
-  return reached >= to;
+  return false;
 }
 
 /**
@@ -254,28 +259,46 @@ function levelOracle(
   return { level: 'partial', cap: stale ? 'coverage.changes_unfollowed' : null, followedWhole: false };
 }
 
+/** The grader's coverage of a claim over `passes` (no pinned rows), and the contract's written out. */
+function levels(raw: Generated<typeof claimArb>, passes: readonly Generated<typeof passArb>[]) {
+  const claim = buildClaim(
+    ScenarioClaim.parse({
+      ref: 'c1',
+      agent: 'muse',
+      type: raw.type,
+      subjectHint: 'Board dinner',
+      claimedAt: at(raw.claimed),
+      claimedAtPrecision: raw.precision,
+      targetAt: at(raw.target),
+    }),
+  );
+  const coverage = buildCoverage(
+    passes.map((pass) => passEntry({ ...pass, pinned: null }, [])),
+    at(EVAL_MINUTES + 60),
+  );
+  const grant = buildGrant({ agent: 'muse', accounts: { 'gcal.event': ['acct-a'] } }, EVAL);
+  return {
+    result: coverageLevel(claim, grant, coverage, DEFAULT_POLICY),
+    expected: levelOracle(raw, coverage),
+  };
+}
+
 describe('created claims are fully covered only by views synced after grace, change claims never (§6.1)', () => {
+  it('a stale view that shows one instant of the window, which no fresh view holds, names its cap (v1.14)', () => {
+    // A counterexample the property found on 2026-10-07 (seed -248710930): a point is a span (§3), and none saw it.
+    const { result, expected } = levels(
+      { type: 'calendar.created', claimed: 0, precision: 'minute', target: 1_440 },
+      [{ from: 0, length: 0, wide: false, sync: 0, followed: null, pinned: null }],
+    );
+    const cap = { code: 'coverage.changes_unfollowed', source: 'gcal.event' };
+    expect([result.level, result.capReasons]).toEqual(['partial', [cap]]);
+    expect([expected.level, expected.cap]).toEqual(['partial', cap.code]);
+  });
+
   it('coverageLevel equals the contract written out; created claims never read changesSince', () => {
     fc.assert(
       fc.property(claimArb, fc.array(passArb, { minLength: 1, maxLength: 4 }), (raw, passes) => {
-        const claim = buildClaim(
-          ScenarioClaim.parse({
-            ref: 'c1',
-            agent: 'muse',
-            type: raw.type,
-            subjectHint: 'Board dinner',
-            claimedAt: at(raw.claimed),
-            claimedAtPrecision: raw.precision,
-            targetAt: at(raw.target),
-          }),
-        );
-        const coverage = buildCoverage(
-          passes.map((pass) => passEntry({ ...pass, pinned: null }, [])),
-          at(EVAL_MINUTES + 60),
-        );
-        const grant = buildGrant({ agent: 'muse', accounts: { 'gcal.event': ['acct-a'] } }, EVAL);
-        const result = coverageLevel(claim, grant, coverage, DEFAULT_POLICY);
-        const expected = levelOracle(raw, coverage);
+        const { result, expected } = levels(raw, passes);
         expect(result.level).toBe(expected.level);
         expect(result.capReasons).toEqual(
           expected.cap === null ? [] : [{ code: expected.cap, source: 'gcal.event' }],
