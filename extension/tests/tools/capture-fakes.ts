@@ -115,7 +115,7 @@ const PHRASE_WORDS = [
 const MAX_ATTEMPTS = 10_000;
 const MAX_PHRASE_WORDS = 12;
 
-type FakeKind = 'email' | 'name' | 'phone' | 'card' | 'amount' | 'address' | 'phrase';
+type FakeKind = 'email' | 'name' | 'phone' | 'card' | 'amount' | 'address' | 'phrase' | 'identifier';
 
 interface FakeOptions {
   /** Fakes of this kind must be distinct across originals (default true). */
@@ -208,6 +208,25 @@ export class Faker {
       unique: false,
       sameAs: (candidate) => candidate.replace(/\D/g, '') === digits,
     });
+  }
+
+  /** An order, receipt or invoice number: its shape (letter case, digits, separators), other letters and digits. */
+  identifier(original: string): string {
+    return this.#fake(
+      'identifier',
+      original,
+      (bytes) => {
+        let index = 0;
+        return original.replace(/[A-Za-z0-9]/g, (char) => {
+          const byte = bytes.readUInt8(index % bytes.length);
+          index += 1;
+          if (/\d/.test(char)) return String(byte % 10);
+          const letter = String.fromCharCode(97 + (byte % 26));
+          return char === char.toUpperCase() ? letter.toUpperCase() : letter;
+        });
+      },
+      { unique: false, sameAs: (candidate) => candidate === original },
+    );
   }
 
   /** Same separators and decimals as `numberText`, different digits; never a leading zero unless 0.xx. */

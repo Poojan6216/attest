@@ -9,7 +9,8 @@
  *     SVG presentation url(), escaped CSS function names included); drop session secrets (nonce, hidden-input
  *     values, csrf meta);
  *  2. learn display names (`Name <email>`, name/title/aria-label beside an email attribute, --names);
- *  3. replace --redact-selector text with fake phrases;
+ *  3. replace --redact-selector text with fake phrases; fake the card endings and order numbers a table row labels
+ *     (capture-rows.ts), an order number wherever else it stands alone too;
  *  4. scrub every text node and attribute: query strings and parameter fragments anywhere (text, data-*,
  *     meta content, relative URLs), then emails (plain, percent-encoded, inside base64 ids), phones, cards,
  *     money, street addresses, names, redacted literals;
@@ -41,6 +42,7 @@ import { type Redactions, redactSelected, selectAll } from './capture-redact';
 import { Faker } from './capture-fakes';
 import { stripForeignRawText } from './capture-html-guard';
 import { learnNames, localNamesFor, type NameBook } from './capture-names';
+import { fakeRowValues, type RowStats } from './capture-rows';
 import {
   EMAIL_SOURCE,
   EMAIL_VALUE,
@@ -97,7 +99,7 @@ export interface SanitizeOptions {
   readonly pageUrl?: string;
 }
 
-export interface SanitizeStats extends ScrubStats {
+export interface SanitizeStats extends ScrubStats, RowStats {
   removedElements: number;
   removedComments: number;
   removedAttributes: number;
@@ -122,6 +124,8 @@ function emptyStats(): SanitizeStats {
     neutralisedResources: 0,
     trimmedUrls: 0,
     redactedTexts: 0,
+    rowCards: 0,
+    rowIds: 0,
     ...emptyScrubStats(),
   };
 }
@@ -353,6 +357,7 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
     keepSenderNames(doc, book, kept, options.names ?? []);
     faker.reserve(book.tokens);
     const redactions = redactSelected(doc, options.redactSelectors ?? [], faker, stats);
+    fakeRowValues(doc, faker, stats);
     const scrubberOptions = {
       globalNames: book.global,
       nameTokens: book.tokens,
