@@ -88,17 +88,19 @@ describe('sanitizeHtml removes tokens wherever they sit (SECURITY-2)', () => {
     expect(run(html)).not.toContain(token);
   });
 
-  it('keeps paths, hosts and plain fragments adapters anchor on', () => {
+  it('keeps the relative paths and plain fragments adapters anchor on; another site keeps only its host', () => {
     const out = run(html);
     expect(out).toContain('data-href="/relative/path"');
     expect(out).toContain('href="#inbox"');
-    expect(out).toContain('Your reset link: https://x.example/reset expires soon');
+    // Another site's address, written as text, loses its path too (security re-review, SEC-R12).
+    expect(out).toContain('Your reset link: https://x.example/ expires soon');
   });
 
-  it('counts what it removed: 8 link attributes trimmed, 4 queries removed from text, data-* and meta', () => {
+  it('counts what it removed: 10 addresses trimmed (8 link attributes, og:url, the text), 2 bare queries', () => {
     const { stats } = sanitizeHtml(html, { seed: 'unit', seeds: SEEDS });
-    expect(stats.trimmedUrls).toBe(8);
-    expect(stats.query).toBe(4);
+    expect(stats.trimmedUrls).toBe(10);
+    // og:url and the text address now lose their query with their path; the two left are not addresses.
+    expect(stats.query).toBe(2);
   });
 });
 

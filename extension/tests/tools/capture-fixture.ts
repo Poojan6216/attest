@@ -113,6 +113,7 @@ export async function captureFixture(input: CaptureOptionsInput): Promise<Captur
     names: options.names,
     redactSelectors: options.redactSelectors,
     keepSelectors: options.keepSelectors,
+    pageUrl: snapshot.url,
   });
   await writeFixture(
     target,

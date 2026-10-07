@@ -201,12 +201,13 @@ describe('sanitizeHtml keeps the page itself and drops what points elsewhere', (
     expect(doc.querySelector('meta[name="viewport"]')).not.toBeNull();
   });
 
-  it('trims query strings and userinfo from links, keeps the path and fragment', () => {
+  it("trims query strings and userinfo from the page's own links, keeps the path and fragment", () => {
     const out = run(
       page(
         `<a href="https://user:pw@${HOST}/mail/u/0/?ik=abc123&tok=zz#inbox/123">a</a>` +
           `<svg><a xlink:href="https://${HOST}/s?tok=zz"><text>t</text></a></svg>`,
       ),
+      { pageUrl: `https://${HOST}/mail/u/0/` },
     );
     expect(out).toContain(`href="https://${HOST}/mail/u/0/#inbox/123"`);
     expect(out).toContain(`xlink:href="https://${HOST}/s"`);

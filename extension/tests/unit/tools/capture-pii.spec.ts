@@ -91,6 +91,7 @@ describe('encoded emails (invisible to a search for "@")', () => {
     const token = b64url('5pap18padh0q9eg4 lena@corp.io');
     const out = main(
       `<b>lena@corp.io</b><div data-eventid="${token}">e</div><a href="https://cal.example/r/eventedit/${token}">e</a>`,
+      { pageUrl: 'https://cal.example/r/week' },
     );
     expect(out).not.toContain(token);
     const tokens = [...out.matchAll(/(?:data-eventid="|eventedit\/)([A-Za-z0-9_-]+)"/g)].map(
@@ -117,7 +118,9 @@ describe('encoded emails (invisible to a search for "@")', () => {
       'base64',
     );
     expect(token).toMatch(/\/.*=$/);
-    const out = main(`<b>ann@corp.io</b><a href="https://cal.example/r/${token}">e</a>`);
+    const out = main(`<b>ann@corp.io</b><a href="https://cal.example/r/${token}">e</a>`, {
+      pageUrl: 'https://cal.example/r/week',
+    });
     const faked = /cal\.example\/r\/([A-Za-z0-9+/=]+)"/.exec(out)?.[1] ?? '';
     expect(faked).toMatch(/=$/);
     expect(decode(faked).slice(3)).toBe(` ${plainFake(out)};`);

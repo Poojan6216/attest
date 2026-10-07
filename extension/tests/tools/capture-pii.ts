@@ -12,6 +12,7 @@ import { inRegistry, RECEIPT_BRAND_TOKENS } from '../../src/observers/gmail/rece
 import { BASE64_RUN, fakeBase64Run, fakePercentEmail, PERCENT_EMAIL } from './capture-encoded';
 import { type Faker, matchCase } from './capture-fakes';
 import { stripQueryParts } from './capture-url';
+import { CARD, CARD_TAIL_DIGITS, isCardTail } from './capture-cards';
 
 export type PiiKind = 'literal' | 'email' | 'address' | 'amount' | 'phone' | 'card' | 'name' | 'query';
 
@@ -27,12 +28,6 @@ const PHONE_INTL = String.raw`\+\d{1,3}(?:[ .\-]?\(?\d{1,5}\)?){1,6}`;
 const PHONE_NATIONAL = String.raw`(?:\(\d{2,5}\)[ .\-]?|\d{2,5}[ .\-])\d{2,5}[ .\-]\d{2,5}`;
 const PHONE = new RegExp(
   String.raw`(?<![\w+@.\-/])(?:${PHONE_INTL}|${PHONE_NATIONAL})(?![\w@]|[.\-/]\d)`,
-  'g',
-);
-
-/** 16 digits in groups of 4 (+ up to 3 more), or Amex 4-6-5, with one consistent separator. */
-const CARD = new RegExp(
-  String.raw`(?<![\w+@.\-/])(?:\d{4}([ \-])\d{4}\1\d{4}\1\d{4}(?:\1\d{1,3})?|\d{4}([ \-])\d{6}\2\d{5})(?![\w@]|[.\-/]\d)`,
   'g',
 );
 
@@ -75,6 +70,8 @@ export const NAME_SHAPE = new RegExp(
 export const LOOSE_NAME_SHAPE = /^[\p{L}\p{M}'’.-]+(?:[ \t]+[\p{L}\p{M}'’.-]+){0,3}$/u;
 
 const NAME_TOKEN = /[\p{L}\p{M}'’-]+/gu;
+/** A name token and the digits glued after it (a handle such as `name0403`): `fakeName` fakes both. */
+const NAME_WITH_DIGITS = /[\p{L}\p{M}'’-]+\d*/gu;
 const FAKE_AT = /@example\.(?:com|org|net)(?![A-Za-z0-9-]|\.[A-Za-z0-9])/y;
 const FULLWIDTH_AT = '\uFF20';
 
@@ -158,7 +155,8 @@ function termMatcher(terms: Iterable<string>): RegExp | null {
     .sort((a, b) => b.length - a.length || (a < b ? -1 : 1))
     .map((term) => escapeRegExp(term.trim()).replace(/\s+/g, String.raw`\s+`));
   if (sources.length === 0) return null;
-  return new RegExp(String.raw`(?<![\p{L}\p{N}_])(?:${sources.join('|')})(?![\p{L}\p{N}_])`, 'giu');
+  // Digits glued after a name are part of it (a handle such as `name0403`: SEC-R15); `fakeName` fakes them too.
+  return new RegExp(String.raw`(?<![\p{L}\p{N}_])(?:${sources.join('|')})\d*(?![\p{L}\p{N}_])`, 'giu');
 }
 
 interface Span {
@@ -230,6 +228,9 @@ export class Scrubber {
     this.#collect(text, MONEY_PREFIX, 'amount', spans, (match) => this.#money(match, 'prefix'));
     this.#collect(text, MONEY_SUFFIX, 'amount', spans, (match) => this.#money(match, 'suffix'));
     this.#collect(text, CARD, 'card', spans, (match) => this.#faker.card(match[0]));
+    this.#collect(text, CARD_TAIL_DIGITS, 'card', spans, (match) =>
+      isCardTail(text, match.index) ? this.#faker.card(match[0]) : null,
+    );
     this.#collect(text, PHONE, 'phone', spans, (match) => this.#phone(match[0]));
     this.#collect(text, this.#globalNames, 'name', spans, (match) => this.fakeName(match[0]));
     if (localNames !== undefined && localNames.size > 0) {
@@ -263,12 +264,16 @@ export class Scrubber {
     return replacement === address ? null : replacement;
   }
 
-  /** Replaces every learned name token inside `text`, keeping punctuation, spacing and letter case. */
+  /**
+   * Replaces every learned name token inside `text`, keeping punctuation, spacing and letter case. Digits glued to a
+   * learned name (a handle such as `name0403`) are part of it and are faked too (security re-review, SEC-R15).
+   */
   fakeName(text: string): string {
-    return text.replace(NAME_TOKEN, (word) => {
+    return text.replace(NAME_WITH_DIGITS, (word) => {
       const core = word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
       if (core.length < 2 || !this.#tokens.has(core.toLowerCase())) return word;
-      return word.replace(core, matchCase(this.#faker.nameToken(core), core));
+      const faked = word.replace(core, matchCase(this.#faker.nameToken(core), core));
+      return faked.replace(/\d+/gu, (digits) => this.#faker.card(digits));
     });
   }
 

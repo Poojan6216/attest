@@ -52,7 +52,7 @@ import {
   Scrubber,
   type ScrubStats,
 } from './capture-pii';
-import { stripQueryParts } from './capture-url';
+import { pageHostOf, stripQueryParts, trimForeignLink, trimForeignUrls } from './capture-url';
 
 export interface SeedSecret {
   readonly id: string;
@@ -89,6 +89,12 @@ export interface SanitizeOptions {
   readonly keepSelectors?: readonly string[];
   /** Receipt senders to keep (default RECEIPT_SENDERS; `{ domains: [], nameDomains: [] }` keeps none). */
   readonly keepSenders?: KeptSenders;
+  /**
+   * The captured page's address: links to its host keep their path; every other absolute link keeps only scheme and
+   * host, and a contact link (`tel:`, `sms:` …) only its scheme (capture-url.ts `trimForeignLink`). Absent: no
+   * link is the page's own.
+   */
+  readonly pageUrl?: string;
 }
 
 export interface SanitizeStats extends ScrubStats {
@@ -132,11 +138,12 @@ export function assertSelectorsValid(selectors: readonly string[]): void {
 
 function scrubAttributes(
   element: Element,
-  scrubber: Scrubber,
+  scrubbers: Scrubbers,
   book: NameBook,
   redactions: Redactions,
   stats: SanitizeStats,
 ): void {
+  const scrubber = scrubberFor(element, scrubbers);
   const local = book.local.get(element);
   const redacted = redactions.attributes.get(element);
   for (const attribute of Array.from(element.attributes)) {
@@ -160,9 +167,15 @@ function scrubAttributes(
         value = css.css;
       }
       if (verdict === 'link') {
-        const trimmed = trimUrl(value);
+        const trimmed = trimForeignLink(trimUrl(value), scrubbers.pageHost);
         if (trimmed !== value) stats.trimmedUrls += 1;
         value = trimmed;
+      }
+      // A namespace (`xmlns`, `xmlns:xlink`) is an identifier, never fetched or personal: cutting it breaks SVG.
+      if (verdict === 'text' && !/^xmlns(?::|$)/iu.test(attribute.name)) {
+        const urls = trimForeignUrls(value, scrubbers.pageHost);
+        stats.trimmedUrls += urls.cut;
+        value = urls.text;
       }
       if (redacted?.has(attribute.name) !== true) value = scrubber.scrub(value, local);
     }
@@ -170,11 +183,15 @@ function scrubAttributes(
   }
 }
 
-/** The page's scrubber, and the one for the areas --keep-selector names (the same, but no redacted literals). */
+/**
+ * The page's scrubber, and the one for the areas --keep-selector names (the same, but no redacted literals), with
+ * the host the page's own links have (`SanitizeOptions.pageUrl`).
+ */
 interface Scrubbers {
   readonly page: Scrubber;
   readonly kept: Scrubber;
   readonly keep: string;
+  readonly pageHost: string | null;
 }
 
 function scrubberFor(element: Element | null, scrubbers: Scrubbers): Scrubber {
@@ -195,12 +212,14 @@ function scrubDocument(
       stats.neutralisedResources += css.urlsNeutralised + css.atRulesRemoved;
       element.textContent = scrubber.scrubCss(css.css);
     }
-    scrubAttributes(element, scrubber, book, redactions, stats);
+    scrubAttributes(element, scrubbers, book, redactions, stats);
   }
   for (const node of textNodes(doc)) {
     const parent = node.parentElement;
     if (redactions.texts.has(node) || parent?.localName === 'style') continue;
-    const scrubbed = scrubberFor(parent, scrubbers).scrub(node.data, localNamesFor(parent, book));
+    const urls = trimForeignUrls(node.data, scrubbers.pageHost);
+    stats.trimmedUrls += urls.cut;
+    const scrubbed = scrubberFor(parent, scrubbers).scrub(urls.text, localNamesFor(parent, book));
     if (scrubbed !== node.data) node.data = scrubbed;
   }
 }
@@ -344,6 +363,7 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
       page: new Scrubber(faker, { ...scrubberOptions, literals: redactions.literals }),
       kept: new Scrubber(faker, { ...scrubberOptions, literals: new Map() }),
       keep: (options.keepSelectors ?? []).join(', '),
+      pageHost: pageHostOf(options.pageUrl),
     };
     scrubDocument(doc, scrubbers, book, redactions, stats);
     ensureCharset(doc);
