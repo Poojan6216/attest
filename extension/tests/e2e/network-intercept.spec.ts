@@ -48,6 +48,9 @@ const VENDOR_PAGES = [
   vendorFixture('gmail', 'synthetic-sent-page-1.html'),
   vendorFixture('gmail', 'synthetic-receipt-stripe.html'),
   vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+  // Real captures (2026-10-06), so the content scripts run on what the real pages draw (QA-R5).
+  vendorFixture('gmail', 'sent-list-1.html'),
+  vendorFixture('gcal', 'week-after.html'),
 ];
 const VENDOR_ROUTES = routesFor(VENDOR_PAGES);
 

@@ -16,7 +16,7 @@ import {
   storedSnapshotOf,
 } from '../../../../src/observers/gcal/snapshot';
 import { event, week } from '../../background/calendar-fixtures';
-import { GCAL_FIXTURES, snapshotOfFixture } from './gcal-fixtures';
+import { GCAL_FIXTURES, passReads, snapshotOfFixture } from './gcal-fixtures';
 
 /** The week with one event whose guests are `guests` (as many as listed). */
 function withGuests(guests: readonly string[]): CalendarSnapshotInput {
@@ -74,8 +74,11 @@ describe('the stored form', () => {
     expect(stored.format).toBe(2);
   });
 
-  it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))('%s converts to the stored form', (_, f) => {
-    const page = snapshotOfFixture(f);
-    expect(StoredSnapshot.safeParse(storedSnapshotOf(page)).success).toBe(true);
-  });
+  it.each(GCAL_FIXTURES.filter(passReads).map((f) => [f.file, f] as const))(
+    '%s converts to the stored form',
+    (_, f) => {
+      const page = snapshotOfFixture(f);
+      expect(StoredSnapshot.safeParse(storedSnapshotOf(page)).success).toBe(true);
+    },
+  );
 });

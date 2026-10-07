@@ -31,6 +31,7 @@ import { asciiLower, type OffsetAt } from '../../core/normalize';
 import { clampSubjectHint, hashRowKey, hashText } from '../../core/redact';
 import { SCHEMA_LIMITS, type Sha256 } from '../../core/schema';
 import { oneLineText } from '../../core/schema-text';
+import { isOwnAddress } from '../own-address';
 import { oneLine } from '../text';
 import { type ChipLabel, parseChipLabel } from './label';
 import {
@@ -111,13 +112,17 @@ function subjectOf(title: string): string | undefined | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Guests as written, the account left out, one per address (ASCII case folded), in ASCII-lowercase order. */
+/**
+ * Guests as written, the account's own mailbox left out (../own-address.ts: any case, a `+tag`, Gmail's dots), one per
+ * address (ASCII case folded), in ASCII-lowercase order. None when the page names no account: the account could be
+ * any of them, and its address must not be stored (security re-review, SEC-R8).
+ */
 function guestsOf(label: ChipLabel, account: string | null): string[] {
-  const own = account === null ? null : asciiLower(account);
+  if (account === null) return [];
   const byFolded = new Map<string, string>();
   for (const guest of label.guests) {
     const folded = asciiLower(guest);
-    if (folded === own || byFolded.has(folded) || !Address.safeParse(guest).success) continue;
+    if (isOwnAddress(guest, account) || byFolded.has(folded) || !Address.safeParse(guest).success) continue;
     byFolded.set(folded, guest);
   }
   return [...byFolded.entries()]

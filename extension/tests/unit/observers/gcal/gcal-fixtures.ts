@@ -25,7 +25,7 @@ import {
   type ObservationFact,
   projectArgs,
 } from '../../fixtures/fixture-labels';
-import { zoneOffset } from '../../fixtures/fixture-page-read';
+import { stillDrawing, zoneOffset } from '../../fixtures/fixture-page-read';
 
 /** Every labelled Calendar fixture, across date folders. */
 export const GCAL_FIXTURES: readonly LabelledFixture[] = loadVendor('gcal');
@@ -90,6 +90,18 @@ export function ctxOf(f: LabelledFixture): ExtractContext {
 /** The observer as a content script builds it for this fixture (its browser zone is the page fact's). */
 export function observerFor(f: LabelledFixture): GcalObserver {
   return createGcalObserver({ offsetAt: zoneOffset(f.page.timeZone) });
+}
+
+/**
+ * Whether a pass reads `f` at all: its labelled health is OK and the page is not still drawing (the reference reader
+ * of tests/unit/fixtures/fixture-page-read.ts). A page it does not read (DEGRADED, or the real week whose calendar
+ * lists had not filled in yet) has no snapshot and no event.
+ */
+export function passReads(f: LabelledFixture): boolean {
+  const page: unknown = docOf(f);
+  return (
+    f.health.every((h) => h.status === 'OK') && !stillDrawing(page as Parameters<typeof stillDrawing>[0])
+  );
 }
 
 /** The snapshot a clean pass over `f` stores. */

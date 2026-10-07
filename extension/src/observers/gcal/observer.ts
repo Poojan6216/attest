@@ -31,7 +31,7 @@ import { selectorAttributes } from '../batch';
 import type { ExtractContext, Observer, VisibleWindow } from '../types';
 import { calendarRows } from './extract';
 import { type BusyRun, continuedRun, extendBusyRun, healthOf } from './health';
-import { calendarsOf } from './page';
+import { calendarsOf, someCalendarListEmpty } from './page';
 import { coverageWindows, snapshotOf } from './pass';
 import { type PassRead, passReads } from './pass-read';
 import { GCAL_SELECTORS, GCAL_VERSION } from './selectors';
@@ -81,10 +81,14 @@ function windowsOf(read: PassRead, offsetAt: OffsetAt): VisibleWindow[] | null {
   return coverageWindows(read.page.facts, offsetAt);
 }
 
-/** Whether every calendar the page lists is shown; null when it lists none. */
+/**
+ * Whether every calendar the page lists is shown; null when it lists none. False while a calendar list is drawn
+ * empty (./page.ts `someCalendarListEmpty`): its calendars' states are not on the page.
+ */
 function allShown(read: PassRead, doc: Document): boolean | null {
   const calendars = !read.busy && read.page.ok ? read.page.facts.calendars : calendarsOf(doc);
-  return calendars?.every((calendar) => calendar.shown) ?? null;
+  if (calendars === null) return null;
+  return !someCalendarListEmpty(doc) && calendars.every((calendar) => calendar.shown);
 }
 
 /** The latest snapshot's instant and the hash of the account its pass read (null: the page named none). */

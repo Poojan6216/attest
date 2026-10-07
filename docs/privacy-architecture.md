@@ -43,7 +43,7 @@ Each observer reads one vendor page in a tab you opened, and only while you have
 
 | Observer | Reads | Keeps (in a row) | Never reads into a field |
 |---|---|---|---|
-| `gmail.sent` | The Sent list: each row's recipients, subject and time | One row per recipient: the address, the subject (80 characters), the minute sent, a hash of Gmail's row id | The snippet, the message body, display names, other folders |
+| `gmail.sent` | The Sent list: each row's recipients, subject and time | One row per recipient other than you: the address, the subject (80 characters), the minute sent, a hash of Gmail's row id | The snippet, the message body, display names, your own address, other folders |
 | `gmail.receipt` | Every expanded message of a conversation you opened: its sender, subject and date; the body only of a message whose sender and subject make it a receipt candidate, and only to find the total line | One row per receipt: merchant, amount, currency, subject (80 characters), date, a hash of Gmail's message id | The rest of the body (items, addresses, card digits), any message that is not a receipt |
 | `gcal.event` | The visible days, each event chip's label (start, end, title, calendar, guests), the calendar list | One row per event first seen, created, changed or removed: title (80 characters), start, one guest address, a hash of the event key; and the range's snapshot ([§5.4](#54-calendarsnapshots)) | Locations, conference links, descriptions, response status |
 
@@ -63,7 +63,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 | Allowlisted field | What it holds | Where it comes from |
 |---|---|---|
-| `counterparty` | One recipient's email address, exactly as Gmail shows it (case kept), on one line, at most 320 characters. A row with three recipients gives three rows. Never a display name. | The recipient element's `email` attribute, else its `title` |
+| `counterparty` | One recipient's email address, exactly as Gmail shows it (case kept), on one line, at most 320 characters. A row with three recipients gives three rows. Never a display name, and never the signed-in account's own mailbox, in any spelling Gmail delivers to it (any case, a `+tag`, dots in a Gmail address): it is left out of the recipients, so an email sent only to yourself gives no row, and Attest then cannot check a claim about it (the claim stays UNVERIFIABLE, never NOT FOUND). | The recipient element's `email` attribute, else its `title` |
 | `subjectHint` | The subject on one line, cut to its first 80 Unicode code points. Absent when the subject is empty or Gmail's `(no subject)`. | The row's subject cell; the snippet beside it is never read |
 | `occurredAt` | The minute the message was sent, ISO 8601 with the offset in force at that instant. | The time cell's absolute `title`, else its label or text resolved against the pass's own instant |
 | `rowKeyHash` | SHA-256 of Gmail's id for the row. It tells two identical sends apart and makes the same row read twice one row. The id itself is not stored. | `data-legacy-last-message-id` |
@@ -87,7 +87,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 |---|---|---|
 | `subjectHint` | The event title on one line, first 80 code points. Absent for `(No title)`. | The chip's accessible label and its drawn title |
 | `occurredAt` | The event's start, ISO 8601 with offset; local midnight for an all-day event. For an updated event, its new start. | The chip's accessible label, read in the browser's zone |
-| `counterparty` | One guest address: the first guest in ASCII-lowercase order with your own address left out; for an update that added guests, the first guest added. Absent when the event has no guest addresses. One row per event, never one per guest. | The `Guests:` part of the chip's label |
+| `counterparty` | One guest address: the first guest in ASCII-lowercase order with your own address left out (any case or `+tag`), and none at all on a page that names no account, where yours could be any of them; for an update that added guests, the first guest added. Absent when the event has no guest addresses. One row per event, never one per guest. | The `Guests:` part of the chip's label |
 | `rowKeyHash` | SHA-256 of the event key, which is itself SHA-256 of Calendar's `data-eventid`. That id is base64 of the event id and the calendar id, and a primary calendar's id is its owner's address, so the id never leaves the page. | `data-eventid`, hashed twice |
 | `contentHash` | SHA-256 of the row's source, type, content fields and `rowKeyHash`. A created and a deleted row of one event differ (the type is hashed). | Computed by `project()` |
 
@@ -263,7 +263,7 @@ Every hash is SHA-256 ([`docs/grading.md` §10](grading.md#10-ids-and-hashes-has
 
 | What | Stored as | Where |
 |---|---|---|
-| The signed-in account's address | `accountHash`: SHA-256 of the address, ASCII-lowercased. The address never leaves the content script. | `coverageIntervals`, `coverage`, `calendarSnapshots`, `grants.accounts` |
+| The signed-in account's address | `accountHash`: SHA-256 of the address, ASCII-lowercased. A page's own account address never leaves its content script: it is left out of Gmail recipients and Calendar guests too. A page knows only the account it is signed in to, so the address of your other Google account is stored like any address you wrote to when you email it from this one. | `coverageIntervals`, `coverage`, `calendarSnapshots`, `grants.accounts` |
 | Gmail's row and message ids | `rowKeyHash` | `observations` |
 | Calendar's event id | The event `key` (SHA-256 of `data-eventid`); `rowKeyHash` hashes that key again | `calendarSnapshots`, `observations` |
 | A Calendar guest's address (every guest but an event's first) | `guestKeys`: SHA-256 of the address, ASCII-lowercased | `calendarSnapshots` |

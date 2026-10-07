@@ -7,8 +7,9 @@
  * Avery Founder\n(avery@example.com)"), usually at its end; a second signed-in account can carry words after it (a
  * note such as ", needs attention": real capture of 2026-10-06). The words around it are localised; the
  * parenthesised address is not, so the rule reads no word of any language: the label's last parenthesised address is
- * the account. An address inside the display name ("Avery (x@y.org)\n(avery@example.com)") comes before it. Two different addresses (compared as §5.1 compares them: ASCII-lowercased) are ambiguous,
- * as with an account chooser drawn open: coverage must belong to one account, so the caller refuses to guess (Hard
+ * the account. An address inside the display name ("Avery (x@y.org)\n(avery@example.com)") comes before it. Two
+ * different addresses (compared as §5.1 compares them: ASCII-lowercased) are ambiguous, as with an account chooser
+ * drawn open: coverage must belong to one account, so the caller refuses to guess (Hard
  * Rule 5). The address is returned only to the observer, which hashes it before anything leaves the content script
  * (./account.ts; Hard Rules 2, 10). Pure over the DOM (Hard Rule 3): it reads attributes only.
  */

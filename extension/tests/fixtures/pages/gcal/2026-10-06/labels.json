@@ -1,0 +1,450 @@
+{
+  "week-before.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:52:43-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      }
+    ],
+    "notes": "Real week view, Sun 4 to Sat 10 Oct 2026 (America/New_York). One event, on the account's own calendar: a reservation Google added from Gmail (4 Oct, 20:00; its label reads \"Accepted\"). 3 of 9 calendars ticked, so allCalendars is false. Coverage: the whole week. The calendar list is native checkboxes. Event titles and calendar names are kept; the owner's name is fake."
+  },
+  "week-list-not-loaded.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:52:54-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "The same week, read while the side panel's calendar lists were drawn but still empty (Calendar fills them about 9 s after the grid, and only while the tab is shown). The page is still drawing: health OK, nothing read, no coverage."
+  },
+  "week-after.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:53:33-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "NTdhZmVxY3FvZGxoanBrOGY1NHQ1aWdsNGkgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Attest test",
+        "occurredAt": "2026-10-07T15:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "week-before.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.created",
+            "subjectHint": "Attest test",
+            "occurredAt": "2026-10-07T15:00:00-04:00",
+            "rowKey": "NTdhZmVxY3FvZGxoanBrOGY1NHQ1aWdsNGkgY29ybW9yZS5wZW1mb3JkQG0"
+          }
+        ]
+      }
+    ],
+    "notes": "After creating \"Attest test\" (7 Oct, 15:00 to 16:00, no guests) on the account's own calendar: against week-before, one calendar.created. Its label has no reply word (\"3pm to 4pm, Attest test, <calendar>, No location, October 7, 2026\"), unlike the reservation's \"Accepted\"."
+  },
+  "week-edited.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:54:15-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "NTdhZmVxY3FvZGxoanBrOGY1NHQ1aWdsNGkgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Attest test",
+        "occurredAt": "2026-10-07T17:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "week-after.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.updated",
+            "subjectHint": "Attest test",
+            "occurredAt": "2026-10-07T17:00:00-04:00",
+            "rowKey": "NTdhZmVxY3FvZGxoanBrOGY1NHQ1aWdsNGkgY29ybW9yZS5wZW1mb3JkQG0"
+          }
+        ]
+      }
+    ],
+    "notes": "The test event moved to 17:00 to 18:00: against week-after, one calendar.updated."
+  },
+  "week-deleted.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:54:44-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "week-edited.html",
+        "observations": [
+          {
+            "kind": "observation",
+            "source": "gcal.event",
+            "type": "calendar.deleted",
+            "subjectHint": "Attest test",
+            "occurredAt": "2026-10-07T17:00:00-04:00",
+            "rowKey": "NTdhZmVxY3FvZGxoanBrOGY1NHQ1aWdsNGkgY29ybW9yZS5wZW1mb3JkQG0"
+          }
+        ]
+      }
+    ],
+    "notes": "The test event deleted: against week-edited, one calendar.deleted."
+  },
+  "month.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.month",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:54:55-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/month/2026/10/1"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "DEGRADED",
+        "reasons": [
+          "event.unreadable"
+        ]
+      }
+    ],
+    "notes": "Real month view, October 2026 (35 days). Its event is an element carrying the event id around a button, and the day is named only by a heading's text, so the reader cannot place the event on a day: DEGRADED event.unreadable, no coverage (a known limit, carried forward)."
+  },
+  "second-calendar-on.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:55:19-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "week-deleted.html",
+        "observations": []
+      }
+    ],
+    "notes": "The week with the Tasks calendar ticked (3 of 9 ticked); Tasks has no event this week. Against week-deleted, no change."
+  },
+  "second-calendar-off.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:55:27-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "second-calendar-on.html",
+        "observations": []
+      }
+    ],
+    "notes": "The same week with Tasks unticked (2 of 9 ticked). Against second-calendar-on, no change: a calendar switched off creates and deletes nothing."
+  },
+  "week-other-calendar.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:55:39-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week/2026/10/7"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      },
+      {
+        "kind": "diff",
+        "from": "second-calendar-off.html",
+        "observations": []
+      }
+    ],
+    "notes": "The week with a calendar from \"Other calendars\" ticked as well (4 of 9 ticked); it has no event this week. Against second-calendar-off, no change."
+  }
+}

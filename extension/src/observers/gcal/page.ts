@@ -198,6 +198,17 @@ function calendarListsEmpty(doc: Document): boolean {
   return lists.length > 0 && lists.every((list) => list.childElementCount === 0);
 }
 
+/**
+ * True when one of the side panel's calendar lists is drawn with no item: a list still filling in (Calendar fills
+ * its lists seconds after the grid, and need not fill them together) or a section that holds no calendar. Either
+ * way the page does not show every calendar's state, so it never says every calendar is shown (tech re-review
+ * TECH-R4: a half-filled panel had read as `allCalendars: true`). The page is still read: an empty section is not
+ * a page still drawing.
+ */
+export function someCalendarListEmpty(doc: Document): boolean {
+  return Array.from(doc.querySelectorAll(S.calendarList)).some((list) => list.childElementCount === 0);
+}
+
 /** Every UTC offset (minutes) a "GMT-04" hint in `role="main"` names, outside the event chips. */
 export function zoneHints(main: Element): number[] {
   const hints: number[] = [];
@@ -261,8 +272,8 @@ export function shownEventIds(main: Element): Set<string> {
 
 /**
  * The shown event chips in `role="main"`, one entry per `data-eventid`, in page order. A chip is a button carrying the
- * id (week and day views) or an element carrying it around its button (month view: capture of 2026-10-06). A hidden chip (in a view the
- * app keeps hidden, or one it hides) is not on the page the user sees, so it is not read.
+ * id (week and day views) or an element carrying it around its button (month view: capture of 2026-10-06). A hidden
+ * chip (in a view the app keeps hidden, or one it hides) is not on the page the user sees, so it is not read.
  */
 export function chipsOf(main: Element): Chip[] {
   const byId = new Map<

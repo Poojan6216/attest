@@ -419,3 +419,27 @@ Checklist corrections:
 - `npx vitest run tests/unit/secprobe/background-probe.spec.ts (scratch)` → 4 passed; probe facts recorded: Health stuck at OK (checkedAt 2027) after a DEGRADED report at 2026 acked ok; 'muse' health stored; account-less gcal window 1990-2090 stored; purgeExpired with now 2027-10-03 deleted the 1 current observation (cutoff 2027-07-05T18:00Z)
 - `npx vitest run tests/unit/secprobe/gcal-probe.spec.ts (scratch)` → 1 passed: Snapshot 'Late deploy window' guests [jordan.lee@example.com, sam.chen@example.net]; observation counterparty jordan.lee@example.com only
 
+
+## Re-review of the real-capture work (2026-10-06)
+
+**Scope.** The same eight commits, including the 21 sanitized captures and their labels, which had not been pushed. Two passes: the captures as committed, then the 17 kept after cleaning, with a decoder sweep (plain text, entities, JavaScript escapes, percent-decoding, base64 and base64url at four offsets, zlib, raw deflate and gzip, to depth 3). No personal value is written here.
+
+| ID | Severity | Finding |
+|---|---|---|
+| SEC-R1 | critical | The founder's real address and Uber rider id inside Uber's click links in `receipt-uber.html` (path segments base64url of a zlib-compressed query, `@` written `%40`). |
+| SEC-R2 | high | The trip's pickup and drop-off addresses in Google Maps link paths in the same receipt. |
+| SEC-R3 | high | A phone number in a `tel:` link in `sent-thread.html` (redacted text, link kept; the `%20` hid it from the phone pattern). |
+| SEC-R4 | medium | `receipt-amazon.html` was a birthday gift-card email from a company, not a shipping notice: birth day and month, and likely the employer. |
+| SEC-R5 | medium | The Inbox tab previews (kept in the DOM on every Gmail page) were not redacted: a bank's offer, job alerts, a recruiter's name. |
+| SEC-R6 | medium | Receipt bodies kept a Stripe receipt link token, a private person's name with an order number, card endings, a referral link and code, an order id, a shopper's and a driver's first names. |
+| SEC-R7 | low | The own-address rule compared exact lowercase strings: a `+tag`, Gmail's dots and `googlemail.com` passed. |
+| SEC-R8 | low | On a page that names no account, the generic receipt parser took the account's address (Gmail's sender name for its own mail) as a merchant, and Calendar stored guests unfiltered. |
+| SEC-R9 | low | Any `role="listitem"` with `aria-expanded` counted as a message, one inside an email's own markup included. |
+| SEC-R10 | low | Activity in any thread after a claimed send moves every later window past it: a false claim stays UNVERIFIABLE (safe, but an attack that works), not yet in docs/attacks-that-work.md. |
+| SEC-R11 | low | The link trimmer read URLs with a regex: backslash, single-slash, tab-in-scheme and similar forms kept their path. |
+| SEC-R12 | medium | Web addresses outside link attributes (visible text, `data-src`) kept their paths, the form the receipt's referral link took. |
+| SEC-R13 | low | The new deep leak test missed short calendar ids, `<wbr>`-split blobs, truncated deflate, JavaScript escapes, and unlabelled or other-vendor captures. |
+| SEC-R14 | low | The card-ending pattern was quadratic on long mask runs and missed several real formats. |
+| SEC-R15 | low | A display name kept four digits from a real handle; a Google One price in rupees hints at the billing region; a recipient shown as "US". |
+
+**Checked and clean (second pass).** In the 17 kept pages and both labels files, every address is a fake or a registry sender with a fake local part, the founder's name, username and address appear in no layer, the only short calendar id is the fake account's, and nothing of the four removed receipts remains anywhere in the working tree. The new regexes run in linear time; the no-act, logging and bus rules hold.

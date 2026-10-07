@@ -71,6 +71,57 @@ describe('a message drawn as real Gmail draws it (capture of 2026-10-06)', () =>
   });
 });
 
+describe('which list items are messages (re-review: QA-R2, QA-R3, SEC-R9)', () => {
+  it('a collapsed message drawn without its key is still a message: every message collapsed is OK', () => {
+    const collapsed = run(
+      messagePage({ ...UBER, messages: [{ ...UBER_RECEIPT, noKey: true, expanded: 'false' }] }),
+    );
+    expect(collapsed.health).toEqual({ status: 'OK' });
+  });
+
+  it('a list item in the main region of a list page is no conversation: OK, nothing read', () => {
+    const html = messagePage(UBER)
+      .replace(/<h2[^>]*>[^<]*<\/h2>/u, '')
+      .replace(
+        /<div class="[^"]*" role="listitem"[\s\S]*<\/div><\/div><\/div><\/body>/u,
+        '<div role="listitem">Label</div></div></div></body>',
+      );
+    const page = run(html, LIST_URL);
+    expect(page.health).toEqual({ status: 'OK' });
+    expect(page.plan.observations).toEqual([]);
+  });
+
+  it('a list item inside a message body, even with aria-expanded, is part of that message: the receipt is read', () => {
+    const body = `${rows([['Total', '$23.84']])}<div role="list"><div role="listitem" aria-expanded="true">Trip</div></div>`;
+    const page = run(messagePage({ ...UBER, messages: [{ ...UBER_RECEIPT, body }] }));
+    expect(page.health).toEqual({ status: 'OK' });
+    expect(page.plan.observations).toHaveLength(1);
+  });
+});
+
+describe('a page that names no account (security re-review, SEC-R8)', () => {
+  it('the generic parser reads nothing there: the account’s own order mail cannot be told apart', () => {
+    const own: PageSpec = {
+      subject: 'Order confirmation',
+      account: null,
+      messages: [{ from: ACCOUNT, name: ACCOUNT, body: rows([['Order total', '$10.00']]) }],
+    };
+    expect(run(messagePage(own)).plan.observations).toEqual([]);
+    // The same message from a shop is a generic receipt once the page names the account.
+    const shop: PageSpec = {
+      ...own,
+      account: ACCOUNT,
+      messages: [{ from: 'orders@bakery.example', name: 'Bakery', body: rows([['Order total', '$10.00']]) }],
+    };
+    expect(run(messagePage(shop)).plan.observations).toHaveLength(1);
+    expect(run(messagePage({ ...shop, account: null })).plan.observations).toEqual([]);
+  });
+
+  it('a registry receipt is still read there: its sender is the merchant, never the account', () => {
+    expect(run(messagePage({ ...UBER, account: null })).plan.observations).toHaveLength(1);
+  });
+});
+
 describe('only the main landmark Gmail shows is read (TECH-5)', () => {
   it('a conversation kept hidden beside a shown list is not read: OK, nothing reported', () => {
     const stale = messagePage(UBER).replace('role="main"', 'role="main" hidden');

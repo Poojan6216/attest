@@ -448,3 +448,18 @@ Checklist corrections:
 - `Dev copy with QA tests: pnpm lint; pnpm typecheck; vitest full; pnpm e2e` → lint 0, typecheck 0, vitest 2 failed by design, e2e 43 passed: 318 files: 9,124 passed, 2 failed (sent-head-minute and bench-corpus-honesty receipts, product defects), 7 skipped
 - `npx vitest run (the 5 new unit specs) in the shared tree` → 16 passed, 2 failed by design: Prettier and ESLint clean on all 9 new files in the shared tree
 
+
+## Re-review of the real-capture work (2026-10-06)
+
+**Scope.** The eight commits after the Sprint 2 close (678ef67 to fd01d84): the readers' fixes for real pages, the capture tool's changes, the labels of the first 21 real captures, the reference readers, the corpus checks and the bench changes. Every test and mutant ran in clean worktrees; 33 mutants were tried, 28 killed by assertions.
+
+| ID | Severity | Finding |
+|---|---|---|
+| QA-R1 | high | Tests that run over the whole corpus hit their timeouts under load (real pages are 0.7 to 1.5 MB each and were parsed again for every test and bench run); CI's observer-coverage step failed on fd01d84 with five timeouts. |
+| QA-R2 | medium | No test drew a collapsed message without its key, so dropping the `aria-expanded` rule for receipt message items survived every suite. |
+| QA-R3 | medium | No test put a plain list item in the main region of a list page, so `holdsConversation` reading every list item survived. |
+| QA-R4 | medium | "Lists drawn but empty: still drawing" was tested only with every list empty: `every` → `some`, and dropping `[aria-label]` from the list selector, both survived. |
+| QA-R5 | low | No browser test (no-leak, network, no input events) loaded a real capture. |
+| QA-R6 | low | gmail.sent stayed at selectors version 1.1.0 although its fixture list and its reading changed. |
+
+**Checked and clean.** Every fact on the four real Sent lists matches the page (row key, counterparty, time; both windows start a minute after the newest conversation); no test was weakened (the window-start check moved and now reads every row, every Sent window must end at lastSyncAt, the Calendar checks skip only pages a pass does not read, the receipt-corpus block moved unchanged); the corpus meets 2.1 to 2.5; the WXT stubs hide no assertion.

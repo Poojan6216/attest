@@ -18,6 +18,7 @@ import type { Observation } from '../../../../src/core/schema';
 import { accountHashOf } from '../../../../src/observers/account';
 import { extractSent } from '../../../../src/observers/gmail/extract';
 import { gmailSentObserver } from '../../../../src/observers/gmail/sent-observer';
+import { planPass } from '../../../../src/observers/plan';
 import type { Observer, RawRow } from '../../../../src/observers/types';
 import { findLeaks, loadSeeds } from '../../../e2e/support/leaks';
 import { type LabelledFixture, projectArgs } from '../../fixtures/fixture-labels';
@@ -39,8 +40,12 @@ function expectedObservations(fixture: LabelledFixture): Observation[] {
 describe('Sent lists: the pass posts exactly the labelled observations, health and coverage', () => {
   const lists = sentListFixtures();
 
-  it('covers the six labelled Sent-list fixtures', () => {
+  it('covers the ten labelled Sent-list fixtures, four of them real', () => {
     expect(lists.map((f) => f.file).sort()).toEqual([
+      'second-account-sent.html',
+      'sent-list-1.html',
+      'sent-list-2.html',
+      'sent-list-last.html',
       'synthetic-sent-account-2.html',
       'synthetic-sent-dst-auckland.html',
       'synthetic-sent-midnight.html',
@@ -114,18 +119,24 @@ describe('dedup, subject length and seeds', () => {
     expect(Math.max(...hints)).toBe(80);
   });
 
+  // Each page is parsed once, for the raw rows and the pass (real pages are about 1 MB); the timeout is the measured
+  // 8 s of the whole corpus with room for a loaded machine and coverage instrumentation (tech re-review, TECH-R6).
   it('no seeded secret or account address reaches the raw rows or the pass output', async () => {
     const seeds = loadSeeds();
     for (const fixture of gmailFixtures()) {
       const page = openFixture(fixture);
-      const raw = extractSent(page.doc, fixtureCtx(fixture));
-      await page.close();
-      const plan = await runSentPass(fixture);
-      expect(findLeaks(fixture.file, { raw, plan }, seeds), fixture.file).toEqual([]);
-      const text = JSON.stringify({ raw, plan }).toLowerCase();
-      expect(text.includes(fixture.page.account.toLowerCase()), fixture.file).toBe(false);
+      try {
+        const ctx = fixtureCtx(fixture);
+        const raw = extractSent(page.doc, ctx);
+        const plan = planPass({ observer: gmailSentObserver, doc: page.doc, ctx, policy: DEFAULT_POLICY });
+        expect(findLeaks(fixture.file, { raw, plan }, seeds), fixture.file).toEqual([]);
+        const text = JSON.stringify({ raw, plan }).toLowerCase();
+        expect(text.includes(fixture.page.account.toLowerCase()), fixture.file).toBe(false);
+      } finally {
+        await page.close();
+      }
     }
-  });
+  }, 120_000);
 });
 
 describe('bench/observers/gmail.ts', () => {
@@ -136,22 +147,29 @@ describe('bench/observers/gmail.ts', () => {
     const gates = Object.entries(metrics).filter(([name]) => name.endsWith('GatePassed'));
     expect(gates.length).toBeGreaterThanOrEqual(7);
     expect(gates.filter(([, value]) => value !== true)).toEqual([]);
-  });
+  }, 120_000);
 
   it('the number falls when an extractor gets a field wrong, drops rows or invents rows', async () => {
+    // The gate's sensitivity, shown on the synthetic pages (the full corpus runs once, above: TECH-R6).
+    const synthetic = gmailFixtures().filter((f) => f.page.synthetic);
     const rewrite = (map: (rows: RawRow[]) => RawRow[]): Observer => ({
       ...gmailSentObserver,
       extract: (doc, ctx) => map([...gmailSentObserver.extract(doc, ctx)]),
     });
     const wrongSubject = await runGmailBench(
       rewrite((rows) => rows.map((r) => ({ ...r, fields: { ...r.fields, subjectHint: 'Wrong' } }))),
+      synthetic,
     );
     expect(wrongSubject.gmailSentSubjectHintAccuracy).toBe(0);
     expect(wrongSubject.gmailSentAccuracyGatePassed).toBe(false);
-    const dropped = await runGmailBench(rewrite((rows) => rows.filter((_, at) => at % 2 === 0)));
+    const dropped = await runGmailBench(
+      rewrite((rows) => rows.filter((_, at) => at % 2 === 0)),
+      synthetic,
+    );
     expect(dropped.gmailSentAccuracyGatePassed).toBe(false);
     const invented = await runGmailBench(
       rewrite((rows) => [...rows, ...rows.map((r) => ({ ...r, rowKey: `${r.rowKey ?? ''}x` }))]),
+      synthetic,
     );
     expect(invented.gmailSentAccuracyGatePassed).toBe(false);
   });

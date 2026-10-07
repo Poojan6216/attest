@@ -51,6 +51,9 @@ const VENDOR_PAGES = [
   vendorFixture('gmail', 'synthetic-sent-page-1.html'),
   vendorFixture('gmail', 'synthetic-receipt-amazon.html'),
   vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+  // Real captures (2026-10-06): their seeds go through content script, bus, ledger and export too (QA-R5).
+  vendorFixture('gmail', 'sent-list-1.html'),
+  vendorFixture('gcal', 'week-after.html'),
 ];
 const SETTLE_MS = 5_000;
 

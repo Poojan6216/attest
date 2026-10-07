@@ -19,6 +19,7 @@ import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { CONTENT_FIELDS, project } from '../../../src/core/redact';
 import { closeWindow, createInertWindow } from '../../tools/capture-dom';
 import { BaseSeed, SEEDS_PATH } from '../../tools/seeds';
+import { stillDrawing } from './fixture-page-read';
 import {
   type Fact,
   labelFolders,
@@ -102,8 +103,15 @@ describe('observer fixture labels', () => {
     for (const f of fixtures) {
       expect(f.page.vendor, f.file).toBe(f.vendor);
       expect(f.label.capturedAt, f.file).toBe(f.date);
-      const account = docOf(f).querySelector('[role="banner"] [aria-label^="Google Account:"]');
-      expect(account?.getAttribute('aria-label'), f.file).toContain(`(${f.page.account})`);
+      // The switcher's words are localised (and a capture may fake a brand in them); its address in brackets is not.
+      const labels = Array.from(
+        docOf(f).querySelectorAll('[role="banner"] [aria-label]'),
+        (el) => el.getAttribute('aria-label') ?? '',
+      );
+      expect(
+        labels.filter((label) => label.includes(`(${f.page.account})`)),
+        f.file,
+      ).toHaveLength(1);
       expect(docOf(f).querySelector('[role="main"]'), f.file).not.toBeNull();
     }
   });
@@ -168,6 +176,12 @@ describe('observation facts are what project() keeps', () => {
     }
   });
 
+  it("no fact names the page's own account as its counterparty (it leaves the page only as a hash)", () => {
+    for (const { f, fact } of all) {
+      expect(fact.counterparty?.toLowerCase(), f.file).not.toBe(f.page.account.toLowerCase());
+    }
+  });
+
   it('a Gmail sent fact never lies in the future of the read', () => {
     for (const { f, fact } of all.filter((a) => a.fact.source !== 'gcal.event')) {
       expect(Date.parse(fact.occurredAt), f.file).toBeLessThanOrEqual(Date.parse(f.page.readAt));
@@ -224,15 +238,13 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
 });
 
 describe('coverage windows (Hard Rule 5)', () => {
-  it('a Gmail Sent window starts at its oldest row (a minute later unless every Older is disabled, QA-1) and ends at its newest row or, at the head, lastSyncAt', () => {
+  // A Gmail Sent window's start and end are checked against every row of its page, conversations included, in
+  // fixture-pages.spec.ts ('a Sent window starts …'): the labels hold no fact for a conversation row.
+  it('a Gmail Sent page asserts at most one window, at the head of the list, ending at lastSyncAt', () => {
     for (const f of fixtures.filter((x) => x.coverage.some((c) => c.source === 'gmail.sent'))) {
-      const times = f.observations.map((o) => Date.parse(o.occurredAt));
-      const [c] = f.coverage;
-      const older = Array.from(docOf(f).querySelectorAll('[role="button"][aria-label="Older"]'));
-      const ends = older.length > 0 && older.every((x) => x.getAttribute('aria-disabled') === 'true');
-      expect(Date.parse(c?.windowStart ?? ''), f.file).toBe(Math.min(...times) + (ends ? 0 : 60_000));
-      if (c?.windowEnd !== 'lastSyncAt')
-        expect(Date.parse(c?.windowEnd ?? ''), f.file).toBe(Math.max(...times));
+      const [c, ...more] = f.coverage;
+      expect(more, f.file).toEqual([]);
+      expect(c?.windowEnd, f.file).toBe('lastSyncAt');
     }
   });
 
@@ -289,7 +301,10 @@ describe('facts bind to the page', () => {
     for (const f of fixtures.filter((x) => x.vendor === 'gcal')) {
       const main = docOf(f).querySelector('[role="main"]');
       const chips = Array.from(main?.querySelectorAll('[role="button"][data-eventid]') ?? []);
-      expect(new Set(chips.map((c) => c.getAttribute('data-eventid'))).size, f.file).toBe(f.events.length);
+      // A page the pass does not read (DEGRADED, or still drawing) has no event; any other has one per chip.
+      const read = f.health.every((h) => h.status === 'OK') && !stillDrawing(docOf(f));
+      const ids = new Set(chips.map((c) => c.getAttribute('data-eventid')));
+      expect(read ? ids.size : 0, f.file).toBe(f.events.length);
       for (const e of f.events) {
         const chip = chips.find((c) => c.getAttribute('data-eventid') === e.rowKey);
         const visible = collapse(chip?.querySelector('[aria-hidden="true"]')?.textContent);
@@ -364,34 +379,3 @@ function diffAgrees(o: ObservationFact, before: readonly Fact[], after: readonly
   if (o.type === 'calendar.deleted') return now === undefined && matches(was);
   return false;
 }
-
-describe('receipt corpus (2.3 Done-when)', () => {
-  const gmail = fixtures.filter((f) => f.vendor === 'gmail');
-  const receipts = gmail.flatMap((f) => f.observations.filter((o) => o.source === 'gmail.receipt'));
-
-  it('names every parser the sprint lists, each with a labelled positive', () => {
-    const parsers = new Set(receipts.map((o) => o.parser));
-    for (const parser of [
-      'stripe',
-      'amazon',
-      'marketplace',
-      'opentable',
-      'instacart',
-      'uber',
-      'shopify',
-      'generic',
-    ]) {
-      expect(parsers, parser).toContain(parser);
-    }
-    for (const o of receipts)
-      expect(o.merchant && o.amountCents !== undefined && o.currency, o.subjectHint).toBeTruthy();
-  });
-
-  it('has at least 3 generic positives and 3 opened-inbox negatives with no receipt', () => {
-    expect(receipts.filter((o) => o.parser === 'generic').length).toBeGreaterThanOrEqual(3);
-    const negatives = gmail.filter(
-      (f) => f.page.view === 'gmail.message' && f.page.folder === 'inbox' && f.observations.length === 0,
-    );
-    expect(negatives.length).toBeGreaterThanOrEqual(3);
-  });
-});

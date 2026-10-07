@@ -296,3 +296,45 @@ Against the Sprint 2 gate (sprints/sprint_2.md):
 
 - `6cc0386` fix(sprint-2): close the Sprint 2 reviews
 - the next commit: RESULTS.md, `bench/results/*-2026-10-05.json` and this report
+
+## Re-close after the real captures (2026-10-06)
+
+**Inputs.** The re-review sections of [`qa.md`](qa.md), [`security.md`](security.md) and [`tech.md`](tech.md): 30 findings (6 QA, 15 security, 9 tech), each reviewer working alone in scratch copies. First action, before any fix: the local commits holding the captures were taken out of history (main reset to a11572f; none had been pushed), so the founder's next push cannot publish them. Every code fix below was proved by a mutant that the new or changed test kills.
+
+**FIXED**
+
+- **SEC-R1, R2, R4, R6** → the four receipt captures are held out of the repository (Decisions `[2.close-r2]`); they come back only re-captured with the stricter tool and read by the founder (MANUAL.md). Test: `fixture-deep-leaks.spec.ts`, which flags the held-out Uber page's address.
+- **SEC-R3, R5, R15 (digits)** → the 17 kept captures cleaned with the tool's own new rules: `tel:` emptied, Inbox tab previews replaced, links to other sites cut to their host (Google One paths included), a handle's digits faked. Same test, plus the second security pass (clean).
+- **SEC-R11, R12** → `capture-url.ts` `trimForeignLink` (WHATWG parsing, plain forms only for the page's own host, scheme-only for other schemes, `mailto:` faked) and `trimForeignUrls` (text and attributes; `xmlns` exempt). Tests: `sanitize-links.spec.ts`, `capture-url.spec.ts`.
+- **SEC-R13** → `fixture-deep-leaks.spec.ts` walks every capture in any vendor folder, rejoins `<wbr>` text, inflates truncated streams, decodes JavaScript escapes and checks short calendar ids; its last case plants each form and shows it is caught.
+- **SEC-R14** → card endings found by their digits and a 32-character look-back (linear); five more formats. Found on the way: the query stripper's lookbehind-first pattern was quadratic (22 s on 100,000 bullets) → reordered, same results. Tests: `sanitize-links.spec.ts`.
+- **SEC-R15 (handles)** → digits glued to a learned name are matched and faked with it (`capture-pii.ts`). Test: `sanitize-links.spec.ts`.
+- **TECH-R1, SEC-R7** → `src/observers/own-address.ts` (any case, `+tag`, Gmail's dots); a Sent row naming the account gives no row for it and narrows the window. Tests: `sent-own-address.spec.ts`, `fixture-pages.spec.ts`.
+- **SEC-R8** → no generic receipt and no Calendar guest on a page that names no account. Tests: `receipts-page.spec.ts`, `gcal/own-guests.spec.ts`.
+- **TECH-R2** → grading contract v1.14 (`coverage.list_unsettled`; caps named only for unseen spans; Sent unions bounded in `coverage-merge.ts`). Tests: golden 113 with its proof and broken copies (`v114-rules.spec.ts`), `state-grace-full.spec.ts`, `calendar-stale-views.spec.ts`, `grade-reasons-policy.spec.ts`, both coverage property tests, `ledger/coverage.spec.ts`.
+- **TECH-R3** → `patterns.legacyId` in gmail selectors.json; a blank or re-formed id is refused. Tests: `sent-time.spec.ts`.
+- **TECH-R4, QA-R4** → `someCalendarListEmpty`: never `allCalendars: true` while a labelled list is empty; one empty list is not "still drawing"; an unlabelled list is not a calendar list. Tests: `calendar-list.spec.ts` (kills `every`→`some` and the dropped `[aria-label]`).
+- **TECH-R5, QA-R6** → gmail.sent 1.2.0, gmail.receipt 1.3.0, gcal.event 1.5.0; every label restamped. Test: `fixture-selector-versions.spec.ts`.
+- **TECH-R6, QA-R1** → gate-sensitivity tests on the synthetic pages; each page parsed once where a test only reads it; measured timeouts. The heaviest suites now take 2 to 6 s per test alone.
+- **TECH-R7** → the grouped sweep reports a group whose change no half reproduces. Test: `watched-attributes.spec.ts`.
+- **TECH-R8** → a list out of order vouches for no window (`window.unknown`). Test: `sent-time.spec.ts`.
+- **SEC-R9** → a list item inside a message is part of it. Test: `receipts-page.spec.ts`.
+- **QA-R2, QA-R3** → tests for a collapsed unkeyed message (OK) and a list item on a list page (no conversation). Test: `receipts-page.spec.ts`.
+- **QA-R5** → the real Sent list and Calendar week join the no-leak, network and no-input-events browser tests (9 passed, 5.2 min).
+- **TECH-R9** → month-view and account-label wording, the README example, the cache comment; `docs/adapters.md`, `docs/grading.md`, `docs/privacy-architecture.md` and the fixture README describe every rule above.
+- **SEC-R10** → written into `docs/attacks-that-work.md` for the Sprint 6 red team.
+
+**MANUAL**
+
+- Push the waiting commits (the agent's push is blocked by its safety settings) and quit the capture Chrome.
+- Re-capture eight receipts and newsletters, read by the founder before labelling (task 2.1 needs 12 real Gmail pages; 8 are labelled).
+- The live smoke (2.8), which also checks what an event the account organises with a guest reads.
+
+**ACCEPTED**
+
+- The grouped sweep cannot find two attributes whose changes cancel inside one group (TECH-R7's second case): testing one by one would take minutes per real page; the risk is a read depending on two unnamed attributes that cancel exactly.
+- A change in what Gmail's ids mean that keeps their form makes every row a conversation (TECH-R3's remainder): one page cannot tell it from a real list of conversations; Sprint 6.4 counts rows given no row.
+- The six config tests keep their own WXT stub (TECH-R9): a shared setup file would stub WXT for every test.
+- A Google One price in rupees and a recipient shown as "US" stay in the Gmail captures (SEC-R15): not identifying beyond the calendar names the founder accepted.
+
+**VERIFIED CLEAN.** The second security pass over the 17 kept captures and both labels files found no personal value in any layer. The full gate ran last, on the final tree (below in the Progress Log).

@@ -25,6 +25,8 @@ const SentSelectorsFile = z.strictObject({
     folder: z.string().regex(/^[a-z]+$/u),
     pageSegment: z.string().min(1),
   }),
+  /** The form of Gmail's legacy thread and message ids: a row with another is refused (./sent-time.ts). */
+  patterns: z.strictObject({ legacyId: z.string().min(1) }),
   selectors: z.strictObject({
     navLink: Selector,
     main: Selector,
@@ -70,3 +72,6 @@ export const SENT_SELECTORS: Readonly<SentSelectorsFile> = loadSentSelectors(raw
 
 /** The second segment of a Sent list page's route (`#sent/p2`), compiled once. */
 export const PAGE_SEGMENT = new RegExp(SENT_SELECTORS.route.pageSegment, 'u');
+
+/** Gmail's legacy id form (every id of the captures of 2026-10-03 and 2026-10-06 is 16 lowercase hex digits). */
+export const LEGACY_ID = new RegExp(SENT_SELECTORS.patterns.legacyId, 'u');

@@ -9,11 +9,13 @@ import { describe, expect, it } from 'vitest';
 
 import seededJson from '../../../fixtures/secrets/seeded.json';
 import { asciiLower } from '../../../../src/core/normalize';
+import { DEFAULT_POLICY } from '../../../../src/core/policy';
 import { hashRowKey, hashText } from '../../../../src/core/redact';
 import { accountOf } from '../../../../src/observers/gcal/page';
 import { readCalendar } from '../../../../src/observers/gcal/read';
 import { GCAL_VERSION } from '../../../../src/observers/gcal/selectors';
-import { ctxOf, docOf, GCAL_FIXTURES, observerFor, projectRows, snapshotOfFixture } from './gcal-fixtures';
+import { planPass } from '../../../../src/observers/plan';
+import { ctxOf, docOf, GCAL_FIXTURES, observerFor, passReads, projectRows } from './gcal-fixtures';
 
 const SEEDS = new Map(seededJson.seeds.map((seed) => [seed.id, seed.value]));
 
@@ -37,7 +39,14 @@ describe('gcal.event on the labelled fixtures', () => {
   it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(
     '%s: every labelled event, and no other',
     (_, f) => {
-      const snapshot = snapshotOfFixture(f);
+      const snapshot = observerFor(f).snapshot(docOf(f), ctxOf(f));
+      // A page the pass does not read (DEGRADED, or still drawing) has no snapshot and no labelled event.
+      if (!passReads(f)) {
+        expect(snapshot).toBeNull();
+        expect(f.events).toEqual([]);
+        return;
+      }
+      if (snapshot === null) throw new Error(`${f.file}: no snapshot`);
       expect(snapshot.version).toBe(GCAL_VERSION);
       const expected = f.events.map((e) => ({
         key: hashRowKey(e.rowKey),
@@ -68,7 +77,11 @@ describe('gcal.event coverage and account on the labelled fixtures', () => {
       const observer = observerFor(f);
       const doc = docOf(f);
       const windows = observer.visibleWindows(doc, ctxOf(f));
-      expect(windows).toEqual(f.coverage.map(({ windowStart, windowEnd }) => ({ windowStart, windowEnd })));
+      // A DEGRADED page's span is unknown (null); any other page shows exactly the labelled windows.
+      const degraded = f.health.some((h) => h.status === 'DEGRADED');
+      expect(windows).toEqual(
+        degraded ? null : f.coverage.map(({ windowStart, windowEnd }) => ({ windowStart, windowEnd })),
+      );
       for (const fact of f.coverage) expect(observer.allCalendars(doc)).toBe(fact.allCalendars);
     },
   );
@@ -95,10 +108,13 @@ describe('gcal.event keeps page content off the bus', () => {
   it.each(GCAL_FIXTURES.map((f) => [f.file, f] as const))(
     '%s: no seed, event id, calendar name or account address in a snapshot or a row',
     (_, f) => {
-      const snapshot = snapshotOfFixture(f);
-      const rows = observerFor(f).extract(docOf(f), ctxOf(f));
+      const observer = observerFor(f);
+      const snapshot = observer.snapshot(docOf(f), ctxOf(f));
+      // A pass never extracts a page it does not read (its health stops it): what it posts is its plan.
+      const rows = passReads(f) ? observer.extract(docOf(f), ctxOf(f)) : [];
       const observations = projectRows(rows, f.page.readAt);
-      const text = JSON.stringify([snapshot, rows, observations]).toLowerCase();
+      const plan = planPass({ observer, doc: docOf(f), ctx: ctxOf(f), policy: DEFAULT_POLICY });
+      const text = JSON.stringify([snapshot, rows, observations, plan]).toLowerCase();
       const seeds = f.label.seededSecrets.map((id) => SEEDS.get(id) ?? id);
       const secrets = [
         ...seeds,

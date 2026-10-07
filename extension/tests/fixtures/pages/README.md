@@ -5,7 +5,7 @@
 
 ## Status
 
-Tasks 2.1 and 2.4 are `BLOCKED(MANUAL)` until the founder captures real pages with `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal` (see `docs/adapters.md` §6, the capture, label, test and version loop; the loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked). Until then every file here is a hand-written structural stand-in named `synthetic-*.html`, modelled on the Gmail and Google Calendar web DOM as best known in October 2026. When real captures arrive they go in their own date folder beside these, labelled the same way. The synthetic files stay as regression cases for the edge cases a real capture rarely contains.
+The founder's first real captures (6 October 2026, `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal`; see `docs/adapters.md` §6, the capture, label, test and version loop) are in `gmail/2026-10-06/` (8 pages) and `gcal/2026-10-06/` (9 pages), labelled like the rest. The four receipt pages captured that day were held out: their bodies kept names, order numbers, a referral link and, inside compressed click links, the founder's address (security re-review). They wait for a re-capture with the stricter sanitiser and the founder's review (MANUAL.md). The loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked. The hand-written structural stand-ins named `synthetic-*.html` (the `2026-10-03` folders), modelled on the Gmail and Google Calendar web DOM as best known before the captures, stay as regression cases for the edge cases a real capture rarely contains, and for the receipt kinds the founder's mail does not hold (Facebook Marketplace, OpenTable) or that are still to capture (Stripe, Instacart and Uber receipts, an Amazon shipping notice, a Shopify store, a generic order confirmation, newsletters with prices: MANUAL.md).
 
 Everything here is a test fixture, never live data:
 
@@ -46,6 +46,19 @@ Everything here is a test fixture, never live data:
 | `synthetic-receipt-negative-shipping.html` | Opened message | Negative: "order … has shipped", no amount |
 | `synthetic-receipt-negative-no-currency.html` | Opened message | Negative: receipt subject, numbers, no currency |
 
+`gmail/2026-10-06/` (8 real captures, America/New_York, read on 6 Oct 2026 between 15:31 and 15:33):
+
+| Fixture | View | What it tests |
+|---|---|---|
+| `sent-list-1.html` | Sent list, head (Newer disabled) | 50 rows, 48 of them conversations (no row); 2 one-message rows, one sent only to the account (no row: the account is never a counterparty); the window starts after the newest conversation |
+| `sent-list-2.html` | Sent list, page 2 | 43 conversations and 7 one-message rows, 2 of them only to the account: 5 observations; not the head: health OK, no coverage |
+| `sent-list-last.html` | Sent list, last page | 8 one-message rows; the shown `Older` control disabled, on this page only; rows from earlier years show a numeric date (`11/25/25`) |
+| `drafts.html` | Drafts | Empty in this account: DEGRADED `not_sent_folder` |
+| `inbox.html` | Inbox | 50 rows: DEGRADED `not_sent_folder`, nothing read |
+| `second-account-sent.html` | Sent, `/mail/u/1/` | Second account; all 50 rows conversations: no row, a window that starts after the newest; a note after the address in the account label |
+| `sent-thread.html` | Opened sent thread | No list: DEGRADED `not_sent_list`; the account's own message: no receipt |
+| `sent-thread-with-reply.html` | Opened conversation | Three messages, two collapsed (no message key): no receipt |
+
 `gcal/2026-10-03/` (8 fixtures, America/New_York, week of Sun 4 to Sat 10 Oct 2026 unless noted):
 
 | Fixture | Diff against | Expected diff |
@@ -60,6 +73,22 @@ Everything here is a test fixture, never live data:
 | `synthetic-gcal-month-november.html` | none | none. Month view across the US DST change (Sun 1 Nov), a day with "2 more" hidden events, an open event dialog |
 
 Every week fixture also holds an event that crosses midnight (two chips, one `data-eventid`: one event), a recurring instance (its id carries `_<UTC instant>`), an all-day event, and a title with a comma.
+
+`gcal/2026-10-06/` (9 real captures, America/New_York, the week of Sun 4 to Sat 10 Oct 2026, read on 6 Oct between 15:52 and 15:56):
+
+| Fixture | Diff against | Expected |
+|---|---|---|
+| `week-before.html` | none | one event (a reservation Google added from Gmail); 3 of 9 calendars ticked |
+| `week-list-not-loaded.html` | none | the calendar lists drawn but empty: still drawing, health OK, nothing read |
+| `week-after.html` | week-before | one `calendar.created` (the test event, 7 Oct 15:00, no guests) |
+| `week-edited.html` | week-after | one `calendar.updated` (moved to 17:00) |
+| `week-deleted.html` | week-edited | one `calendar.deleted` |
+| `month.html` | none | DEGRADED `event.unreadable`: month view's events cannot be placed on days yet |
+| `second-calendar-on.html` | week-deleted | none (Tasks ticked, no event this week) |
+| `second-calendar-off.html` | second-calendar-on | none (Tasks unticked) |
+| `week-other-calendar.html` | second-calendar-off | none (a calendar under "Other calendars" ticked) |
+
+Event titles and calendar names are kept in the Calendar captures (the founder agreed for titles); names, addresses and amounts are faked everywhere.
 
 ## What the pages model
 
@@ -83,6 +112,19 @@ The `aria-hidden` part shows the title, a short time and, on a chip whose event 
 
 **Best knowledge, verify on the first real capture:** the selected-folder signal in Gmail's nav, the `aria-label` on Gmail's time span, U+202F in time titles, the `data-datekey` encoding (`((year - 1970) << 9) | (month << 5) | day`), the `Location:` and `Guests:` segments of the chip text (the sprint expects attendee emails in the label; the live page may not carry them), the range heading's markup, and whether hidden "N more" events are absent from the DOM. Live smoke (2.8) records what differs.
 
+**What the real pages showed (captures of 2026-10-06).** The selected folder's link has `tabindex="0"`, the time span's `title` and `aria-label` are absolute, an opened message's date has U+202F before AM/PM, and `data-datekey` decodes as above. Where they differ from the model:
+
+- Gmail repeats each list row's recipients and subject anchor, ids included, in a `display: none` summary for screen readers inside the recipients cell. Only what the row shows is read.
+- Most Sent rows are conversations: their thread, last and last non-draft ids differ, and their time is their newest message's. They give no row (grading contract v1.13).
+- A row from an earlier year shows a numeric date (`11/25/25`, month first); the `title` stays absolute.
+- An opened message's `data-legacy-message-id` sits on an element inside its `role="listitem"`, not on the item; a collapsed message carries none.
+- A message opened from a search selects no folder in the nav (its page fact has no `folder`).
+- The Calendar list is native `input type="checkbox"` elements labelled by `aria-label`; ticking one changes only its `checked` property, which the capture tool writes into the copy. The lists are drawn empty and fill about 9 s after the grid, and only while the tab is shown.
+- A week chip's spoken label reads `<time>, <title>, <calendar>, [Accepted, ](Location: … | No location), <date>`; the event the account created has no reply word.
+- A month chip is an element carrying `data-eventid` around a `role="button"`, outside any `data-datekey` cell; its day is named only by a heading's text.
+- The capture keeps each element's computed styles inline and none of the page's stylesheets (a Gmail page carries about 4 MB of them).
+- A redacted text is also replaced wherever else it appears: "Google", alone as a sender's name in the hidden summaries the capture redacted, reads "Glade yonder" throughout the Gmail pages, the account switcher's label included. No reader reads those words.
+
 ## `labels.json`
 
 One file per folder, keyed by fixture file, in the capture tool's format (`tests/tools/capture-output.ts`):
@@ -91,12 +133,12 @@ One file per folder, keyed by fixture file, in the capture tool's format (`tests
 { "<name>.html": { "capturedAt": "2026-10-03", "selectorsVersion": null, "seededSecrets": ["…", "…", "…"], "expected": [ … ], "notes": "…" } }
 ```
 
-`expected` is a list of facts, each with a `kind`. The schema is `tests/unit/fixtures/fixture-labels.ts`. `selectorsVersion` names the selectors the facts were checked against: one `<observer>@<version>` for every observer whose `selectors.json` lists the folder in `fixtures`, sorted and separated by a space (`gmail.receipt@1.1.0 gmail.sent@1.1.0`: both Gmail observers read every Gmail page). When an observer's `selectors.json` version changes, re-check its fixtures and update every label of its folders (`docs/adapters.md` §5); `tests/unit/observers/fixture-selector-versions.spec.ts` fails until then.
+`expected` is a list of facts, each with a `kind`. The schema is `tests/unit/fixtures/fixture-labels.ts`. `selectorsVersion` names the selectors the facts were checked against: one `<observer>@<version>` for every observer whose `selectors.json` lists the folder in `fixtures`, sorted and separated by a space (`gmail.receipt@1.3.0 gmail.sent@1.2.0`: both Gmail observers read every Gmail page). When an observer's `selectors.json` version changes, re-check its fixtures and update every label of its folders (`docs/adapters.md` §5); `tests/unit/observers/fixture-selector-versions.spec.ts` fails until then.
 
 | `kind` | Fields | Meaning |
 |---|---|---|
 | `page` | `vendor`, `view`, `folder?`, `synthetic`, `timeZone`, `readAt`, `account`, `liveUrl`, `defaultDollar?` | Exactly one, first. `timeZone` is the IANA zone time text is read in. `readAt` is the instant of the pass: its `observedAt` and the reference for relative times. `account` is the switcher's address (the observer hashes it). `liveUrl` is the address the page stands for (serve with its `#fragment` when an observer reads `location`). `defaultDollar` is what a bare `$` means. |
-| `health` | `observer`, `status`, `reasons` | The status the observer reports for this page **after its pass**: DEGRADED by `health()` (nothing extracted) or by a row the pass could not read (the other rows still listed). Reason codes used: `not_sent_folder`, `not_sent_list`, `redact.missing_occurred_at`, `window.unknown`; gmail.sent health can also give `location.not_gmail`, `selector.missing.*` / `selector.ambiguous.*` (main, grid, row, subject, cell, recipient, time, account) and `row.recipient_invalid`. |
+| `health` | `observer`, `status`, `reasons` | The status the observer reports for this page **after its pass**: DEGRADED by `health()` (nothing extracted) or by a row the pass could not read (the other rows still listed). Reason codes used: `not_sent_folder`, `not_sent_list`, `redact.missing_occurred_at`, `window.unknown`, and `event.unreadable` (the real Calendar month view); gmail.sent health can also give `location.not_gmail`, `selector.missing.*` / `selector.ambiguous.*` (main, grid, row, subject, cell, recipient, time, account) and `row.recipient_invalid`. |
 | `observation` | `source`, `type`, `counterparty?`, `merchant?`, `amountCents?`, `currency?`, `subjectHint?`, `occurredAt`, `rowKey?`, `parser?`, `confidence?` | One row as `redact.project()` keeps it: the extractor passes the content fields as `raw` and `{ type, observedAt: readAt, rowKey }` as context. |
 | `coverage` | `source`, `account`, `windowStart`, `windowEnd`, `allCalendars?` | A window the pass may report as seen. None when the pass is DEGRADED. |
 | `dedup` | `with`, `shared` | How many of this fixture's observations project to the same contentHash as observations of `with`. |
@@ -107,10 +149,10 @@ Field rules:
 
 - `occurredAt`: ISO 8601 with the offset the page's zone has at that instant. Gmail rows use the time cell's `title`, else the relative text resolved at `readAt` (`normalize.resolveRelative`). A text that resolves only to a day gives no observation. Receipts use the opened message's date `title`, never a date in the body. Calendar events use the event start, local midnight for an all-day event.
 - `subjectHint`: whitespace collapsed to one space and trimmed, then the first 80 code points (what `project()` stores). Gmail's `(no subject)` gives no `subjectHint`.
-- `counterparty`: the address exactly as read (case kept, `normalize.email()` compares later). One observation per recipient (Gmail); one per event (Calendar), naming the event's first guest in ASCII-lowercase order (the account left out), or none; an update that added guests names the first guest it added.
-- `rowKey`: Gmail list rows use `data-legacy-last-message-id` (every fixture thread holds one message, so it equals the thread id); opened messages use `data-legacy-message-id`; Calendar uses `data-eventid` as written, and its observer's row key is SHA-256 of it (core `hashRowKey`), so a Calendar observation fact projects with `rowKey = hashRowKey(rowKey)` (`tests/unit/observers/gcal/gcal-fixtures.ts` `expectedObservation`).
+- `counterparty`: the address exactly as read (case kept, `normalize.email()` compares later). The account's own mailbox is never one, in any spelling Gmail delivers to it (it leaves the page only as a hash). One observation per recipient but the account (Gmail; a send only to the account gives none, and the window starts after it as after a conversation); one per event (Calendar), naming the event's first guest in ASCII-lowercase order (the account left out), or none; an update that added guests names the first guest it added.
+- `rowKey`: Gmail list rows use `data-legacy-last-message-id`, labelled only for a row that holds one message (its thread, last and last non-draft ids are one id; a conversation row has no fact); opened messages use `data-legacy-message-id`; Calendar uses `data-eventid` as written, and its observer's row key is SHA-256 of it (core `hashRowKey`), so a Calendar observation fact projects with `rowKey = hashRowKey(rowKey)` (`tests/unit/observers/gcal/gcal-fixtures.ts` `expectedObservation`).
 - Receipts: `merchant` is the business the user dealt with. A platform parser uses its canonical name (`Amazon`, `Uber`, `Instacart`, `Facebook Marketplace`). Stripe, Shopify and the generic parser use the sender's display name (for Shopify, the store), OpenTable the restaurant named in the subject. `amountCents` is the charged total in integer minor units, with `currency` in ISO 4217, shown in the message on a line that names it (`Total`, `Order total`, `Amount paid`, `Amount charged`, `Total charged`); a `listing.posted` carries the listing price. `parser` names the parser that must claim the message, and `confidence` is 0.6 for `generic`.
-- Coverage, Gmail Sent: only the head of the list (`#sent`, `Newer` disabled) has a coverage fact, ending at `lastSyncAt`. It starts at its oldest visible row's minute when every `Older` control is disabled (the list ends on this page), else at the minute after it: a send in that minute older than the oldest row would be on the next page, unseen (`synthetic-sent-page-1.html` starts at 17:56). A later page has none, though its rows are facts and its health is OK: in conversation view a send from its span can be listed on page 1 under a later reply's date (sprint_2 2.7). A Drafts, Inbox or opened-message page covers nothing for Sent.
+- Coverage, Gmail Sent: only the head of the list (`#sent`, `Newer` disabled) has a coverage fact, ending at `lastSyncAt`. It starts at its oldest visible row's minute when every `Older` control shown is disabled (the list ends on this page), else at the minute after it: a send in that minute older than the oldest row would be on the next page, unseen (`synthetic-sent-page-1.html` starts at 17:56). It starts no earlier than the minute after the newest conversation row, and after the newest row that names the account: no claim can be matched to their sends (`sent-list-1.html` starts at 09:56 on 17 Sept). A later page has none, though its rows are facts and its health is OK: in conversation view a send from its span can be listed on page 1 under a later reply's date (sprint_2 2.7). A Drafts, Inbox or opened-message page covers nothing for Sent.
 - Coverage, receipts: an opened message a platform parser claims (a registry sender) has one `gmail.receipt` coverage fact whose `windowStart` and `windowEnd` are both its `occurredAt`. It says only that this message was read, nothing about the other mail around it (sprint_2 2.7). A generic receipt has none (anyone can send one: it is evidence, never coverage), and neither has a registry receipt dated in the same minute as a generic one on the same page. A page with nothing parsed has none.
 - Coverage, Calendar: from 00:00 of the first visible day to 00:00 after the last, with a day that hides events behind "N more" left out (two windows, each its own coverage ping). `allCalendars` is true only when every calendar in the list is checked. A page whose every day hides events behind its own "N more", and a grid still drawing (`aria-busy="true"` or a progress bar in the main region), have no coverage fact, and their health is OK (sprint_2 2.7).
 - Diffs compare events by `data-eventid`, only within calendars visible in both snapshots. An event that appears or disappears because its calendar was switched on or off is neither created nor deleted.
@@ -125,9 +167,9 @@ Fixtures are independent: only fixtures joined by a `dedup` or `diff` fact share
 
 - each seed has a marked copy drawn on screen (no ancestor `hidden`, `display: none` or clipped by a 1px rule), and no seed is listed twice;
 - the live URL is on the vendor's host; a Gmail page's selected folder, `/mail/u/<n>/` path and view match its page fact;
-- Gmail Sent: every row is labelled with exactly its recipients, its subject and the minute its time names, or it cannot be timed to the minute, has no fact, and the pass is DEGRADED `redact.missing_occurred_at` (`window.unknown`, no coverage); a row's visible time agrees with its title (a clock today, a date before); the window ends at `lastSyncAt` exactly when `Newer` is disabled;
+- Gmail Sent: every row is labelled with exactly its recipients but the account, its subject and the minute its time names, or it is a conversation and has no fact, or it cannot be timed to the minute, has no fact, and the pass is DEGRADED `redact.missing_occurred_at` (`window.unknown`, no coverage); a row's visible time agrees with its title (a clock today, a date before); the window starts as the coverage rule above says and ends at `lastSyncAt` exactly when `Newer` is disabled;
 - receipts: message id, subject, date `title`, an amount the message shows on a total line (any line for `listing.posted`), and the merchant the rule above names;
-- Calendar: each event's start (local midnight when all day), guests and calendar match its chip label, on a checked calendar; the coverage windows are exactly the visible days minus any "N more" day; `allCalendars` is true exactly when every calendar is checked; each diff lists exactly the changes the two snapshots' event facts imply (by `data-eventid`, calendars checked in both, one observation per event).
+- Calendar: each event's start (local midnight when all day), guests and calendar match its chip label, on a checked calendar; the coverage windows are exactly the visible days minus any "N more" day, and none on a DEGRADED page or one still drawing (`stillDrawing`); `allCalendars` is true exactly when every calendar is checked; each diff lists exactly the changes the two snapshots' event facts imply (by `data-eventid`, calendars checked in both, one observation per event).
 
 The readers parse the page model above. When a real capture shows a different shape (the chip label's wording, the time span, where the total sits), update the reader in the same change as the observer, and record the difference with the live smoke (2.8).
 

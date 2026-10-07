@@ -1,0 +1,402 @@
+{
+  "sent-list-1.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:31:21-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.daldale@example.org",
+        "subjectHint": "Delta umber orbit yonder",
+        "occurredAt": "2025-08-02T19:53:00-04:00",
+        "rowKey": "1986d34525e4042b"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-09-17T09:56:00-04:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "Real Sent list, first page (#sent; Newer disabled: the head of the list). 50 rows, 48 of them conversations (their thread, last and last non-draft ids differ), which give no row: their time is their newest message's, not a send's (grading contract v1.13). Of its 2 one-message rows, one to another person gives 1 observation; one sent only to the account gives none (the account's own mailbox is never a counterparty, and such a row narrows the window like a conversation; it is older than the newest conversation here). Older is enabled (the list goes on) and the newest conversation row is at 09:55 on 17 Sept, so the window starts at 09:56 on 17 Sept and ends at lastSyncAt. Every row repeats its recipients and subject anchor in a hidden screen-reader summary (display: none), which is not read. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+  },
+  "sent-list-2.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:31:36-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/p2",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.daldale@example.org",
+        "subjectHint": "Delta umber orbit yonder",
+        "occurredAt": "2025-04-14T13:16:00-04:00",
+        "rowKey": "196354d9112882d4"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "marton.pemley@example.org",
+        "subjectHint": "Delta hollow willow",
+        "occurredAt": "2024-11-25T23:10:00-05:00",
+        "rowKey": "19366a9b75c2a9e2"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.daldale@example.org",
+        "subjectHint": "Delta hollow willow",
+        "occurredAt": "2024-11-25T22:59:00-05:00",
+        "rowKey": "193669fbfe896535"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.daldale@example.org",
+        "subjectHint": "Delta hollow willow",
+        "occurredAt": "2024-11-25T22:58:00-05:00",
+        "rowKey": "193669f5affcb2d1"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.daldale@example.org",
+        "subjectHint": "Delta hollow willow",
+        "occurredAt": "2024-11-25T19:01:00-05:00",
+        "rowKey": "19365c5919f7d4ff"
+      }
+    ],
+    "notes": "Real Sent list, second page (#sent/p2). 50 rows: 43 conversations (no row) and 7 one-message rows: 5 observations, and none for the 2 rows sent only to the account. Not the head of the list: health OK, no coverage. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+  },
+  "sent-list-last.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:31:49-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/p10",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "keswyn.harby@example.org",
+        "subjectHint": "Fern island glade",
+        "occurredAt": "2017-10-02T01:34:00-04:00",
+        "rowKey": "15edb93b5dabfbb1"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "keswyn.harby@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-08-19T08:00:00-04:00",
+        "rowKey": "15dfa5e136294f8c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ivesmer.norsby@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-08-08T12:21:00-04:00",
+        "rowKey": "15dc2a6c7d12529a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "belsby.daling@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-08-04T11:44:00-04:00",
+        "rowKey": "15dadeaffbe4251e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "keswyn.harby@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-08-04T09:53:00-04:00",
+        "rowKey": "15dad85cc279fc84"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "osric.norric@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-07-24T11:30:00-04:00",
+        "rowKey": "15d7538b261a3677"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "keswyn.harby@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-07-24T11:28:00-04:00",
+        "rowKey": "15d75371c8135872"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "keswyn.harby@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2017-07-10T08:10:00-04:00",
+        "rowKey": "15d2c689d9fd6c02"
+      }
+    ],
+    "notes": "Real Sent list, last page (#sent/p10): 8 one-message rows, 8 observations. The Older control shown is disabled (aria-disabled=\"true\"), on this page only. Not the head: health OK, no coverage. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+  },
+  "sent-thread.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:32:53-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/1986d34525e4042b",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_list"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "A real one-message thread opened from Sent (#sent/<thread id>). No list: gmail.sent DEGRADED not_sent_list. The message key sits on an element inside the list item. It is the account's own message, which no receipt parser claims: gmail.receipt OK, no row. Subject and body hidden at capture; after capture, a phone link in the body kept only `tel:`, and the recipient's display name lost the digits it kept from a real handle."
+  },
+  "sent-thread-with-reply.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:33:12-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#sent/19f8a52346dcd3ff",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_list"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "A real conversation of three messages opened from Sent: the last expanded, the two before it collapsed (they carry no message key). gmail.sent DEGRADED not_sent_list; gmail.receipt OK, no row. Subject and bodies hidden at capture."
+  },
+  "drafts.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.drafts",
+        "folder": "drafts",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:32:02-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#drafts",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      }
+    ],
+    "notes": "Real Drafts folder, empty in this account. gmail.sent DEGRADED not_sent_folder: nothing read, no coverage."
+  },
+  "inbox.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.inbox",
+        "folder": "inbox",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:32:14-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#inbox",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      }
+    ],
+    "notes": "Real Inbox list (50 rows). gmail.sent DEGRADED not_sent_folder: nothing read, no coverage; a receipt is parsed only from an opened message. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+  },
+  "second-account-sent.html": {
+    "capturedAt": "2026-10-06",
+    "selectorsVersion": "gmail.receipt@1.3.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.list.sent",
+        "folder": "sent",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-06T15:32:26-04:00",
+        "account": "evermer.daldale@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/1/#sent",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.sent",
+        "account": "evermer.daldale@example.org",
+        "windowStart": "2026-10-06T12:14:00-04:00",
+        "windowEnd": "lastSyncAt"
+      }
+    ],
+    "notes": "Real Sent list of the second signed-in account (/mail/u/1/), head of the list. All 50 rows are conversations: no row. The newest is at 12:13 today, so the window starts at 12:14 and ends at lastSyncAt, and holds no send. The account switcher's label carries a note after the address; the account is its last address in brackets. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+  }
+}

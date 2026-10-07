@@ -20,8 +20,9 @@
  * was parsed), and every labelled health matches.
  *
  * Corpus honesty (Hard Rule 12; QA-4, QA-V3): `receiptRealFixtures` counts the real captures among the pages the
- * numbers are scored on (the positives and the negatives, receipt-fixtures.ts `receiptScoredFixtures`). It is 0
- * until the founder's captures land (2.1, 2.4 BLOCKED(MANUAL)): every accuracy here describes synthetic pages.
+ * numbers are scored on (the positives and the negatives, receipt-fixtures.ts `receiptScoredFixtures`): the
+ * founder's first real captures (2026-10-06) add four (Stripe, Instacart and Uber receipts, and an Amazon shipping
+ * notice); every other page is synthetic.
  *
  * The DOM lib reference above types the extension code this bench runs (it takes a DOM `Document`); nothing here
  * touches a real browser or the network.

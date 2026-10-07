@@ -1,8 +1,8 @@
 {
   "$comment": "Google Calendar observer (gcal.event) selectors and label words. role, aria-*, data-* and structure only, never a class name. Bump `version` on any change and record it with the fixture folder date in Decisions.md (agents/adapter_engineer.md rule 3). Parsed by ./selectors.ts.",
   "observer": "gcal.event",
-  "version": "1.4.0",
-  "fixtures": ["tests/fixtures/pages/gcal/2026-10-03"],
+  "version": "1.5.0",
+  "fixtures": ["tests/fixtures/pages/gcal/2026-10-03", "tests/fixtures/pages/gcal/2026-10-06"],
   "selectors": {
     "main": "[role=\"main\"]",
     "grid": "[role=\"grid\"]",

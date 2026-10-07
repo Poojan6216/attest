@@ -1,7 +1,7 @@
 {
   "synthetic-gcal-month-november.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "person_name_1",
       "email_body_3",
@@ -133,7 +133,7 @@
   },
   "synthetic-gcal-week-after-create.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -256,7 +256,7 @@
   },
   "synthetic-gcal-week-after-delete.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -368,7 +368,7 @@
   },
   "synthetic-gcal-week-after-edit.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -491,7 +491,7 @@
   },
   "synthetic-gcal-week-before.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -588,7 +588,7 @@
   },
   "synthetic-gcal-week-family-hidden.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -690,7 +690,7 @@
   },
   "synthetic-gcal-week-two-calendars.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",
@@ -813,7 +813,7 @@
   },
   "synthetic-gcal-week-unchanged.html": {
     "capturedAt": "2026-10-03",
-    "selectorsVersion": "gcal.event@1.4.0",
+    "selectorsVersion": "gcal.event@1.5.0",
     "seededSecrets": [
       "phone_number",
       "street_address",

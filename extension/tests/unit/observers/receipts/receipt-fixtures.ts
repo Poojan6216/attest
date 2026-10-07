@@ -78,10 +78,14 @@ export const receiptFacts = (f: LabelledFixture): LabelledFixture['observations'
 export const receiptPositives = (fixtures: readonly LabelledFixture[]): LabelledFixture[] =>
   fixtures.filter((f) => receiptFacts(f).length > 0);
 
-/** The negatives: opened inbox messages with no labelled receipt, the pages that must stay unparsed. */
+/**
+ * The negatives: opened messages with no labelled receipt, the pages that must stay unparsed: from the Inbox, or
+ * opened from a search, which selects no folder (the real captures of 2026-10-06). The account's own mail in Sent
+ * is not one: no parser reads it.
+ */
 export const receiptNegatives = (fixtures: readonly LabelledFixture[]): LabelledFixture[] =>
   fixtures.filter(
-    (f) => f.page.view === 'gmail.message' && f.page.folder === 'inbox' && receiptFacts(f).length === 0,
+    (f) => f.page.view === 'gmail.message' && f.page.folder !== 'sent' && receiptFacts(f).length === 0,
   );
 
 /**

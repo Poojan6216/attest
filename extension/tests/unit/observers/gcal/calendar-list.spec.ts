@@ -56,6 +56,41 @@ describe('the calendar list drawn as native checkboxes (real capture, 2026-10-06
     expect(empty.observations).toEqual([]);
     expect('snapshot' in empty).toBe(false);
   });
+});
+
+describe('calendar lists drawn empty, or one of them (re-review, TECH-R4 and QA-R4)', () => {
+  it('one list empty beside a filled one: the page is read, but never says every calendar is shown (TECH-R4)', () => {
+    const doc = nativeBoxes(docOf(WEEK));
+    const [list] = Array.from(doc.querySelectorAll('[role="complementary"] [role="list"]'));
+    if (list === undefined) throw new Error('no calendar list');
+    list.setAttribute('aria-label', 'My calendars');
+    for (const box of Array.from(list.querySelectorAll('input[type="checkbox"]')))
+      Reflect.set(box, 'checked', true);
+    const other = doc.createElement('div');
+    other.setAttribute('role', 'list');
+    other.setAttribute('aria-label', 'Other calendars');
+    list.after(other);
+    const plan = planPass({ observer: observerFor(WEEK), doc, ctx: ctxOf(WEEK), policy: DEFAULT_POLICY });
+    expect(plan.status).toBe('OK');
+    expect(plan.status === 'OK' && plan.coverage.map((c) => c.allCalendars)).toEqual([false]);
+    // Filled, the same panel shows every calendar ticked.
+    other.append(list.firstElementChild?.cloneNode(true) ?? doc.createElement('div'));
+    expect(observerFor(WEEK).allCalendars(doc)).toBe(true);
+  });
+
+  it('an empty list with no label (not a calendar list) is neither drawing nor a hidden calendar', () => {
+    const doc = nativeBoxes(docOf(WEEK));
+    const [list] = Array.from(doc.querySelectorAll('[role="complementary"] [role="list"]'));
+    if (list === undefined) throw new Error('no calendar list');
+    list.setAttribute('aria-label', 'My calendars');
+    for (const box of Array.from(list.querySelectorAll('input[type="checkbox"]')))
+      Reflect.set(box, 'checked', true);
+    const unlabelled = doc.createElement('div');
+    unlabelled.setAttribute('role', 'list');
+    list.after(unlabelled);
+    expect(statusOf(doc)).toBe('OK');
+    expect(observerFor(WEEK).allCalendars(doc)).toBe(true);
+  });
 
   it('a list whose items hold no box this reader knows is a markup change: DEGRADED, as before', () => {
     const doc = nativeBoxes(docOf(WEEK));

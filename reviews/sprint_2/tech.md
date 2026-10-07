@@ -798,3 +798,21 @@ Checklist corrections:
 - `npx tsx scripts/check-docs.ts` → check-docs: OK (6 files, 337 links, 17 allowlisted fields checked): 2.9 Done-when holds; stale semantic text (TECH-11, TECH-9) is outside what it checks.
 - `cd extension && npx vitest run tests/unit/fixtures/fixture-labels.spec.ts tests/unit/background/calendar-seen.spec.ts tests/unit/observers/heartbeat.spec.ts --testTimeout=120000` → 3 files, 43 tests passed: Confirms the existing tests pass yet do not check label versions (TECH-4) or tie sameState to the diff (TECH-6).
 
+
+## Re-review of the real-capture work (2026-10-06)
+
+**Scope.** The same eight commits' code: the Sent conversation and window logic, the receipt message items, the account reader, the Calendar list and chip rules, the capture tool, the reference readers, the corpus specs and the benches.
+
+| ID | Severity | Finding |
+|---|---|---|
+| TECH-R1 | high | A Sent row kept without its counterparty (a send only to the account) turned a true claim naming the account into NOT_FOUND: grading scores a missing field 0, and the content gate drops the pair. |
+| TECH-R2 | medium | A stale Sent list (a reply sent through the API, the open tab not yet refreshed) asserted a window over the reply's minute; with later windows starting after the reply's conversation, the union made a true reply claim NOT_FOUND. |
+| TECH-R3 | medium | Only a missing id was refused: an empty or re-formed thread id made every row a conversation, health OK with no row, silently. |
+| TECH-R4 | medium | A calendar panel filling one list before the other read as `allCalendars: true`; the reference reader copied the same rule. |
+| TECH-R5 | medium | gmail.sent kept version 1.1.0 though its file and reading changed. |
+| TECH-R6 | medium | Real-page tests time out under load (the Sent bench ran over all 37 pages per gate case). |
+| TECH-R7 | low | The grouped attribute sweep dropped a change it saw when neither half of the group reproduced it. |
+| TECH-R8 | low | The Sent window assumed the list is in order of its shown minutes and never checked it. |
+| TECH-R9 | low | Docs and comments drifted: month-view wording, "the label ends with (address)", a README version example, a cache comment, line widths, six copies of the WXT stub, files at the size limit. |
+
+**Checked and clean.** The window arithmetic on a fresh list (all-conversation heads, a conversation in the current minute, an unreadable conversation time, refused inverted windows); the live `checked` read; month chips; the account regex (linear, last match); the capture tool's keep areas, short ids, stylesheet drop and checkbox state; lint and types.

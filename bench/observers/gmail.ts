@@ -14,9 +14,12 @@
  * page other than the Sent list yields an observation; coverage is sent exactly where labelled (window and account
  * hash: only the head of the list asserts a window, sprint_2 2.7) and nowhere else; dedup facts hold (the
  * overlapping second page); no subjectHint is over 80 code points; no seeded secret (value or canary,
- * tests/e2e/support/leaks.ts matching) or account address is in any pass output.
- * The corpus is synthetic until the founder's captures land (2.1 BLOCKED(MANUAL)); `gmailSentRealFixtures` says so,
- * counted over the Sent-list fixtures the accuracy is scored on (QA-V3), never over every Gmail page.
+ * tests/e2e/support/leaks.ts matching) is in any pass output, nor a page's own account address in that page's. The
+ * address of the user's other account can be a recipient there, as any address the user wrote to (a real Sent page
+ * of 2026-10-06 holds a send from one account to the other): a page knows only the account it is signed in to.
+ * `gmailSentRealFixtures` says how many of the pages are the founder's real captures (four Sent lists from
+ * 2026-10-06; the rest are synthetic), counted over the Sent-list fixtures the accuracy is scored on (QA-V3), never
+ * over every Gmail page.
  */
 import { asciiLower } from '../../extension/src/core/normalize';
 import { hashRowKey } from '../../extension/src/core/redact';
@@ -135,10 +138,9 @@ function dedupHolds(fixture: LabelledFixture, plans: ReadonlyMap<string, PassPla
 const ratio = (correct: number, total: number): number =>
   total === 0 ? 0 : Math.round((correct / total) * 10_000) / 10_000;
 
-/** Every account address any fixture shows, ASCII-lowercased (none may reach an output). */
-const accountsOf = (fixtures: readonly LabelledFixture[]): string[] => [
-  ...new Set(fixtures.map((f) => asciiLower(f.page.account))),
-];
+/** Whether the page's own account address, ASCII-lowercased, is anywhere in its pass output. */
+const ownAccountIn = (fixture: LabelledFixture, plan: PassPlan): boolean =>
+  JSON.stringify(plan).toLowerCase().includes(asciiLower(fixture.page.account));
 
 /**
  * Runs the bench: one pass per labelled Gmail fixture. `observer` and `fixtures` are replaced only by the bench's own
@@ -160,7 +162,6 @@ export async function runGmailBench(
   for (const fixture of sentLists) scoreFixture(fixture, planOf(fixture), tally);
   const correct = FIELDS.reduce((sum, field) => sum + tally.correct[field], 0);
   const accuracy = ratio(correct, tally.total * FIELDS.length);
-  const outputs = JSON.stringify([...plans.values()]).toLowerCase();
   const hints = [...plans.values()].flatMap((plan) => plan.observations.map((obs) => obs.subjectHint ?? ''));
   const longestHint = Math.max(0, ...hints.map((hint) => Array.from(hint).length));
   return {
@@ -189,6 +190,6 @@ export async function runGmailBench(
     gmailSentSubjectHintGatePassed: longestHint <= 80,
     gmailSentSeedsGatePassed:
       findLeaks('gmail.sent', [...plans.values()], loadSeeds()).length === 0 &&
-      accountsOf(fixtures).every((account) => !outputs.includes(account)),
+      fixtures.every((f) => !ownAccountIn(f, planOf(f))),
   };
 }

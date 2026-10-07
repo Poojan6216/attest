@@ -14,7 +14,7 @@
  * `verdictsOf` classifies each message of one page read once: health, the rows, the windows and the bench all ask
  * for the same verdicts in a pass (TECH-2).
  */
-import { asciiLower } from '../../../core/normalize';
+import { isOwnAddress } from '../../own-address';
 import { amazon } from './amazon';
 import { generic } from './generic';
 import { instacart } from './instacart';
@@ -39,13 +39,19 @@ export const RECEIPT_PARSERS: Readonly<Record<ParserId, ReceiptParser>> = Object
   generic,
 });
 
-/** The parser that may read `message`, or null when none may. */
+/**
+ * The parser that may read `message`, or null when none may. Never the account's own mail (../../own-address.ts: any
+ * case, a `+tag`, Gmail's dots). On a page that names no account the generic parser reads nothing: the account's own
+ * message cannot be told apart there, and the generic parser takes its sender's name, which Gmail writes as the
+ * account's address, as the merchant (security re-review, SEC-R8).
+ */
 export function parserFor(message: MessageView, account: string | null): ReceiptParser | null {
   const sender = message.sender;
   if (sender === null || sender.confusable) return null;
-  if (account !== null && asciiLower(sender.address) === account) return null;
+  if (isOwnAddress(sender.address, account)) return null;
   const platform = platformForDomain(sender.domain);
-  return platform === undefined ? generic : RECEIPT_PARSERS[platform.id];
+  if (platform !== undefined) return RECEIPT_PARSERS[platform.id];
+  return account === null ? null : generic;
 }
 
 /** What the parser that may read `message` says about it. */

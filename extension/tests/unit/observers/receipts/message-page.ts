@@ -30,6 +30,8 @@ export interface MessageSpec {
    * it, and a list of attachment chips inside the message.
    */
   readonly nestedKey?: boolean;
+  /** Leave the message key off entirely, as real Gmail draws a collapsed message (capture of 2026-10-06). */
+  readonly noKey?: boolean;
 }
 
 export interface PageSpec {
@@ -72,7 +74,8 @@ function messageHtml(m: MessageSpec, index: number): string {
       : m.expanded === null
         ? ''
         : ` aria-expanded="${m.expanded}"`;
-  const ids = `data-message-id="#msg-f:${String(index)}" data-legacy-message-id="${key}"`;
+  const ids =
+    m.noKey === true ? '' : `data-message-id="#msg-f:${String(index)}" data-legacy-message-id="${key}"`;
   const attachments =
     m.nestedKey === true ? '<div role="list"><div role="listitem">invoice.pdf</div></div>' : '';
   return [

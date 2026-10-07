@@ -63,7 +63,8 @@ describe('read-only (Hard Rule 3)', () => {
       expect(page.doc.documentElement.outerHTML, fixture.file).toBe(before);
       await page.close();
     }
-  });
+    // Real pages are about 1 MB each: the measured 8 s with room for a loaded machine (tech re-review, TECH-R6).
+  }, 120_000);
 });
 
 async function postedFor(file: string): Promise<BusMessage[]> {

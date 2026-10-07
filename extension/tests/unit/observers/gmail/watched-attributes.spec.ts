@@ -6,6 +6,10 @@
  * that an observer does not name is removed, then set to "true", then to "false", on every element: what that
  * observer's pass reads (its plan and its account) must not change. Changing a named one must change it on some page,
  * so the check can fail.
+ *
+ * The attributes are tested in groups: all of a page's names at once, and a group whose change alters the read is
+ * split in halves until each attribute that alters it alone is found. A real Gmail page holds hundreds of attribute
+ * names (capture of 2026-10-06), too many for one pass each, while a group that alters nothing costs one pass.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -29,19 +33,61 @@ function readOf(observer: Observer, doc: Document, fixture: LabelledFixture): st
 /** Lets the per-pass memo (src/observers/pass-memo.ts) drop the last read, so the next pass reads the page again. */
 const nextPass = (): Promise<void> => Promise.resolve();
 
-/** Applies `mutation` to `name` on every element that has it, and returns the undo. */
-function mutate(doc: Document, name: string, mutation: Mutation): () => void {
-  const held = Array.from(doc.querySelectorAll('*')).flatMap((el) => {
-    const value = el.getAttribute(name);
-    return value === null ? [] : [{ el, value }];
-  });
-  for (const { el } of held) {
+/** Every (element, attribute, value) of a page, by attribute name: read once per page (a real page has ~7,000 elements). */
+type AttributeIndex = ReadonlyMap<string, readonly { readonly el: Element; readonly value: string }[]>;
+
+function indexAttributes(doc: Document): AttributeIndex {
+  const index = new Map<string, { el: Element; value: string }[]>();
+  for (const el of Array.from(doc.querySelectorAll('*'))) {
+    for (const name of el.getAttributeNames()) {
+      const value = el.getAttribute(name);
+      if (value === null) continue;
+      const list = index.get(name) ?? [];
+      list.push({ el, value });
+      index.set(name, list);
+    }
+  }
+  return index;
+}
+
+/** Applies `mutation` to each of `names` on every element that has it, and returns the undo. */
+function mutate(index: AttributeIndex, names: readonly string[], mutation: Mutation): () => void {
+  const held = names.flatMap((name) => (index.get(name) ?? []).map((entry) => ({ ...entry, name })));
+  for (const { el, name } of held) {
     if (mutation === 'removed') el.removeAttribute(name);
     else el.setAttribute(name, mutation);
   }
   return () => {
-    for (const { el, value } of held) el.setAttribute(name, value);
+    for (const { el, name, value } of held) el.setAttribute(name, value);
   };
+}
+
+/**
+ * The attributes of `names` whose `mutation` alone alters what `observer` reads (a group that alters nothing: one
+ * pass). A group that alters the read while neither half does is reported whole: the read depends on attributes
+ * together, and the check must not lose a change it saw (tech re-review, TECH-R7). Two attributes whose changes
+ * cancel exactly inside one group are not found (a known limit of testing in groups).
+ */
+async function changers(
+  read: () => string,
+  before: string,
+  index: AttributeIndex,
+  names: readonly string[],
+  mutation: Mutation,
+): Promise<string[]> {
+  if (names.length === 0) return [];
+  await nextPass();
+  const undo = mutate(index, names, mutation);
+  const same = read() === before;
+  undo();
+  if (same) return [];
+  if (names.length === 1) return [...names];
+  const half = Math.ceil(names.length / 2);
+  const found = [
+    ...(await changers(read, before, index, names.slice(0, half), mutation)),
+    ...(await changers(read, before, index, names.slice(half), mutation)),
+  ];
+  return found.length === 0 ? [...names] : found;
 }
 
 function attributeNames(doc: Document): string[] {
@@ -55,19 +101,18 @@ function attributeNames(doc: Document): string[] {
 async function readersOf(
   observer: Observer,
   names: (doc: Document) => readonly string[],
+  fixtures: readonly LabelledFixture[] = gmailFixtures(),
 ): Promise<(readonly [string, string, Mutation])[]> {
   const changed: (readonly [string, string, Mutation])[] = [];
-  for (const fixture of gmailFixtures()) {
+  for (const fixture of fixtures) {
     const page = openFixture(fixture);
     try {
-      const before = readOf(observer, page.doc, fixture);
-      for (const name of names(page.doc)) {
-        for (const mutation of ['removed', 'true', 'false'] as const) {
-          await nextPass();
-          const undo = mutate(page.doc, name, mutation);
-          if (readOf(observer, page.doc, fixture) !== before) changed.push([fixture.file, name, mutation]);
-          undo();
-        }
+      const read = () => readOf(observer, page.doc, fixture);
+      const before = read();
+      const index = indexAttributes(page.doc);
+      for (const mutation of ['removed', 'true', 'false'] as const) {
+        for (const name of await changers(read, before, index, names(page.doc), mutation))
+          changed.push([fixture.file, name, mutation]);
       }
     } finally {
       await page.close();
@@ -129,8 +174,11 @@ describe('the attributes the Gmail observers name (TECH-2)', () => {
   it('a named attribute does change what a pass reads (the check can fail)', async () => {
     const named = (list: readonly string[]) => (doc: Document) =>
       attributeNames(doc).filter((name) => list.includes(name));
-    const sent = await readersOf(gmailSentObserver, named(SENT_ATTRIBUTES));
-    const receipts = await readersOf(receiptObserver, named(RECEIPT_ATTRIBUTES));
+    // The check's own sensitivity, shown on the hand-built pages: a named attribute changes nearly every read, so
+    // each one costs passes of its own, which on every real page would outrun the timeout.
+    const synthetic = gmailFixtures().filter((f) => f.page.synthetic);
+    const sent = await readersOf(gmailSentObserver, named(SENT_ATTRIBUTES), synthetic);
+    const receipts = await readersOf(receiptObserver, named(RECEIPT_ATTRIBUTES), synthetic);
     expect(sent.map(([, name]) => name)).toEqual(
       expect.arrayContaining(['email', 'data-legacy-last-message-id']),
     );

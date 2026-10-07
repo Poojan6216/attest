@@ -48,19 +48,41 @@ export function zoneOffset(timeZone: string): OffsetAt {
   };
 }
 
+const NUMERIC_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/u;
+
+/**
+ * Gmail's visible date for a row from an earlier year, numeric and month first in English ("11/25/25": real capture,
+ * 2026-10-06), as "November 25, 2025", which `resolveRelative` reads; any other text unchanged. The observer reads
+ * the absolute `title` first, so this is only for checking that the visible text agrees with it.
+ */
+export function longDate(text: string): string {
+  const [, month = '', day = '', year = ''] = NUMERIC_DATE.exec(text) ?? [];
+  const name = MONTHS[Number(month) - 1];
+  return name === undefined ? text : `${name} ${Number(day)}, ${2000 + Number(year)}`;
+}
+
 /** `text` read at `readAt` in `timeZone`: the precision unit it names, or null. */
 export function timeOf(text: string, readAt: string, timeZone: string) {
   return resolveRelative(text, { referenceIso: readAt, offsetAt: zoneOffset(timeZone) });
 }
 
-/** Classes the page's own stylesheet hides visually (the 1px clip pattern of screen-reader-only text). */
+const HIDDEN_CLASSES = new WeakMap<Document, Set<string>>();
+
+/**
+ * Classes the page's own stylesheet hides visually (the 1px clip pattern of screen-reader-only text), read once per
+ * document: the check runs for every seed, row and recipient of a page (real captures carry no stylesheet, so theirs
+ * is empty; the hand-built pages carry their own).
+ */
 function visuallyHiddenClasses(doc: Document): Set<string> {
+  const known = HIDDEN_CLASSES.get(doc);
+  if (known) return known;
   const css = Array.from(doc.querySelectorAll('style'), (style) => style.textContent).join('\n');
   const hidden = new Set<string>();
   for (const rule of css.matchAll(/\.([\w-]+)\s*\{([^}]*)\}/gu)) {
     const [, name = '', body = ''] = rule;
     if (/\bclip(?:-path)?\s*:/u.test(body) && /\b1px\b/u.test(body)) hidden.add(name);
   }
+  HIDDEN_CLASSES.set(doc, hidden);
   return hidden;
 }
 
@@ -99,7 +121,15 @@ export function newerDisabled(doc: Document): boolean | null {
 }
 
 export interface SentRow {
+  /** The subject anchor's `data-legacy-last-message-id`. */
   readonly key: string;
+  readonly threadId: string;
+  readonly lastNonDraftId: string;
+  /**
+   * The row stands for a conversation of several messages: its thread, last and last non-draft ids differ (a
+   * thread's legacy id is its first message's), so its time is its newest message's, not a send's (grading v1.13).
+   */
+  readonly conversation: boolean;
   readonly recipients: readonly string[];
   readonly subject: string;
   /** The time cell's absolute `title`, when the row has one. */
@@ -108,23 +138,56 @@ export interface SentRow {
   readonly timeText: string;
 }
 
-/** Every row of the list grid in `role="main"`. */
+/**
+ * Every row of the list grid in `role="main"`, read from what it shows: real Gmail repeats a row's recipients and
+ * subject anchor in a `display: none` summary for screen readers (capture of 2026-10-06), which is not the row.
+ */
 export function sentRows(doc: Document): SentRow[] {
   return Array.from(doc.querySelectorAll('[role="main"] [role="grid"] [role="row"]'), (row) => {
-    const subject = row.querySelector('[data-legacy-last-message-id]');
+    const subject = Array.from(row.querySelectorAll('[data-legacy-last-message-id]')).find((el) =>
+      isShown(el, doc),
+    );
     const cells = Array.from(row.querySelectorAll('[role="gridcell"]'));
     const timeCell = cells[cells.length - 1];
-    const recipients = Array.from(row.querySelectorAll('[data-hovercard-id]'), (span) =>
-      collapse(span.getAttribute('email') ?? span.getAttribute('title')),
-    );
+    const recipients = Array.from(row.querySelectorAll('[data-hovercard-id]'))
+      .filter((span) => isShown(span, doc))
+      .map((span) => collapse(span.getAttribute('email') ?? span.getAttribute('title')));
+    const key = subject?.getAttribute('data-legacy-last-message-id') ?? '';
+    const threadId = subject?.getAttribute('data-legacy-thread-id') ?? '';
+    const lastNonDraftId = subject?.getAttribute('data-legacy-last-non-draft-message-id') ?? '';
     return {
-      key: subject?.getAttribute('data-legacy-last-message-id') ?? '',
+      key,
+      threadId,
+      lastNonDraftId,
+      conversation: threadId !== key || lastNonDraftId !== key,
       recipients,
       subject: collapse(subject?.textContent),
       timeTitle: timeCell?.querySelector('[title]')?.getAttribute('title') ?? null,
       timeText: collapse(timeCell?.textContent),
     };
   });
+}
+
+/**
+ * Whether `address` is the account's own mailbox, written independently of the observers' rule: compared in ASCII
+ * lower case, without a `+tag`, and, at gmail.com or googlemail.com, without dots in the local part.
+ */
+export function ownMailbox(address: string, account: string): boolean {
+  const box = (raw: string): string => {
+    const [local = '', domain = ''] = raw.trim().toLowerCase().split('@');
+    const base = local.split('+')[0] ?? '';
+    const gmail = domain === 'gmail.com' || domain === 'googlemail.com';
+    return gmail ? `${base.replace(/\./gu, '')}@gmail.com` : `${base}@${domain}`;
+  };
+  return address.includes('@') && box(address) === box(account);
+}
+
+/** Whether the list provably ends on this page: it shows an `Older` control and every one it shows is disabled. */
+export function olderDisabled(doc: Document): boolean {
+  const older = Array.from(doc.querySelectorAll('[role="button"][aria-label="Older"]')).filter((button) =>
+    isShown(button, doc),
+  );
+  return older.length > 0 && older.every((button) => button.getAttribute('aria-disabled') === 'true');
 }
 
 export interface MessageLine {
@@ -153,9 +216,23 @@ function amountsIn(text: string, defaultDollar: string | undefined): Money[] {
   );
 }
 
-/** The one opened message in `role="main"`, or null. */
+/** A message item's `data-legacy-message-id`: on the item, or (real Gmail, 2026-10-06) on an element inside it. */
+function messageKey(item: Element): string {
+  return (
+    item.getAttribute('data-legacy-message-id') ??
+    item.querySelector('[data-legacy-message-id]')?.getAttribute('data-legacy-message-id') ??
+    ''
+  );
+}
+
+/**
+ * The one opened message in `role="main"`, or null: the one list item that carries a message key. A collapsed
+ * message of a conversation carries none, so a thread with one message open reads as that message.
+ */
 export function openedMessage(doc: Document, defaultDollar: string | undefined): OpenedMessage | null {
-  const items = Array.from(doc.querySelectorAll('[role="main"] [role="listitem"][data-legacy-message-id]'));
+  const items = Array.from(doc.querySelectorAll('[role="main"] [role="listitem"]')).filter(
+    (item) => messageKey(item) !== '',
+  );
   const [item] = items;
   if (items.length !== 1 || !item) return null;
   const leaves = Array.from(item.querySelectorAll(BLOCKS)).filter(
@@ -166,7 +243,7 @@ export function openedMessage(doc: Document, defaultDollar: string | undefined):
     return { text, amounts: amountsIn(text, defaultDollar) };
   });
   return {
-    key: item.getAttribute('data-legacy-message-id') ?? '',
+    key: messageKey(item),
     subject: collapse(doc.querySelector('[role="main"] h2[data-legacy-thread-id]')?.textContent),
     senderName: collapse(item.querySelector('[email][name]')?.getAttribute('name')),
     dateTitle: item.querySelector('span[title]')?.getAttribute('title') ?? '',
@@ -223,15 +300,37 @@ export function chipGuests(label: string): string[] {
   return list.split(', ').filter((guest) => guest.includes('@'));
 }
 
-/** The side panel's calendar list: name and whether it is shown. */
+/**
+ * The side panel's calendar list: name and whether it is shown. Real Google Calendar draws native checkboxes
+ * (capture of 2026-10-06), whose ticked state the capture tool writes into `checked`.
+ */
 export function calendarList(doc: Document): { name: string; checked: boolean }[] {
   return Array.from(
-    doc.querySelectorAll('[role="complementary"] [role="list"] [role="checkbox"]'),
+    doc.querySelectorAll(
+      '[role="complementary"] [role="list"] [role="checkbox"], [role="complementary"] [role="list"] input[type="checkbox"]',
+    ),
     (box) => ({
       name: collapse(box.getAttribute('aria-label')),
-      checked: box.getAttribute('aria-checked') === 'true',
+      checked:
+        box.localName === 'input' ? box.hasAttribute('checked') : box.getAttribute('aria-checked') === 'true',
     }),
   );
+}
+
+/**
+ * Whether the page is still drawing its range: `role="main"` or a grid in it says `aria-busy="true"`, a progress
+ * bar is shown in it, or the side panel's calendar lists are drawn but all still empty (real Calendar fills them
+ * seconds after the grid). Such a page is not read: health OK, no events, no coverage.
+ */
+export function stillDrawing(doc: Document): boolean {
+  const main = doc.querySelector('[role="main"]');
+  if (!main) return false;
+  const busy = [main, ...Array.from(main.querySelectorAll('[role="grid"]'))].some(
+    (el) => el.closest('[aria-busy="true"]') !== null,
+  );
+  const progress = Array.from(main.querySelectorAll('[role="progressbar"]')).some((bar) => isShown(bar, doc));
+  const lists = Array.from(doc.querySelectorAll('[role="complementary"] [role="list"][aria-label]'));
+  return busy || progress || (lists.length > 0 && lists.every((list) => list.childElementCount === 0));
 }
 
 const MONTHS = [

@@ -3,9 +3,10 @@
  * observers' field accuracy (2.2, 2.3, 2.5) is measured against these labels, so a label that drifts from its page
  * would make a measured number false (Hard Rule 12). Each fact is re-read from the page with the reference readers
  * in fixture-page-read.ts, times in the page's own IANA zone (DST and midnight rows included):
- *  - Gmail Sent: every row is labelled (recipients, subject, minute), or it is a row that cannot be timed to the
- *    minute and the pass is DEGRADED; the visible time text agrees with the title; the window ends at lastSyncAt
- *    exactly at the head of the list (Hard Rule 5);
+ *  - Gmail Sent: every row is labelled (recipients, subject, minute), or it is a conversation (no fact), or it is a
+ *    row that cannot be timed to the minute and the pass is DEGRADED; the visible time text agrees with the title;
+ *    the window starts at the oldest row (a minute later while the list may go on) and after the newest
+ *    conversation, and ends at lastSyncAt exactly at the head of the list (Hard Rule 5);
  *  - receipts: the message's id, subject, date, an amount it shows on a total line, and the merchant the rule names;
  *  - Calendar: each event's start, guests and calendar; coverage is the visible days minus a day hiding events
  *    behind "N more"; allCalendars only when every calendar is checked; each diff lists exactly the changes;
@@ -34,10 +35,14 @@ import {
   dayWindows,
   gridDays,
   isShown,
+  longDate,
   newerDisabled,
+  olderDisabled,
   openedMessage,
+  ownMailbox,
   selectedFolder,
   sentRows,
+  stillDrawing,
   timeOf,
 } from './fixture-page-read';
 
@@ -92,12 +97,15 @@ describe('page facts match the page', () => {
       expect(url.hostname, f.file).toBe(f.vendor === 'gmail' ? 'mail.google.com' : 'calendar.google.com');
       if (f.vendor !== 'gmail') continue;
       const doc = docOf(f);
-      expect(selectedFolder(doc), f.file).toBe(f.page.folder);
+      // A message opened from a search selects no folder (real capture, 2026-10-06).
+      expect(selectedFolder(doc) ?? undefined, f.file).toBe(f.page.folder);
       expect(accountPaths(doc), f.file).toEqual([/^\/mail\/u\/\d+\//u.exec(url.pathname)?.[0]]);
       expect(url.hash.startsWith(`#${f.page.folder ?? ''}`), f.file).toBe(true);
       const isMessage = openedMessage(doc, f.page.defaultDollar) !== null;
       expect(isMessage, f.file).toBe(f.page.view === 'gmail.message');
-      expect(sentRows(doc).length > 0, f.file).toBe(f.page.view.startsWith('gmail.list.'));
+      // A message view shows no list row; a Sent list shows rows (a Drafts folder may be empty: real, 2026-10-06).
+      if (isMessage) expect(sentRows(doc), f.file).toEqual([]);
+      if (f.page.view === 'gmail.list.sent') expect(sentRows(doc).length, f.file).toBeGreaterThan(0);
       if (!isMessage) expect(f.page.view, f.file).toBe(`gmail.list.${f.page.folder ?? ''}`);
     }
   });
@@ -113,13 +121,24 @@ describe('Gmail Sent facts match their rows (2.2 truth)', () => {
       for (const row of rows) {
         const facts = f.observations.filter((o) => o.rowKey === row.key);
         const time = at(f, row.timeTitle ?? row.timeText);
+        if (row.conversation) {
+          // A conversation's time is its newest message's, not a send's: no fact (grading contract v1.13).
+          expect(facts, `${f.file}: conversation row ${row.key}`).toEqual([]);
+          continue;
+        }
+        // The account's mailbox is never a counterparty; a timed row only to it gives no fact (privacy §6).
+        const others = row.recipients.filter((r) => !ownMailbox(r, f.page.account));
+        if (others.length === 0 && time?.precision === 'minute') {
+          expect(facts, `${f.file}: row to the account ${row.key}`).toEqual([]);
+          continue;
+        }
         if (facts.length === 0) {
           expect(time?.precision, `${f.file}: unlabelled row ${row.key}`).not.toBe('minute');
           expect(degraded, `${f.file}: unlabelled row ${row.key}`).toContain('redact.missing_occurred_at');
           continue;
         }
         const counterparties = facts.map((o) => o.counterparty ?? '').sort();
-        expect(counterparties, `${f.file}: ${row.key}`).toEqual([...row.recipients].sort());
+        expect(counterparties, `${f.file}: ${row.key}`).toEqual([...others].sort());
         for (const o of facts) {
           expect(o.subjectHint, `${f.file}: ${row.key}`).toBe(subjectHintOf(row.subject));
           expect(time?.precision, `${f.file}: ${row.key}`).toBe('minute');
@@ -136,7 +155,7 @@ describe('Gmail Sent facts match their rows (2.2 truth)', () => {
     for (const f of lists) {
       for (const row of sentRows(docOf(f)).filter((r) => r.timeTitle !== null)) {
         const title = at(f, row.timeTitle ?? '');
-        const shown = at(f, row.timeText);
+        const shown = at(f, longDate(row.timeText));
         const instant = Date.parse(title?.start ?? '');
         expect(Date.parse(shown?.start ?? ''), `${f.file}: ${row.timeText}`).toBeLessThanOrEqual(instant);
         expect(Date.parse(shown?.end ?? ''), `${f.file}: ${row.timeText}`).toBeGreaterThan(instant);
@@ -144,6 +163,27 @@ describe('Gmail Sent facts match their rows (2.2 truth)', () => {
         const sentToday = instant >= Date.parse(today?.start ?? '');
         expect(shown?.precision === 'minute', `${f.file}: ${row.timeText}`).toBe(sentToday);
       }
+    }
+  });
+});
+
+describe('Gmail Sent windows (2.2 truth; Hard Rule 5)', () => {
+  const lists = gmail.filter((f) => f.page.view === 'gmail.list.sent');
+
+  it('a Sent window starts at the oldest row (a minute later while the list may go on) and after the newest unmatched row', () => {
+    for (const f of lists.filter((x) => x.coverage.some((c) => c.source === 'gmail.sent'))) {
+      const rows = sentRows(docOf(f));
+      const minute = (row: (typeof rows)[number]) =>
+        Date.parse(at(f, row.timeTitle ?? row.timeText)?.start ?? '');
+      // Rows no claim can be matched to: conversations, and rows that name the account.
+      const unmatched = rows
+        .filter((row) => row.conversation || row.recipients.some((r) => ownMailbox(r, f.page.account)))
+        .map(minute);
+      const start = Math.max(
+        Math.min(...rows.map(minute)) + (olderDisabled(docOf(f)) ? 0 : 60_000),
+        unmatched.length === 0 ? Number.NEGATIVE_INFINITY : Math.max(...unmatched) + 60_000,
+      );
+      for (const c of f.coverage) expect(Date.parse(c.windowStart), f.file).toBe(start);
     }
   });
 
@@ -214,7 +254,9 @@ describe('Calendar facts match the grid (2.5 truth)', () => {
     for (const f of gcal) {
       const days = gridDays(docOf(f));
       const windows = f.coverage.map(({ windowStart, windowEnd }) => ({ windowStart, windowEnd }));
-      expect(windows, f.file).toEqual(dayWindows(days, f.page.readAt, f.page.timeZone));
+      // A DEGRADED pass and a page still drawing assert nothing (Hard Rules 5, 6).
+      const read = f.health.every((h) => h.status === 'OK') && !stillDrawing(docOf(f));
+      expect(windows, f.file).toEqual(read ? dayWindows(days, f.page.readAt, f.page.timeZone) : []);
       const all = calendarList(docOf(f)).every((c) => c.checked);
       for (const c of f.coverage) expect(c.allCalendars, f.file).toBe(all);
     }

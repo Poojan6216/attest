@@ -98,18 +98,18 @@ describe('which text decides', () => {
   });
 });
 
-describe('conversation view: a row of several messages gives no row and bounds the window (capture of 2026-10-06)', () => {
-  const ids = (thread: string, last: string, nonDraft: string | null) => (doc: Document) => {
-    const subject = one(row(doc, 0), '[data-legacy-last-message-id]');
-    subject.setAttribute('data-legacy-thread-id', thread);
-    subject.setAttribute('data-legacy-last-message-id', last);
-    if (nonDraft === null) subject.removeAttribute('data-legacy-last-non-draft-message-id');
-    else subject.setAttribute('data-legacy-last-non-draft-message-id', nonDraft);
-  };
-  const reply = ids('1a101ff21e04e756', '1a1020aa00000001', '1a1020aa00000001');
-  const startsOf = (plan: PassPlan): string[] =>
-    plan.status === 'OK' ? plan.coverage.map((c) => c.windowStart) : [];
+const ids = (thread: string, last: string, nonDraft: string | null) => (doc: Document) => {
+  const subject = one(row(doc, 0), '[data-legacy-last-message-id]');
+  subject.setAttribute('data-legacy-thread-id', thread);
+  subject.setAttribute('data-legacy-last-message-id', last);
+  if (nonDraft === null) subject.removeAttribute('data-legacy-last-non-draft-message-id');
+  else subject.setAttribute('data-legacy-last-non-draft-message-id', nonDraft);
+};
+const reply = ids('1a101ff21e04e756', '1a1020aa00000001', '1a1020aa00000001');
+const startsOf = (plan: PassPlan): string[] =>
+  plan.status === 'OK' ? plan.coverage.map((c) => c.windowStart) : [];
 
+describe('conversation view: a row of several messages gives no row and bounds the window (capture of 2026-10-06)', () => {
   it.each([
     ['a received reply is the newest message', reply],
     ['a draft sits on the thread', ids('1a101ff21e04e756', '1a1020aa00000002', '1a101ff21e04e756')],
@@ -129,6 +129,42 @@ describe('conversation view: a row of several messages gives no row and bounds t
     const plan = await planVariant({ mutate: ids('1a101ff21e04e756', '1a101ff21e04e756', null) });
     expect(plan).toMatchObject(UNTIMED);
     expect(plan.observations).toHaveLength(10);
+  });
+});
+
+describe("ids not in Gmail's form, and a list out of order (re-review, TECH-R3 and TECH-R8)", () => {
+  it.each([
+    ['an empty thread id', ids('', '1a101ff21e04e756', '1a101ff21e04e756')],
+    ['a prefixed thread id', ids('thread-f:1a101ff21e04e756', '1a101ff21e04e756', '1a101ff21e04e756')],
+    ['an id in upper case', ids('1A101FF21E04E756', '1A101FF21E04E756', '1A101FF21E04E756')],
+  ])(
+    '%s is not in Gmail’s id form: refused, no coverage (TECH-R3: a change of form is loud)',
+    async (_, mutate) => {
+      const plan = await planVariant({ mutate });
+      expect(plan).toMatchObject(UNTIMED);
+      expect(plan.observations).toHaveLength(10);
+    },
+  );
+
+  it('every row’s thread id emptied (a markup change across the list) is DEGRADED, never OK with no row', async () => {
+    const plan = await planVariant({
+      mutate: (doc) => {
+        for (const anchor of Array.from(doc.querySelectorAll('[data-legacy-thread-id]')))
+          anchor.setAttribute('data-legacy-thread-id', '');
+      },
+    });
+    expect(plan.status).toBe('DEGRADED');
+    expect(plan.observations).toEqual([]);
+  });
+
+  it('a list whose shown minutes go up down the page vouches for no window (TECH-R8)', async () => {
+    const plan = await planVariant({
+      mutate: (doc) => {
+        setRowTime(row(doc, 2), { title: 'Sat, Oct 3, 2026, 9:50 AM', label: '9:50 AM' });
+      },
+    });
+    expect(plan).toMatchObject({ status: 'DEGRADED', reasons: ['window.unknown'] });
+    expect(plan.observations.length).toBeGreaterThan(0);
   });
 
   it('a conversation in the minute being read leaves no whole minute: OK, no coverage', async () => {

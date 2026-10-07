@@ -4,7 +4,12 @@
  *
  * One raw row per recipient (docs/grading.md §10: the counterparty is part of the content hash), each holding only
  * the fields `gmail.sent` allowlists: `counterparty` (the address exactly as read), `subjectHint` (one line, at most
- * 80 code points, none for an empty subject or Gmail's "(no subject)") and `occurredAt` (./sent-time.ts). `rowKey`
+ * 80 code points, none for an empty subject or Gmail's "(no subject)") and `occurredAt` (./sent-time.ts). The
+ * account's own mailbox is never a counterparty (../own-address.ts: any case, a `+tag`, Gmail's dots), as the
+ * Calendar reader leaves it out of guests: the address leaves the content script only as its hash
+ * (docs/privacy-architecture.md §6; Hard Rule 2). A claim naming the account can then match no row, so a row that
+ * names the account narrows the window like a conversation row (below): such a claim is UNVERIFIABLE, never NOT_FOUND
+ * (Hard Rule 5; a real Sent page held a send to the account, capture of 2026-10-06). `rowKey`
  * is the row's `data-legacy-last-message-id`, so the same row read on two scrolls is one observation, and two
  * identical sends stay two. The snippet, the screen-reader summary and every other text on the row are never read
  * (Hard Rule 2). Subject text is data, never an instruction or a selector (rule 6).
@@ -28,9 +33,11 @@
  * thread once, under its latest message: a send from a later page's span whose thread later got a reply is listed
  * on an earlier page, under the reply's date, so that span is not every send in it. The head lists every thread
  * whose latest message is at or after its oldest row. A conversation row's sends were made at or before its own
- * minute, so the window starts one minute after the newest conversation row (real capture of 2026-10-06): every send
- * in the window is then a one-message row the pass timed. A conversation row whose time cannot be read leaves the
- * window unknown.
+ * minute, so the window starts one minute after the newest conversation row (real capture of 2026-10-06), and the
+ * newest row that names the account: every send in the window is then a one-message row the pass timed and can match
+ * to a claim. A conversation row whose time cannot be read leaves the window unknown, and so does a list whose shown
+ * minutes go up anywhere down the page: the window rests on the list being in order of its shown minutes, newest
+ * first (true of every real capture), so a list out of order vouches for nothing (tech re-review, TECH-R8).
  *
  * Each row's time is read once per pass and context: the rows and the window share it (TECH-2).
  */
@@ -38,7 +45,9 @@ import { instantMs, isoWithOffset } from '../../core/normalize';
 import { clampSubjectHint } from '../../core/redact';
 import { MS_PER_MINUTE } from '../../core/units';
 import { oneLine } from '../text';
+import { isOwnAddress } from '../own-address';
 import type { ExtractContext, RawRow, VisibleWindow } from '../types';
+import { gmailAccount } from './account';
 import { type SentList, sentPageOf, type SentRowParts } from './sent-page';
 import { type RowTime, rowTime } from './sent-time';
 import { SENT_SELECTORS } from './selectors';
@@ -67,14 +76,19 @@ function timesOf(list: SentList, ctx: ExtractContext): readonly RowTime[] {
   return times;
 }
 
-function rawRows(row: SentRowParts, time: RowTime): RawRow[] {
+/** Whether the row names the account among its recipients (header: it narrows the window). */
+const namesAccount = (row: SentRowParts, account: string | null): boolean =>
+  row.recipients.some((address) => isOwnAddress(address, account));
+
+function rawRows(row: SentRowParts, time: RowTime, account: string | null): RawRow[] {
   // A conversation's sends cannot be timed from the list: no row, and the window starts after it (spanOf).
   if (time.kind === 'conversation') return [];
   // Refused by project() (no occurredAt): the pass says DEGRADED instead of dropping a send in silence.
   if (time.kind === 'unreadable') return [{ type: 'email.sent', rowKey: row.rowKey, fields: {} }];
   const occurredAt = time.at;
   const subjectHint = subjectHintOf(row.subject);
-  return row.recipients.map((counterparty) => ({
+  const others = row.recipients.filter((address) => !isOwnAddress(address, account));
+  return others.map((counterparty) => ({
     type: 'email.sent',
     rowKey: row.rowKey,
     fields:
@@ -87,34 +101,56 @@ export function extractSent(doc: Document, ctx: ExtractContext): RawRow[] {
   const list = sentPageOf(doc);
   if (!list.ok) return [];
   const times = timesOf(list, ctx);
-  return list.rows.flatMap((row, at) => rawRows(row, times[at] ?? { kind: 'unreadable' }));
+  // Health refuses a page whose account it cannot read, so a pass extracts only with the account known.
+  const account = gmailAccount(doc);
+  return list.rows.flatMap((row, at) => rawRows(row, times[at] ?? { kind: 'unreadable' }, account));
 }
 
 /** The row's minute as the list shows it (a send's, or a conversation's newest), or null when unreadable. */
 const minuteOf = (time: RowTime): string | null =>
   time.kind === 'send' ? time.at : time.kind === 'conversation' ? time.latest : null;
 
-/** The list's span (header); `none` when it holds no whole minute; null when a row's time is unknown. */
-function spanOf(list: SentList, ctx: ExtractContext): VisibleWindow | 'none' | null {
+/** The list's oldest and newest minutes, and the newest minute of a row no claim can be matched to (header). */
+interface ListMinutes {
+  readonly oldest: string;
+  readonly newest: string;
+  readonly unmatched: string | null;
+}
+
+/**
+ * Reads the minute of every row of `list` (header): null when one is unknown, or when the list is out of order (a
+ * minute later than the row above it). A conversation row and a row that names the account are `unmatched`.
+ */
+function minutesOf(list: SentList, ctx: ExtractContext, account: string | null): ListMinutes | null {
   let oldest: string | null = null;
   let newest: string | null = null;
-  let conversation: string | null = null;
-  for (const time of timesOf(list, ctx)) {
-    const at = minuteOf(time);
-    if (at === null) return null;
-    if (oldest === null || instantMs(at) < instantMs(oldest)) oldest = at;
-    if (newest === null || instantMs(at) > instantMs(newest)) newest = at;
-    if (time.kind === 'conversation' && (conversation === null || instantMs(at) > instantMs(conversation)))
-      conversation = at;
+  let unmatched: string | null = null;
+  for (const [at, time] of timesOf(list, ctx).entries()) {
+    const minute = minuteOf(time);
+    if (minute === null) return null;
+    const ms = instantMs(minute);
+    if (oldest !== null && ms > instantMs(oldest)) return null;
+    oldest = minute;
+    newest ??= minute;
+    const row = list.rows[at];
+    const hides = time.kind === 'conversation' || (row !== undefined && namesAccount(row, account));
+    if (hides && (unmatched === null || ms > instantMs(unmatched))) unmatched = minute;
   }
-  if (oldest === null || newest === null) return null;
+  return oldest === null || newest === null ? null : { oldest, newest, unmatched };
+}
+
+/** The list's span (header); `none` when it holds no whole minute; null when it cannot be known. */
+function spanOf(list: SentList, ctx: ExtractContext, account: string | null): VisibleWindow | 'none' | null {
+  const minutes = minutesOf(list, ctx, account);
+  if (minutes === null) return null;
+  const { oldest, newest, unmatched } = minutes;
   const windowEnd = list.head ? ctx.observedAt : newest;
   const startMs = Math.max(
     instantMs(oldest) + (list.mayContinue ? MS_PER_MINUTE : 0),
-    conversation === null ? Number.NEGATIVE_INFINITY : instantMs(conversation) + MS_PER_MINUTE,
+    unmatched === null ? Number.NEGATIVE_INFINITY : instantMs(unmatched) + MS_PER_MINUTE,
   );
   const endMs = instantMs(windowEnd);
-  // No whole minute after the oldest row (QA-1) and the newest conversation was seen.
+  // No whole minute after the oldest row (QA-1) and the newest unmatched row was seen.
   if (startMs > endMs && instantMs(oldest) <= endMs) return 'none';
   if (startMs === instantMs(oldest)) return { windowStart: oldest, windowEnd };
   return { windowStart: isoWithOffset(startMs, ctx.offsetAt(startMs)), windowEnd };
@@ -124,7 +160,7 @@ function spanOf(list: SentList, ctx: ExtractContext): VisibleWindow | 'none' | n
 export function sentWindow(doc: Document, ctx: ExtractContext): VisibleWindow | null {
   const list = sentPageOf(doc);
   if (!list.ok) return null;
-  const span = spanOf(list, ctx);
+  const span = spanOf(list, ctx, gmailAccount(doc));
   return span === 'none' ? null : span;
 }
 
@@ -137,7 +173,7 @@ export function sentWindows(doc: Document, ctx: ExtractContext): VisibleWindow[]
   const list = sentPageOf(doc);
   if (!list.ok) return null;
   if (!list.head) return [];
-  const span = spanOf(list, ctx);
+  const span = spanOf(list, ctx, gmailAccount(doc));
   if (span === null) return null;
   return span === 'none' ? [] : [span];
 }

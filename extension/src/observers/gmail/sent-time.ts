@@ -18,13 +18,17 @@
  * list cannot time the user's sends in it, only that each was at or before the row's own minute. Real Sent lists
  * are mostly such rows (48 of 50 on the first page of the capture of 2026-10-06), so they are not refused: they give
  * no row, and the window starts after the newest one (./extract.ts), so it never holds a send it did not time
- * (Hard Rule 5). A row missing an id cannot be told apart, and is refused (DEGRADED: a markup change is loud).
+ * (Hard Rule 5). A row missing an id, or with one not in Gmail's legacy form (selectors.json `patterns.legacyId`:
+ * an empty or prefixed id included), cannot be told apart, and is refused (DEGRADED: a change of the ids' markup or
+ * form is loud; tech re-review TECH-R3). A change in what the ids mean that keeps their form would make every row a
+ * conversation, which one page cannot tell from a real list of conversations (a real second account's head page is
+ * all conversations): a known limit, for Sprint 6.4's count of rows given no row.
  */
 import { resolveRelative } from '../../core/normalize';
 import { oneLine } from '../text';
 import type { ExtractContext } from '../types';
 import type { SentRowParts } from './sent-page';
-import { SENT_SELECTORS } from './selectors';
+import { LEGACY_ID, SENT_SELECTORS } from './selectors';
 
 /** The texts a time element carries, most absolute first: its time attributes, then its own text. */
 function timeTexts(element: Element): string[] {
@@ -59,9 +63,13 @@ export type RowTime =
   | { readonly kind: 'conversation'; readonly latest: string | null }
   | { readonly kind: 'unreadable' };
 
+/** An id in Gmail's legacy form (never null or empty). */
+const legacyId = (id: string | null): boolean => id !== null && LEGACY_ID.test(id);
+
 /** The row's time as the list shows it, read at `ctx.observedAt` (header). */
 export function rowTime(row: SentRowParts, ctx: ExtractContext): RowTime {
-  if (row.threadId === null || row.lastNonDraftId === null) return { kind: 'unreadable' };
+  if (!legacyId(row.threadId) || !legacyId(row.lastNonDraftId) || !legacyId(row.rowKey))
+    return { kind: 'unreadable' };
   const minute = minuteOf(row.time, ctx);
   if (!holdsOneMessage(row)) return { kind: 'conversation', latest: minute };
   return minute === null ? { kind: 'unreadable' } : { kind: 'send', at: minute };

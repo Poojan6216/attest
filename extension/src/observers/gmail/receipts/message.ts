@@ -207,9 +207,14 @@ function messageKeyOf(item: Element): string {
  */
 const isMessageItem = (item: Element): boolean => item.hasAttribute(L.expanded) || messageKeyOf(item) !== '';
 
-/** The conversation's message items in `main`. */
-const messageItems = (main: Element): Element[] =>
-  Array.from(main.querySelectorAll(L.message)).filter(isMessageItem);
+/**
+ * The conversation's message items in `main`. A list item inside another message item is part of that message, not
+ * a message of its own: an email's own markup can carry `role` and `aria-expanded` (security re-review, SEC-R9).
+ */
+function messageItems(main: Element): Element[] {
+  const items = Array.from(main.querySelectorAll(L.message)).filter(isMessageItem);
+  return items.filter((item) => !items.some((other) => other !== item && other.contains(item)));
+}
 
 function messageView(item: Element, main: Element, missing: Set<Landmark>): MessageView | null {
   const heading = headingOf(item, main);
