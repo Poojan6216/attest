@@ -31,7 +31,7 @@ const PHONE = new RegExp(
   'g',
 );
 
-const CURRENCY = String.raw`(?:US\$|CA\$|C\$|A\$|AU\$|NZ\$|HK\$|S\$|R\$|\$|€|£|¥|₹|₩|₽|₺|₪|₫|₱|฿|₦|₴|₡|USD|EUR|GBP|JPY|INR|CAD|AUD|NZD|CHF|CNY|HKD|SGD|SEK|NOK|DKK|PLN|CZK|HUF|MXN|BRL|ZAR|KRW|TRY|ILS|AED|SAR|THB|IDR|MYR|PHP|VND|RUB|UAH|NGN|KES|EGP|ARS|CLP|COP|PEN)`;
+const CURRENCY = String.raw`(?:US\$|CA\$|C\$|A\$|AU\$|NZ\$|HK\$|S\$|R\$|\$|€|£|¥|₹|Rs\.?|₩|₽|₺|₪|₫|₱|฿|₦|₴|₡|USD|EUR|GBP|JPY|INR|CAD|AUD|NZD|CHF|CNY|HKD|SGD|SEK|NOK|DKK|PLN|CZK|HUF|MXN|BRL|ZAR|KRW|TRY|ILS|AED|SAR|THB|IDR|MYR|PHP|VND|RUB|UAH|NGN|KES|EGP|ARS|CLP|COP|PEN)`;
 const AMOUNT = String.raw`\d{1,3}(?:[,.\u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?`;
 const MONEY_PREFIX = new RegExp(
   String.raw`(?<![\p{L}\p{N}_])(-?)(${CURRENCY})(\s?-?)(${AMOUNT})(?!\d)`,

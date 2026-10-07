@@ -120,3 +120,112 @@ describe('an order number beside its label (capture-rows.ts)', () => {
     expect(sanitized(RECEIPT)).toBe(sanitized(RECEIPT));
   });
 });
+
+describe('a code or an order number beside its label, outside a table row (capture-rows.ts)', () => {
+  it("fakes Instacart's referral code in the span after 'Copy code:', in its own shape", () => {
+    const out = sanitized('<div><span>Copy code:</span><span>R123456</span></div>');
+    expect(out).not.toContain('R123456');
+    expect(out).toMatch(/<span>Copy code:<\/span><span>[A-Z]\d{6}<\/span>/u);
+  });
+
+  it('skips empty elements to the next element with text, and stops at the last child', () => {
+    const out = sanitized(
+      '<p><span>Order #</span><span></span><b>W-55512</b></p><p><span>Referral code</span></p>',
+    );
+    expect(out).not.toContain('W-55512');
+    expect(out).toMatch(/<b>[A-Z]-\d{5}<\/b>/u);
+    expect(out).toContain('<span>Referral code</span>');
+  });
+
+  it('is set off only by an element whose whole text is a label', () => {
+    const out = sanitized('<div><span>Code of conduct</span><span>Rev 2025A</span></div>');
+    expect(out).toContain('<span>Rev 2025A</span>');
+  });
+});
+
+describe('a postal address after its label (capture-rows.ts)', () => {
+  /** Shopify's order confirmation, as captured (the values are made up). */
+  const SHOPIFY = `<table><tr>
+    <td class="m_-12customer-info__item"><h4>Shipping address</h4><p>Tara Sample<br>
+      <a href="https://www.google.com/">12/4 Fixture Nagar, Testpur</a><br><a href="https://www.google.com/">999999 Placeholderabad</a> ZZ<br>India</p></td>
+    <td class="m_-12customer-info__item"><h4>Billing address:</h4><p>Tara Sample</p></td>
+    <td><h4>Shipping method</h4><p>Free Shipping</p></td></tr></table>`;
+
+  it("turns every text after 'Shipping address' and 'Billing address:' into a phrase of as many words", () => {
+    const out = sanitized(SHOPIFY);
+    for (const real of ['Tara', 'Sample', 'Fixture', 'Testpur', '999999', 'Placeholderabad', 'ZZ', 'India'])
+      expect(out).not.toContain(real);
+    expect(out).toContain('<h4>Shipping address</h4>');
+    expect(out).toMatch(/<h4>Billing address:<\/h4><p>[A-Z][a-z]+ [a-z]+<\/p>/u);
+  });
+
+  it('leaves what follows any other label, and a sentence about an address', () => {
+    const out = sanitized(
+      `${SHOPIFY}<div><span>Your address is safe with us</span><span>Tara Sample</span></div><div><a>Change your shipping address</a><span>Mira Example</span></div>`,
+    );
+    expect(out).toContain('<h4>Shipping method</h4><p>Free Shipping</p>');
+    expect(out).toContain('<span>Tara Sample</span>');
+    expect(out).toContain('<span>Mira Example</span>');
+  });
+});
+
+describe("rupee amounts written 'Rs.' (capture-pii.ts CURRENCY)", () => {
+  it('fakes them like any amount, keeping the sign, the spacing and the decimals', () => {
+    const out = sanitized('<p>Subtotal Rs. 100.00</p><p>Taxes Rs.12.34</p>');
+    expect(out).not.toContain('100.00');
+    expect(out).not.toContain('12.34');
+    expect(out).toMatch(/<p>Subtotal Rs\. \d{3}\.\d{2}<\/p><p>Taxes Rs\.\d{2}\.\d{2}<\/p>/u);
+  });
+});
+
+describe('an order number in the row under its label, and an id a <wbr> splits (capture-rows.ts)', () => {
+  /** Spotify's receipt, as captured: the label's row, then the id's row, the id broken by a <wbr>. */
+  const SPOTIFY =
+    '<table><tr><td width="5%"></td><td>Invoice ID</td></tr>' +
+    '<tr><td width="5%"></td><td>deadbeef-0000-4000-8000-<wbr>feedface0001</td></tr></table>';
+
+  it('fakes the id in the row under a row whose only text is the label, both halves, in its shape', () => {
+    const out = sanitized(SPOTIFY);
+    expect(out).not.toContain('bd1ecc0a');
+    expect(out).not.toContain('feedface0001');
+    expect(out).toMatch(/<td>[a-z\d]{8}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{4}-<wbr>[a-z\d]{12}<\/td>/u);
+  });
+
+  it('gives a copy of the id elsewhere, whole, the same fake', () => {
+    const out = sanitized(`${SPOTIFY}<p>Invoice deadbeef-0000-4000-8000-feedface0001 is attached</p>`);
+    const half = /<td>([a-z\d-]+)<wbr>([a-z\d]{12})<\/td>/u.exec(out);
+    expect(out).toContain(`<p>Invoice ${half?.[1] ?? '?'}${half?.[2] ?? '?'} is attached</p>`);
+  });
+
+  it('reads a row above as a label only when its one text is a label', () => {
+    const out = sanitized(
+      '<table><tr><td>Thanks</td></tr><tr><td>A1234-XY</td></tr>' +
+        '<tr><td>Invoice ID</td><td>and more</td></tr><tr><td>B5678-ZZ</td></tr></table>',
+    );
+    expect(out).toContain('<td>A1234-XY</td>');
+    expect(out).toContain('<td>B5678-ZZ</td>');
+  });
+});
+
+describe('a label and its value in one text (capture-rows.ts)', () => {
+  it("fakes Gap's coupon code after 'Code', and an order number after 'Order Confirmation #' or 'Order'", () => {
+    const out = sanitized(
+      '<table><tr><td class="x_coupon-code">Code ABCDE12FG3HI</td></tr></table>' +
+        '<h2>Order Confirmation #1ABCDEF</h2><p>Order 54321 confirmed</p>',
+    );
+    for (const real of ['ABCDE12FG3HI', '1ABCDEF', '54321']) expect(out).not.toContain(real);
+    expect(out).toMatch(/>Code [A-Z]{5}\d{2}[A-Z]{2}\d[A-Z]{2}</u);
+    expect(out).toMatch(/<h2>Order Confirmation #\d[A-Z]{6}<\/h2><p>Order \d{5} confirmed<\/p>/u);
+  });
+
+  it('leaves a label followed by words without digits, and digits after other words', () => {
+    const out = sanitized(
+      '<p>Your Instacart order receipt</p><p>Offer ends 10/7/26</p><p>A code of conduct 2025</p>' +
+        '<p>Preorder 12345 units</p>',
+    );
+    expect(out).toContain('<p>Your Instacart order receipt</p>');
+    expect(out).toContain('<p>Offer ends 10/7/26</p>');
+    expect(out).toContain('<p>A code of conduct 2025</p>');
+    expect(out).toContain('<p>Preorder 12345 units</p>');
+  });
+});

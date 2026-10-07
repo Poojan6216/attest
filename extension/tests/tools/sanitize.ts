@@ -126,6 +126,7 @@ function emptyStats(): SanitizeStats {
     redactedTexts: 0,
     rowCards: 0,
     rowIds: 0,
+    rowAddresses: 0,
     ...emptyScrubStats(),
   };
 }

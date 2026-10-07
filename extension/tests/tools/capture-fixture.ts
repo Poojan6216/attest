@@ -143,7 +143,7 @@ function summary(result: CaptureResult): string {
     `captured ${result.source}`,
     `  -> ${relative}`,
     `  replaced: ${s.email} emails, ${s.phone} phones, ${s.card + s.rowCards} cards, ${s.amount} amounts, ` +
-      `${s.address} addresses, ${s.name} names, ${s.rowIds} order numbers, ` +
+      `${s.address + s.rowAddresses} addresses, ${s.name} names, ${s.rowIds} order numbers, ` +
       `${s.redactedTexts + s.literal} redacted texts, ${s.strayAt} stray '@'`,
     `  removed: ${s.removedElements} elements, ${s.removedAttributes} handlers, script URLs and secrets, ` +
       `${s.neutralisedResources} external resources, ${s.removedComments} comments`,
