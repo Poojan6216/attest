@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-05 with `pnpm bench`.
+Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,20 +12,20 @@ Measured 2026-10-05 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 365.3 |
-| lookupMinMs | 331.3 |
-| lookupMaxMs | 448.8 |
-| lookupCpuMedianMs | 395.2 |
-| indexBuildMedianMs | 147.4 |
-| buildPlusLookupMedianMs | 512 |
+| lookupMedianMs | 367.3 |
+| lookupMinMs | 343.1 |
+| lookupMaxMs | 505.3 |
+| lookupCpuMedianMs | 387.9 |
+| indexBuildMedianMs | 155 |
+| buildPlusLookupMedianMs | 517.1 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1060.8 |
-| gradingMinMs | 985.2 |
-| gradingMaxMs | 1258.3 |
-| gradingCpuMedianMs | 1336.5 |
+| gradingMedianMs | 1081.7 |
+| gradingMinMs | 1027.5 |
+| gradingMaxMs | 1329.6 |
+| gradingCpuMedianMs | 1270.5 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,58 +33,58 @@ Measured 2026-10-05 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
+| commit | fb87912f388eec1108a63aff02903598188c1f5b |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gcal
 
-Measured 2026-10-05 with `pnpm bench`.
+Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gcalSelectorsVersion | 1.3.0 |
-| gcalFixtures | 8 |
+| gcalSelectorsVersion | 1.5.0 |
+| gcalFixtures | 17 |
 | gcalSyntheticFixtures | 8 |
-| gcalEventsLabelled | 56 |
-| gcalEventsFound | 56 |
+| gcalEventsLabelled | 65 |
+| gcalEventsFound | 65 |
 | gcalEventsSpurious | 0 |
-| gcalEventFieldsChecked | 280 |
-| gcalEventFieldsCorrect | 280 |
+| gcalEventFieldsChecked | 325 |
+| gcalEventFieldsCorrect | 325 |
 | gcalStartAccuracy | 1 |
 | gcalAllDayAccuracy | 1 |
 | gcalSubjectAccuracy | 1 |
 | gcalGuestsAccuracy | 1 |
 | gcalCalendarAccuracy | 1 |
-| gcalHealthCorrect | 8/8 |
-| gcalCoverageWindowsCorrect | 9/9 |
-| gcalAllCalendarsCorrect | 9/9 |
-| gcalStepDiffsExact | 6/6 |
-| gcalStepRowsCorrect | 3/3 |
+| gcalHealthCorrect | 17/17 |
+| gcalCoverageWindowsCorrect | 16/16 |
+| gcalAllCalendarsCorrect | 16/16 |
+| gcalStepDiffsExact | 12/12 |
+| gcalStepRowsCorrect | 6/6 |
 | gcalStepRowsSpurious | 0 |
 | gcalStepRowsUnmarked | 0 |
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
+| commit | fb87912f388eec1108a63aff02903598188c1f5b |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gmail-sent
 
-Measured 2026-10-05 with `pnpm bench`.
+Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailSentSelectorsVersion | 1.1.0 |
-| gmailFixtureFolders | 2026-10-03 |
-| gmailFixtures | 25 |
-| gmailSentListFixtures | 6 |
-| gmailSentRealFixtures | 0 |
-| gmailSentLabelledObservations | 39 |
-| gmailSentProducedObservations | 39 |
-| gmailSentFieldsCompared | 117 |
-| gmailSentFieldsCorrect | 117 |
+| gmailSentSelectorsVersion | 1.2.0 |
+| gmailFixtureFolders | 2026-10-03,2026-10-06 |
+| gmailFixtures | 33 |
+| gmailSentListFixtures | 10 |
+| gmailSentRealFixtures | 4 |
+| gmailSentLabelledObservations | 53 |
+| gmailSentProducedObservations | 53 |
+| gmailSentFieldsCompared | 159 |
+| gmailSentFieldsCorrect | 159 |
 | gmailSentRecipientAccuracy | 1 |
 | gmailSentSubjectHintAccuracy | 1 |
 | gmailSentOccurredAtAccuracy | 1 |
@@ -98,17 +98,17 @@ Measured 2026-10-05 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
+| commit | fb87912f388eec1108a63aff02903598188c1f5b |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## receipts
 
-Measured 2026-10-05 with `pnpm bench`.
+Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailFixtures | 25 |
+| gmailFixtures | 33 |
 | receiptRealFixtures | 0 |
 | stripeFixtures | 2 |
 | stripeExact | 2 |
@@ -137,14 +137,14 @@ Measured 2026-10-05 with `pnpm bench`.
 | receiptFieldAccuracy | 1 |
 | negatives | 4 |
 | negativesUnparsed | 4 |
-| listViews | 8 |
-| listViewsNeutral | 8 |
-| coveragePages | 25 |
-| coveragePagesExact | 25 |
+| listViews | 14 |
+| listViewsNeutral | 14 |
+| coveragePages | 33 |
+| coveragePagesExact | 33 |
 | coverageWindows | 8 |
-| healthLabelled | 17 |
-| healthMatched | 17 |
+| healthLabelled | 19 |
+| healthMatched | 19 |
 | receiptParsersGatePassed | true |
-| commit | 6cc0386037c88b5ff1cf7b223631050096dc75a4 |
+| commit | fb87912f388eec1108a63aff02903598188c1f5b |
 | commitDirty | false |
 | node | v22.14.0 |
