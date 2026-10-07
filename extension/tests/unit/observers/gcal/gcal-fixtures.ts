@@ -30,14 +30,12 @@ import { stillDrawing, zoneOffset } from '../../fixtures/fixture-page-read';
 /** Every labelled Calendar fixture, across date folders. */
 export const GCAL_FIXTURES: readonly LabelledFixture[] = loadVendor('gcal');
 
-const happyWindow = new Window({
-  settings: {
-    disableJavaScriptEvaluation: true,
-    disableJavaScriptFileLoading: true,
-    disableCSSFileLoading: true,
-    handleDisabledFileLoadingAsSuccess: true,
-  },
-});
+const SETTINGS = {
+  disableJavaScriptEvaluation: true,
+  disableJavaScriptFileLoading: true,
+  disableCSSFileLoading: true,
+  handleDisabledFileLoadingAsSuccess: true,
+};
 
 function isDocument(value: unknown): value is Document {
   return (
@@ -45,11 +43,22 @@ function isDocument(value: unknown): value is Document {
   );
 }
 
-/** `html` parsed as a page (no script runs). */
+/**
+ * `html` parsed as a page (no script runs), in a window of its own that is closed at once. happy-dom keeps every
+ * page parsed in a window alive until that window closes, about 26 MB per real Calendar page: one shared window
+ * held every page the Calendar tests parsed, and a CI test worker ran out of its 2 GB heap (CI run 37652047432).
+ * The page stays readable after its window closes (queries, text, computed styles); its window runs no timers or
+ * MutationObserver callbacks, which no test of these pages uses.
+ */
 export function parseDocument(html: string): Document {
-  const parsed: unknown = new happyWindow.DOMParser().parseFromString(html, 'text/html');
-  if (!isDocument(parsed)) throw new Error('happy-dom returned no document');
-  return parsed;
+  const window = new Window({ settings: SETTINGS });
+  try {
+    const parsed: unknown = new window.DOMParser().parseFromString(html, 'text/html');
+    if (!isDocument(parsed)) throw new Error('happy-dom returned no document');
+    return parsed;
+  } finally {
+    void window.happyDOM.close();
+  }
 }
 
 const html = new Map<string, string>();

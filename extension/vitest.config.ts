@@ -14,6 +14,17 @@ export const VITEST_INCLUDE = 'tests/{unit,property,golden}/**/*.spec.{ts,tsx}';
 export const TEST_TIMEOUT_MS = 60_000;
 
 /**
+ * Every test worker's heap, in MB: what a GitHub-hosted ubuntu-latest runner gives Node by default (a 16 GB Mac gives
+ * about 4,096). Pinned so a test that holds too much memory fails on the Mac as it does in CI: the Calendar tests
+ * kept every page they parsed alive, passed on the Mac and ran a CI worker out of memory (CI run 37652047432;
+ * tests/unit/page-windows-setup.ts).
+ */
+export const TEST_WORKER_HEAP_MB = 2048;
+
+/** The Node flag that sets a worker's heap to TEST_WORKER_HEAP_MB. */
+export const TEST_WORKER_EXEC_ARGV = [`--max-old-space-size=${String(TEST_WORKER_HEAP_MB)}`];
+
+/**
  * Coverage of src/core only, the Gate's "core coverage >= 95%" (sprint_1.md; QA-R4, TECH-R2): `pnpm test:coverage`
  * runs the whole suite instrumented, prints lines, branches, functions and statements for src/core, and fails
  * when lines drop below 95%. The report is written even when a test fails, so the number is never lost.
@@ -39,7 +50,8 @@ export default defineConfig({
     mockReset: true,
     restoreMocks: true,
     testTimeout: TEST_TIMEOUT_MS,
-    setupFiles: ['tests/unit/lint/test-timeout-setup.ts'],
+    execArgv: TEST_WORKER_EXEC_ARGV,
+    setupFiles: ['tests/unit/lint/test-timeout-setup.ts', 'tests/unit/page-windows-setup.ts'],
     tags: TEST_TAGS,
     coverage: {
       provider: 'v8',

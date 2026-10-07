@@ -36,3 +36,6 @@ __pycache__/
 # local env
 .env
 .env.*
+
+# Claude Code's per-machine settings (permission rules); never committed
+.claude/settings.local.json

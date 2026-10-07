@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
+import { TEST_WORKER_EXEC_ARGV } from './vitest.config.ts';
+
 /**
  * Perf gates only (tests/perf). Serial and in one fork, so no other test competes for CPU while a gate measures:
  * in the parallel unit run, seven workers on four physical cores inflated a gate's CPU time by about 25%.
@@ -13,6 +15,8 @@ export default defineConfig({
     fileParallelism: false,
     pool: 'forks',
     maxWorkers: 1,
+    // CI's heap, as in every other run (vitest.config.ts TEST_WORKER_HEAP_MB).
+    execArgv: TEST_WORKER_EXEC_ARGV,
     // Print each gate's medians (tests/perf/measure.ts describeRuns) in `pnpm test` and CI output, also when the
     // gate passes: Vitest hides a passing test's console output by default (QA-R8, Hard Rule 12).
     silent: false,
