@@ -40,7 +40,7 @@
     "healthLabelled": 26,
     "healthMatched": 26,
     "receiptParsersGatePassed": true,
-    "commit": "79d21370b1cd24b1b5630ac4635a3b3bde860354",
+    "commit": "aa922c5a7275bd971ac7440b6f52a25066052343",
     "commitDirty": false,
     "node": "v22.14.0"
   }

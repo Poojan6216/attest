@@ -12,20 +12,20 @@ Measured 2026-10-08 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 696.9 |
-| lookupMinMs | 454.2 |
-| lookupMaxMs | 1000 |
-| lookupCpuMedianMs | 480.1 |
-| indexBuildMedianMs | 383.1 |
-| buildPlusLookupMedianMs | 1325.8 |
+| lookupMedianMs | 374.8 |
+| lookupMinMs | 328.6 |
+| lookupMaxMs | 446.7 |
+| lookupCpuMedianMs | 403.2 |
+| indexBuildMedianMs | 155.5 |
+| buildPlusLookupMedianMs | 524.6 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1568.6 |
-| gradingMinMs | 1317 |
-| gradingMaxMs | 2209.2 |
-| gradingCpuMedianMs | 1563.6 |
+| gradingMedianMs | 1116.3 |
+| gradingMinMs | 1011.4 |
+| gradingMaxMs | 1298.1 |
+| gradingCpuMedianMs | 1390.2 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,7 +33,7 @@ Measured 2026-10-08 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 79d21370b1cd24b1b5630ac4635a3b3bde860354 |
+| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -66,7 +66,7 @@ Measured 2026-10-08 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 79d21370b1cd24b1b5630ac4635a3b3bde860354 |
+| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -98,7 +98,7 @@ Measured 2026-10-08 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 79d21370b1cd24b1b5630ac4635a3b3bde860354 |
+| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -145,6 +145,6 @@ Measured 2026-10-08 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | 79d21370b1cd24b1b5630ac4635a3b3bde860354 |
+| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
 | commitDirty | false |
 | node | v22.14.0 |
