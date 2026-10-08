@@ -41,6 +41,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `docs/privacy-architecture.md` v1: every ledger table and field, the allowlist of each observation source, what is hashed and what that does not hide, retention and purge, and the export.
 - `pnpm check-docs` also fails when `docs/privacy-architecture.md` does not describe a field `policy/default.json` allowlists, or describes one it does not (`scripts/check-docs-allowlist.ts`).
 
+- Claim pattern tables for the agent adapters (`src/adapters/patterns.ts`): a sentence an agent writes is read as one of the eight action types only when it reports the action done. A question, an offer, a draft or an approval prompt is recorded as `other` at low confidence, and a refusal or a step still under way is no claim, so a misread sentence loses a claim rather than inventing one. Each vendor's table is tested on 47 or 48 invented sentences plus 20 shared ones.
+
 ### Changed
 
 - The Gmail Sent, receipt and Google Calendar readers now feed the in-browser ledger (`entrypoints/content/`): the service worker answers each message, stores rows one by one for Gmail and a whole Calendar pass all or none, records which windows were really seen, and keeps Calendar snapshots to tell created, changed and deleted events apart.

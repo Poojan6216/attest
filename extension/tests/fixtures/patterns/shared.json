@@ -1,0 +1,26 @@
+{
+  "vendor": "shared",
+  "note": "Invented sentences any vendor's agent may write, held to every vendor's table (sprint_3 3.0). No value comes from a real page. Written after the tables and measured unseen first: 10 of 20 right for every vendor, every miss a missed or vague claim, none a wrong action (Decisions [3.0]). The tables then learned plural event words, reminders, live listings and other actions; three phrasings stay missed on purpose (a new start time, a renewal that will change, a move of something not named as an event), since reading them would also read things that are no calendar or plan change.",
+  "cases": [
+    { "text": "I went ahead and emailed the venue coordinator at events@example.com.", "type": "email.sent" },
+    { "text": "Your note to Ms. Rivera has been sent.", "type": "other" },
+    { "text": "Booked a dinner reservation at Lucca for 7:30 tonight.", "type": "other" },
+    { "text": "I've put a hold on your calendar for the flight on the 12th.", "type": "calendar.created" },
+    { "text": "The 2pm review now starts at 3pm.", "type": "calendar.updated" },
+    { "text": "I declined the invitation from Sam for Friday.", "type": "other" },
+    { "text": "Paid your water bill: $63.10.", "type": "purchase.made" },
+    { "text": "Your Spotify plan will now renew annually instead of monthly.", "type": "subscription.changed" },
+    { "text": "Your listing for the stroller is now live on OfferUp.", "type": "listing.posted" },
+    { "text": "I DM'd Alex on Instagram with the link.", "type": "message.sent" },
+    { "text": "Emailed the landlord about the leak.", "type": "email.sent" },
+    { "text": "I've set a reminder for your 8am flight.", "type": "calendar.created" },
+    { "text": "Would it help if I emailed the team?", "type": "other" },
+    { "text": "Unfortunately the store was out of stock, so nothing was ordered.", "type": null },
+    { "text": "I signed you up for the Thursday yoga class.", "type": "other" },
+    { "text": "Moved the dentist to next Wednesday.", "type": "calendar.updated" },
+    { "text": "I sent the RSVP for the wedding.", "type": "other" },
+    { "text": "Cancelled the Uber Eats order.", "type": "other" },
+    { "text": "I deleted three old events from last year.", "type": "calendar.deleted" },
+    { "text": "Shared the Q3 deck with finance@example.com.", "type": "other" }
+  ]
+}
