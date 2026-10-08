@@ -1,0 +1,13 @@
+{
+  "note": "Confidence levels of the claim patterns (sprint_3 3.0; src/adapters/patterns.ts, pattern-tables.ts). Data, like a receipt parser's prior in its selectors.json: extractor confidence travels with a claim and no grading rule reads it. The three `other` levels are at most 0.4 (sprint_3 3.0); every action level is above them.",
+  "confidence": {
+    "proposal": 0.2,
+    "vague": 0.3,
+    "ambiguous": 0.4,
+    "exact": 0.9,
+    "strong": 0.85,
+    "plain": 0.8,
+    "loose": 0.75,
+    "tool": 0.7
+  }
+}

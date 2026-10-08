@@ -25,16 +25,16 @@
  * Pure: no DOM, no clock. A helper of the adapter skeleton (eslint-rules/fences.js HELPER_SCOPES).
  */
 import type { ActionType, AgentId } from '../core/schema';
-import { CLAIM_PATTERNS, type ClaimPattern, re } from './pattern-tables';
+import { CLAIM_PATTERNS, type ClaimPattern, LEVEL, re } from './pattern-tables';
 
 export { CLAIM_PATTERNS, type ClaimPattern } from './pattern-tables';
 
 /** A sentence that proposes an action or asks for approval to take it, and names it. */
-export const PROPOSAL_CONFIDENCE = 0.2;
+export const PROPOSAL_CONFIDENCE = LEVEL.proposal;
 /** A sentence that says the agent acted without saying what it did. */
-export const VAGUE_CONFIDENCE = 0.3;
+export const VAGUE_CONFIDENCE = LEVEL.vague;
 /** A sentence that patterns of two types match. */
-export const AMBIGUOUS_CONFIDENCE = 0.4;
+export const AMBIGUOUS_CONFIDENCE = LEVEL.ambiguous;
 /** The longest sentence `classify` reads; a longer one is no claim. */
 export const MAX_SENTENCE = 400;
 
