@@ -1,6 +1,6 @@
 # Attest privacy policy
 
-Version 0.1. Effective 8 October 2026 (version 0, of 1 October 2026, read no AI agent's page). Applies to Attest 0.0.1.
+Version 0.1. Effective 8 October 2026 (version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
@@ -8,7 +8,7 @@ Nothing leaves your browser. Attest reads only pages you have open, keeps what i
 
 ## Where things stand today
 
-Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. On Muse (muse.ai) it reads the pages you have open only to check that its reader works, and keeps only that status, never what a page says. It stores no requests, claims or receipts yet and grades nothing.
+Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. It does not read your AI agents' pages: Meta (Muse), OpenAI (ChatGPT) and Anthropic (Claude) do not allow collecting data from their sites by automated means, so Attest's readers for them are off, and stay off unless those companies permit them. It stores no requests, claims or receipts yet and grades nothing.
 
 The rest of this policy describes how later versions will work, so you can judge the design before Attest reads anything. Any version that changes what is read, stored or sent updates this policy first.
 
@@ -16,8 +16,8 @@ The rest of this policy describes how later versions will work, so you can judge
 
 Later versions read these pages, and only in tabs you have open yourself:
 
-- the activity and chat pages of the AI agents you use (Meta Muse, ChatGPT and Dots, Claude), to see what the agent says it did
-- those agents' settings pages, to see which apps and accounts you have connected to them
+- only if their makers permit it: the activity and chat pages of the AI agents you use (Meta Muse, ChatGPT and Dots, Claude), to see what the agent says it did
+- only if their makers permit it: those agents' settings pages, to see which apps and accounts you have connected to them
 - your Gmail Sent folder, to see which emails were actually sent
 - receipt emails you open in Gmail, to see purchases
 - Google Calendar, to see which events exist
@@ -86,7 +86,7 @@ Attest 0.0.1 asks Chrome for:
 - alarms, to schedule checks
 - side panel, to show receipts beside the page you are on
 
-It asks for access to three websites, to read them in tabs you open: mail.google.com, calendar.google.com and muse.ai. Later versions add the other agent sites listed above, each together with its reader, and nothing broader.
+It asks for access to two websites, to read them in tabs you open: mail.google.com and calendar.google.com. A later version adds an AI agent's site only if its maker permits Attest to read it, and nothing broader.
 
 ## Logs
 

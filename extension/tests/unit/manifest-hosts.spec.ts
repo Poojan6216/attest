@@ -1,12 +1,12 @@
 /**
  * Hard Rule 8 at the source: wxt.config.ts declares host_permissions as exactly the two observer hosts (Gmail, Google
- * Calendar; sprint_2 2.0, from src/config.ts OBSERVER_HOSTS) and the agent hosts that have a reader (sprint_3: each
- * enters with its content script, never before, Decisions [3.0]; Muse's since 2026-10-08), and nothing else that widens
- * access. tests/e2e/built-bundle.spec.ts checks the same in the manifest of the build that ships.
+ * Calendar; sprint_2 2.0, from src/config.ts OBSERVER_HOSTS) and no agent host while its reader is off (sprint_3,
+ * Decisions [3.0], [3.10]: every agent reader is off under its vendor's terms), and nothing else that widens access.
+ * tests/e2e/built-bundle.spec.ts checks the same in the manifest of the build that ships.
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { AGENT_HOSTS, OBSERVER_HOSTS } from '../../src/config';
+import { AGENT_HOSTS, AGENT_READERS, OBSERVER_HOSTS } from '../../src/config';
 import config from '../../wxt.config';
 
 // wxt.config.ts imports `defineConfig` from 'wxt', which loads WXT and, in the background, its optional `web-ext` peer
@@ -22,22 +22,20 @@ function manifest(): Record<string, unknown> {
 }
 
 describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)', () => {
-  it('are exactly Gmail, Google Calendar and Muse', () => {
+  it('are exactly https://mail.google.com/* and https://calendar.google.com/*', () => {
     expect(manifest().host_permissions).toEqual([
       'https://mail.google.com/*',
       'https://calendar.google.com/*',
-      'https://muse.ai/*',
     ]);
   });
 
-  it('are the observer hosts of src/config.ts and the agent hosts with a reader: no ChatGPT or Claude host yet', () => {
-    expect(manifest().host_permissions).toEqual([
-      ...OBSERVER_HOSTS.gmail,
-      ...OBSERVER_HOSTS.gcal,
-      ...AGENT_HOSTS.muse,
-    ]);
-    const unread: readonly string[] = [...AGENT_HOSTS.chatgpt, ...AGENT_HOSTS.claude];
-    expect(unread.filter((host) => (manifest().host_permissions as string[]).includes(host))).toEqual([]);
+  it('are the observer hosts of src/config.ts, and no agent host while its reader is off', () => {
+    expect(manifest().host_permissions).toEqual([...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal]);
+    const offHosts = Object.entries(AGENT_HOSTS)
+      .filter(([agent]) => AGENT_READERS[agent as keyof typeof AGENT_READERS] === 'off')
+      .flatMap(([, hosts]) => hosts);
+    expect(offHosts.length).toBeGreaterThan(0);
+    expect(offHosts.filter((host) => (manifest().host_permissions as string[]).includes(host))).toEqual([]);
   });
 
   it('declare no optional hosts, content scripts or web-accessible resources', () => {

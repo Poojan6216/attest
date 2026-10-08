@@ -96,7 +96,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm capture` fakes every value with a secret key kept outside the repository (`~/.config/attest/capture-key`, made on first use) and refuses a public seed, so a committed capture's fakes cannot be worked back to your values; `capture-refake.ts` re-fakes an older capture without its originals. It also fakes card endings and order numbers that a receipt's table rows label, codes beside their labels (referral, coupon, tracking, booking, membership), Google Meet codes, postal addresses written over several lines, written web addresses with no scheme, and ids inside page attributes.
 - `pnpm bench` refuses to publish numbers measured on uncommitted code (`pnpm bench -- --dirty` for a look).
 - CI runs as five jobs side by side, each inside its 30 minutes (the slowest measured at 20.3), with one shared setup step and each test worker's memory pinned to 2 GB.
-- Attest asks for access to muse.ai (Muse's web app) beside Gmail and Google Calendar, and runs the Muse reader on the Muse pages you open. Until it keeps claims it reports only whether the reader works; nothing else of a Muse page leaves the page. PRIVACY.md (version 0.1) says so.
+- Attest's readers for Muse, ChatGPT and Claude are off: Meta's, OpenAI's and Anthropic's terms do not allow collecting data from their sites by automated means. The options page lists each reader, on or off, and why, and Attest asks for access to Gmail and Google Calendar only (PRIVACY.md version 0.1).
 - Grading ranks a batch's candidate ids by number rather than as text, halving that step (37 → 18 ms per 5,000-claim bench batch) with every receipt unchanged.
 
 ### Removed

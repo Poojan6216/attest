@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ADAPTER_SITES,
   AGENT_HOSTS,
+  AGENT_READERS,
   FEATURE_FLAG_DEFAULTS,
   FEATURE_FLAGS,
   NETWORK_ALLOWLIST,
@@ -64,6 +65,11 @@ describe('host lists', () => {
       claude: ['https://claude.ai/*'],
       muse: ['https://muse.ai/*'],
     });
+  });
+
+  it("every agent reader is off under its vendor's terms (Decisions [3.10])", () => {
+    expect(AGENT_READERS).toEqual({ muse: 'off', chatgpt: 'off', claude: 'off' });
+    expect(Object.isFrozen(AGENT_READERS)).toBe(true);
   });
 
   it('every adapter the service worker hears from speaks from an agent site that has a host', () => {

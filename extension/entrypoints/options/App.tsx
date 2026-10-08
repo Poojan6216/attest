@@ -1,3 +1,4 @@
+import { AdaptersSection } from './components/AdaptersSection';
 import { DangerZone } from './components/DangerZone';
 import { ExportSection } from './components/ExportSection';
 import { PrivacySection } from './components/PrivacySection';
@@ -7,7 +8,8 @@ import { StubSection } from './components/StubSection';
 
 /**
  * Options page shell (Sprint 0). The privacy statement is the first line; sections follow in the order of
- * `SECTIONS`. Features that arrive later say so and show no controls. Export saves the ledger (Sprint 2 close).
+ * `SECTIONS`. Features that arrive later say so and show no controls. Export saves the ledger (Sprint 2 close); the
+ * Adapters section says which page readers run and why the agent ones are off (sprint_3 3.10).
  */
 export function App() {
   return (
@@ -23,10 +25,7 @@ export function App() {
             id="grants"
             summary="Set what each agent may do: which actions, which recipients, and how much it may spend."
           />
-          <StubSection
-            id="adapters"
-            summary="See which agent pages and which Gmail and Calendar readers are working, and which need repair after a site changes."
-          />
+          <AdaptersSection />
           <PrivacySection />
           <StubSection
             id="model"

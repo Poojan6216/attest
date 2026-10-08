@@ -23,7 +23,7 @@
 Nothing. Attest has no server, no account, no analytics and no remote code (Hard Rules 1, 9).
 
 - **No network allowlist.** `NETWORK_ALLOWLIST` in [`extension/src/config.ts`](../extension/src/config.ts) is empty. Sprint 5 adds exactly one host to it, for telemetry that is off until the user turns it on ([§10](#10-not-built-yet)).
-- **Three host permissions, all read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*`, `https://calendar.google.com/*` and, since 8 October 2026, `https://muse.ai/*` (Muse's web app; each agent site enters with its reader, never before), so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms` and `sidePanel` (the build adds the last one for the side panel). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab.
+- **Two host permissions, both read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*` and `https://calendar.google.com/*`, so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms` and `sidePanel` (the build adds the last one for the side panel). No AI agent's site is asked for: Meta's, OpenAI's and Anthropic's terms forbid collecting data from their sites by automated means, so those readers are off (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts); Decisions [3.10]). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab.
 - **A test enforces it.** [`extension/tests/e2e/network-intercept.spec.ts`](../extension/tests/e2e/network-intercept.spec.ts) (`@mandatory`) loads the built extension, opens the Gmail Sent, receipt and Calendar fixtures with the shipped content scripts running, reloads them for five minutes, and fails on any request from the extension outside the allowlist. Its negative control proves it catches a request from the service worker, an extension page and a page.
 - **A second test hunts for leaks.** [`extension/tests/e2e/no-leak.spec.ts`](../extension/tests/e2e/no-leak.spec.ts) (`@mandatory`) plants three known secrets in the fixture pages (in message bodies, snippets, event locations) and checks that none reaches the ledger export, IndexedDB, extension storage, the console or the network.
 
@@ -35,7 +35,7 @@ Limitations first.
 - **A hash is not a secret.** Attest stores some values only as SHA-256 hashes ([§6](#6-what-is-hashed)), so a casual reader of the ledger or an export does not see them. A hash of a value someone can guess (an email address, a calendar named "Family") can be confirmed by hashing the guess. Hashing hides; it does not encrypt.
 - **Some content is stored in clear, because matching needs it.** A recipient address, a merchant name, an amount, the first 80 characters of a subject, and for Calendar the first guest address of every event in a range you looked at; its other guests are kept only as one-way keys ([§5.4](#54-calendarsnapshots)). These are the facts a claim is checked against.
 - **The export holds everything the ledger holds** ([§8](#8-the-export)). Treat an export file like the ledger itself.
-- **The content script sees the whole page.** It runs inside the Gmail, Calendar or Muse tab you opened, so the page's text is in its memory while a pass reads it, as it is in the site's own. What it keeps from a pass is only what this document lists; the rest is dropped before anything crosses to the service worker (Hard Rule 2). Until the service worker stores claims (Sprint 3.6), the Muse content script sends only its health report ([§5.5](#55-adapterhealth)).
+- **The content script sees the whole page.** It runs inside the Gmail or Calendar tab you opened, so the page's text is in its memory while a pass reads it, as it is in Gmail's own. What it keeps from a pass is only what this document lists; the rest is dropped before anything crosses to the service worker (Hard Rule 2).
 
 ## 3. What is read, and what is kept
 
@@ -171,7 +171,7 @@ Index field: `readMs` (`readAt` in epoch milliseconds, for the purge). A record 
 
 ### 5.5 `adapterHealth`
 
-The latest health of each observer and agent adapter (`muse.chat` since 8 October 2026, taken only from a muse.ai page): what the popup's banner will show (Hard Rule 6). Key `adapterId`.
+The latest health of each observer (and of an agent adapter, taken only from its own site, once its reader may run): what the popup's banner will show (Hard Rule 6). Key `adapterId`.
 
 | Field | Meaning |
 |---|---|

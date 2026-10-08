@@ -3,8 +3,8 @@
  * The Muse adapter on its labelled fixtures (sprint_3 3.2 Done-when; tests/fixtures/pages/muse/, synthetic until the
  * founder captures Muse): each page's health, Requests, Claims and scopes are its label's; re-rendering the same
  * conversation gives no duplicate Claim (rawHash); the approval prompt is one Claim of type `other` from the chat,
- * never an action; a missing landmark is DEGRADED by name (Hard Rule 6); and it starts on Muse's confirmed site only
- * (Hard Rule 8).
+ * never an action; a missing landmark is DEGRADED by name (Hard Rule 6); and it is valid only for Muse's site, where no
+ * content script runs it while Muse's reader is off under Meta's terms (Hard Rule 8; Decisions [3.10]).
  */
 import { readFileSync } from 'node:fs';
 
@@ -140,7 +140,7 @@ describe('the Muse adapter', () => {
     });
   });
 
-  it('starts on Muse’s confirmed site, and only there (Hard Rule 8)', () => {
+  it('is valid only for Muse’s site, though no content script runs it while its reader is off (Hard Rule 8)', () => {
     expect(MUSE_CHAT.hosts).toEqual(['https://muse.ai/*']);
     expect(() => {
       assertAdapter(MUSE_CHAT);
