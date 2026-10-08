@@ -12,20 +12,20 @@ Measured 2026-10-07 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 367.3 |
-| lookupMinMs | 343.1 |
-| lookupMaxMs | 505.3 |
-| lookupCpuMedianMs | 387.9 |
-| indexBuildMedianMs | 155 |
-| buildPlusLookupMedianMs | 517.1 |
+| lookupMedianMs | 386 |
+| lookupMinMs | 334 |
+| lookupMaxMs | 482.8 |
+| lookupCpuMedianMs | 405.7 |
+| indexBuildMedianMs | 160.8 |
+| buildPlusLookupMedianMs | 533 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1081.7 |
-| gradingMinMs | 1027.5 |
-| gradingMaxMs | 1329.6 |
-| gradingCpuMedianMs | 1270.5 |
+| gradingMedianMs | 1093 |
+| gradingMinMs | 1057.4 |
+| gradingMaxMs | 1328.5 |
+| gradingCpuMedianMs | 1304.7 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,7 +33,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | fb87912f388eec1108a63aff02903598188c1f5b |
+| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -44,21 +44,21 @@ Measured 2026-10-07 with `pnpm bench`.
 | Metric | Value |
 |---|---|
 | gcalSelectorsVersion | 1.5.0 |
-| gcalFixtures | 17 |
+| gcalFixtures | 18 |
 | gcalSyntheticFixtures | 8 |
-| gcalEventsLabelled | 65 |
-| gcalEventsFound | 65 |
+| gcalEventsLabelled | 67 |
+| gcalEventsFound | 67 |
 | gcalEventsSpurious | 0 |
-| gcalEventFieldsChecked | 325 |
-| gcalEventFieldsCorrect | 325 |
+| gcalEventFieldsChecked | 335 |
+| gcalEventFieldsCorrect | 335 |
 | gcalStartAccuracy | 1 |
 | gcalAllDayAccuracy | 1 |
 | gcalSubjectAccuracy | 1 |
 | gcalGuestsAccuracy | 1 |
 | gcalCalendarAccuracy | 1 |
-| gcalHealthCorrect | 17/17 |
-| gcalCoverageWindowsCorrect | 16/16 |
-| gcalAllCalendarsCorrect | 16/16 |
+| gcalHealthCorrect | 18/18 |
+| gcalCoverageWindowsCorrect | 17/17 |
+| gcalAllCalendarsCorrect | 17/17 |
 | gcalStepDiffsExact | 12/12 |
 | gcalStepRowsCorrect | 6/6 |
 | gcalStepRowsSpurious | 0 |
@@ -66,7 +66,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | fb87912f388eec1108a63aff02903598188c1f5b |
+| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -77,8 +77,8 @@ Measured 2026-10-07 with `pnpm bench`.
 | Metric | Value |
 |---|---|
 | gmailSentSelectorsVersion | 1.2.0 |
-| gmailFixtureFolders | 2026-10-03,2026-10-06 |
-| gmailFixtures | 33 |
+| gmailFixtureFolders | 2026-10-03,2026-10-06,2026-10-07 |
+| gmailFixtures | 40 |
 | gmailSentListFixtures | 10 |
 | gmailSentRealFixtures | 4 |
 | gmailSentLabelledObservations | 53 |
@@ -98,7 +98,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | fb87912f388eec1108a63aff02903598188c1f5b |
+| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -108,10 +108,10 @@ Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailFixtures | 33 |
-| receiptRealFixtures | 0 |
-| stripeFixtures | 2 |
-| stripeExact | 2 |
+| gmailFixtures | 40 |
+| receiptRealFixtures | 6 |
+| stripeFixtures | 3 |
+| stripeExact | 3 |
 | stripeFieldAccuracy | 1 |
 | amazonFixtures | 1 |
 | amazonExact | 1 |
@@ -122,11 +122,11 @@ Measured 2026-10-07 with `pnpm bench`.
 | opentableFixtures | 1 |
 | opentableExact | 1 |
 | opentableFieldAccuracy | 1 |
-| instacartFixtures | 1 |
-| instacartExact | 1 |
+| instacartFixtures | 2 |
+| instacartExact | 2 |
 | instacartFieldAccuracy | 1 |
-| uberFixtures | 1 |
-| uberExact | 1 |
+| uberFixtures | 2 |
+| uberExact | 2 |
 | uberFieldAccuracy | 1 |
 | shopifyFixtures | 1 |
 | shopifyExact | 1 |
@@ -135,16 +135,16 @@ Measured 2026-10-07 with `pnpm bench`.
 | genericExact | 4 |
 | genericFieldAccuracy | 1 |
 | receiptFieldAccuracy | 1 |
-| negatives | 4 |
-| negativesUnparsed | 4 |
+| negatives | 7 |
+| negativesUnparsed | 7 |
 | listViews | 14 |
 | listViewsNeutral | 14 |
-| coveragePages | 33 |
-| coveragePagesExact | 33 |
-| coverageWindows | 8 |
-| healthLabelled | 19 |
-| healthMatched | 19 |
+| coveragePages | 40 |
+| coveragePagesExact | 40 |
+| coverageWindows | 11 |
+| healthLabelled | 26 |
+| healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | fb87912f388eec1108a63aff02903598188c1f5b |
+| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
 | commitDirty | false |
 | node | v22.14.0 |
