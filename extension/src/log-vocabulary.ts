@@ -60,6 +60,7 @@ export const LOG_VALUES = [
   // Bus message types (src/bus/messages.ts BusMessageType).
   'adapter.health',
   'adapter.claims',
+  'adapter.scope',
   'observer.observations',
   'coverage.ping',
   'calendar.snapshot',
@@ -157,6 +158,7 @@ export const LOG_VALUES = [
   'end_not_after_claimed_at',
   'no_offset',
   'invalid_observer',
+  'invalid_adapter',
   'invalid_options',
   'invalid_selectors',
   'unreadable_page',
@@ -265,6 +267,7 @@ export const LOG_ERROR_NAMES = [
   'InstallIdError',
   'LedgerError',
   'ObserverError',
+  'AdapterError',
   'GcalError',
   'ReceiptError',
   'CalendarRowRefused',

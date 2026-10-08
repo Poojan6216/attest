@@ -3,7 +3,7 @@
 **Who this is for:** whoever adds, repairs or reviews an Attest observer or adapter: the code that reads a vendor page the user has open and turns it into facts.
 **What you'll know after:** the observer contract, what one pass posts and in what order, what every DEGRADED reason code means, how a page becomes a labelled, versioned fixture, and how to repair a selector that broke.
 
-> Status: **v1** (Sprint 2, task 2.9). It covers the three observers that ship in Sprint 2 (`gmail.sent`, `gmail.receipt`, `gcal.event`) and the fixture capture tool. The agent adapters (Muse, ChatGPT/Dots, Claude) arrive in Sprint 3 under the same contract (`build_spec.md` §7). **Every fixture so far is synthetic:** the founder's real captures are `BLOCKED(MANUAL)` ([`sprints/sprint_2.md`](../sprints/sprint_2.md) 2.1, 2.4), and the live smoke run (2.8) has not happened. So every accuracy figure in [`RESULTS.md`](../RESULTS.md) is measured on hand-built pages (its `gmailSentRealFixtures` row says so), and every DOM detail marked "best knowledge" below is still to be checked on a live page.
+> Status: **v1.1** (Sprint 2, task 2.9; Sprint 3.0 adds [§10](#10-agent-adapters), the agent adapter skeleton and its claim patterns). It covers the three observers that ship in Sprint 2 (`gmail.sent`, `gmail.receipt`, `gcal.event`) and the fixture capture tool. The agent adapters (Muse, ChatGPT/Dots, Claude) arrive in Sprint 3 under the same contract (`build_spec.md` §7). **Every fixture so far is synthetic:** the founder's real captures are `BLOCKED(MANUAL)` ([`sprints/sprint_2.md`](../sprints/sprint_2.md) 2.1, 2.4), and the live smoke run (2.8) has not happened. So every accuracy figure in [`RESULTS.md`](../RESULTS.md) is measured on hand-built pages (its `gmailSentRealFixtures` row says so), and every DOM detail marked "best knowledge" below is still to be checked on a live page.
 
 What and how the ledger stores what these observers send is in [`docs/privacy-architecture.md`](privacy-architecture.md). How a receipt is graded from it is in [`docs/grading.md`](grading.md).
 
@@ -18,6 +18,7 @@ What and how the ledger stores what these observers send is in [`docs/privacy-ar
 7. [Repairing a broken selector](#7-repairing-a-broken-selector)
 8. [The observers](#8-the-observers): `gmail.sent`, `gmail.receipt`, `gcal.event`
 9. [Message bus](#9-message-bus)
+10. [Agent adapters](#10-agent-adapters): the contract, one pass, how a sentence becomes a claim, and the skeleton's reasons
 
 ## 1. What an observer cannot see
 
@@ -574,6 +575,7 @@ Content scripts never touch the ledger. They post derived facts to the service w
 |---|---|---|---|---|
 | `adapter.health` | content script (adapter or observer) | service worker | `health`: `AdapterHealth` (id and version as `ComponentId` tokens, OK, IDLE or DEGRADED, reason codes such as `selector.missing.row` (never page text), checkedAt) | `BusAck`: `{ ok: true }` once stored (sprint_2 2.7); `invalid_input` for an observer the extension does not have or a page on another site; `clock_behind` for a report checked after the service worker's clock |
 | `adapter.claims` | content script (agent adapter) | service worker | `adapterId`, `version`, `requests`: `Request[]`, `claims`: `Claim[]` (at most 500 each) | acknowledgement |
+| `adapter.scope` | content script (agent adapter, on a settings page) | service worker | `adapterId`, `version`, `snapshot`: `ScopeSnapshot` (`agent`; `scopes`, as the page names them, one line each, at most 200 of 120 code units; `observedAt`) | acknowledgement; Sprint 3.7 sets the agent's `observedScopes` from it |
 | `observer.observations` | content script (Gmail or Calendar observer) | service worker | `observerId`, `version`, `observations`: `Observation[]` (at most 500) | `BusAck`: `{ ok: true }` when every row was stored, else `{ ok: false, code }`: for Gmail rows the worst of `invalid_input`, `id_conflict`, `late_sighting`; Calendar rows are stored all or none, each first sighting with its first-look marker, and a refusal answers the first refused row's code; `clock_behind` when a row was sighted after the service worker's clock (nothing stored, not DEGRADED) |
 | `coverage.ping` | content script (observer) | service worker | `ping`: `CoveragePing` (observer id, source, account hash, sync time, window, `allCalendars` for Calendar, user active; never `changesSince`). A Sent window must end at its sync, a receipt window is one instant, and a Calendar window must span from a day less an hour to 42 days and an hour, and, with an account, lie on whole days of its pass's snapshot. | `BusAck` (`refused` for a pass whose rows were refused, `invalid_input` for a window the observer cannot have seen or a page on another site, `clock_behind` for one synced after the service worker's clock) |
 | `calendar.snapshot` | content script (Calendar observer) | service worker | `observerId`, `snapshot`: `CalendarSnapshot` (`src/observers/gcal/snapshot.ts`), `accountHash?` (the hash of the page's account, added by the Calendar content script) | `BusAck` (`late_sighting` for a snapshot read at or before the stored one, not DEGRADED; `invalid_input` for one that disagrees with its pass's pings; `refused` for one whose pass had a refused row; `clock_behind` for one read after the service worker's clock, not DEGRADED) |
@@ -586,3 +588,58 @@ Since Sprint 2.7 the service worker also handles the four observer messages (`sr
 **Drops** (`bus.dropped`, logged with the reason and, when it is one of ours, the type; never the payload): `foreign_sender` (not this extension, or an orphaned context), `malformed` (fails the schema, unknown types included), `untrusted_context` (`ui.query` from a content script), each a warning; `no_handler` (this context does not handle that type, routine wherever several pages listen), at debug.
 
 **Send failures** (`bus.send_failed`, the message resolves `undefined`): `no_receiver`, `port_closed`, `context_invalidated`, `send_failed`, each a warning, except `no_receiver` for a broadcast (`ledger.changed`), which is expected when no page is open and logged at debug. An invalid outgoing message is never sent: `send()` rejects with `BusError('invalid_outgoing')`. `sendChecked()` (acknowledged messages) never resolves `undefined`: it rejects with the transport code, or `invalid_reply` when the answer is not a `BusAck`; `postAcked()` also rejects with `refused` on `{ ok: false }` (logged at debug as `bus.refused`).
+
+## 10. Agent adapters
+
+Sprint 3.0 adds the skeleton every Muse, ChatGPT/Dots and Claude adapter runs ([`src/adapters/base.ts`](../extension/src/adapters/base.ts)) and the tables that read an agent's sentences ([`src/adapters/patterns.ts`](../extension/src/adapters/patterns.ts)). No vendor adapter exists yet: each is written against captured pages (3.2 to 3.4, which wait on captures in `MANUAL.md`). An agent page gives Requests (what the user asked), Claims (what the agent says it did) and, on a settings page, a scope snapshot (what the agent may reach). It gives no Observations and no coverage: those come only from the observers.
+
+### 10.1 The contract
+
+| Member | Rule |
+|---|---|
+| `id`, `vendor`, `version` | `ComponentId` tokens, as an observer's ([§2](#2-the-observer-contract)). |
+| `agent` | `muse`, `chatgpt`, `dots` or `claude`. |
+| `hosts` | Exact match patterns of that agent in `AGENT_HOSTS` ([`src/config.ts`](../extension/src/config.ts)); Dots runs on ChatGPT's. Muse has none until its host is confirmed. A host enters the manifest with the content script that reads it, never before (Hard Rule 8). |
+| `health(doc, ctx)` | As an observer's: OK, IDLE or DEGRADED with reason codes, never page text. |
+| `extract(doc, ctx)` | One `AgentRead` ([`types.ts`](../extension/src/adapters/types.ts)): the conversation's vendor id or null, its turns (`role`, `text`, `time` as the page shows it, optional `rowKey`), the activity entries (`text`, `time`, optional `rowKey`), and a settings page's `scopes` (null on any other page). Pure over the DOM: if a claim is not rendered, it is not read. |
+| `attributes` (optional) | As an observer's. |
+
+### 10.2 One pass
+
+The skeleton runs on the observer skeleton's loop (`startPasses` in [`src/observers/base.ts`](../extension/src/observers/base.ts)): the same batching, prerender rule and stop when the extension is gone ([§3.1](#31-when-a-pass-runs)). Each pass reads the clock once and posts, one message at a time and each after the last was answered: `adapter.health`; then `adapter.claims`, at most 500 Requests and 500 Claims per message, none when the page holds neither; then, on a settings page whose pass was clean, `adapter.scope`, each scope one line and once. A post that rejects ends the pass.
+
+What becomes what ([`claims.ts`](../extension/src/adapters/claims.ts)):
+
+- A user turn is a Request: the SHA-256 of its one-line text, a hint of its first 200 code units, and its time, with the id [`docs/grading.md`](grading.md) §10 defines. A page without a conversation id gives no Requests.
+- Each sentence of an agent turn (`sourceKind: chat`) and each activity entry (`activity_view`) that the pattern tables read as a claim is a Claim, linked to the conversation's last Request before it. Its `rawHash` and id are §10's, so a sentence re-rendered is one claim and the same words at another time are another.
+- A turn's time is the page's: an ISO 8601 instant, written again in the user's offset, or vendor-relative text ("2:03 PM", "Yesterday") resolved against the pass instant. A turn whose time is missing, unreadable or after the pass gives nothing: a claim at a guessed time could end NOT_FOUND (Hard Rule 5). The pass is then DEGRADED `time.unknown` and still posts what it did read.
+- A claim's counterparty is the address its sentence names, else the capitalised words of a name; its subject hint is a quoted or captured subject, at most 80 code units; its amount comes from core `amount()`, and a bare `$` keeps its cents and no currency (the grant's `spendCurrency` reads it). A calendar claim has no `targetAt` until a vendor adapter reads the event's own time, so it grades `no_target` until then.
+
+### 10.3 How a sentence becomes a claim
+
+`classify(agent, sentence)` holds one sentence to the agent's table ([`pattern-tables.ts`](../extension/src/adapters/pattern-tables.ts)). Rules first, never a guessed type:
+
+| The sentence | Becomes |
+|---|---|
+| asks, offers, plans or drafts, and names an action ("Should I send…", "I'll create…", an approval card) | `other`, confidence 0.2 |
+| refuses, or reports a step still under way ("I couldn't…", "Sending email…") | no claim |
+| matches patterns of one ActionType | that type, confidence 0.7 to 0.9, with what the pattern captured |
+| matches patterns of two types | `other`, confidence 0.4 |
+| says it acted without saying how, or names an action outside the ActionTypes (an RSVP, a share) | `other`, confidence 0.3 |
+| anything else, or longer than 400 code units | no claim |
+
+A sentence wrongly read as an action can end in a NOT_FOUND against the agent, so the tables err toward losing a claim, never toward inventing one: their tests check that no labelled sentence is ever typed as an action it is not. The corpora are invented until real transcripts exist (`tests/fixtures/patterns/`); measured accuracy on captured pages arrives with 3.8.
+
+### 10.4 Reasons the adapter skeleton gives
+
+Beside the reasons an adapter's `health()` names, a pass can be DEGRADED with these (`ADAPTER_REASONS`):
+
+| Reason | Meaning |
+|---|---|
+| `health.threw`, `health.invalid` | As an observer's ([§4.1](#41-pass-reasons)). |
+| `extract.threw` | `extract()` threw. |
+| `extract.invalid` | `extract()` returned something that is not an `AgentRead`. |
+| `claims.threw` | Building the Requests and Claims threw: a bug. |
+| `time.unknown` | A turn or entry that held a Request or a Claim shows no time the skeleton reads, or one after the pass. What was read is still posted; no scope snapshot is. |
+| `claim.invalid` | A Request or a Claim failed its schema: a bug, never expected. What else was read is still posted. |
+| `message.invalid` | A message of the pass failed its bus schema: only this health report is posted. |

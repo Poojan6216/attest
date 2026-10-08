@@ -12,6 +12,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import {
   AdapterClaimsMessage,
+  AdapterScopeMessage,
   AdapterHealthMessage,
   type BusMessageOf,
   type BusMessageType,
@@ -184,7 +185,7 @@ export const SNAPSHOT = CalendarSnapshotMessage.shape.snapshot.parse({
   ],
 });
 
-/** One valid message per type. The mapped type makes the compiler demand all eight. */
+/** One valid message per type. The mapped type makes the compiler demand all nine. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'adapter.health': AdapterHealthMessage.parse({
     type: 'adapter.health',
@@ -202,6 +203,12 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     version: '1.0.0',
     requests: [REQUEST],
     claims: [CLAIM],
+  }),
+  'adapter.scope': AdapterScopeMessage.parse({
+    type: 'adapter.scope',
+    adapterId: 'claude.settings',
+    version: '1.0.0',
+    snapshot: { agent: 'claude', scopes: ['Gmail', 'Google Calendar'], observedAt: TS },
   }),
   'observer.observations': ObserverObservationsMessage.parse({
     type: 'observer.observations',
@@ -251,6 +258,10 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
     health: { ...VALID['adapter.health'].health, status: 'BROKEN' },
   },
   'adapter.claims': { ...VALID['adapter.claims'], claims: [{ ...CLAIM, body: SECRET }] },
+  'adapter.scope': {
+    ...VALID['adapter.scope'],
+    snapshot: { ...VALID['adapter.scope'].snapshot, html: SECRET },
+  },
   'observer.observations': {
     ...VALID['observer.observations'],
     observations: [{ ...OBSERVATION, body: SECRET }],

@@ -115,11 +115,18 @@ const HealthCheckShape = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('DEGRADED'), reasons: HealthReport.shape.reasons.min(1) }),
 ]);
 
-/** The observer's health, checked against the contract: `health.threw` or `health.invalid` when it is not. */
-function checkHealth(observer: Observer, doc: Document, ctx: ExtractContext): HealthCheck {
+/**
+ * The health an observer (or an agent adapter, src/adapters/base.ts) reports, checked against the contract:
+ * `health.threw` or `health.invalid` when it is not.
+ */
+export function checkHealth(
+  target: Pick<Observer, 'health'>,
+  doc: Document,
+  ctx: ExtractContext,
+): HealthCheck {
   let check: unknown;
   try {
-    check = observer.health(doc, ctx);
+    check = target.health(doc, ctx);
   } catch {
     return { status: 'DEGRADED', reasons: ['health.threw'] };
   }

@@ -41,6 +41,7 @@ beforeEach(() => {
 const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'adapter.health': contentScript,
   'adapter.claims': contentScript,
+  'adapter.scope': contentScript,
   'observer.observations': contentScript,
   'coverage.ping': contentScript,
   'calendar.snapshot': contentScript,
@@ -90,6 +91,7 @@ function fireAndForget(type: Exclude<BusMessageType, 'ui.query' | AckedType>): v
 }
 
 fireAndForget('adapter.claims');
+fireAndForget('adapter.scope');
 fireAndForget('ui.result');
 fireAndForget('ledger.changed');
 

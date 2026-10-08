@@ -42,6 +42,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm check-docs` also fails when `docs/privacy-architecture.md` does not describe a field `policy/default.json` allowlists, or describes one it does not (`scripts/check-docs-allowlist.ts`).
 
 - Claim pattern tables for the agent adapters (`src/adapters/patterns.ts`): a sentence an agent writes is read as one of the eight action types only when it reports the action done. A question, an offer, a draft or an approval prompt is recorded as `other` at low confidence, and a refusal or a step still under way is no claim, so a misread sentence loses a claim rather than inventing one. Each vendor's table is tested on 47 or 48 invented sentences plus 20 shared ones.
+- The agent adapter skeleton (`src/adapters/base.ts`): each pass on a Muse, ChatGPT or Claude page reports its health, the requests the user made, the claims the agent's sentences make, and on a settings page the apps the agent can reach (a new bus message, `adapter.scope`). A claim whose time the page does not show is left out and the adapter shows as degraded, rather than placed at a guessed time. No vendor adapter uses it yet; each waits on captured pages.
 
 ### Changed
 

@@ -309,18 +309,24 @@ function stoppingWhenGone(post: Post, contextAlive: () => boolean, stop: () => v
   };
 }
 
+/** What the skeleton runs passes for: an observer, or an agent adapter (src/adapters/base.ts). */
+export interface PassTarget {
+  /** The attributes its reads depend on (`Observer.attributes`); absent, every attribute is watched. */
+  readonly attributes?: readonly string[] | undefined;
+}
+
 /**
- * Starts the skeleton for a content script's `observers` on this page (see the module comment): one watcher, one
- * activity tracker, one page-sync tracker and one heartbeat for all of them, and one serial pass runner each. The
- * first passes run one debounce after start; a prerendered page runs none until the user opens it. Throws
- * `ObserverError` for an invalid observer or options, before it attaches any listener.
+ * Starts the skeleton for a content script's `targets` on this page (see the module comment): one watcher, one
+ * activity tracker, one page-sync tracker and one heartbeat for all of them, and one serial runner each, whose passes
+ * are `runOne(target, deps)`. The first passes run one debounce after start; a prerendered page runs none until the
+ * user opens it. Throws `ObserverError` for invalid options, before it attaches any listener; the targets are the
+ * caller's to check (`startObservers`, src/adapters/base.ts `startAdapters`).
  */
-export function startObservers(
-  observers: readonly Observer[],
+export function startPasses<T extends PassTarget>(
+  targets: readonly T[],
+  runOne: (target: T, deps: PassDeps) => Promise<unknown>,
   overrides: Partial<StartOptions> = {},
 ): ObserverHandle {
-  if (observers.length === 0) throw new ObserverError('invalid_observer');
-  for (const observer of observers) assertObserver(observer);
   const options = startOptions(overrides);
   checkOptions(options);
   checkHeartbeat(options.heartbeatMs, options.maxWaitMs);
@@ -346,8 +352,8 @@ export function startObservers(
   const post = stoppingWhenGone(options.post, options.contextAlive, stop);
   const userActive = overrides.userActive ?? activity.active;
   const deps: PassDeps = { ...options, post, userActive, vouches: overrides.vouches ?? sync.vouches };
-  runners = observers.map((observer) => serialRunner(() => runPass(observer, deps)));
-  const watch = watchMutations(doc, poke, options.Watcher, watchedInit(observers.map((o) => o.attributes)));
+  runners = targets.map((target) => serialRunner(() => runOne(target, deps)));
+  const watch = watchMutations(doc, poke, options.Watcher, watchedInit(targets.map((t) => t.attributes)));
   doc.addEventListener(PRERENDERING_CHANGE, poke);
   const stopHeartbeat = startHeartbeat(doc, timers, options.heartbeatMs, poke);
   stops.push(
@@ -368,6 +374,19 @@ export function startObservers(
       await Promise.all(runners.map((runner) => runner.idle()));
     },
   });
+}
+
+/**
+ * Starts the skeleton for a content script's `observers` (`startPasses`, each pass `runPass`). Throws
+ * `ObserverError` for an invalid observer or options, before it attaches any listener.
+ */
+export function startObservers(
+  observers: readonly Observer[],
+  overrides: Partial<StartOptions> = {},
+): ObserverHandle {
+  if (observers.length === 0) throw new ObserverError('invalid_observer');
+  for (const observer of observers) assertObserver(observer);
+  return startPasses(observers, runPass, overrides);
 }
 
 /** `startObservers` for a content script with one observer. */

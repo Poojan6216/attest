@@ -42,6 +42,10 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
       health: { ...VALID['adapter.health'].health, checkedAt: 'now' as IsoTs },
     },
     'adapter.claims': { ...VALID['adapter.claims'], claims: [smuggledClaim] },
+    'adapter.scope': {
+      ...VALID['adapter.scope'],
+      snapshot: { ...VALID['adapter.scope'].snapshot, scopes: [`Gmail\n${SECRET}`] },
+    },
     'observer.observations': { ...VALID['observer.observations'], observations: [smuggledObservation] },
     'coverage.ping': {
       type: 'coverage.ping',

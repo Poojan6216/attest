@@ -31,10 +31,12 @@ import {
   HealthReport,
   IsoTs,
   Observation,
+  AgentId,
   Request,
   SCHEMA_LIMITS,
   Sha256,
 } from '../core/schema';
+import { oneLineText } from '../core/schema-text';
 import { CoveragePing } from '../ledger/types';
 import { CalendarSnapshot } from '../observers/gcal/snapshot';
 
@@ -58,6 +60,7 @@ export const LedgerTable = z.enum([
 export const BusMessageType = z.enum([
   'adapter.health',
   'adapter.claims',
+  'adapter.scope',
   'observer.observations',
   'coverage.ping',
   'calendar.snapshot',
@@ -67,7 +70,7 @@ export const BusMessageType = z.enum([
 ]);
 
 /**
- * The eight type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The nine type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -85,6 +88,24 @@ export const AdapterClaimsMessage = z.strictObject({
   version: ComponentId,
   requests: z.array(Request).max(SCHEMA_LIMITS.BATCH),
   claims: z.array(Claim).max(SCHEMA_LIMITS.BATCH),
+});
+
+/**
+ * What an agent's settings page lists (connected apps, permissions), as one adapter pass read it (sprint_3 3.0): the
+ * scopes as the page names them, one line each, the items `Grant.observedScopes` holds (3.7 sets it from these).
+ */
+export const ScopeSnapshot = z.strictObject({
+  agent: AgentId,
+  scopes: z.array(oneLineText(SCHEMA_LIMITS.ITEM)).max(SCHEMA_LIMITS.LIST),
+  observedAt: IsoTs,
+});
+
+/** What an agent's settings page lists, as one adapter pass read it (sprint_3 3.0; 3.7 diffs it with the grant). */
+export const AdapterScopeMessage = z.strictObject({
+  type: z.literal('adapter.scope'),
+  adapterId: ComponentId,
+  version: ComponentId,
+  snapshot: ScopeSnapshot,
 });
 
 /** What a Gmail/Calendar observer extracted from one page read (derived facts only). */
@@ -203,6 +224,7 @@ export const LedgerChangedMessage = z.strictObject({
 export const BusMessage = z.discriminatedUnion('type', [
   AdapterHealthMessage,
   AdapterClaimsMessage,
+  AdapterScopeMessage,
   ObserverObservationsMessage,
   CoveragePingMessage,
   CalendarSnapshotMessage,
@@ -215,6 +237,8 @@ export type LedgerTable = z.infer<typeof LedgerTable>;
 export type BusMessageType = z.infer<typeof BusMessageType>;
 export type AdapterHealthMessage = z.infer<typeof AdapterHealthMessage>;
 export type AdapterClaimsMessage = z.infer<typeof AdapterClaimsMessage>;
+export type ScopeSnapshot = z.infer<typeof ScopeSnapshot>;
+export type AdapterScopeMessage = z.infer<typeof AdapterScopeMessage>;
 export type ObserverObservationsMessage = z.infer<typeof ObserverObservationsMessage>;
 export type CoveragePingMessage = z.infer<typeof CoveragePingMessage>;
 export type CalendarSnapshotMessage = z.infer<typeof CalendarSnapshotMessage>;
