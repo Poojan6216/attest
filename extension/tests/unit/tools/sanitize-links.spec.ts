@@ -165,3 +165,23 @@ describe('card endings and handles (SEC-R14, SEC-R15)', () => {
     expect(body('<p>Since 2026, store 4242</p>')).toContain('Since 2026, store 4242');
   });
 });
+
+describe('a written address with no scheme (a Meet code, capture of 2026-10-07)', () => {
+  const CALENDAR = { pageUrl: 'https://calendar.google.com/calendar/u/0/r/week' };
+
+  it("keeps only another host's name: a Meet code, a document's path", () => {
+    const out = body(
+      '<p>Join with Google Meet meet.google.com/qrs-tuvw-xyz</p><p>Notes: docs.google.com/document/d/1AbC/edit</p>',
+      CALENDAR,
+    );
+    expect(out).toContain('<p>Join with Google Meet meet.google.com/</p>');
+    expect(out).toContain('<p>Notes: docs.google.com/</p>');
+    expect(out).not.toContain('qrs-tuvw-xyz');
+  });
+
+  it("keeps the page's own address whole, and what only looks like a path", () => {
+    const out = body('<p>calendar.google.com/calendar/r/week</p><p>and/or 1.5/2 Q3/Q4</p>', CALENDAR);
+    expect(out).toContain('<p>calendar.google.com/calendar/r/week</p>');
+    expect(out).toContain('<p>and/or 1.5/2 Q3/Q4</p>');
+  });
+});

@@ -229,3 +229,18 @@ describe('a label and its value in one text (capture-rows.ts)', () => {
     expect(out).toContain('<p>Preorder 12345 units</p>');
   });
 });
+
+describe('a Google Meet code (capture-rows.ts; the invitation week of 2026-10-07)', () => {
+  it("fakes the code in a label that names Meet, and in the page's other copies of it", () => {
+    const out = sanitized(
+      '<div aria-label="Join with Google Meet (abc-defg-hij)"><span>Join with Google Meet</span></div>' +
+        '<p>Code abc-defg-hij</p>',
+    );
+    expect(out).not.toContain('abc-defg-hij');
+    expect(out).toMatch(/aria-label="Join with Google Meet \([a-z]{3}-[a-z]{4}-[a-z]{3}\)"/u);
+  });
+
+  it('leaves the same shape where nothing names Meet', () => {
+    expect(sanitized('<p>A one-time-use code</p>')).toContain('<p>A one-time-use code</p>');
+  });
+});

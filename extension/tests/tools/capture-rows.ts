@@ -15,6 +15,7 @@
  *    (Gmail breaks a long word with one), so the page reads the same everywhere;
  *  - a label and its value in one text (`Code ABCDE12FG3HI`, `Order Confirmation #1ABCDEF`): the value, when it
  *    holds a digit, is an order number like the ones above;
+ *  - a Google Meet code (`abc-defg-hij`, the key to a meeting) in a text or label that names Meet;
  *  - a postal address: every text of the first element with text after one whose whole text labels an address
  *    (`Shipping address`, `Billing address`, `Ship to`, …) becomes a neutral phrase of as many words. A Shopify order
  *    writes the recipient's name and address after an `<h4>Shipping address</h4>`, in a format (an Indian one) that
@@ -42,6 +43,9 @@ const MIN_ID_LENGTH = 4;
  */
 const INLINE_ID =
   /(?<![\p{L}\p{N}])(?:(?:promo|promotion|coupon|discount|referral|invite|gift|offer)\s+)?(?:code|order|receipt|invoice|confirmation|booking|reservation)(?:\s+(?:order|receipt|invoice|confirmation|code|number|no\.?|id|#))*\s*[:#]?\s*#?\s*([\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*)/giu;
+
+/** A Google Meet code (`abc-defg-hij`): the key to a meeting, faked where a text or label names Meet. */
+const MEET_CODE = /(?<![\p{L}\p{N}-])[a-z]{3}-[a-z]{4}-[a-z]{3}(?![\p{L}\p{N}-])/gu;
 
 /** A text that labels a postal address: a receipt's shipping, billing or delivery address. */
 const ADDRESS_LABEL =
@@ -78,6 +82,15 @@ function rowIds(row: Element): string[] {
   const [label, ...values] = cells;
   if (label === undefined || !ID_LABEL.test(ownText(label))) return [];
   return values.flatMap((cell) => idWords(ownText(cell)));
+}
+
+/** Every text run and attribute value of the page that names Meet (a Meet code is faked only there). */
+function meetTexts(doc: Document): string[] {
+  const texts = textRuns(doc).map((run) => run.map((node) => node.data).join(''));
+  const attributes = Array.from(doc.querySelectorAll('*')).flatMap((element) =>
+    Array.from(element.attributes, (attribute) => attribute.value ?? ''),
+  );
+  return [...texts, ...attributes].filter((value) => /meet/iu.test(value));
 }
 
 /**
@@ -140,6 +153,10 @@ export function fakeRowValues(doc: Document, faker: Faker, stats: RowStats): voi
   const ids = new Map<string, string>();
   for (const label of Array.from(doc.querySelectorAll('body *'))) {
     for (const id of besideIds(label)) if (!ids.has(id)) ids.set(id, faker.identifier(id));
+  }
+  for (const value of meetTexts(doc)) {
+    for (const code of value.match(MEET_CODE) ?? [])
+      if (!ids.has(code)) ids.set(code, faker.identifier(code));
   }
   for (const run of textRuns(doc)) {
     for (const match of run

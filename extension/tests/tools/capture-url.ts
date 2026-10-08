@@ -91,10 +91,15 @@ export function trimForeignLink(value: string, pageHost: string | null): string 
 }
 
 /**
- * A web address written as text: with a scheme and `//`, a bare `//` before a dotted host, or starting `www.` (a text
- * has no link attribute to read). A `//` inside other text (`a//b`, `Q3 // plan`) is not one.
+ * A web address written as text: with a scheme and `//`, a bare `//` before a dotted host, starting `www.`, or a dotted
+ * host with a path and no scheme (`meet.google.com/qrs-tuvw-xyz`: a Meet code is the key to a meeting; capture of
+ * 2026-10-07) (a text has no link attribute to read). A `//` inside other text (`a//b`, `Q3 // plan`), a host inside an
+ * address or a path, and `and/or` or `1.5/2` are not one.
  */
-const TEXT_URL = /(?:\b[a-z][a-z0-9+.-]*:\/\/|(?<![\w:/])\/\/(?=[a-z0-9-]+\.[a-z0-9-])|\bwww\.)[^\s"'<>]+/giu;
+const TEXT_URL =
+  /(?:\b[a-z][a-z0-9+.-]*:\/\/|(?<![\w:/])\/\/(?=[a-z0-9-]+\.[a-z0-9-])|\bwww\.|(?<![\w@./-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?=\/))[^\s"'<>]+/giu;
+/** A text address written with a scheme or `//`; any other is read as `https://` and written back without it. */
+const SCHEMED = /^(?:[a-z][a-z0-9+.-]*:)?\/\//iu;
 
 /**
  * Every web address in a text or a non-link attribute cut as `trimForeignLink` cuts a link: the receipts printed
@@ -107,7 +112,7 @@ export function trimForeignUrls(
 ): { readonly text: string; readonly cut: number } {
   let cut = 0;
   const out = text.replace(TEXT_URL, (found) => {
-    const bare = found.toLowerCase().startsWith('www.');
+    const bare = !SCHEMED.test(found);
     const trimmed = trimForeignLink(bare ? `https://${found}` : found, pageHost);
     const next = bare ? trimmed.replace(/^https:\/\//u, '') : trimmed;
     if (next !== found) cut += 1;
