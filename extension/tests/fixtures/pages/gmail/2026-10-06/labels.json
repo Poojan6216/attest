@@ -1,7 +1,7 @@
 {
   "sent-list-1.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -30,6 +30,78 @@
         "kind": "observation",
         "source": "gmail.sent",
         "type": "email.sent",
+        "counterparty": "faling.osmer@example.net",
+        "subjectHint": "Amber kettle zephyr hollow",
+        "occurredAt": "2026-06-16T18:37:00-04:00",
+        "rowKey": "19ed2952e2b6998a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ashwick.osby@example.org",
+        "subjectHint": "Yonder zephyr",
+        "occurredAt": "2026-06-04T17:29:00-04:00",
+        "rowKey": "19e948af6b3a96f9"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everian.falric@example.org",
+        "subjectHint": "Orbit timber",
+        "occurredAt": "2026-05-03T16:49:00-04:00",
+        "rowKey": "19def9a0418d88e0"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everian.falric@example.org",
+        "subjectHint": "Amber ripple",
+        "occurredAt": "2026-05-03T16:47:00-04:00",
+        "rowKey": "19def984fc35895f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "pemian.pemard@example.org",
+        "subjectHint": "Cobalt island",
+        "occurredAt": "2026-04-29T10:16:00-04:00",
+        "rowKey": "19dd99913cb0a65c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "norric.ashian@example.org",
+        "subjectHint": "Glade lantern nectar",
+        "occurredAt": "2026-03-30T17:15:00-04:00",
+        "rowKey": "19d4099e354e094d"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "iveswick.norard@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2026-03-20T17:16:00-04:00",
+        "rowKey": "19d0d1b2f3ee0c7e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "rosard.norwyn@example.net",
+        "subjectHint": "Island ember",
+        "occurredAt": "2026-01-08T22:21:00-05:00",
+        "rowKey": "19ba0c6061a3976c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
         "counterparty": "evermer.daldale@example.org",
         "subjectHint": "Delta umber orbit yonder",
         "occurredAt": "2025-08-02T19:53:00-04:00",
@@ -43,11 +115,11 @@
         "windowEnd": "lastSyncAt"
       }
     ],
-    "notes": "Real Sent list, first page (#sent; Newer disabled: the head of the list). 50 rows, 48 of them conversations (their thread, last and last non-draft ids differ), which give no row: their time is their newest message's, not a send's (grading contract v1.13). Of its 2 one-message rows, one to another person gives 1 observation; one sent only to the account gives none (the account's own mailbox is never a counterparty, and such a row narrows the window like a conversation; it is older than the newest conversation here). Older is enabled (the list goes on) and the newest conversation row is at 09:55 on 17 Sept, so the window starts at 09:56 on 17 Sept and ends at lastSyncAt. Every row repeats its recipients and subject anchor in a hidden screen-reader summary (display: none), which is not read. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+    "notes": "Real Sent list, first page (#sent; Newer disabled: the head of the list). 50 rows: 40 show a message count (conversations, no row: their time is their newest message's, grading contract v1.13); 10 hold one message (2 with one id; 8 with a thread id older than the message id and no count shown, each carrying the `#thread-a:r-` thread form), which give 9 observations: a row sent only to the account gives none and narrows the window like a conversation. Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Older is enabled (the list goes on) and the newest conversation row is at 09:55 on 17 Sept, so the window starts at 09:56 on 17 Sept and ends at lastSyncAt. Every row repeats its recipients, subject and count in a hidden summary for screen readers, which is not read. Subjects, previews and attachment names were hidden at capture (fake text); names and addresses are fake."
   },
   "sent-list-2.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -71,6 +143,87 @@
         "observer": "gmail.sent",
         "status": "OK",
         "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "faling.osmer@example.net",
+        "subjectHint": "Amber kettle zephyr hollow",
+        "occurredAt": "2026-06-16T18:37:00-04:00",
+        "rowKey": "19ed2952e2b6998a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ashwick.osby@example.org",
+        "subjectHint": "Yonder zephyr",
+        "occurredAt": "2026-06-04T17:29:00-04:00",
+        "rowKey": "19e948af6b3a96f9"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everian.falric@example.org",
+        "subjectHint": "Orbit timber",
+        "occurredAt": "2026-05-03T16:49:00-04:00",
+        "rowKey": "19def9a0418d88e0"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everian.falric@example.org",
+        "subjectHint": "Amber ripple",
+        "occurredAt": "2026-05-03T16:47:00-04:00",
+        "rowKey": "19def984fc35895f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "pemian.pemard@example.org",
+        "subjectHint": "Cobalt island",
+        "occurredAt": "2026-04-29T10:16:00-04:00",
+        "rowKey": "19dd99913cb0a65c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "norric.ashian@example.org",
+        "subjectHint": "Glade lantern nectar",
+        "occurredAt": "2026-03-30T17:15:00-04:00",
+        "rowKey": "19d4099e354e094d"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "iveswick.norard@example.org",
+        "subjectHint": "Island ember",
+        "occurredAt": "2026-03-20T17:16:00-04:00",
+        "rowKey": "19d0d1b2f3ee0c7e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "iveswick.norard@example.org",
+        "subjectHint": "Quarry basin basin cobalt kettle timber",
+        "occurredAt": "2025-07-17T12:03:00-04:00",
+        "rowKey": "1981920ce5f7a459"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "osric.norric@example.org",
+        "subjectHint": "Fable nectar island yonder yonder fern glade kettle harbor",
+        "occurredAt": "2025-07-03T09:28:00-04:00",
+        "rowKey": "197d079516e3a16f"
       },
       {
         "kind": "observation",
@@ -116,13 +269,27 @@
         "subjectHint": "Delta hollow willow",
         "occurredAt": "2024-11-25T19:01:00-05:00",
         "rowKey": "19365c5919f7d4ff"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "marton.pemley@example.org",
+        "subjectHint": "Lantern pepper",
+        "occurredAt": "2024-11-21T04:33:00-05:00",
+        "rowKey": "1934e11edc430f14"
+      },
+      {
+        "kind": "dedup",
+        "with": "sent-list-1.html",
+        "shared": 7
       }
     ],
-    "notes": "Real Sent list, second page (#sent/p2). 50 rows: 43 conversations (no row) and 7 one-message rows: 5 observations, and none for the 2 rows sent only to the account. Not the head of the list: health OK, no coverage. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+    "notes": "Real Sent list, second page (Newer enabled; Gmail shows \"51–100 of 458\"): its rows are facts, its health OK, and it has no coverage (a send from its span can be listed on page 1 under a later reply's date). Gmail's second page repeats 30 rows of the first: rows 6 to 35 of page 1 are rows 1 to 30 here, with the same ids and dates. Seven of them are one-message rows to others, so they are the same observations as on page 1 (the dedup fact) and the store keeps each once by its contentHash. 50 rows: 33 conversations (a message count shown), 17 one-message rows giving 15 observations (7 with one id; 10 with an older thread id and no count, each in the `#thread-a:r-` thread form). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Fake subjects, names and addresses as on page 1."
   },
   "sent-list-last.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -224,7 +391,7 @@
   },
   "sent-thread.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -262,7 +429,7 @@
   },
   "sent-thread-with-reply.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -300,7 +467,7 @@
   },
   "drafts.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -332,7 +499,7 @@
   },
   "inbox.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -364,7 +531,7 @@
   },
   "second-account-sent.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -390,6 +557,303 @@
         "reasons": []
       },
       {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "iveston.rosing@example.org",
+        "subjectHint": "Ripple fable island willow echo bramble dapple zephyr fern fern echo",
+        "occurredAt": "2026-10-04T13:11:00-04:00",
+        "rowKey": "1a107e691c906bc6"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermore.lormore@example.org",
+        "subjectHint": "Cinder pepper glade cinder umber basin",
+        "occurredAt": "2026-10-01T10:10:00-04:00",
+        "rowKey": "1a0f7cdc05061a70"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "dalley.pemlow@example.net",
+        "subjectHint": "Glade timber ember cobalt harbor",
+        "occurredAt": "2026-10-01T10:08:00-04:00",
+        "rowKey": "1a0f7cb8390ae324"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "belsby.dalwyn@example.net",
+        "subjectHint": "Bramble quarry juniper willow",
+        "occurredAt": "2026-10-01T10:06:00-04:00",
+        "rowKey": "1a0f7c9eb91e29f2"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ashard.jensby@example.org",
+        "subjectHint": "Juniper saffron cobalt island umber echo",
+        "occurredAt": "2026-10-01T10:02:00-04:00",
+        "rowKey": "1a0f7c65e18af6dd"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "iveston.harford@example.org",
+        "subjectHint": "Ripple zephyr glade juniper kettle delta nectar umber glade",
+        "occurredAt": "2026-09-30T14:37:00-04:00",
+        "rowKey": "1a0f39b7cb12a052"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "belwyn.roston@example.org",
+        "subjectHint": "Echo ripple pepper fern",
+        "occurredAt": "2026-09-30T12:06:00-04:00",
+        "rowKey": "1a0f311ad3153d77"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "falwyn.norard@example.org",
+        "subjectHint": "Willow amber fern basin velvet",
+        "occurredAt": "2026-09-30T12:03:00-04:00",
+        "rowKey": "1a0f30ed8065d3ac"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everdale.osford@example.org",
+        "subjectHint": "Meadow juniper pepper orbit",
+        "occurredAt": "2026-09-30T12:01:00-04:00",
+        "rowKey": "1a0f30d11ae069fd"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "harford.dalwyn@example.net",
+        "subjectHint": "Fern hollow kettle willow lantern nectar timber meadow ember cobalt garnet",
+        "occurredAt": "2026-09-30T11:57:00-04:00",
+        "rowKey": "1a0f308fb885c68f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "roswyn.corian@example.org",
+        "subjectHint": "Yonder zephyr willow fern ripple quarry nectar",
+        "occurredAt": "2026-09-29T11:09:00-04:00",
+        "rowKey": "1a0edb6e24f55615"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "jenmer.ashley@example.net",
+        "subjectHint": "Fern cobalt willow zephyr basin orbit",
+        "occurredAt": "2026-09-29T11:09:00-04:00",
+        "rowKey": "1a0edb6dbfffc3fd"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "haring.falton@example.org",
+        "subjectHint": "Bramble willow velvet timber garnet",
+        "occurredAt": "2026-09-29T11:09:00-04:00",
+        "rowKey": "1a0edb6cc7385485"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ashric.hardale@example.net",
+        "subjectHint": "Nectar glade kettle kettle willow zephyr",
+        "occurredAt": "2026-09-29T11:09:00-04:00",
+        "rowKey": "1a0edb6b67d9c495"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ivesdale.keslow@example.net",
+        "subjectHint": "Garnet kettle harbor basin",
+        "occurredAt": "2026-09-29T11:09:00-04:00",
+        "rowKey": "1a0edb69d39fc990"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "falett.corett@example.net",
+        "subjectHint": "Orbit hollow zephyr basin glade timber amber hollow quarry echo dapple",
+        "occurredAt": "2026-09-28T16:46:00-04:00",
+        "rowKey": "1a0e9c4eb00fbf47"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "harlow.harsby@example.net",
+        "subjectHint": "Hollow meadow harbor ember harbor kettle kettle yonder saffron cinder echo bramb",
+        "occurredAt": "2026-09-28T16:43:00-04:00",
+        "rowKey": "1a0e9c26fd59fd7b"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "mardale.eversby@example.org",
+        "subjectHint": "Fern kettle willow island dapple lantern orbit yonder",
+        "occurredAt": "2026-09-25T11:46:00-04:00",
+        "rowKey": "1a0d93eba479e69f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "norton.lorlow@example.org",
+        "subjectHint": "Hollow lantern hollow glade quarry umber ember saffron echo kettle hollow zephyr",
+        "occurredAt": "2026-09-24T10:22:00-04:00",
+        "rowKey": "1a0d3cb941b105a6"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "dalford.roston@example.org",
+        "subjectHint": "Bramble delta juniper umber dapple bramble",
+        "occurredAt": "2026-09-23T12:52:00-04:00",
+        "rowKey": "1a0cf2e9c490de64"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "oslow.harlow@example.net",
+        "subjectHint": "Nectar kettle pepper nectar yonder saffron ripple hollow",
+        "occurredAt": "2026-09-23T12:36:00-04:00",
+        "rowKey": "1a0cf1fe075f59f1"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "marton.norford@example.org",
+        "subjectHint": "Dapple timber garnet basin zephyr kettle fern ember glade",
+        "occurredAt": "2026-09-21T11:00:00-04:00",
+        "rowKey": "1a0c47b255c3e9f7"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "loring.roswyn@example.org",
+        "subjectHint": "Cinder kettle cobalt hollow fable meadow zephyr pepper kettle timber amber",
+        "occurredAt": "2026-09-21T11:00:00-04:00",
+        "rowKey": "1a0c47b24f39c671"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "marett.dalard@example.net",
+        "subjectHint": "Ripple cobalt yonder dapple zephyr kettle quarry timber echo nectar umber",
+        "occurredAt": "2026-09-15T21:36:00-04:00",
+        "rowKey": "1a0a7dbc3f8cb5fa"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "everford.pemsby@example.org",
+        "subjectHint": "Echo saffron quarry nectar basin fern hollow yonder bramble lantern quarry glade",
+        "occurredAt": "2026-09-15T14:13:00-04:00",
+        "rowKey": "1a0a6460f0040f1a"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "jenian.eversby@example.org",
+        "subjectHint": "Basin delta basin garnet cobalt dapple garnet cinder fable hollow kettle orbit",
+        "occurredAt": "2026-09-15T14:11:00-04:00",
+        "rowKey": "1a0a644028b0812c"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "osby.ashmore@example.org",
+        "subjectHint": "Cobalt glade willow umber fable bramble glade meadow yonder pepper orbit velvet",
+        "occurredAt": "2026-09-14T14:18:00-04:00",
+        "rowKey": "1a0a1248fa9b2e8f"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "mardale.falmer@example.org",
+        "subjectHint": "Cobalt glade willow umber fable bramble glade meadow yonder pepper orbit velvet",
+        "occurredAt": "2026-09-14T14:16:00-04:00",
+        "rowKey": "1a0a122c4ecd3042"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "evermer.pemwick@example.net",
+        "subjectHint": "Orbit cinder kettle bramble saffron zephyr juniper harbor delta",
+        "occurredAt": "2026-09-14T13:37:00-04:00",
+        "rowKey": "1a0a0fedffe473bb"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ivessby.jenmer@example.org",
+        "subjectHint": "Cobalt nectar meadow yonder saffron zephyr fern nectar echo delta harbor basin",
+        "occurredAt": "2026-09-14T11:23:00-04:00",
+        "rowKey": "1a0a083cf7f7caa5"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ivesric.corlow@example.org",
+        "subjectHint": "Cobalt nectar meadow yonder saffron zephyr fern nectar echo delta harbor basin",
+        "occurredAt": "2026-09-14T11:20:00-04:00",
+        "rowKey": "1a0a080f43c8a30e"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "ossby.mardale@example.org",
+        "subjectHint": "Cobalt nectar meadow yonder saffron zephyr fern nectar echo delta harbor basin",
+        "occurredAt": "2026-09-14T11:01:00-04:00",
+        "rowKey": "1a0a06fefea0facc"
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "bellow.beldale@example.org",
+        "subjectHint": "Cobalt nectar meadow yonder saffron zephyr fern nectar echo delta harbor basin",
+        "occurredAt": "2026-09-14T10:54:00-04:00",
+        "rowKey": "1a0a069542aba970"
+      },
+      {
         "kind": "coverage",
         "source": "gmail.sent",
         "account": "evermer.daldale@example.org",
@@ -397,6 +861,6 @@
         "windowEnd": "lastSyncAt"
       }
     ],
-    "notes": "Real Sent list of the second signed-in account (/mail/u/1/), head of the list. All 50 rows are conversations: no row. The newest is at 12:13 today, so the window starts at 12:14 and ends at lastSyncAt, and holds no send. The account switcher's label carries a note after the address; the account is its last address in brackets. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+    "notes": "Real Sent list of the second signed-in account (/mail/u/1/), head of the list. 50 rows: 17 conversations (a message count shown), 33 one-message rows, giving 33 observations: none has one id, every one has a thread id older than its message id and no count (19 in the `#thread-a:r-` thread form, 14 in the `#thread-f:` one). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. The newest conversation is at 12:13 today, so the window starts at 12:14 and ends at lastSyncAt. The account switcher's label carries a note after the address; the account is its last address in brackets. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
   }
 }

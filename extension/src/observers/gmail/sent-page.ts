@@ -28,7 +28,7 @@ import { perPass } from '../pass-memo';
 import { type ShownCheck, shownChecker, shownOnly } from '../shown';
 import { oneLine } from '../text';
 import { linkFolder, sentRoute } from './route';
-import { SENT_SELECTORS } from './selectors';
+import { MESSAGE_COUNT, SENT_SELECTORS } from './selectors';
 
 const { selectors: S, attributes: A } = SENT_SELECTORS;
 
@@ -64,6 +64,11 @@ export interface SentRowParts {
   readonly recipients: readonly string[];
   /** The element carrying the row's time (`title`, `aria-label`, text). */
   readonly time: Element;
+  /**
+   * The message count Gmail shows after the row's recipients ("11": a conversation of that many messages), or null
+   * when it shows none (one message; ./sent-time.ts reads it with the ids).
+   */
+  readonly messageCount: number | null;
 }
 
 /** The Sent list a page shows, read whole. */
@@ -175,6 +180,33 @@ function timeElement(cells: readonly Element[]): Element | null {
   return null;
 }
 
+/** `Node.DOCUMENT_POSITION_FOLLOWING`: the compared node comes after the reference node. */
+const FOLLOWING = 4;
+
+/**
+ * The message count shown after a row's recipients, or null: in a cell before the subject, an element with no element
+ * inside it, after the cell's last recipient, whose whole text is a count (selectors.json `patterns.messageCount`),
+ * and shown. Gmail draws it only for a conversation of two messages or more, and repeats it in the row's hidden
+ * summary, which is not read (capture of 2026-10-06). Text is tested before the costlier shown-check.
+ */
+function messageCountOf(
+  cells: readonly Element[],
+  recipients: readonly Element[],
+  shown: ShownCheck,
+): number | null {
+  for (const cell of cells) {
+    const last = recipients.filter((recipient) => cell.contains(recipient)).pop();
+    if (last === undefined) continue;
+    for (const leaf of Array.from(cell.querySelectorAll('*'))) {
+      if (leaf.childElementCount > 0 || last.contains(leaf)) continue;
+      if ((last.compareDocumentPosition(leaf) & FOLLOWING) === 0) continue;
+      const text = oneLine(leaf.textContent);
+      if (MESSAGE_COUNT.test(text) && shown(leaf)) return Number(text);
+    }
+  }
+  return null;
+}
+
 /** Step 4 for one row: its shown subject anchor (one), the shown recipients before it, the time after it. */
 function rowParts(row: Element, shown: ShownCheck): Step<SentRowParts> {
   const anchors = shownOnly(row.querySelectorAll(S.subject), shown);
@@ -194,7 +226,11 @@ function rowParts(row: Element, shown: ShownCheck): Step<SentRowParts> {
   if (time === null) return fail('selector.missing.time');
   const threadId = subject.getAttribute(A.threadId);
   const lastNonDraftId = subject.getAttribute(A.lastNonDraftId);
-  return { ok: true, value: { rowKey, threadId, lastNonDraftId, subject, recipients: addresses, time } };
+  const messageCount = messageCountOf(cells.slice(0, at), recipients, shown);
+  return {
+    ok: true,
+    value: { rowKey, threadId, lastNonDraftId, subject, recipients: addresses, time, messageCount },
+  };
 }
 
 /**

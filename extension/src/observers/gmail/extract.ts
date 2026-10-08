@@ -71,7 +71,9 @@ function timesOf(list: SentList, ctx: ExtractContext): readonly RowTime[] {
   }
   const known = byContext.get(ctx);
   if (known !== undefined) return known;
-  const times = list.rows.map((row) => rowTime(row, ctx));
+  // The list draws message counts when some row shows one; only then is a row with none one message (./sent-time.ts).
+  const countsShown = list.rows.some((row) => row.messageCount !== null);
+  const times = list.rows.map((row) => rowTime(row, ctx, countsShown));
   byContext.set(ctx, times);
   return times;
 }

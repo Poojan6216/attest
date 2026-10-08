@@ -120,10 +120,15 @@ export interface SentRow {
   readonly threadId: string;
   readonly lastNonDraftId: string;
   /**
-   * The row stands for a conversation of several messages: its thread, last and last non-draft ids differ (a
-   * thread's legacy id is its first message's), so its time is its newest message's, not a send's (grading v1.13).
+   * The row stands for a conversation of several messages, whose time is its newest message's, not a send's (grading
+   * v1.13): a draft is newer than its last message, or the row shows a message count, or its thread id differs from
+   * its last message's and the page shows no count at all (then ids alone decide). A thread id older than the
+   * message's with no count, on a page that shows counts, is a mail composed as a draft first: one message (live
+   * smoke, 2026-10-07).
    */
   readonly conversation: boolean;
+  /** The message count shown after the recipients ("11"), or null. */
+  readonly count: number | null;
   readonly recipients: readonly string[];
   readonly subject: string;
   /** The time cell's absolute `title`, when the row has one. */
@@ -137,29 +142,44 @@ export interface SentRow {
  * subject anchor in a `display: none` summary for screen readers (capture of 2026-10-06), which is not the row.
  */
 export function sentRows(doc: Document): SentRow[] {
-  return Array.from(doc.querySelectorAll('[role="main"] [role="grid"] [role="row"]'), (row) => {
+  const read = Array.from(doc.querySelectorAll('[role="main"] [role="grid"] [role="row"]'), (row) => {
     const subject = Array.from(row.querySelectorAll('[data-legacy-last-message-id]')).find((el) =>
       isShown(el, doc),
     );
     const cells = Array.from(row.querySelectorAll('[role="gridcell"]'));
     const timeCell = cells[cells.length - 1];
-    const recipients = Array.from(row.querySelectorAll('[data-hovercard-id]'))
-      .filter((span) => isShown(span, doc))
-      .map((span) => collapse(span.getAttribute('email') ?? span.getAttribute('title')));
-    const key = subject?.getAttribute('data-legacy-last-message-id') ?? '';
-    const threadId = subject?.getAttribute('data-legacy-thread-id') ?? '';
-    const lastNonDraftId = subject?.getAttribute('data-legacy-last-non-draft-message-id') ?? '';
+    const shownRecipients = Array.from(row.querySelectorAll('[data-hovercard-id]')).filter((span) =>
+      isShown(span, doc),
+    );
     return {
-      key,
-      threadId,
-      lastNonDraftId,
-      conversation: threadId !== key || lastNonDraftId !== key,
-      recipients,
+      key: subject?.getAttribute('data-legacy-last-message-id') ?? '',
+      threadId: subject?.getAttribute('data-legacy-thread-id') ?? '',
+      lastNonDraftId: subject?.getAttribute('data-legacy-last-non-draft-message-id') ?? '',
+      count: shownCount(shownRecipients, doc),
+      recipients: shownRecipients.map((span) =>
+        collapse(span.getAttribute('email') ?? span.getAttribute('title')),
+      ),
       subject: collapse(subject?.textContent),
       timeTitle: timeCell?.querySelector('[title]')?.getAttribute('title') ?? null,
       timeText: collapse(timeCell?.textContent),
     };
   });
+  const countsShown = read.some((row) => row.count !== null);
+  return read.map((row) => ({
+    ...row,
+    conversation:
+      row.lastNonDraftId !== row.key || row.count !== null || (row.threadId !== row.key && !countsShown),
+  }));
+}
+
+/** The count shown right after a row's recipients: a shown sibling of the last one whose text is a number. */
+function shownCount(recipients: readonly Element[], doc: Document): number | null {
+  const last = recipients[recipients.length - 1];
+  for (let next = last?.nextElementSibling ?? null; next !== null; next = next.nextElementSibling) {
+    const text = collapse(next.textContent);
+    if (/^[1-9]\d{0,3}$/u.test(text) && isShown(next, doc)) return Number(text);
+  }
+  return null;
 }
 
 /**

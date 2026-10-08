@@ -5,7 +5,7 @@
 
 ## Status
 
-The founder's first real captures (6 October 2026, `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal`; see `docs/adapters.md` §6, the capture, label, test and version loop) are in `gmail/2026-10-06/` (8 pages) and `gcal/2026-10-06/` (9 pages), labelled like the rest. The four receipt pages captured that day were held out: their bodies kept names, order numbers, a referral link and, inside compressed click links, the founder's address (security re-review). They wait for a re-capture with the stricter sanitiser and the founder's review (MANUAL.md). The loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked. The hand-written structural stand-ins named `synthetic-*.html` (the `2026-10-03` folders), modelled on the Gmail and Google Calendar web DOM as best known before the captures, stay as regression cases for the edge cases a real capture rarely contains, and for the receipt kinds the founder's mail does not hold (Facebook Marketplace, OpenTable) or that are still to capture (Stripe, Instacart and Uber receipts, an Amazon shipping notice, a Shopify store, a generic order confirmation, newsletters with prices: MANUAL.md).
+The founder's first real captures (6 October 2026, `pnpm capture --vendor gmail` and `pnpm capture --vendor gcal`; see `docs/adapters.md` §6, the capture, label, test and version loop) are in `gmail/2026-10-06/` (8 pages) and `gcal/2026-10-06/` (9 pages), labelled like the rest. The four receipt pages captured that day were held out: their bodies kept names, order numbers, a referral link and, inside compressed click links, the founder's address (security re-review). They were captured again on 7 October 2026 with the stricter sanitiser, every real value the reading found checked against the live page and faked: `gmail/2026-10-07/` (7 receipt and newsletter pages), with `gcal/2026-10-07/` (a week with an invitation open) from the same session (MANUAL.md). The loader reads only the `gmail/` and `gcal/` folders, so a capture under any other vendor name is never checked. The hand-written structural stand-ins named `synthetic-*.html` (the `2026-10-03` folders), modelled on the Gmail and Google Calendar web DOM as best known before the captures, stay as regression cases for the edge cases a real capture rarely contains, and for the receipt kinds the founder's mail does not hold (Facebook Marketplace, OpenTable) or that no capture holds yet (an Amazon order or shipping notice: the founder's account has none). `gmail/2026-10-07/` also holds one hand-written page, `synthetic-sent-draft-first.html` (task 2.10).
 
 Everything here is a test fixture, never live data:
 
@@ -50,14 +50,27 @@ Everything here is a test fixture, never live data:
 
 | Fixture | View | What it tests |
 |---|---|---|
-| `sent-list-1.html` | Sent list, head (Newer disabled) | 50 rows, 48 of them conversations (no row); 2 one-message rows, one sent only to the account (no row: the account is never a counterparty); the window starts after the newest conversation |
-| `sent-list-2.html` | Sent list, page 2 | 43 conversations and 7 one-message rows, 2 of them only to the account: 5 observations; not the head: health OK, no coverage |
+| `sent-list-1.html` | Sent list, head (Newer disabled) | 50 rows: 40 conversations (a message count shown: no row); 10 one-message rows (2 with one id, 8 with an older thread id and no count), one sent only to the account (no row: the account is never a counterparty): 9 observations; the window starts after the newest conversation |
+| `sent-list-2.html` | Sent list, page 2 | 33 conversations and 17 one-message rows (7 with one id, 10 with an older thread id and no count), 2 of them only to the account: 15 observations; Gmail repeats 30 rows of page 1 here, 7 of them observations (the dedup fact); not the head: health OK, no coverage |
 | `sent-list-last.html` | Sent list, last page | 8 one-message rows; the shown `Older` control disabled, on this page only; rows from earlier years show a numeric date (`11/25/25`) |
 | `drafts.html` | Drafts | Empty in this account: DEGRADED `not_sent_folder` |
 | `inbox.html` | Inbox | 50 rows: DEGRADED `not_sent_folder`, nothing read |
-| `second-account-sent.html` | Sent, `/mail/u/1/` | Second account; all 50 rows conversations: no row, a window that starts after the newest; a note after the address in the account label |
+| `second-account-sent.html` | Sent, `/mail/u/1/` | Second account; 17 conversations (no row) and 33 one-message rows, every one with an older thread id and no count: 33 observations; a window that starts after the newest conversation; a note after the address in the account label |
 | `sent-thread.html` | Opened sent thread | No list: DEGRADED `not_sent_list`; the account's own message: no receipt |
 | `sent-thread-with-reply.html` | Opened conversation | Three messages, two collapsed (no message key): no receipt |
+
+`gmail/2026-10-07/` (7 real captures, America/New_York, read on 7 Oct 2026 between 18:41 and 19:35, each opened from a search, so no folder is selected and `gmail.sent` is DEGRADED `not_sent_folder`; and one synthetic Sent list):
+
+| Fixture | View | What it tests |
+|---|---|---|
+| `receipt-stripe.html` | Opened message | Stripe receipt whose total labels sit in tables of their own beside the amounts (a row holding a row, read when exactly two of its cells hold text): one purchase |
+| `receipt-instacart.html` | Opened message | "Total charged" with the items subtotal, tip and fees around it: one purchase at the charged total |
+| `receipt-uber.html` | Opened message | A thread of two: a charge summary that says it is not a payment receipt (refused by its text, gmail.receipt 1.4.0), then the trip receipt: one purchase |
+| `receipt-shopify.html` | Opened message | Totals in "Rs.", a sign several currencies share: no currency is guessed, DEGRADED `receipt.amount_missing`, no row |
+| `receipt-generic-order.html` | Opened message | A sender outside the registry; the only amount is a fee in a sentence, on no total line: no receipt |
+| `newsletter-prices-1.html` | Opened message | Negative: a promotion with a price in the subject and a discount in the body |
+| `newsletter-prices-2.html` | Opened message | Negative: a sale with a promo code for everyone |
+| `synthetic-sent-draft-first.html` | Sent list, head, the whole list | Task 2.10: two mails composed as drafts first (thread id older than the message id, no count shown) are rows, one with two recipients; a one-id mail is a row; a draft-first mail sent only to the account gives none; two conversations with a count (3 and 2) give none, and the window starts a minute after the newer |
 
 `gcal/2026-10-03/` (8 fixtures, America/New_York, week of Sun 4 to Sat 10 Oct 2026 unless noted):
 
@@ -87,6 +100,12 @@ Every week fixture also holds an event that crosses midnight (two chips, one `da
 | `second-calendar-on.html` | week-deleted | none (Tasks ticked, no event this week) |
 | `second-calendar-off.html` | second-calendar-on | none (Tasks unticked) |
 | `week-other-calendar.html` | second-calendar-off | none (a calendar under "Other calendars" ticked) |
+
+`gcal/2026-10-07/` (1 real capture, America/New_York, read on 7 Oct 2026 at 19:58):
+
+| Fixture | Diff against | Expected |
+|---|---|---|
+| `week-invited.html` | none | two events: an invitation from the founder's second account ("Needs RSVP"), whose details dialog is open over the grid and is not a chip, and the account's own reservation ("Accepted"); the week grid lists no guest, so neither has attendees (a known limit, `docs/adapters.md` §8.3) |
 
 Event titles and calendar names are kept in the Calendar captures (the founder agreed for titles); names, addresses and amounts are faked everywhere.
 

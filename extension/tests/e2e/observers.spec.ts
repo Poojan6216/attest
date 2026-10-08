@@ -8,6 +8,8 @@
  *  - The Sent list and a run of Calendar weeks (before and after a creation, an edit and a deletion) export as
  *    exactly their labelled observations, with only allowlisted fields, no seeded secret, OK health, coverage
  *    that follows the rows, and a first-look marker for each event the first look found (Hard Rules 2, 5, 7).
+ *  - A Sent list of mails composed as drafts first exports each as its row, and a conversation as none, with the window
+ *    starting a minute after the newest conversation (sprint_2 2.10, live smoke finding 1; Hard Rule 5).
  *  - Forged and out-of-order observer messages, sent from a vendor tab's content-script world since the service worker
  *    checks which site an observer message comes from, are ./observer-forged.spec.ts.
  *  - A Calendar event sighted before a `calendar.created` claim but written after a grading batch is stored with its
@@ -149,6 +151,25 @@ async function exportsLabelledRows(session: Session): Promise<void> {
   expectMarkers(ledger, before);
 }
 
+/** A Sent list with mails composed as drafts first exports exactly its labelled rows and window (module comment). */
+async function exportsDraftFirstRows(session: Session): Promise<void> {
+  const page = vendorFixture('gmail', 'synthetic-sent-draft-first.html');
+  const rows = page.observations.map((fact) => expectedObservation(page, fact).contentHash);
+  await openVendorPage(session.extension.context, session.routes, page);
+  // The pass posts its coverage after its rows, so once the window is stored every row of the pass is too.
+  const ledger = await waitForLedger(
+    session.ledgerPage,
+    (state) =>
+      holdsAll(state, rows) && state.tables.coverageIntervals.some((entry) => entry.source === 'gmail.sent'),
+  );
+  const sent = ledger.tables.observations.filter((row) => row.source === 'gmail.sent');
+  expect(new Set(sent.map((row) => row.contentHash))).toEqual(new Set(rows));
+  expect(health(ledger, 'gmail.sent')).toMatchObject({ status: 'OK', reasons: [] });
+  const windows = ledger.tables.coverageIntervals.filter((entry) => entry.source === 'gmail.sent');
+  expect(windows.map((entry) => entry.windowStart)).toEqual([page.coverage[0]?.windowStart]);
+  expect(windows[0]?.windowEnd).toBe(windows[0]?.lastSyncAt);
+}
+
 /** A grading batch between a pass's sighting and its write. */
 async function sightedBeforeBatch(session: Session): Promise<void> {
   // The ledger is open (an export opens it); then a grading batch is recorded two minutes ahead, so every row
@@ -169,6 +190,11 @@ test.describe('the observers write Gmail and Calendar to the ledger (sprint_2 2.
   test('the Sent and Calendar fixtures export as their labelled observations, allowlisted fields only', async () => {
     test.setTimeout(4 * 60_000);
     await withSession(exportsLabelledRows);
+  });
+
+  test('a mail composed as a draft first is a row, and a conversation is none (sprint_2 2.10)', async () => {
+    test.setTimeout(2 * 60_000);
+    await withSession(exportsDraftFirstRows);
   });
 
   test('a Calendar event sighted before a calendar.created claim but written after a batch is not its evidence', async () => {

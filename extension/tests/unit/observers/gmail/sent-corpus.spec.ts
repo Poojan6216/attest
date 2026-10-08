@@ -40,13 +40,14 @@ function expectedObservations(fixture: LabelledFixture): Observation[] {
 describe('Sent lists: the pass posts exactly the labelled observations, health and coverage', () => {
   const lists = sentListFixtures();
 
-  it('covers the ten labelled Sent-list fixtures, four of them real', () => {
+  it('covers the eleven labelled Sent-list fixtures, four of them real', () => {
     expect(lists.map((f) => f.file).sort()).toEqual([
       'second-account-sent.html',
       'sent-list-1.html',
       'sent-list-2.html',
       'sent-list-last.html',
       'synthetic-sent-account-2.html',
+      'synthetic-sent-draft-first.html',
       'synthetic-sent-dst-auckland.html',
       'synthetic-sent-midnight.html',
       'synthetic-sent-page-1.html',

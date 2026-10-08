@@ -26,7 +26,7 @@ const SentSelectorsFile = z.strictObject({
     pageSegment: z.string().min(1),
   }),
   /** The form of Gmail's legacy thread and message ids: a row with another is refused (./sent-time.ts). */
-  patterns: z.strictObject({ legacyId: z.string().min(1) }),
+  patterns: z.strictObject({ legacyId: z.string().min(1), messageCount: z.string().min(1) }),
   selectors: z.strictObject({
     navLink: Selector,
     main: Selector,
@@ -75,3 +75,5 @@ export const PAGE_SEGMENT = new RegExp(SENT_SELECTORS.route.pageSegment, 'u');
 
 /** Gmail's legacy id form (every id of the captures of 2026-10-03 and 2026-10-06 is 16 lowercase hex digits). */
 export const LEGACY_ID = new RegExp(SENT_SELECTORS.patterns.legacyId, 'u');
+/** The text of the message count Gmail shows after a conversation's recipients ("11"). */
+export const MESSAGE_COUNT = new RegExp(SENT_SELECTORS.patterns.messageCount, 'u');
