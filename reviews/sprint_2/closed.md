@@ -364,3 +364,40 @@ Still open against the Sprint 2 gate, all in MANUAL.md: the live smoke (2.8) and
 - `fb87912` fix(observers): read the real Gmail and Calendar captures of 2026-10-06
 - `aa762ac` chore(bench): RESULTS.md on the real captures of 2026-10-06
 - the next commit: this gate record and MANUAL.md's push note
+
+## Third close: receipts, live smoke and its fixes (2026-10-08)
+
+The third reviews (qa.md, security.md, tech.md, third sections) of the commits after the re-close: 29 gaps (SEC-L1 to L5, TECH-L1 to L13, QA-L1 to L11). Fixed in commit 14f2890 and the record commit after it.
+
+### FIXED IN CODE
+1. SEC-L1, QA-L1 (HIGH): values copied from the real captures into tests, tool comments, docs and Decisions.md → invented values of the same shape, or prose → `extension/tests/unit/tools/sanitize-rows.spec.ts`, `extension/tests/tools/capture-rows.ts`, `capture-url.ts`, `sanitize-links.spec.ts`, `docs/adapters.md` §6.2, Decisions.md → a search of the tree for every value finds none; the rule is in docs/adapters.md §6.3 and agents/adapter_engineer.md. The unpushed commits before 14f2890 still hold them: MANUAL ACTION 1.
+2. SEC-L2 (HIGH): fakes are HMAC(key; kind, original); a live capture uses the key file `~/.config/attest/capture-key` (made on first use, owner-only); a seed under 32 characters is refused → `capture-fakes.ts`, `capture-key.ts`, `capture-args.ts`, `capture-fixture.ts` → `capture-key.spec.ts`, `capture-args.spec.ts` (`--seed attest` refused). The 8 captures of 2026-10-07 were re-faked under the key (`capture-refake.ts`, `capture-refake.spec.ts`) and their labels updated; the fixture and observer suites and the reference readers agree with every relabelled fact.
+3. SEC-L3: UUIDs in attributes faked (never `data-legacy-*`), hex kept → `capture-rows.ts`, `Faker.uuid` → `sanitize-rows.spec.ts` (UUID case).
+4. SEC-L4: inline labels (tracking, booking reference, membership, ticket, …), Meet-shaped codes anywhere on a Calendar page, address blocks up to the next heading, label, table or amount → `capture-rows.ts`, `capture-url.ts` `isCalendarPage` → `sanitize-rows.spec.ts` (four cases).
+5. SEC-L5, QA-L8, TECH-L3: an IDLE replaces the report of its own tab, never another tab's, never a DEGRADED the service worker set → `src/ledger/health.ts` `nextOwnReport`, `src/background/observer-state.ts` `tabKey`, `observer-messages.ts` → `health.spec.ts`, `observer-messages.spec.ts` (same tab, other tab, restarted worker), `tests/e2e/observer-tabs.spec.ts` (the broken tab itself moving to the Inbox). The reverse nav check was tried and withdrawn (Decisions `[2.close-r3]`). Texts corrected (health.ts `checkedAt`, adapters.md §4).
+6. TECH-L1: fixture specs keep two pages, each in its own window, with a timer turn between pages → `tests/unit/fixtures/fixture-docs.ts` → heap peak 1,990 → 1,199 MB measured.
+7. TECH-L2: `pnpm bench` refuses a dirty tree (`--dirty` for a look) → `bench/run_bench.ts` `dirtyRefusal` → `bench-gates.spec.ts`.
+8. TECH-L4: carry-forwards under sprint_6 6.4; comments and docs that deferred to 2.8 repointed; the longest-subject item answered (not measured: 8 subjects of at most 30 code points).
+9. TECH-L5: `receiptMatches` fails when the message is missing (`toBeDefined`), shown with a mutant.
+10. TECH-L6, QA-L10: texts giving the old statuses (types.ts, base.ts, plan.ts, receipts/message.ts, receipts/index.ts, ledger/health.ts, selectors.ts, adapters.md §1 and §3.2 with an IDLE row, fixtures README).
+11. TECH-L7: 8 label notes say IDLE. TECH-L8: 51 rows are 44 distinct sends (Decisions, Progress Log). QA-L11: the thread-form wording (13 + 24 + 14).
+12. TECH-L9: the sanitiser's step list, the capture summary ("ids and codes"), the 4-character id rule in docs and Decisions, `fakeRowValues`' comment.
+13. TECH-L10: e2e session harness shared (`tests/e2e/support/session.ts`), `DOCUMENT_POSITION_FOLLOWING` in nodes.ts, `escapeRegExp` shared, `fakeRowValues` split, three window oracles point-safe (calendar-markers property, v111 and v114 golden rules).
+14. TECH-L11: the version rule (bump when the reader changes; a fixture list alone does not) and IDLE in grading.md §14's deviations.
+15. TECH-L12: CHANGELOG lines for the capture tool, CI and the heap pin; every new Decisions entry names its Hard Rule.
+16. TECH-L13: one composite setup action (`.github/actions/setup`, watched by Dependabot) and the measured job times of run 37691867866 in ci.yml.
+17. QA-L2: the attribute sweep is one test per observer and page (`watched-attributes.spec.ts`), 85 tests.
+18. QA-L3, L5, L6, L7, L9: the QA reviewer's 13 tests kept (`sent-draft-rule.spec.ts`, `receipts-refuse-text.spec.ts`, `sanitize-rows-edges.spec.ts`, `health.spec.ts`). QA-L4: two real receipts in the no-leak, network-intercept and no-input-events browser tests.
+
+### MANUAL ACTION REQUIRED
+1. [ ] Rewrite the unpushed history (54756d5 to c81480a and their messages) before any push → MANUAL.md "Before your next push". Prepared and checked in the agent's session; refused in auto mode as a destructive git action.
+2. [ ] Before the repository goes public: re-fake the 17 pushed pages of 2026-10-06 and every capture's names, emails and phrases, and purge their old versions → MANUAL.md, Sprint 7.
+3. [ ] Keep a private backup of the capture key → MANUAL.md, Sprint 7.
+
+### ACCEPTED AS KNOWN LIMITATION
+1. Calendar has no IDLE: a settings or search tab beside a week tab still flips `gcal.event` health → measured 0 captures of those views; Decisions `[2.11]`, docs/adapters.md §8.3, sprint_6 6.4.
+2. Mutant M9 (`messageCountOf` reading non-leaf elements) is equivalent: only whether a count shows decides → Decisions `[2.10]`.
+3. Six QA survivors (D7, D15, I9, R1, R5, R6) cannot change what a page shows → qa.md third section.
+
+### VERIFIED (on 14f2890)
+Unit 9,868 passed, 7 skipped by design (366 files); perf 5/5; e2e 49/49 with every @mandatory test green; time zones 6,427 passed in each of two zones; runtime guard 6,215 passed, core 99.39% of lines; core coverage 99.42%; observer coverage 99.07% (1,365 tests); lint, typecheck and check-docs clean. Not yet VERIFIED CLEAN: the bench runs on the final commit once the history is rewritten (a dirty or about-to-change commit would be cited), and the history itself is MANUAL ACTION 1.
