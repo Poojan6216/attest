@@ -367,10 +367,10 @@ Still open against the Sprint 2 gate, all in MANUAL.md: the live smoke (2.8) and
 
 ## Third close: receipts, live smoke and its fixes (2026-10-08)
 
-The third reviews (qa.md, security.md, tech.md, third sections) of the commits after the re-close: 29 gaps (SEC-L1 to L5, TECH-L1 to L13, QA-L1 to L11). Fixed in commit 14f2890 and the record commit after it.
+The third reviews (qa.md, security.md, tech.md, third sections) of the commits after the re-close: 29 gaps (SEC-L1 to L5, TECH-L1 to L13, QA-L1 to L11). Fixed in 7aa1fa4 (14f2890 before the history rewrite below) and recorded in 79d2137; the bench ran on 79d2137 (c3ea753).
 
 ### FIXED IN CODE
-1. SEC-L1, QA-L1 (HIGH): values copied from the real captures into tests, tool comments, docs and Decisions.md → invented values of the same shape, or prose → `extension/tests/unit/tools/sanitize-rows.spec.ts`, `extension/tests/tools/capture-rows.ts`, `capture-url.ts`, `sanitize-links.spec.ts`, `docs/adapters.md` §6.2, Decisions.md → a search of the tree for every value finds none; the rule is in docs/adapters.md §6.3 and agents/adapter_engineer.md. The unpushed commits before 14f2890 still hold them: MANUAL ACTION 1.
+1. SEC-L1, QA-L1 (HIGH): values copied from the real captures into tests, tool comments, docs and Decisions.md → invented values of the same shape, or prose → `extension/tests/unit/tools/sanitize-rows.spec.ts`, `extension/tests/tools/capture-rows.ts`, `capture-url.ts`, `sanitize-links.spec.ts`, `docs/adapters.md` §6.2, Decisions.md → a search of the tree for every value finds none; the rule is in docs/adapters.md §6.3 and agents/adapter_engineer.md. The unpushed commits that held them were rewritten with the founder's approval (MANUAL ACTION 1).
 2. SEC-L2 (HIGH): fakes are HMAC(key; kind, original); a live capture uses the key file `~/.config/attest/capture-key` (made on first use, owner-only); a seed under 32 characters is refused → `capture-fakes.ts`, `capture-key.ts`, `capture-args.ts`, `capture-fixture.ts` → `capture-key.spec.ts`, `capture-args.spec.ts` (`--seed attest` refused). The 8 captures of 2026-10-07 were re-faked under the key (`capture-refake.ts`, `capture-refake.spec.ts`) and their labels updated; the fixture and observer suites and the reference readers agree with every relabelled fact.
 3. SEC-L3: UUIDs in attributes faked (never `data-legacy-*`), hex kept → `capture-rows.ts`, `Faker.uuid` → `sanitize-rows.spec.ts` (UUID case).
 4. SEC-L4: inline labels (tracking, booking reference, membership, ticket, …), Meet-shaped codes anywhere on a Calendar page, address blocks up to the next heading, label, table or amount → `capture-rows.ts`, `capture-url.ts` `isCalendarPage` → `sanitize-rows.spec.ts` (four cases).
@@ -390,7 +390,7 @@ The third reviews (qa.md, security.md, tech.md, third sections) of the commits a
 18. QA-L3, L5, L6, L7, L9: the QA reviewer's 13 tests kept (`sent-draft-rule.spec.ts`, `receipts-refuse-text.spec.ts`, `sanitize-rows-edges.spec.ts`, `health.spec.ts`). QA-L4: two real receipts in the no-leak, network-intercept and no-input-events browser tests.
 
 ### MANUAL ACTION REQUIRED
-1. [ ] Rewrite the unpushed history (54756d5 to c81480a and their messages) before any push → MANUAL.md "Before your next push". Prepared and checked in the agent's session; refused in auto mode as a destructive git action.
+1. [x] Rewrite the unpushed history before any push → done 2026-10-08 with the founder's approval (`git filter-branch` over `origin/main..main`, two passes). Old → new ids: 54756d5→4667589, 2868b76→098793a, 2ce7b6c→a91d104, 072e8d8→d1dde3c, caadba8→82f6673, dc7dfde→72d4f71, a98b223→e8bd2dd, 55db414→3654f9d, c81480a→649f435, 14f2890→7aa1fa4, 8e2f8de→79d2137. Checked: the final tree is the tested one except two test literals the second pass replaced (both specs pass); no copied value and no old fake is left in any of the 11 commits or their messages, beyond three coincidences that are no one's data. The backup ref and the record of old fakes were deleted.
 2. [ ] Before the repository goes public: re-fake the 17 pushed pages of 2026-10-06 and every capture's names, emails and phrases, and purge their old versions → MANUAL.md, Sprint 7.
 3. [ ] Keep a private backup of the capture key → MANUAL.md, Sprint 7.
 
@@ -399,5 +399,11 @@ The third reviews (qa.md, security.md, tech.md, third sections) of the commits a
 2. Mutant M9 (`messageCountOf` reading non-leaf elements) is equivalent: only whether a count shows decides → Decisions `[2.10]`.
 3. Six QA survivors (D7, D15, I9, R1, R5, R6) cannot change what a page shows → qa.md third section.
 
-### VERIFIED (on 14f2890)
-Unit 9,868 passed, 7 skipped by design (366 files); perf 5/5; e2e 49/49 with every @mandatory test green; time zones 6,427 passed in each of two zones; runtime guard 6,215 passed, core 99.39% of lines; core coverage 99.42%; observer coverage 99.07% (1,365 tests); lint, typecheck and check-docs clean. Not yet VERIFIED CLEAN: the bench runs on the final commit once the history is rewritten (a dirty or about-to-change commit would be cited), and the history itself is MANUAL ACTION 1.
+### VERIFIED CLEAN
+On 7aa1fa4 (14f2890 before the rewrite): unit 9,868 passed, 7 skipped by design (366 files); perf 5/5; e2e 49/49 with every @mandatory test green (network-intercept and secret-seed, now with two real receipts); time zones 6,427 passed in each of two zones; runtime guard 6,215 passed, core 99.39% of lines; core coverage 99.42% of lines; observer coverage 99.07% (1,365 tests); lint, typecheck and check-docs clean. The second rewrite pass changed only two test literals; both specs pass on 79d2137. Bench on 79d2137, a clean tree (commitDirty false): every gate passed; Gmail Sent field accuracy 1 (324 of 324, 4 real pages, gmail.sent 1.4.0); every receipt parser exact on 6 real pages, list views neutral 15 of 15; gradeBatch CPU median 1,563.6 ms (gate 2,000).
+
+### Commits
+- `7aa1fa4` chore(sprint-2): close 29 review gaps (third round)
+- `79d2137` chore(sprint-2): record the third close
+- `c3ea753` chore(bench): RESULTS.md on the third close, measured on a clean tree
+- the next commit: this report's final state, the rewrite's record, and the Sprint 2 gate

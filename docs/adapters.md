@@ -406,7 +406,7 @@ cd extension && pnpm exec tsx tests/tools/serve-fixtures.ts
 # then open http://127.0.0.1:4173/<vendor>/<yyyy-mm-dd>/<name>.html
 ```
 
-- [ ] No value read from the page (or from the sanitiser's output while a rule was missing) is written anywhere else: not in a test, a code comment, a doc, Decisions.md or a commit message. Describe it by kind and length, and give a test an invented value of the same shape (security review SEC-L1, 2026-10-08: card digits, receipt, invoice and order numbers, codes and two Meet codes had been copied from the receipt captures into the sanitiser's tests and docs; they were replaced, and the unpushed commits that still hold them are rewritten before anything is pushed, MANUAL.md).
+- [ ] No value read from the page (or from the sanitiser's output while a rule was missing) is written anywhere else: not in a test, a code comment, a doc, Decisions.md or a commit message. Describe it by kind and length, and give a test an invented value of the same shape (security review SEC-L1, 2026-10-08: card digits, receipt, invoice and order numbers, codes and two Meet codes had been copied from the receipt captures into the sanitiser's tests and docs; they were replaced, and the unpushed commits that held them were rewritten before anything was pushed).
 
 If anything personal is left, re-capture with more `--names` or `--redact-selector` and `--force`. Do not hand-edit a fixture to fix it, because the next capture would bring it back.
 
