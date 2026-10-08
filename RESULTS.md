@@ -12,20 +12,20 @@ Measured 2026-10-07 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 390.6 |
-| lookupMinMs | 340.9 |
-| lookupMaxMs | 445.9 |
-| lookupCpuMedianMs | 417.2 |
-| indexBuildMedianMs | 150.7 |
-| buildPlusLookupMedianMs | 537.7 |
+| lookupMedianMs | 393.2 |
+| lookupMinMs | 343.2 |
+| lookupMaxMs | 460.2 |
+| lookupCpuMedianMs | 429.9 |
+| indexBuildMedianMs | 153.8 |
+| buildPlusLookupMedianMs | 547 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1078.4 |
-| gradingMinMs | 1028.5 |
-| gradingMaxMs | 1321.3 |
-| gradingCpuMedianMs | 1282.3 |
+| gradingMedianMs | 1116.4 |
+| gradingMinMs | 1033.7 |
+| gradingMaxMs | 1353.6 |
+| gradingCpuMedianMs | 1379.1 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,7 +33,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commit | a98b22328c9cb1abedd093bc79074938a04de19e |
 | commitDirty | true |
 | node | v22.14.0 |
 
@@ -66,7 +66,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commit | a98b22328c9cb1abedd093bc79074938a04de19e |
 | commitDirty | true |
 | node | v22.14.0 |
 
@@ -76,7 +76,7 @@ Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailSentSelectorsVersion | 1.3.0 |
+| gmailSentSelectorsVersion | 1.4.0 |
 | gmailFixtureFolders | 2026-10-03,2026-10-06,2026-10-07 |
 | gmailFixtures | 41 |
 | gmailSentListFixtures | 11 |
@@ -98,7 +98,7 @@ Measured 2026-10-07 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commit | a98b22328c9cb1abedd093bc79074938a04de19e |
 | commitDirty | true |
 | node | v22.14.0 |
 
@@ -145,6 +145,6 @@ Measured 2026-10-07 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commit | a98b22328c9cb1abedd093bc79074938a04de19e |
 | commitDirty | true |
 | node | v22.14.0 |
