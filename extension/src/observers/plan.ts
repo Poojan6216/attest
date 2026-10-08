@@ -5,6 +5,9 @@
  * `account()` (./coverage.ts) over one synchronous read of the page and says what the pass may report. It posts
  * nothing (./base.ts does) and never throws: every failure becomes a reason code on a DEGRADED plan.
  *
+ *  - health IDLE (the page is not one the observer reads: another Gmail folder, no conversation open): nothing is
+ *    extracted, no coverage, and the plan says IDLE with the observer's reasons, neither OK nor DEGRADED (sprint_2
+ *    2.11: the ledger keeps the status a page the observer reads gave, so a second tab never flips it).
  *  - health DEGRADED (or `health()` threw or answered badly): nothing is extracted, no coverage.
  *  - `extract()` threw or returned something that is not a list of rows of this source: no observations, no coverage.
  *    An extractor that answers badly is broken, so none of its rows is trusted.
@@ -84,6 +87,12 @@ export type PassPlan =
       readonly snapshot?: unknown;
     }
   | {
+      /** The page is not one the observer reads: nothing read, nothing posted but the health report. */
+      readonly status: 'IDLE';
+      readonly reasons: readonly [string, ...string[]];
+      readonly observations: readonly [];
+    }
+  | {
       readonly status: 'DEGRADED';
       readonly reasons: readonly [string, ...string[]];
       readonly observations: readonly Observation[];
@@ -97,11 +106,12 @@ export interface PassInput {
 }
 
 /**
- * A `HealthCheck` as the contract allows it: OK, or DEGRADED with 1 to SCHEMA_LIMITS.REASONS reason codes. A reason
- * that is not a code (a sentence, text the page held) fails it (Hard Rule 2).
+ * A `HealthCheck` as the contract allows it: OK, or IDLE or DEGRADED with 1 to SCHEMA_LIMITS.REASONS reason codes. A
+ * reason that is not a code (a sentence, text the page held) fails it (Hard Rule 2).
  */
 const HealthCheckShape = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('OK') }),
+  z.strictObject({ status: z.literal('IDLE'), reasons: HealthReport.shape.reasons.min(1) }),
   z.strictObject({ status: z.literal('DEGRADED'), reasons: HealthReport.shape.reasons.min(1) }),
 ]);
 
@@ -117,9 +127,8 @@ function checkHealth(observer: Observer, doc: Document, ctx: ExtractContext): He
   if (!parsed.success) return { status: 'DEGRADED', reasons: ['health.invalid'] };
   if (parsed.data.status === 'OK') return { status: 'OK' };
   const [first, ...rest] = parsed.data.reasons;
-  return first === undefined
-    ? { status: 'DEGRADED', reasons: ['health.invalid'] }
-    : { status: 'DEGRADED', reasons: [first, ...rest] };
+  if (first === undefined) return { status: 'DEGRADED', reasons: ['health.invalid'] };
+  return { status: parsed.data.status, reasons: [first, ...rest] };
 }
 
 function isRawRow(row: unknown): row is RawRow {
@@ -186,7 +195,7 @@ function cleanPlan(observations: readonly Observation[], facts: PassCoverage): P
 /** Decides one pass over `input.doc`. Never throws. */
 export function planPass(input: PassInput): PassPlan {
   const health = checkHealth(input.observer, input.doc, input.ctx);
-  if (health.status === 'DEGRADED') return { status: 'DEGRADED', reasons: health.reasons, observations: [] };
+  if (health.status !== 'OK') return { status: health.status, reasons: health.reasons, observations: [] };
   const rows = extractRows(input);
   if (!rows.ok) return { status: 'DEGRADED', reasons: [rows.reason], observations: [] };
   const { observations, reasons } = projectRows(input, rows.value);

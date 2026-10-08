@@ -16,6 +16,12 @@
  *    nothing to accept.
  * Otherwise the observer's own report is stored as before: the latest wins (repo.ts `putAdapterHealth`).
  *
+ * IDLE (sprint_2 2.11): a report from a page the observer does not read (an Inbox tab beside the Sent tab, a list with
+ * no conversation open) is neither OK nor broken, so it never replaces an OK or a DEGRADED: it is stored only where
+ * no page the observer reads has reported (nothing stored, or an IDLE), and a stored IDLE never holds back a report
+ * from such a page, whatever its instant. Several tabs then never flip an observer's health, and a page that broke
+ * stays DEGRADED while other tabs show other folders (Hard Rule 6).
+ *
  * A report that says what the stored one says (status, reasons and version) is written only once the stored one is
  * OBSERVER_HEALTH_REFRESH_MS old (TECH-2): a pass runs every few seconds on a busy page, and rewriting the same row
  * each time cost a readwrite transaction per pass. The stored `checkedAt` stays at most that old while the observer
@@ -89,7 +95,10 @@ function sameReport(a: AdapterHealth, b: AdapterHealth): boolean {
 
 /** The row the rule in the header stores for `own` over `current`, or null when it stores nothing. */
 function nextOwnReport(own: AdapterHealth, current: AdapterHealth | undefined): AdapterHealth | null {
-  if (current !== undefined && instantMs(own.checkedAt) < instantMs(current.checkedAt)) return null;
+  const older = current !== undefined && instantMs(own.checkedAt) < instantMs(current.checkedAt);
+  if (own.status === 'IDLE')
+    return current === undefined || (current.status === 'IDLE' && !older) ? own : null;
+  if (older && current.status !== 'IDLE') return null;
   if (!setByLedger(current)) return own;
   if (own.status === 'OK') return null;
   return { ...own, reasons: mergeReasons(own.reasons, current.reasons.filter(isLedgerReason)) };

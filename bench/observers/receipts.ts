@@ -9,7 +9,7 @@
  * observations are the labelled facts after `redact.project()`. It reports, per parser, the labelled fixtures, how
  * many the observer reproduced exactly (the labelled parser claims the message, every projected field and hash
  * equal) and the field accuracy over type, merchant, amountCents, currency, subjectHint and occurredAt; and overall,
- * the negatives left unparsed, the list views left neutral (health OK, nothing read), the pages whose asserted
+ * the negatives left unparsed, the list views left neutral (health IDLE, nothing read), the pages whose asserted
  * coverage is exactly the labelled one (the instant of each parsed receipt and nothing else, sprint_2 2.7) and the
  * pages whose health matched its label.
  *
@@ -108,7 +108,7 @@ interface Overall {
 function healthMatches(f: LabelledFixture, run: ReceiptRun): boolean | null {
   const label = receiptHealthLabel(f);
   if (label === undefined) return null;
-  const reasons = run.health.status === 'DEGRADED' ? run.health.reasons : [];
+  const reasons = run.health.status === 'OK' ? [] : run.health.reasons;
   return run.health.status === label.status && JSON.stringify(reasons) === JSON.stringify(label.reasons);
 }
 
@@ -119,7 +119,7 @@ function scoreOverall(f: LabelledFixture, run: ReceiptRun, overall: Overall, neg
   }
   if (f.page.view.startsWith('gmail.list.')) {
     overall.listViews += 1;
-    overall.listViewsNeutral += run.health.status === 'OK' && run.plan.observations.length === 0 ? 1 : 0;
+    overall.listViewsNeutral += run.health.status === 'IDLE' && run.plan.observations.length === 0 ? 1 : 0;
   }
   const asserted = planCoverage(run.plan);
   overall.coveragePages += 1;

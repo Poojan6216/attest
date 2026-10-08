@@ -4,7 +4,8 @@
  * plans it) and must post exactly what its labels say:
  *  - on a Sent list, exactly the labelled observations (each label projected by `project()` at `readAt`, so ids,
  *    content hashes and row-key hashes are compared too), the labelled health and the labelled coverage;
- *  - on Drafts, the Inbox, an opened conversation and every opened receipt: DEGRADED, zero observations, no coverage;
+ *  - on Drafts, the Inbox, an opened conversation and every opened receipt: IDLE (not a Sent list: neither OK nor
+ *    broken, sprint_2 2.11), zero observations, no coverage;
  *  - the overlapping second page shares exactly the labelled rows with the first (dedup by contentHash);
  *  - no subjectHint over 80 code points, and no seeded secret or account address anywhere in a pass's output.
  * The field-accuracy number itself is bench/observers/gmail.ts's, checked here against its gate.
@@ -74,13 +75,14 @@ describe('Sent lists: the pass posts exactly the labelled observations, health a
   });
 });
 
-describe('every other Gmail page: DEGRADED, nothing extracted, no coverage', () => {
+describe('every other Gmail page: IDLE, nothing extracted, no coverage', () => {
   const others = gmailFixtures().filter((f) => f.page.view !== 'gmail.list.sent');
 
   it.each(others.map((f) => [f.file, f] as const))('%s', async (_file, fixture) => {
     const plan = await runSentPass(fixture);
     const health = fixture.health.find((h) => h.observer === 'gmail.sent');
-    expect(plan).toEqual({ status: 'DEGRADED', reasons: health?.reasons, observations: [] });
+    expect(health?.status).toBe('IDLE');
+    expect(plan).toEqual({ status: 'IDLE', reasons: health?.reasons, observations: [] });
     const page = openFixture(fixture);
     try {
       expect(extractSent(page.doc, fixtureCtx(fixture))).toEqual([]);
@@ -89,11 +91,11 @@ describe('every other Gmail page: DEGRADED, nothing extracted, no coverage', () 
     }
   });
 
-  it('the Drafts fixture is refused as not_sent_folder', async () => {
+  it('the Drafts fixture is IDLE: not_sent_folder', async () => {
     const drafts = others.find((f) => f.file === 'synthetic-drafts.html');
     if (drafts === undefined) throw new Error('no Drafts fixture');
     expect(await runSentPass(drafts)).toEqual({
-      status: 'DEGRADED',
+      status: 'IDLE',
       reasons: ['not_sent_folder'],
       observations: [],
     });

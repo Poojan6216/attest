@@ -88,6 +88,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The Gmail Sent reader refuses a row whose ids are blank or not in Gmail's form, and a list out of order vouches for no window; a Calendar page with an empty calendar list never says every calendar is shown; a list inside an email is never read as a message.
 - Receipts read from real mail (captures of 2026-10-07): a Stripe receipt whose total label sits in a small table of its own beside the amount is read; Uber's charge summary, which says it is not a payment receipt, is no longer a second purchase of the same trip; an amount in "Rs.", a sign several countries' rupees share, is never given a currency: the receipt shows as unreadable instead of guessed.
 - `docs/grading.md` v1.15: an email you composed as a draft before sending is read from the Gmail Sent list as the send it is. Gmail keeps the draft's thread id, which made such a mail look like a conversation, so it gave no row; a third of the rows on the real Sent pages were single sends read that way. A row is now one message when Gmail shows no message count beside it on a list that shows counts; a row with a count is still a conversation, and a list that shows no count is read by its ids alone.
+- With several Gmail tabs open, a tab on another folder no longer changes how healthy the Gmail readers look: a page a reader does not read reports IDLE (nothing to read, nothing wrong), which never replaces the status the Sent tab or an opened receipt gave, so a reader that broke stays shown as broken.
 
 ### Removed
 

@@ -115,14 +115,14 @@ describe('what the skeleton posts', () => {
     expect(messages[0]).toMatchObject({ health: { adapterId: 'gmail.sent', status: 'OK', reasons: [] } });
   });
 
-  it('Drafts: only a DEGRADED health report, naming the observer and its version', async () => {
+  it('Drafts: only an IDLE health report, naming the observer and its version (sprint_2 2.11)', async () => {
     expect(await postedFor('synthetic-drafts.html')).toEqual([
       {
         type: 'adapter.health',
         health: {
           adapterId: 'gmail.sent',
           version: SENT_SELECTORS.version,
-          status: 'DEGRADED',
+          status: 'IDLE',
           reasons: ['not_sent_folder'],
           checkedAt: '2026-10-03T10:20:00-04:00',
         },

@@ -203,8 +203,8 @@ describe('what the page address says (Hard Rule 6: no false DEGRADED on a list)'
     ['a one-word search of 24+ letters', 'search/supercalifragilisticexpialidocious'],
     ['a label named with 16 hex digits', 'label/deadbeefdeadbeef'],
     ['a category tab', 'category/promotions'],
-  ])('%s is a list view: OK', (_case, fragment) => {
-    expect(health(`${base}${fragment}`)).toEqual({ status: 'OK' });
+  ])('%s is a list view: IDLE, nothing to read', (_case, fragment) => {
+    expect(health(`${base}${fragment}`)).toEqual({ status: 'IDLE', reasons: ['no_conversation'] });
   });
 
   it.each([

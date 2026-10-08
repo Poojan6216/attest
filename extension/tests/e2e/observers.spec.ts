@@ -144,9 +144,11 @@ async function exportsLabelledRows(session: Session): Promise<void> {
   expectEditIsNoCreation(ledger);
   expectAllowlisted(ledger);
   expect(findLeaks('ledger-export', ledger, loadSeeds())).toEqual([]);
-  for (const observer of ['gmail.sent', 'gmail.receipt', 'gcal.event']) {
+  for (const observer of ['gmail.sent', 'gcal.event']) {
     expect(health(ledger, observer), observer).toMatchObject({ status: 'OK', reasons: [] });
   }
+  // No conversation was opened: the receipt observer had nothing to read, neither OK nor broken (sprint_2 2.11).
+  expect(health(ledger, 'gmail.receipt')).toMatchObject({ status: 'IDLE', reasons: ['no_conversation'] });
   expectCoverage(ledger, sent, vendorFixture('gcal', 'synthetic-gcal-week-after-delete.html'));
   expectMarkers(ledger, before);
 }

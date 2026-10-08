@@ -251,7 +251,8 @@ const TABLES: readonly Table[] = [
     schema: HealthReport,
     valid: [
       HEALTH,
-      { ...HEALTH, status: 'DEGRADED', reasons: ['selector.missing', 'not_sent_folder'] },
+      { ...HEALTH, status: 'DEGRADED', reasons: ['selector.missing', 'view.mismatch'] },
+      { ...HEALTH, status: 'IDLE', reasons: ['not_sent_folder'] },
       { ...HEALTH, adapterId: 'muse', version: '2.3.1-beta' },
       { ...HEALTH, checkedAt: '2026-10-06T18:02:00.5Z' },
       { ...HEALTH, status: 'DEGRADED', reasons: Array(32).fill('r') },

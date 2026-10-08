@@ -1,7 +1,7 @@
 {
   "receipt-stripe.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -22,7 +22,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -57,7 +57,7 @@
   },
   "receipt-instacart.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -78,7 +78,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -113,7 +113,7 @@
   },
   "receipt-uber.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -134,7 +134,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -169,7 +169,7 @@
   },
   "receipt-shopify.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -190,7 +190,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -208,7 +208,7 @@
   },
   "receipt-generic-order.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -229,7 +229,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -245,7 +245,7 @@
   },
   "newsletter-prices-1.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -266,7 +266,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -282,7 +282,7 @@
   },
   "newsletter-prices-2.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -303,7 +303,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -319,7 +319,7 @@
   },
   "synthetic-sent-draft-first.html": {
     "capturedAt": "2026-10-07",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "email_body_3",
       "api_key_anthropic_shape",

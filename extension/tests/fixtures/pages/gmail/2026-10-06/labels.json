@@ -1,7 +1,7 @@
 {
   "sent-list-1.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -119,7 +119,7 @@
   },
   "sent-list-2.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -289,7 +289,7 @@
   },
   "sent-list-last.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -391,7 +391,7 @@
   },
   "sent-thread.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -413,7 +413,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_list"
         ]
@@ -429,7 +429,7 @@
   },
   "sent-thread-with-reply.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -451,7 +451,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_list"
         ]
@@ -467,7 +467,7 @@
   },
   "drafts.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -489,7 +489,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -499,7 +499,7 @@
   },
   "inbox.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",
@@ -521,7 +521,7 @@
       {
         "kind": "health",
         "observer": "gmail.sent",
-        "status": "DEGRADED",
+        "status": "IDLE",
         "reasons": [
           "not_sent_folder"
         ]
@@ -531,7 +531,7 @@
   },
   "second-account-sent.html": {
     "capturedAt": "2026-10-06",
-    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.3.0",
+    "selectorsVersion": "gmail.receipt@1.5.0 gmail.sent@1.4.0",
     "seededSecrets": [
       "api_key_anthropic_shape",
       "api_key_aws_shape",

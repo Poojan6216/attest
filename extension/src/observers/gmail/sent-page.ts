@@ -4,9 +4,11 @@
  *
  * The Sent list is read only when it is the view Gmail shows:
  *  1. the page address is Gmail's and its fragment routes to the Sent list (`#sent`, `#sent/p2`; ./route.ts).
- *     Any other folder → `not_sent_folder`; Sent with a conversation open → `not_sent_list`;
+ *     Any other folder → `not_sent_folder`; Sent with a conversation open → `not_sent_list`. Neither page is a Sent
+ *     list, so ./health.ts reports them IDLE, neither OK nor broken (sprint_2 2.11);
  *  2. the folder the nav marks as selected, when it marks one, is Sent, and the document title does not name
- *     another folder (otherwise Gmail is between two views and may still show the previous one);
+ *     another folder, else `view.mismatch`: Gmail is between two views and may still show the previous one, or the
+ *     page changed so that a Sent list reads as another folder, which must stay loud (DEGRADED);
  *  3. exactly one `role="main"` is shown, and exactly one `role="grid"` is shown inside it: Gmail keeps earlier
  *     views in the DOM, hidden, and a hidden Inbox list must never be read as the Sent list (../shown.ts, with one
  *     shown-check per read);
@@ -37,6 +39,7 @@ export const SENT_PAGE_REASONS = Object.freeze([
   'location.not_gmail',
   'not_sent_folder',
   'not_sent_list',
+  'view.mismatch',
   'selector.missing.main',
   'selector.ambiguous.main',
   'selector.missing.grid',
@@ -122,8 +125,8 @@ function activeSentPage(doc: Document): Step<number> {
   if (route.kind === 'conversation') return fail('not_sent_list');
   const links = Array.from(doc.querySelectorAll(S.navLink));
   const selected = links.filter((link) => link.getAttribute(A.navSelected) === A.navSelectedValue);
-  if (namesOtherFolder(foldersOf(selected, doc))) return fail('not_sent_folder');
-  if (namesOtherFolder(titledFolders(doc, links))) return fail('not_sent_folder');
+  if (namesOtherFolder(foldersOf(selected, doc))) return fail('view.mismatch');
+  if (namesOtherFolder(titledFolders(doc, links))) return fail('view.mismatch');
   return { ok: true, value: route.page };
 }
 

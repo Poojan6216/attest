@@ -21,10 +21,10 @@ const selectNav = (folder: string) => (doc: Document) => {
 
 describe('a previous view still shown under #sent (route and nav already say Sent) is not read', () => {
   it.each(['synthetic-inbox.html', 'synthetic-drafts.html'])(
-    '%s drawn at #sent: the document title names its folder, so not_sent_folder',
+    '%s drawn at #sent: the document title names its folder, so DEGRADED view.mismatch',
     async (file) => {
       expect(await planVariant({ file, url: SENT, mutate: selectNav('sent') })).toEqual(
-        degraded('not_sent_folder'),
+        degraded('view.mismatch'),
       );
     },
   );
@@ -105,7 +105,7 @@ describe('the route and the nav, exactly', () => {
       }
       selectNav('inbox')(doc);
     };
-    expect(await planVariant({ mutate: relative })).toEqual(degraded('not_sent_folder'));
+    expect(await planVariant({ mutate: relative })).toEqual(degraded('view.mismatch'));
   });
 
   it('only tabindex="0" marks a folder as selected: links without a tabindex mark nothing', async () => {

@@ -13,12 +13,16 @@ import type { OffsetAt } from '../core/normalize';
 import type { ActionType, IsoTs, ObservationSource } from '../core/schema';
 
 /**
- * What `health()` found. DEGRADED names at least one reason code (`not_sent_folder`, `selector.missing.row`):
- * lowercase snake_case segments joined by dots, never text the page held (Hard Rules 2, 6). The skeleton adds the
- * observer's id and version and the pass instant to make the stored `HealthReport`.
+ * What `health()` found. IDLE: the page is not one the observer reads (a Gmail folder other than Sent, no
+ * conversation open), so there is nothing to read and nothing is wrong; the ledger keeps the status a page it reads
+ * gave (sprint_2 2.11). DEGRADED: a page it reads that it cannot read. Both name at least one reason code
+ * (`not_sent_folder`, `selector.missing.row`): lowercase snake_case segments joined by dots, never text the page held
+ * (Hard Rules 2, 6). The skeleton adds the observer's id and version and the pass instant to make the stored
+ * `HealthReport`.
  */
 export type HealthCheck =
   | { readonly status: 'OK' }
+  | { readonly status: 'IDLE'; readonly reasons: readonly [string, ...string[]] }
   | { readonly status: 'DEGRADED'; readonly reasons: readonly [string, ...string[]] };
 
 /** What one pass knows besides the page. */

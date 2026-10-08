@@ -204,6 +204,7 @@ export const LOG_VALUES = [
   'FINAL',
   'USER_OVERRIDDEN',
   'OK',
+  'IDLE',
   'DEGRADED',
   // Extension surfaces (src/ui/mount.ts).
   'popup',

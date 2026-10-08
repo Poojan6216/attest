@@ -15,6 +15,7 @@ import { accountHashOf } from '../../../src/observers/account';
 import {
   assertObserver,
   browserOffsetAt,
+  type HealthCheck,
   type Observer,
   type PassDeps,
   passMessages,
@@ -190,6 +191,36 @@ describe('runPass: what a DEGRADED pass posts', () => {
     const result = await runPass(sentObserver(), d);
     expect(d.messages).toEqual([]);
     expect(result).toEqual({ status: 'DEGRADED', reasons: ['clock.invalid'], posted: [], complete: false });
+  });
+});
+
+describe('runPass: what an IDLE pass posts (a page the observer does not read, sprint_2 2.11)', () => {
+  it('IDLE health: the IDLE report only, with its reasons, no extraction, no coverage (sprint_2 2.11)', async () => {
+    const extract = vi.fn(() => [] as RawRow[]);
+    const health = (): HealthCheck => ({ status: 'IDLE', reasons: ['not_sent_folder'] });
+    const d = deps({ doc: syntheticDocument({ folder: 'drafts' }) });
+    const result = await runPass(sentObserver({ health, extract }), d);
+    expect(d.messages).toEqual([
+      {
+        type: 'adapter.health',
+        health: {
+          adapterId: 'synthetic.sent',
+          version: '1.0.0',
+          status: 'IDLE',
+          reasons: ['not_sent_folder'],
+          checkedAt: NOW,
+        },
+      },
+    ]);
+    expect(extract).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'IDLE', reasons: ['not_sent_folder'], complete: true });
+  });
+
+  it('a pass that cannot vouch for the present keeps an IDLE plan IDLE (no OK is made of it)', async () => {
+    const health = (): HealthCheck => ({ status: 'IDLE', reasons: ['not_sent_folder'] });
+    const d = deps({ doc: syntheticDocument({ folder: 'drafts' }), vouches: () => false });
+    expect(await runPass(sentObserver({ health }), d)).toMatchObject({ status: 'IDLE', complete: true });
+    expect(typesOf(d.messages)).toEqual(['adapter.health']);
   });
 });
 

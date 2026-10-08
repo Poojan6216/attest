@@ -67,11 +67,11 @@ export const HealthFact = z
   .strictObject({
     kind: z.literal('health'),
     observer: ObservationSource,
-    status: z.enum(['OK', 'DEGRADED']),
+    status: z.enum(['OK', 'IDLE', 'DEGRADED']),
     reasons: z.array(z.string().max(SCHEMA_LIMITS.ID).regex(HEALTH_REASON)),
   })
   .refine((fact) => (fact.status === 'OK') === (fact.reasons.length === 0), {
-    message: 'OK has no reasons; DEGRADED has at least one',
+    message: 'OK has no reasons; IDLE and DEGRADED have at least one',
   });
 
 export const ObservationFact = z.strictObject({

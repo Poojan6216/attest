@@ -99,13 +99,17 @@ function scoreFixture(fixture: LabelledFixture, plan: PassPlan, tally: Tally): v
 const sameReasons = (a: readonly string[], b: readonly string[]): boolean =>
   [...a].sort().join('\n') === [...b].sort().join('\n');
 
-/** The health a pass posts: OK for a clean pass, with or without coverage (src/observers/base.ts). */
-const postedStatus = (plan: PassPlan): 'OK' | 'DEGRADED' => (plan.status === 'DEGRADED' ? 'DEGRADED' : 'OK');
+/**
+ * The health a pass posts: OK for a clean pass, with or without coverage; IDLE (a page that is not a Sent list) and
+ * DEGRADED as planned, with their reasons (src/observers/base.ts).
+ */
+const postedStatus = (plan: PassPlan): 'OK' | 'IDLE' | 'DEGRADED' =>
+  plan.status === 'DEGRADED' || plan.status === 'IDLE' ? plan.status : 'OK';
 
 function healthMatches(fixture: LabelledFixture, plan: PassPlan): boolean {
   const fact = fixture.health.find((h) => h.observer === 'gmail.sent');
   if (fact === undefined) return false;
-  const reasons = plan.status === 'DEGRADED' ? plan.reasons : [];
+  const reasons = plan.status === 'DEGRADED' || plan.status === 'IDLE' ? plan.reasons : [];
   return fact.status === postedStatus(plan) && sameReasons(fact.reasons, reasons);
 }
 
@@ -183,7 +187,7 @@ export async function runGmailBench(
     gmailSentHealthGatePassed: fixtures.every((f) => healthMatches(f, planOf(f))),
     gmailSentNegativesGatePassed: fixtures
       .filter((f) => f.page.view !== 'gmail.list.sent')
-      .every((f) => planOf(f).observations.length === 0 && planOf(f).status === 'DEGRADED'),
+      .every((f) => planOf(f).observations.length === 0 && postedStatus(planOf(f)) !== 'OK'),
     gmailSentCoverageGatePassed: fixtures.every((f) => coverageMatches(f, planOf(f))),
     gmailSentDedupGatePassed: fixtures.every((f) => dedupHolds(f, plans)),
     gmailSentSubjectHintMaxCodePoints: longestHint,

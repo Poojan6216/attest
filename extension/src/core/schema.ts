@@ -210,11 +210,11 @@ export const Coverage = z.strictObject({
   observers: z.array(ObserverCoverage).max(L.GRADING_INPUT),
 });
 
-/** The latest health of one adapter or observer (Hard Rule 6: DEGRADED is stored and shown). */
+/** The latest health of an adapter or observer (Hard Rule 6). IDLE: a page it does not read (sprint_2 2.11). */
 export const HealthReport = z.strictObject({
   adapterId: ComponentId,
   version: ComponentId,
-  status: z.enum(['OK', 'DEGRADED']),
+  status: z.enum(['OK', 'IDLE', 'DEGRADED']),
   /** Reason codes (`not_sent_folder`), never text the page held: health runs beside the mail (Hard Rule 2). */
   reasons: z.array(healthReason(L.ID)).max(L.REASONS),
   checkedAt: IsoTs,

@@ -22,8 +22,8 @@ Everything here is a test fixture, never live data:
 |---|---|---|
 | `synthetic-sent-page-1.html` | Sent list, head (Newer disabled) | 10 rows, 11 observations: two recipients on one row, mixed-case address, `(no subject)`, a subject over 80 code points, an emoji subject, U+202F before AM/PM |
 | `synthetic-sent-page-2.html` | Sent list, rows 11 to 20 | Rows 9 and 10 of page 1 again (same ids and fields): dedup by contentHash; not the head of the list, so rows and health OK but no coverage |
-| `synthetic-sent-thread.html` | Opened sent thread | No list on the page: gmail.sent DEGRADED `not_sent_list`, no coverage |
-| `synthetic-drafts.html` | Drafts | Negative: rows look sent but are drafts. DEGRADED `not_sent_folder` |
+| `synthetic-sent-thread.html` | Opened sent thread | No list on the page: gmail.sent IDLE `not_sent_list`, no coverage |
+| `synthetic-drafts.html` | Drafts | Negative: rows look sent but are drafts. IDLE `not_sent_folder` |
 | `synthetic-inbox.html` | Inbox | Negative: an "Alex, me (2)" thread and a receipt row with an amount in its snippet |
 | `synthetic-sent-account-2.html` | Sent, `/mail/u/1/` | Coverage belongs to the second account; addresses only in `title` and `data-hovercard-id` |
 | `synthetic-sent-dst-auckland.html` | Sent, Pacific/Auckland | DST edge: 1:45 AM (+12:00) and 3:10 AM (+13:00) on Sun 27 Sep 2026 |
@@ -53,13 +53,13 @@ Everything here is a test fixture, never live data:
 | `sent-list-1.html` | Sent list, head (Newer disabled) | 50 rows: 40 conversations (a message count shown: no row); 10 one-message rows (2 with one id, 8 with an older thread id and no count), one sent only to the account (no row: the account is never a counterparty): 9 observations; the window starts after the newest conversation |
 | `sent-list-2.html` | Sent list, page 2 | 33 conversations and 17 one-message rows (7 with one id, 10 with an older thread id and no count), 2 of them only to the account: 15 observations; Gmail repeats 30 rows of page 1 here, 7 of them observations (the dedup fact); not the head: health OK, no coverage |
 | `sent-list-last.html` | Sent list, last page | 8 one-message rows; the shown `Older` control disabled, on this page only; rows from earlier years show a numeric date (`11/25/25`) |
-| `drafts.html` | Drafts | Empty in this account: DEGRADED `not_sent_folder` |
-| `inbox.html` | Inbox | 50 rows: DEGRADED `not_sent_folder`, nothing read |
+| `drafts.html` | Drafts | Empty in this account: IDLE `not_sent_folder` |
+| `inbox.html` | Inbox | 50 rows: IDLE `not_sent_folder`, nothing read |
 | `second-account-sent.html` | Sent, `/mail/u/1/` | Second account; 17 conversations (no row) and 33 one-message rows, every one with an older thread id and no count: 33 observations; a window that starts after the newest conversation; a note after the address in the account label |
-| `sent-thread.html` | Opened sent thread | No list: DEGRADED `not_sent_list`; the account's own message: no receipt |
+| `sent-thread.html` | Opened sent thread | No list: IDLE `not_sent_list`; the account's own message: no receipt |
 | `sent-thread-with-reply.html` | Opened conversation | Three messages, two collapsed (no message key): no receipt |
 
-`gmail/2026-10-07/` (7 real captures, America/New_York, read on 7 Oct 2026 between 18:41 and 19:35, each opened from a search, so no folder is selected and `gmail.sent` is DEGRADED `not_sent_folder`; and one synthetic Sent list):
+`gmail/2026-10-07/` (7 real captures, America/New_York, read on 7 Oct 2026 between 18:41 and 19:35, each opened from a search, so no folder is selected and `gmail.sent` is IDLE `not_sent_folder`; and one synthetic Sent list):
 
 | Fixture | View | What it tests |
 |---|---|---|
@@ -157,7 +157,7 @@ One file per folder, keyed by fixture file, in the capture tool's format (`tests
 | `kind` | Fields | Meaning |
 |---|---|---|
 | `page` | `vendor`, `view`, `folder?`, `synthetic`, `timeZone`, `readAt`, `account`, `liveUrl`, `defaultDollar?` | Exactly one, first. `timeZone` is the IANA zone time text is read in. `readAt` is the instant of the pass: its `observedAt` and the reference for relative times. `account` is the switcher's address (the observer hashes it). `liveUrl` is the address the page stands for (serve with its `#fragment` when an observer reads `location`). `defaultDollar` is what a bare `$` means. |
-| `health` | `observer`, `status`, `reasons` | The status the observer reports for this page **after its pass**: DEGRADED by `health()` (nothing extracted) or by a row the pass could not read (the other rows still listed). Reason codes used: `not_sent_folder`, `not_sent_list`, `redact.missing_occurred_at`, `window.unknown`, and `event.unreadable` (the real Calendar month view); gmail.sent health can also give `location.not_gmail`, `selector.missing.*` / `selector.ambiguous.*` (main, grid, row, subject, cell, recipient, time, account) and `row.recipient_invalid`. |
+| `health` | `observer`, `status`, `reasons` | The status the observer reports for this page **after its pass**: IDLE by `health()` for a page it does not read (`not_sent_folder`, `not_sent_list`; nothing extracted), DEGRADED by `health()` (nothing extracted) or by a row the pass could not read (the other rows still listed). DEGRADED reason codes used: `redact.missing_occurred_at`, `window.unknown`, and `event.unreadable` (the real Calendar month view); gmail.sent health can also give `location.not_gmail`, `view.mismatch`, `selector.missing.*` / `selector.ambiguous.*` (main, grid, row, subject, cell, recipient, time, account) and `row.recipient_invalid`. |
 | `observation` | `source`, `type`, `counterparty?`, `merchant?`, `amountCents?`, `currency?`, `subjectHint?`, `occurredAt`, `rowKey?`, `parser?`, `confidence?` | One row as `redact.project()` keeps it: the extractor passes the content fields as `raw` and `{ type, observedAt: readAt, rowKey }` as context. |
 | `coverage` | `source`, `account`, `windowStart`, `windowEnd`, `allCalendars?` | A window the pass may report as seen. None when the pass is DEGRADED. |
 | `dedup` | `with`, `shared` | How many of this fixture's observations project to the same contentHash as observations of `with`. |

@@ -2,6 +2,7 @@
  * Gmail Sent health: the Sent list is read only when it is the view Gmail shows, and every landmark the extractor
  * needs is there (sprint_2 2.2; agents/adapter_engineer.md rule 2; Hard Rules 5, 6). Each case changes a copy of a
  * fixture the way Gmail (an earlier view kept hidden, a compose window, a preview pane) or a selector break would.
+ * A page that is not a Sent list is IDLE, neither OK nor broken (sprint_2 2.11).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -11,20 +12,19 @@ import { addHiddenView, all, one, PAGE_1, planVariant, row } from './variants';
 
 const SENT = 'https://mail.google.com/mail/u/0/#sent';
 const degraded = (reason: string) => ({ status: 'DEGRADED', reasons: [reason], observations: [] });
+const idle = (reason: string) => ({ status: 'IDLE', reasons: [reason], observations: [] });
 
 describe('the route and the nav decide which folder is active', () => {
-  it('Sent markup at a Drafts, Inbox, label or search address is not_sent_folder, nothing extracted', async () => {
+  it('Sent markup at a Drafts, Inbox, label or search address is IDLE not_sent_folder, nothing extracted', async () => {
     for (const hash of ['#drafts', '#inbox', '#label/Receipts', '#search/in%3Asent', '']) {
       const url = `https://mail.google.com/mail/u/0/${hash}`;
-      expect(await planVariant({ url }), hash).toEqual(degraded('not_sent_folder'));
+      expect(await planVariant({ url }), hash).toEqual(idle('not_sent_folder'));
     }
   });
 
-  it('a Sent conversation (or the preview pane) is not_sent_list; a compose window changes nothing', async () => {
-    expect(await planVariant({ url: `${SENT}/FMfcgzQXJWDsKmvBcfJbxFgx` })).toEqual(degraded('not_sent_list'));
-    expect(await planVariant({ url: `${SENT}/p2/FMfcgzQXJWDsKmvBcfJbxFgx` })).toEqual(
-      degraded('not_sent_list'),
-    );
+  it('a Sent conversation (or the preview pane) is IDLE not_sent_list; a compose window changes nothing', async () => {
+    expect(await planVariant({ url: `${SENT}/FMfcgzQXJWDsKmvBcfJbxFgx` })).toEqual(idle('not_sent_list'));
+    expect(await planVariant({ url: `${SENT}/p2/FMfcgzQXJWDsKmvBcfJbxFgx` })).toEqual(idle('not_sent_list'));
     expect(await planVariant({ url: `${SENT}?compose=new` })).toEqual(await planVariant());
   });
 
@@ -34,13 +34,13 @@ describe('the route and the nav decide which folder is active', () => {
     );
   });
 
-  it('the nav selecting another folder is not_sent_folder; a nav that selects none does not block', async () => {
+  it('the nav selecting another folder under #sent is DEGRADED view.mismatch; a nav that selects none does not block', async () => {
     const select = (folder: string) => (doc: Document) => {
       for (const link of all(doc, '[role="navigation"] a[href*="#"]')) {
         link.setAttribute('tabindex', link.getAttribute('href')?.endsWith(`#${folder}`) ? '0' : '-1');
       }
     };
-    expect(await planVariant({ mutate: select('inbox') })).toEqual(degraded('not_sent_folder'));
+    expect(await planVariant({ mutate: select('inbox') })).toEqual(degraded('view.mismatch'));
     expect((await planVariant({ mutate: select('nothing') })).status).toBe('OK');
   });
 });

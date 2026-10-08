@@ -12,7 +12,7 @@ import { contentHashOf } from '../../../src/core/redact';
 import { IsoTs } from '../../../src/core/schema';
 import { accountHashOf } from '../../../src/observers/account';
 import { type PassPlan, planPass } from '../../../src/observers/plan';
-import type { ExtractContext, Observer, RawRow } from '../../../src/observers/types';
+import type { ExtractContext, HealthCheck, Observer, RawRow } from '../../../src/observers/types';
 import { NOW, ROWS, SEEDS, sentObserver, syntheticDocument } from './helpers';
 
 const ctx: ExtractContext = { observedAt: IsoTs.parse(NOW), offsetAt: () => -240 };
@@ -97,6 +97,19 @@ describe('health runs first', () => {
     expect(visibleWindow).not.toHaveBeenCalled();
   });
 
+  it('IDLE health (a page the observer does not read): nothing extracted, no coverage, IDLE kept (sprint_2 2.11)', () => {
+    const extract = vi.fn(() => [] as RawRow[]);
+    const visibleWindow = vi.fn(() => null);
+    const health = (): HealthCheck => ({ status: 'IDLE', reasons: ['not_sent_folder'] });
+    const result = plan(
+      sentObserver({ health, extract, visibleWindow }),
+      syntheticDocument({ folder: 'drafts' }),
+    );
+    expect(result).toEqual({ status: 'IDLE', reasons: ['not_sent_folder'], observations: [] });
+    expect(extract).not.toHaveBeenCalled();
+    expect(visibleWindow).not.toHaveBeenCalled();
+  });
+
   it.each<[string, () => unknown, string]>([
     [
       'throws',
@@ -111,6 +124,12 @@ describe('health runs first', () => {
       'health.invalid',
     ],
     ['gives no reason', () => ({ status: 'DEGRADED', reasons: [] }), 'health.invalid'],
+    ['is IDLE with no reason', () => ({ status: 'IDLE', reasons: [] }), 'health.invalid'],
+    [
+      'quotes the page in an IDLE reason',
+      () => ({ status: 'IDLE', reasons: ['Not the Sent list'] }),
+      'health.invalid',
+    ],
     ['answers an unknown status', () => ({ status: 'FINE' }), 'health.invalid'],
     ['adds a field', () => ({ status: 'OK', note: SEEDS[0] }), 'health.invalid'],
     ['answers nothing', () => undefined, 'health.invalid'],

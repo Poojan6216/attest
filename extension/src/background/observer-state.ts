@@ -8,6 +8,8 @@
  *    carry-forward), whichever tab sent them.
  *  - Own health: the latest report each observer sent of itself, so a later message of that pass, once accepted,
  *    can clear a DEGRADED the service worker set (src/ledger/health.ts). Lost: the DEGRADED stays until the next pass.
+ *    An IDLE report is not kept: its pass sends nothing else, and kept it would hide, from a tab on another folder,
+ *    the report of the pass whose rows follow (sprint_2 2.11).
  *  - Refused passes: the instants of passes with a refused row, so their coverage is refused too. Lost: the observer
  *    already stopped that pass when its post was refused (src/observers/base.ts), so it sends no coverage anyway.
  *  - Held Calendar pings: a Calendar pass with a known account posts its coverage pings before its snapshot, and its
@@ -59,6 +61,7 @@ export function serially<T>(state: PassState, observerId: string, job: () => Pro
 }
 
 export function noteOwnHealth(state: PassState, report: AdapterHealth): void {
+  if (report.status === 'IDLE') return;
   const known = state.ownHealth.get(report.adapterId);
   if (known === undefined || instantMs(report.checkedAt) >= instantMs(known.checkedAt)) {
     state.ownHealth.set(report.adapterId, report);

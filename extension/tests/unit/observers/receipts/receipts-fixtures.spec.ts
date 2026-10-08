@@ -103,22 +103,27 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
     }
   });
 
-  it.each(lists.map((f) => [f.file, f] as const))('list view %s is neutral: OK, nothing read', (_file, f) => {
-    const run = runOf(f);
-    expect(run.health).toEqual({ status: 'OK' });
-    expect(run.plan).toEqual({ status: 'OK_NO_COVERAGE', observations: [] });
-    expect(run.verdicts).toEqual([]);
-  });
+  it.each(lists.map((f) => [f.file, f] as const))(
+    'list view %s is neutral: IDLE, nothing read',
+    (_file, f) => {
+      const run = runOf(f);
+      expect(run.health).toEqual({ status: 'IDLE', reasons: ['no_conversation'] });
+      expect(run.plan).toEqual({ status: 'IDLE', reasons: ['no_conversation'], observations: [] });
+      expect(run.verdicts).toEqual([]);
+    },
+  );
 
-  it('coverage only where a platform receipt was parsed: the labelled windows, OK_NO_COVERAGE elsewhere', () => {
+  it('coverage only where a platform receipt was parsed: the labelled windows, none elsewhere', () => {
+    // A receipt whose total is unreadable reports DEGRADED and covers nothing (Hard Rules 5, 6); a list, with no
+    // conversation open, is IDLE (sprint_2 2.11); any other page is read and covers nothing.
+    const uncovered = (f: LabelledFixture): string => {
+      if (receiptHealthLabel(f)?.status === 'DEGRADED') return 'DEGRADED';
+      return f.page.view.startsWith('gmail.list.') ? 'IDLE' : 'OK_NO_COVERAGE';
+    };
     for (const f of fixtures) {
       const plan = runOf(f).plan;
       expect(planCoverage(plan), f.file).toEqual(expectedReceiptCoverage(f));
-      // A receipt whose total is unreadable reports DEGRADED and covers nothing (Hard Rules 5, 6).
-      const unreadable = receiptHealthLabel(f)?.status === 'DEGRADED';
-      if (platformInstants(f).length === 0) {
-        expect(plan.status, f.file).toBe(unreadable ? 'DEGRADED' : 'OK_NO_COVERAGE');
-      }
+      if (platformInstants(f).length === 0) expect(plan.status, f.file).toBe(uncovered(f));
     }
   });
 

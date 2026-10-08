@@ -79,7 +79,7 @@ describe('which list items are messages (re-review: QA-R2, QA-R3, SEC-R9)', () =
     expect(collapsed.health).toEqual({ status: 'OK' });
   });
 
-  it('a list item in the main region of a list page is no conversation: OK, nothing read', () => {
+  it('a list item in the main region of a list page is no conversation: IDLE, nothing read', () => {
     const html = messagePage(UBER)
       .replace(/<h2[^>]*>[^<]*<\/h2>/u, '')
       .replace(
@@ -87,7 +87,7 @@ describe('which list items are messages (re-review: QA-R2, QA-R3, SEC-R9)', () =
         '<div role="listitem">Label</div></div></div></body>',
       );
     const page = run(html, LIST_URL);
-    expect(page.health).toEqual({ status: 'OK' });
+    expect(page.health).toEqual({ status: 'IDLE', reasons: ['no_conversation'] });
     expect(page.plan.observations).toEqual([]);
   });
 
@@ -123,12 +123,12 @@ describe('a page that names no account (security re-review, SEC-R8)', () => {
 });
 
 describe('only the main landmark Gmail shows is read (TECH-5)', () => {
-  it('a conversation kept hidden beside a shown list is not read: OK, nothing reported', () => {
+  it('a conversation kept hidden beside a shown list is not read: IDLE, nothing reported', () => {
     const stale = messagePage(UBER).replace('role="main"', 'role="main" hidden');
     const html = stale.replace('</body>', '<div role="main"><div role="grid"></div></div></body>');
     expect(run(html, LIST_URL)).toEqual({
-      health: { status: 'OK' },
-      plan: { status: 'OK_NO_COVERAGE', observations: [] },
+      health: { status: 'IDLE', reasons: ['no_conversation'] },
+      plan: { status: 'IDLE', reasons: ['no_conversation'], observations: [] },
     });
   });
 
@@ -179,7 +179,7 @@ describe('the account in any display language, and only one (TECH-5)', () => {
     expect(health).toEqual({ status: 'DEGRADED', reasons: ['selector.ambiguous.account'] });
     expect(plan.status).toBe('DEGRADED');
     const list = messagePage({ subject: null, messages: [] }).replace('</header>', `${second}</header>`);
-    expect(run(list, LIST_URL).health).toEqual({ status: 'OK' });
+    expect(run(list, LIST_URL).health).toEqual({ status: 'IDLE', reasons: ['no_conversation'] });
   });
 });
 
@@ -190,7 +190,10 @@ describe("Gmail's address and placeholders come from one place (TECH-14)", () =>
       status: 'DEGRADED',
       reasons: ['selector.missing.main'],
     });
-    expect(run(html, `${LIST_URL}?compose=new`).health).toEqual({ status: 'OK' });
+    expect(run(html, `${LIST_URL}?compose=new`).health).toEqual({
+      status: 'IDLE',
+      reasons: ['no_conversation'],
+    });
   });
 
   it("Gmail's empty-subject placeholder is versioned in selectors.json, and no subject hint is made of it", () => {

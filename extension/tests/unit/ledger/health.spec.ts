@@ -1,6 +1,7 @@
 /**
  * Observer health as the service worker keeps it (src/ledger/health.ts; sprint_2 2.7; Hard Rule 6): a DEGRADED the
- * service worker set (`ledger.<code>`) stays until a later clean pass of the observer is fully accepted.
+ * service worker set (`ledger.<code>`) stays until a later clean pass of the observer is fully accepted, and an IDLE
+ * report (a page the observer does not read) never replaces the status a page it reads gave (sprint_2 2.11).
  */
 import 'fake-indexeddb/auto';
 
@@ -47,7 +48,7 @@ const own = (checkedAt: string, reasons: string[] = []) =>
 describe('recordOwnHealth', () => {
   it('keeps the latest of the observer reports while the service worker set nothing', async () => {
     expect(await recordOwnHealth(db, own(T2))).toEqual({ written: true, changed: true });
-    expect(await recordOwnHealth(db, own(T1, ['not_sent_folder']))).toEqual({
+    expect(await recordOwnHealth(db, own(T1, ['selector.missing.row']))).toEqual({
       written: false,
       changed: false,
     });
@@ -62,12 +63,52 @@ describe('recordOwnHealth', () => {
 
   it('keeps the service worker reasons beside a DEGRADED report of the observer', async () => {
     await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.invalid_input'], at: T1 });
-    await recordOwnHealth(db, own(T2, ['not_sent_folder']));
+    await recordOwnHealth(db, own(T2, ['selector.missing.row']));
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
       status: 'DEGRADED',
-      reasons: ['not_sent_folder', 'ledger.invalid_input'],
+      reasons: ['selector.missing.row', 'ledger.invalid_input'],
       checkedAt: T2,
     });
+  });
+});
+
+const idle = (checkedAt: string, reasons: string[] = ['not_sent_folder']) =>
+  makeHealth({ adapterId: 'gmail.sent', status: 'IDLE', reasons, checkedAt });
+
+describe('an IDLE report: a page the observer does not read, beside one it reads (sprint_2 2.11)', () => {
+  it('is stored where nothing is, and over an IDLE: the latest one', async () => {
+    expect(await recordOwnHealth(db, idle(T1))).toEqual({ written: true, changed: true });
+    expect(await recordOwnHealth(db, idle(T2, ['not_sent_list']))).toEqual({ written: true, changed: true });
+    expect(await recordOwnHealth(db, idle(T1))).toEqual({ written: false, changed: false });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
+      status: 'IDLE',
+      reasons: ['not_sent_list'],
+      checkedAt: T2,
+    });
+  });
+
+  it.each([
+    ['an OK', [] as string[]],
+    ["the observer's own DEGRADED", ['selector.missing.time']],
+  ])('never replaces %s, however much later', async (_name, reasons) => {
+    await recordOwnHealth(db, own(T1, reasons));
+    expect(await recordOwnHealth(db, idle(T3))).toEqual({ written: false, changed: false });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ reasons, checkedAt: T1 });
+  });
+
+  it('never replaces a DEGRADED the service worker set', async () => {
+    await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.late_sighting'], at: T1 });
+    expect(await recordOwnHealth(db, idle(T2))).toEqual({ written: false, changed: false });
+    expect(setByLedger(await getAdapterHealth(db, 'gmail.sent'))).toBe(true);
+  });
+
+  it('never holds back a report from a page the observer reads, even one read before it', async () => {
+    await recordOwnHealth(db, idle(T2));
+    expect(await recordOwnHealth(db, own(T1, ['selector.missing.time']))).toEqual({
+      written: true,
+      changed: true,
+    });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'DEGRADED', checkedAt: T1 });
   });
 });
 
@@ -84,12 +125,12 @@ describe('markLedgerDegraded', () => {
   });
 
   it('keeps the reasons a DEGRADED report already holds, its own and earlier refusals', async () => {
-    await recordOwnHealth(db, own(T1, ['not_sent_folder']));
+    await recordOwnHealth(db, own(T1, ['selector.missing.row']));
     await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.invalid_input'], at: T2 });
     await markLedgerDegraded(db, { adapterId: 'gmail.sent', reasons: ['ledger.late_sighting'], at: T3 });
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
       status: 'DEGRADED',
-      reasons: ['not_sent_folder', 'ledger.invalid_input', 'ledger.late_sighting'],
+      reasons: ['selector.missing.row', 'ledger.invalid_input', 'ledger.late_sighting'],
       checkedAt: T3,
     });
   });
@@ -98,7 +139,7 @@ describe('markLedgerDegraded', () => {
     await markLedgerDegraded(db, { adapterId: 'gcal.event', reasons: ['ledger.invalid_input'], at: T1 });
     expect(await getAdapterHealth(db, 'gcal.event')).toMatchObject({ version: UNKNOWN_VERSION });
     await expectLedgerError(
-      markLedgerDegraded(db, { adapterId: 'gcal.event', reasons: ['not_sent_folder'], at: T1 }),
+      markLedgerDegraded(db, { adapterId: 'gcal.event', reasons: ['selector.missing.row'], at: T1 }),
       'invalid_input',
     );
   });
@@ -118,9 +159,9 @@ describe('clearLedgerDegraded', () => {
   });
 
   it('changes nothing when the service worker set nothing', async () => {
-    await recordOwnHealth(db, own(T1, ['not_sent_folder']));
+    await recordOwnHealth(db, own(T1, ['selector.missing.row']));
     expect(await clearLedgerDegraded(db, own(T2))).toEqual({ cleared: false });
-    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ reasons: ['not_sent_folder'] });
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ reasons: ['selector.missing.row'] });
   });
 });
 
@@ -143,7 +184,7 @@ describe('a repeat of the stored report (TECH-2: no write, no broadcast, checked
 
   it('a change of status, reasons or version is written at once and announced', async () => {
     await recordOwnHealth(db, own(at(0)));
-    expect(await recordOwnHealth(db, own(at(0, 5), ['not_sent_folder']))).toEqual({
+    expect(await recordOwnHealth(db, own(at(0, 5), ['selector.missing.grid']))).toEqual({
       written: true,
       changed: true,
     });

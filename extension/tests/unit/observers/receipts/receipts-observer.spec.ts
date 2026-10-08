@@ -132,8 +132,11 @@ describe('health: neutral with nothing to read, loud when a landmark is missing 
   const health = (spec: PageSpec, url = THREAD_URL) =>
     onPage(spec, (doc) => receiptObserver.health(doc), url);
 
-  it('a list view with no conversation open is OK', () => {
-    expect(health({ subject: null, messages: [] }, LIST_URL)).toEqual({ status: 'OK' });
+  it('a list view with no conversation open is IDLE: neither OK nor broken (sprint_2 2.11)', () => {
+    expect(health({ subject: null, messages: [] }, LIST_URL)).toEqual({
+      status: 'IDLE',
+      reasons: ['no_conversation'],
+    });
   });
 
   it('an address naming a thread with no message on the page names what is missing', () => {
@@ -159,7 +162,10 @@ describe('health: neutral with nothing to read, loud when a landmark is missing 
       status: 'DEGRADED',
       reasons: ['selector.missing.main'],
     });
-    expect(withPage(html, LIST_URL, (doc) => receiptObserver.health(doc))).toEqual({ status: 'OK' });
+    expect(withPage(html, LIST_URL, (doc) => receiptObserver.health(doc))).toEqual({
+      status: 'IDLE',
+      reasons: ['no_conversation'],
+    });
   });
 });
 

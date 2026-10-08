@@ -64,6 +64,18 @@ export function healthOf(adapterId: string, checkedAt: string, reasons: readonly
   });
 }
 
+/** The report of a pass on a page the observer does not read (sprint_2 2.11): IDLE, with its reasons. */
+export function idleOf(
+  adapterId: string,
+  checkedAt: string,
+  reasons: readonly string[] = ['not_sent_folder'],
+) {
+  return AdapterHealthMessage.parse({
+    type: 'adapter.health',
+    health: { adapterId, version: '1.0.0', status: 'IDLE', reasons: [...reasons], checkedAt },
+  });
+}
+
 export function rowsOf(observerId: string, observations: readonly ObservationInput[]) {
   return ObserverObservationsMessage.parse({
     type: 'observer.observations',

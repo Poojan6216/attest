@@ -7,7 +7,9 @@
  * A content script does nothing but `startObservers(observers)`. Each pass reads the clock once (src/clock.ts) and
  * decides what it may report (./plan.ts), then posts, in this order and one message at a time, each only after the
  * previous one was answered:
- *  1. `adapter.health`: OK, or DEGRADED with reason codes (Hard Rule 6: every pass reports its health);
+ *  1. `adapter.health`: OK; IDLE with reason codes when the page is not one the observer reads (another Gmail folder,
+ *     no conversation open: nothing else is posted, and the ledger keeps the status a page it reads gave, sprint_2
+ *     2.11); or DEGRADED with reason codes (Hard Rule 6: every pass reports its health);
  *  2. `observer.observations`: the rows `project()` accepted, at most SCHEMA_LIMITS.BATCH per message, each with
  *     `observedAt` = the instant the pass read the page (docs/grading.md §3, §10), never `sightedAt`;
  *  3. `coverage.ping`, one per window the pass saw (./coverage.ts), each naming the observer's `source` (and, for
@@ -108,7 +110,7 @@ export interface PassDeps {
  * gave no ISO instant, so nothing could be stamped or sent) appears only here.
  */
 export interface PassResult {
-  readonly status: 'OK' | 'DEGRADED';
+  readonly status: 'OK' | 'IDLE' | 'DEGRADED';
   readonly reasons: readonly string[];
   /** The types of the messages posted and answered, in order. */
   readonly posted: readonly BusMessageType[];
@@ -117,13 +119,14 @@ export interface PassResult {
 }
 
 function healthMessage(observer: Observer, plan: PassPlan, checkedAt: IsoTs): BusMessage | null {
+  const named = plan.status === 'DEGRADED' || plan.status === 'IDLE';
   const parsed = AdapterHealthMessage.safeParse({
     type: 'adapter.health',
     health: {
       adapterId: observer.id,
       version: observer.version,
-      status: plan.status === 'DEGRADED' ? 'DEGRADED' : 'OK',
-      reasons: plan.status === 'DEGRADED' ? plan.reasons : [],
+      status: named ? plan.status : 'OK',
+      reasons: named ? plan.reasons : [],
       checkedAt,
     },
   });
@@ -167,7 +170,7 @@ function coverageMessages(
 
 /** The pass's `calendar.snapshot` (none when the plan has no snapshot), or null when it fails its schema. */
 function snapshotMessages(observer: Observer, plan: PassPlan): BusMessage[] | null {
-  if (plan.status === 'DEGRADED' || plan.snapshot === undefined) return [];
+  if (plan.status === 'DEGRADED' || plan.status === 'IDLE' || plan.snapshot === undefined) return [];
   const parsed = CalendarSnapshotMessage.safeParse({
     type: 'calendar.snapshot',
     observerId: observer.id,
@@ -216,10 +219,11 @@ function resultOf(messages: readonly BusMessage[], posted: BusMessageType[], com
 
 /**
  * The plan of a pass that cannot vouch that the page shows the present (./lifecycle.ts): its health and its rows, no
- * coverage and no snapshot. A DEGRADED plan posts neither anyway.
+ * coverage and no snapshot. An IDLE or DEGRADED plan posts neither anyway.
  */
 function withoutCoverage(plan: PassPlan): PassPlan {
-  return plan.status === 'DEGRADED' ? plan : { status: 'OK_NO_COVERAGE', observations: plan.observations };
+  if (plan.status === 'DEGRADED' || plan.status === 'IDLE') return plan;
+  return { status: 'OK_NO_COVERAGE', observations: plan.observations };
 }
 
 /**

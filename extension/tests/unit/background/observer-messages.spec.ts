@@ -31,7 +31,7 @@ import {
   uniqueDbName,
 } from '../ledger/fixtures';
 import { ACCOUNT } from './calendar-fixtures';
-import { contextOf, healthOf, pingOf, rowsOf, tab, type TestContext } from './observer-harness';
+import { contextOf, healthOf, idleOf, pingOf, rowsOf, tab, type TestContext } from './observer-harness';
 
 let db: LedgerDb;
 let ctx: TestContext;
@@ -265,10 +265,10 @@ describe('a DEGRADED the service worker set stays until a later clean pass is fu
 
   it('a later pass that reports DEGRADED itself keeps the service worker reason beside its own', async () => {
     await onObservations(ctx, rowsOf('gmail.sent', [{ ...forgedRow(), source: 'gmail.sent' }]));
-    await onHealth(ctx, healthOf('gmail.sent', LATER, ['not_sent_folder']));
+    await onHealth(ctx, healthOf('gmail.sent', LATER, ['selector.missing.time']));
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
       status: 'DEGRADED',
-      reasons: ['not_sent_folder', 'ledger.invalid_input'],
+      reasons: ['selector.missing.time', 'ledger.invalid_input'],
     });
   });
 
@@ -282,6 +282,32 @@ describe('a DEGRADED the service worker set stays until a later clean pass is fu
     await onObservations(ctx, rowsOf('gmail.sent', [{ ...forgedRow(), source: 'gmail.sent' }]));
     await onHealth(ctx, healthOf('gmail.sent', LATER));
     await onCoveragePing(ctx, pingOf(sentPing({ lastSyncAt: LATER, windowEnd: LATER })), tab());
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'OK', checkedAt: LATER });
+  });
+});
+
+describe('several Gmail tabs: a page the observer does not read never flips its health (sprint_2 2.11)', () => {
+  const BETWEEN = '2026-10-01T10:22:00-04:00';
+  const LATEST = '2026-10-01T10:30:00-04:00';
+
+  it("an Inbox tab's reports between the Sent tab's keep the Sent tab's status, OK or DEGRADED", async () => {
+    await onHealth(ctx, healthOf('gmail.sent', SIGHTED));
+    await onHealth(ctx, idleOf('gmail.sent', BETWEEN));
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'OK', checkedAt: SIGHTED });
+    await onHealth(ctx, healthOf('gmail.sent', LATER, ['selector.missing.time']));
+    await onHealth(ctx, idleOf('gmail.sent', LATEST));
+    expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({
+      status: 'DEGRADED',
+      reasons: ['selector.missing.time'],
+      checkedAt: LATER,
+    });
+  });
+
+  it("an Inbox tab's report between a Sent pass's health and its rows still lets that pass clear a ledger DEGRADED", async () => {
+    await onObservations(ctx, rowsOf('gmail.sent', [{ ...forgedRow(), source: 'gmail.sent' }]));
+    await onHealth(ctx, healthOf('gmail.sent', LATER));
+    await onHealth(ctx, idleOf('gmail.sent', LATEST));
+    await onObservations(ctx, rowsOf('gmail.sent', [makeObservation({ observedAt: LATER })]));
     expect(await getAdapterHealth(db, 'gmail.sent')).toMatchObject({ status: 'OK', checkedAt: LATER });
   });
 });
