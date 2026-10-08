@@ -27,3 +27,4 @@ You turn vendor pages into structured facts. Agent pages (Muse, ChatGPT/Dots, Cl
 - [ ] Sanitised: names, emails, amounts, subjects replaced by deterministic fakes; `tests/fixtures/secrets/seeded.json` values injected for the leak test
 - [ ] A `labels.json` beside the HTML with the expected extraction output
 - [ ] Vendor terms re-read on capture day; note in `Decisions.md`
+- [ ] No value read from the live page, or from a capture's output, is written anywhere else (a test, a comment, a doc, `Decisions.md`, a commit message): describe it by kind and length, and give a test an invented value of the same shape (security review SEC-L1, 2026-10-08)

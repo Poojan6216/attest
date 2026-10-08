@@ -20,7 +20,8 @@
  * no coverage ping and no Calendar snapshot (the snapshot is the base the next pass's changes are dated against).
  * Its health is what the pass found: a page catching up is not a broken observer (Hard Rule 6: never cry wolf).
  * Known limit: a page whose network is up but whose server cannot be reached reports itself online; only its own
- * banner says otherwise, and the live smoke (sprint_2 2.8) checks what the observers do then.
+ * banner says otherwise. The live smoke (sprint_2 2.8) went offline through `navigator.onLine` only: that case is
+ * carried to sprint_6 6.4.
  *
  * Listening is not acting (Hard Rule 3): every listener here is passive, reads nothing of its event, and keeps only
  * instants; nothing here writes the page.

@@ -6,6 +6,7 @@ export type CaptureErrorCode =
   | 'bad_args'
   | 'bad_selector'
   | 'bad_seeds'
+  | 'bad_key'
   | 'too_few_seeds'
   | 'bad_labels'
   | 'exists'

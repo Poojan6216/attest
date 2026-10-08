@@ -176,7 +176,7 @@ The latest health of each observer (and, from Sprint 3, each adapter): what the 
 | Field | Meaning |
 |---|---|
 | `adapterId`, `version` | The observer and its selectors version. |
-| `status` | `OK`, `IDLE` or `DEGRADED`. IDLE: the page is not one the observer reads (another Gmail folder, no conversation open), neither OK nor broken; it is stored only where no page the observer reads has reported, so it never replaces an OK or a DEGRADED (sprint_2 2.11). |
+| `status` | `OK`, `IDLE` or `DEGRADED`. IDLE: the page is not one the observer reads (another Gmail folder, no conversation open), neither OK nor broken; it replaces only nothing, an IDLE, or the report of its own tab, never another tab's OK or DEGRADED (sprint_2 2.11; the tab is known only in the service worker's memory, never stored). |
 | `reasons` | Reason codes such as `not_sent_folder` or `selector.missing.row`: codes only, never page text ([`docs/adapters.md` §4](adapters.md#4-reading-a-degraded-reason)). |
 | `checkedAt` | When the pass ran that wrote it. A report that repeats the stored one (same status, reasons and version) is written again only once the stored one is a minute old (`OBSERVER_HEALTH_REFRESH_MS`); a change is written at once. A report checked after the service worker's clock is refused, and one stored while the clock ran ahead is repaired when the clock comes back. |
 

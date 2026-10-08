@@ -21,7 +21,7 @@
  *  - otherwise OK, with one set of coverage facts per window. A coverage entry exists only for a clean pass whose
  *    health was OK.
  *  - a clean pass whose observer reports no window, by design (`visibleWindows()` answered []: a Sent page past the
- *    head of the list, a Gmail view with no receipt open, a Calendar grid still drawing): `OK_NO_COVERAGE`, health
+ *    head of the list, an opened conversation with no receipt, a Calendar grid still drawing): `OK_NO_COVERAGE`, health
  *    OK and the rows, never DEGRADED (Hard Rule 6 must not cry wolf over a page that is fine).
  * A clean pass of a Calendar observer whose account is known also carries the snapshot it read (sprint_2 2.7).
  *

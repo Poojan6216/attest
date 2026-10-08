@@ -11,50 +11,24 @@
  *  - Two passes of one row delivered out of order from a Gmail tab: the first is stored, the second refused
  *    `late_sighting`, and the observer is DEGRADED (Hard Rules 4, 6).
  */
-import { expect, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { idFromHash } from '../../src/core/hash';
 import { instantMs } from '../../src/core/normalize';
 import type { LedgerExport } from '../../src/ledger/export';
-import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { contentScriptPost } from './support/content-world';
-import { launchExtension, type LaunchedExtension } from './support/extension';
-import { installRouteGuard } from './support/network-guard';
+import { type VendorSession, withVendorSession } from './support/session';
 import {
   expectedObservation,
-  FIXTURE_TIME_ZONE,
   openVendorPage,
   readLedger,
   sightingOf,
-  type VendorRoutes,
   vendorFixture,
   waitForLedger,
 } from './support/vendor-pages';
 
 declare const chrome: WxtBrowser;
-
-interface Session {
-  readonly server: FixtureServer;
-  readonly extension: LaunchedExtension;
-  readonly routes: VendorRoutes;
-  /** An extension page the test reads the ledger from. */
-  readonly ledgerPage: Page;
-}
-
-async function withSession(run: (session: Session) => Promise<void>): Promise<void> {
-  const server = await startFixtureServer();
-  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
-  try {
-    const routes: VendorRoutes = new Map();
-    await installRouteGuard(extension.context, { fixtureOrigin: server.origin, routedFixtures: routes });
-    const ledgerPage = await extension.openExtensionPage('options.html');
-    await run({ server, extension, routes, ledgerPage });
-  } finally {
-    await extension.close();
-    await server.close();
-  }
-}
 
 const health = (ledger: LedgerExport, observer: string) =>
   ledger.tables.adapterHealth.find((report) => report.adapterId === observer);
@@ -86,7 +60,7 @@ function forgedCalendarRows(): unknown {
 }
 
 /** The forged rows (see the module comment): refused from an extension page, refused and DEGRADED from Calendar. */
-async function forgedWritesNothing(session: Session): Promise<void> {
+async function forgedWritesNothing(session: VendorSession): Promise<void> {
   const week = vendorFixture('gcal', 'synthetic-gcal-week-before.html');
   const tab = await openVendorPage(session.extension.context, session.routes, week);
   const firstLook = week.events.map((event) => sightingOf(week, event).contentHash);
@@ -122,7 +96,7 @@ async function forgedWritesNothing(session: Session): Promise<void> {
 }
 
 /** The same row twice from a Gmail tab, the later sighting delivered first. */
-async function outOfOrderRefused(session: Session): Promise<void> {
+async function outOfOrderRefused(session: VendorSession): Promise<void> {
   const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
   const tab = await openVendorPage(session.extension.context, session.routes, sent);
   const shown = sent.observations.map((fact) => expectedObservation(sent, fact).contentHash);
@@ -161,11 +135,11 @@ async function outOfOrderRefused(session: Session): Promise<void> {
 test.describe('forged and out-of-order observer messages (sprint_2 2.7; SEC-V1)', () => {
   test('a forged observer.observations message writes nothing and turns the observer DEGRADED', async () => {
     test.setTimeout(2 * 60_000);
-    await withSession(forgedWritesNothing);
+    await withVendorSession(forgedWritesNothing);
   });
 
   test('two passes of one row delivered out of order: the first is stored, the second refused late_sighting', async () => {
     test.setTimeout(2 * 60_000);
-    await withSession(outOfOrderRefused);
+    await withVendorSession(outOfOrderRefused);
   });
 });

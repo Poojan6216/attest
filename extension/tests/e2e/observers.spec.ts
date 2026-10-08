@@ -22,54 +22,19 @@ import { idFromHash } from '../../src/core/hash';
 import { instantMs } from '../../src/core/normalize';
 import { Claim } from '../../src/core/schema';
 import type { LedgerExport } from '../../src/ledger/export';
-import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import type { LabelledFixture } from '../unit/fixtures/fixture-labels';
-import { launchExtension, type LaunchedExtension } from './support/extension';
 import { findLeaks, loadSeeds } from './support/leaks';
-import { installRouteGuard } from './support/network-guard';
+import { type VendorSession, withVendorSession } from './support/session';
 import {
   allowedFields,
   expectedObservation,
-  FIXTURE_TIME_ZONE,
   openVendorPage,
   POLICY_DOCUMENT,
   readLedger,
   sightingOf,
-  type VendorRoutes,
   vendorFixture,
   waitForLedger,
 } from './support/vendor-pages';
-
-interface Session {
-  readonly server: FixtureServer;
-  readonly extension: LaunchedExtension;
-  readonly routes: VendorRoutes;
-  /** An extension page the test asks the ledger from. */
-  readonly ledgerPage: Page;
-}
-
-async function startSession(): Promise<Session> {
-  const server = await startFixtureServer();
-  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
-  const routes: VendorRoutes = new Map();
-  await installRouteGuard(extension.context, { fixtureOrigin: server.origin, routedFixtures: routes });
-  const ledgerPage = await extension.openExtensionPage('options.html');
-  return { server, extension, routes, ledgerPage };
-}
-
-async function endSession(session: Session): Promise<void> {
-  await session.extension.close();
-  await session.server.close();
-}
-
-async function withSession(run: (session: Session) => Promise<void>): Promise<void> {
-  const session = await startSession();
-  try {
-    await run(session);
-  } finally {
-    await endSession(session);
-  }
-}
 
 const hashesOf = (ledger: LedgerExport): Set<string> =>
   new Set(ledger.tables.observations.map((observation) => observation.contentHash));
@@ -91,7 +56,7 @@ function diffRows(file: string): string[] {
 }
 
 /** Opens each Calendar week in one tab, in turn, waiting until the service worker stored each pass's snapshot. */
-async function walkCalendar(session: Session, files: readonly string[]): Promise<void> {
+async function walkCalendar(session: VendorSession, files: readonly string[]): Promise<void> {
   let tab: Page | undefined;
   let readAt: string | undefined;
   for (const file of files) {
@@ -116,7 +81,7 @@ function expectAllowlisted(ledger: LedgerExport): void {
 }
 
 /** The Sent list and a run of Calendar weeks export as exactly their labelled rows (see the module comment). */
-async function exportsLabelledRows(session: Session): Promise<void> {
+async function exportsLabelledRows(session: VendorSession): Promise<void> {
   const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
   const sentRows = sent.observations.map((fact) => expectedObservation(sent, fact).contentHash);
   await openVendorPage(session.extension.context, session.routes, sent);
@@ -154,7 +119,7 @@ async function exportsLabelledRows(session: Session): Promise<void> {
 }
 
 /** A Sent list with mails composed as drafts first exports exactly its labelled rows and window (module comment). */
-async function exportsDraftFirstRows(session: Session): Promise<void> {
+async function exportsDraftFirstRows(session: VendorSession): Promise<void> {
   const page = vendorFixture('gmail', 'synthetic-sent-draft-first.html');
   const rows = page.observations.map((fact) => expectedObservation(page, fact).contentHash);
   await openVendorPage(session.extension.context, session.routes, page);
@@ -173,7 +138,7 @@ async function exportsDraftFirstRows(session: Session): Promise<void> {
 }
 
 /** A grading batch between a pass's sighting and its write. */
-async function sightedBeforeBatch(session: Session): Promise<void> {
+async function sightedBeforeBatch(session: VendorSession): Promise<void> {
   // The ledger is open (an export opens it); then a grading batch is recorded two minutes ahead, so every row
   // the next pass sights is written after that batch (Sprint 3.6 records batches; Sprint 2 has none yet).
   await readLedger(session.ledgerPage);
@@ -191,17 +156,17 @@ async function sightedBeforeBatch(session: Session): Promise<void> {
 test.describe('the observers write Gmail and Calendar to the ledger (sprint_2 2.7)', () => {
   test('the Sent and Calendar fixtures export as their labelled observations, allowlisted fields only', async () => {
     test.setTimeout(4 * 60_000);
-    await withSession(exportsLabelledRows);
+    await withVendorSession(exportsLabelledRows);
   });
 
   test('a mail composed as a draft first is a row, and a conversation is none (sprint_2 2.10)', async () => {
     test.setTimeout(2 * 60_000);
-    await withSession(exportsDraftFirstRows);
+    await withVendorSession(exportsDraftFirstRows);
   });
 
   test('a Calendar event sighted before a calendar.created claim but written after a batch is not its evidence', async () => {
     test.setTimeout(2 * 60_000);
-    await withSession(sightedBeforeBatch);
+    await withVendorSession(sightedBeforeBatch);
   });
 });
 

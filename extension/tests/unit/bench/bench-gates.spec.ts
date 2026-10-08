@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { provenance, UNKNOWN_COMMIT, type Git } from '../../../../bench/provenance';
 import { failedGates } from '../../../../bench/results';
-import { localDate, runBenches, type Bench } from '../../../../bench/run_bench';
+import { dirtyRefusal, localDate, runBenches, type Bench } from '../../../../bench/run_bench';
 import { median, summarize } from '../../../../bench/timing';
 
 const SHA = 'a'.repeat(40);
@@ -157,5 +157,15 @@ describe('pnpm bench: exit code and result files', () => {
 
   it('dates the result file with the local calendar date', () => {
     expect(localDate(new Date(2026, 9, 2, 23, 59))).toBe('2026-10-02');
+  });
+});
+
+describe('pnpm bench refuses a tree that differs from its commit (TECH-L2, Hard Rule 12)', () => {
+  const at = (commitDirty: boolean) => ({ commit: 'a'.repeat(40), commitDirty, node: 'v22.14.0' });
+
+  it('refuses a dirty tree, measures a clean one, and measures a dirty one only when asked (--dirty)', () => {
+    expect(dirtyRefusal(at(true), [])).toMatch(/Commit first/u);
+    expect(dirtyRefusal(at(false), [])).toBeNull();
+    expect(dirtyRefusal(at(true), ['--dirty'])).toBeNull();
   });
 });

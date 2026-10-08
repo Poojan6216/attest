@@ -25,7 +25,9 @@ function contains(entries: readonly ScenarioCoverage[], from: number, to: number
   let reached = from;
   for (const e of [...entries].sort((a, b) => instantMs(a.windowStart) - instantMs(b.windowStart))) {
     if (instantMs(e.windowStart) > reached) return false;
-    reached = Math.max(reached, instantMs(e.windowEnd));
+    // A window that ends before the point reached adds nothing: a point span is held only by a window over it.
+    if (instantMs(e.windowEnd) < reached) continue;
+    reached = instantMs(e.windowEnd);
     if (reached >= to) return true;
   }
   return false;

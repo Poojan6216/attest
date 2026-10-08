@@ -1,0 +1,18 @@
+# The setup every CI job runs after its checkout (tech review TECH-L13: it was written out five times): pnpm, Node at
+# the version in .nvmrc with the pnpm store cached, then the install from the lockfile. Every action is pinned to a
+# full commit SHA (the version is in the comment); Dependabot proposes updates here too (.github/dependabot.yml).
+name: Setup
+description: pnpm, Node from .nvmrc and the frozen install, for a job that has checked the repository out.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - name: Install
+      shell: bash
+      run: pnpm install --frozen-lockfile

@@ -37,6 +37,9 @@ const VENDOR_PAGES = [
   // Real captures (2026-10-06), read as Chrome draws them (QA-R5).
   vendorFixture('gmail', 'sent-list-1.html'),
   vendorFixture('gcal', 'week-after.html'),
+  // Real receipts (2026-10-07): an opened conversation the receipt reader reads (QA third review).
+  vendorFixture('gmail', 'receipt-stripe.html'),
+  vendorFixture('gmail', 'receipt-uber.html'),
 ];
 const OBSERVERS = ['gmail.sent', 'gmail.receipt', 'gcal.event'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];

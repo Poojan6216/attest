@@ -15,6 +15,7 @@ import { type Browser, chromium, type Page } from '@playwright/test';
 
 import { type CaptureOptionsInput, HELP, parseCaptureArgs, resolveCaptureOptions } from './capture-args';
 import { CaptureError } from './capture-error';
+import { captureKey } from './capture-key';
 import { assertWritable, fixtureTarget, loadSeeds, SEEDS_PATH, writeFixture } from './capture-output';
 import { type PageSnapshot, PageSnapshotSchema, SNAPSHOT_CONFIG, snapshotDocument } from './capture-page';
 import { assertSelectorsValid, sanitizeHtml, type SanitizeStats } from './sanitize';
@@ -108,7 +109,7 @@ export async function captureFixture(input: CaptureOptionsInput): Promise<Captur
   const seeds = await loadSeeds(options.seedsPath ?? SEEDS_PATH);
   const snapshot = await snapshotTab(options.cdp, options.tab);
   const sanitized = sanitizeHtml(snapshot.html, {
-    seed: options.seed,
+    seed: options.seed ?? (await captureKey()),
     seeds,
     names: options.names,
     redactSelectors: options.redactSelectors,
@@ -143,7 +144,7 @@ function summary(result: CaptureResult): string {
     `captured ${result.source}`,
     `  -> ${relative}`,
     `  replaced: ${s.email} emails, ${s.phone} phones, ${s.card + s.rowCards} cards, ${s.amount} amounts, ` +
-      `${s.address + s.rowAddresses} addresses, ${s.name} names, ${s.rowIds} order numbers, ` +
+      `${s.address + s.rowAddresses} addresses, ${s.name} names, ${s.rowIds} ids and codes, ` +
       `${s.redactedTexts + s.literal} redacted texts, ${s.strayAt} stray '@'`,
     `  removed: ${s.removedElements} elements, ${s.removedAttributes} handlers, script URLs and secrets, ` +
       `${s.neutralisedResources} external resources, ${s.removedComments} comments`,

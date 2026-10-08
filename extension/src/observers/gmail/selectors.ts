@@ -25,7 +25,10 @@ const SentSelectorsFile = z.strictObject({
     folder: z.string().regex(/^[a-z]+$/u),
     pageSegment: z.string().min(1),
   }),
-  /** The form of Gmail's legacy thread and message ids: a row with another is refused (./sent-time.ts). */
+  /**
+   * The form of Gmail's legacy thread and message ids (a row with another is refused, ./sent-time.ts), and the text of
+   * the message count Gmail draws after a conversation's recipients (./sent-page.ts `messageCountOf`, 1.3.0).
+   */
   patterns: z.strictObject({ legacyId: z.string().min(1), messageCount: z.string().min(1) }),
   selectors: z.strictObject({
     navLink: Selector,

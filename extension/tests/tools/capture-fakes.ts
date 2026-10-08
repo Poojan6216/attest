@@ -1,12 +1,15 @@
 /**
  * Deterministic fakes for the fixture sanitiser.
  *
- * Every fake is derived from SHA-256(seed, kind, original), so the same capture with the same seed always
+ * Every fake is derived from HMAC-SHA256(seed; kind, original), so the same capture with the same seed always
  * produces the same fixture, and one original value maps to one fake everywhere in a capture (labels stay
- * coherent). Fakes for emails, names, phrases and addresses are unique within a capture and never equal an
+ * coherent). The seed is a key: a live capture's is the secret in the capture key file (./capture-key.ts), so a
+ * committed fake says nothing about its original to anyone without it (security review, SEC-L2: with the public
+ * seed every fake was an unkeyed hash of its original, and a card ending or an amount could be recovered). The
+ * fixed seeds of the tool's own tests are public, and their pages hold only invented values. Fakes for emails, names, phrases and addresses are unique within a capture and never equal an
  * original the caller reserved, so two different people never collapse into one fake.
  */
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 /** The only domains a sanitised fixture may contain after an '@' (RFC 2606 reserved). */
 export const FAKE_EMAIL_DOMAINS = ['example.com', 'example.org', 'example.net'] as const;
@@ -115,7 +118,7 @@ const PHRASE_WORDS = [
 const MAX_ATTEMPTS = 10_000;
 const MAX_PHRASE_WORDS = 12;
 
-type FakeKind = 'email' | 'name' | 'phone' | 'card' | 'amount' | 'address' | 'phrase' | 'identifier';
+type FakeKind = 'email' | 'name' | 'phone' | 'card' | 'amount' | 'address' | 'phrase' | 'identifier' | 'uuid';
 
 interface FakeOptions {
   /** Fakes of this kind must be distinct across originals (default true). */
@@ -161,9 +164,20 @@ export class Faker {
     this.#seed = seed;
   }
 
-  /** 32 bytes derived from the seed; the only source of variation in every fake. */
+  /** 32 bytes keyed by the seed (HMAC-SHA256); the only source of variation in every fake. */
   bytes(kind: string, key: string, attempt = 0): Buffer {
-    return createHash('sha256').update(`${this.#seed}\u0000${kind}\u0000${key}\u0000${attempt}`).digest();
+    return createHmac('sha256', this.#seed).update(`${kind}\u0000${key}\u0000${attempt}`).digest();
+  }
+
+  /** Every fake made so far: its kind, what it replaced and the fake (the re-fake tool's record, kept out of the repo). */
+  made(): { kind: string; original: string; fake: string }[] {
+    return Array.from(this.#cache, ([cacheKey, fake]) => {
+      const at = cacheKey.indexOf('\u0000');
+      const kind = cacheKey.slice(0, at);
+      const key = cacheKey.slice(at + 1);
+      // An amount's key is `currency|number`, and the number is what its fake replaced.
+      return { kind, original: kind === 'amount' ? key.slice(key.indexOf('|') + 1) : key, fake };
+    });
   }
 
   /** Originals a fake must never equal (case-insensitive), e.g. every real name token on the page. */
@@ -223,6 +237,24 @@ export class Faker {
           if (/\d/.test(char)) return String(byte % 10);
           const letter = String.fromCharCode(97 + (byte % 26));
           return char === char.toUpperCase() ? letter.toUpperCase() : letter;
+        });
+      },
+      { unique: false, sameAs: (candidate) => candidate === original },
+    );
+  }
+
+  /** A UUID (or any hex token) in its shape: every hex digit another, in the token's case; separators kept. */
+  uuid(original: string): string {
+    return this.#fake(
+      'uuid',
+      original,
+      (bytes) => {
+        const upper = /[A-F]/.test(original) && !/[a-f]/.test(original);
+        let index = 0;
+        return original.replace(/[0-9a-f]/gi, () => {
+          const digit = (bytes.readUInt8(index % bytes.length) % 16).toString(16);
+          index += 1;
+          return upper ? digit.toUpperCase() : digit;
         });
       },
       { unique: false, sameAs: (candidate) => candidate === original },

@@ -53,7 +53,7 @@
         "windowEnd": "2025-05-06T22:35:00-04:00"
       }
     ],
-    "notes": "Real Stripe receipt (a company's monthly plan), opened from a search, so no folder is selected and gmail.sent is DEGRADED not_sent_folder. The merchant is the sender's display name, which the capture fakes (\"Garnet quarry timber\"; the body's \"Receipt from Eleven Labs Inc.\" is the company). Stripe wraps each total label in a table of its own: [\"\", Total, \"\", $67.66, \"\"] reads as one line from gmail.receipt 1.4.0. The total is \"Amount paid $67.66\" (also \"Total\"); amounts, the card ending, the receipt and invoice numbers are fakes, the subject's number with them. One point of coverage at the message date."
+    "notes": "Real Stripe receipt (a company's monthly plan), opened from a search, so no folder is selected and gmail.sent is IDLE not_sent_folder. The merchant is the sender's display name, which the capture fakes (\"Garnet quarry timber\"; the body's \"Receipt from Eleven Labs Inc.\" is the company). Stripe wraps each total label in a table of its own: [\"\", Total, \"\", $67.66, \"\"] reads as one line from gmail.receipt 1.4.0. The total is \"Amount paid $67.66\" (also \"Total\"); amounts, the card ending, the receipt and invoice numbers are fakes, the subject's number with them. One point of coverage at the message date."
   },
   "receipt-instacart.html": {
     "capturedAt": "2026-10-07",

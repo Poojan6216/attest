@@ -115,7 +115,7 @@
         "windowEnd": "lastSyncAt"
       }
     ],
-    "notes": "Real Sent list, first page (#sent; Newer disabled: the head of the list). 50 rows: 40 show a message count (conversations, no row: their time is their newest message's, grading contract v1.13); 10 hold one message (2 with one id; 8 with a thread id older than the message id and no count shown, each carrying the `#thread-a:r-` thread form), which give 9 observations: a row sent only to the account gives none and narrows the window like a conversation. Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Older is enabled (the list goes on) and the newest conversation row is at 09:55 on 17 Sept, so the window starts at 09:56 on 17 Sept and ends at lastSyncAt. Every row repeats its recipients, subject and count in a hidden summary for screen readers, which is not read. Subjects, previews and attachment names were hidden at capture (fake text); names and addresses are fake."
+    "notes": "Real Sent list, first page (#sent; Newer disabled: the head of the list). 50 rows: 40 show a message count (conversations, no row: their time is their newest message's, grading contract v1.13); 10 hold one message (2 with one id; 8 with a thread id older than the message id and no count shown, each carrying a `#thread-a:r` thread form: 3 `#thread-a:r-`, 5 `#thread-a:r` and a digit), which give 9 observations: a row sent only to the account gives none and narrows the window like a conversation. Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Older is enabled (the list goes on) and the newest conversation row is at 09:55 on 17 Sept, so the window starts at 09:56 on 17 Sept and ends at lastSyncAt. Every row repeats its recipients, subject and count in a hidden summary for screen readers, which is not read. Subjects, previews and attachment names were hidden at capture (fake text); names and addresses are fake."
   },
   "sent-list-2.html": {
     "capturedAt": "2026-10-06",
@@ -285,7 +285,7 @@
         "shared": 7
       }
     ],
-    "notes": "Real Sent list, second page (Newer enabled; Gmail shows \"51–100 of 458\"): its rows are facts, its health OK, and it has no coverage (a send from its span can be listed on page 1 under a later reply's date). Gmail's second page repeats 30 rows of the first: rows 6 to 35 of page 1 are rows 1 to 30 here, with the same ids and dates. Seven of them are one-message rows to others, so they are the same observations as on page 1 (the dedup fact) and the store keeps each once by its contentHash. 50 rows: 33 conversations (a message count shown), 17 one-message rows giving 15 observations (7 with one id; 10 with an older thread id and no count, each in the `#thread-a:r-` thread form). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Fake subjects, names and addresses as on page 1."
+    "notes": "Real Sent list, second page (Newer enabled; Gmail shows \"51–100 of 458\"): its rows are facts, its health OK, and it has no coverage (a send from its span can be listed on page 1 under a later reply's date). Gmail's second page repeats 30 rows of the first: rows 6 to 35 of page 1 are rows 1 to 30 here, with the same ids and dates. Seven of them are one-message rows to others, so they are the same observations as on page 1 (the dedup fact) and the store keeps each once by its contentHash. 50 rows: 33 conversations (a message count shown), 17 one-message rows giving 15 observations (7 with one id; 10 with an older thread id and no count, each in a `#thread-a:r` thread form: 5 `#thread-a:r-`, 5 `#thread-a:r` and a digit). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. Fake subjects, names and addresses as on page 1."
   },
   "sent-list-last.html": {
     "capturedAt": "2026-10-06",
@@ -425,7 +425,7 @@
         "reasons": []
       }
     ],
-    "notes": "A real one-message thread opened from Sent (#sent/<thread id>). No list: gmail.sent DEGRADED not_sent_list. The message key sits on an element inside the list item. It is the account's own message, which no receipt parser claims: gmail.receipt OK, no row. Subject and body hidden at capture; after capture, a phone link in the body kept only `tel:`, and the recipient's display name lost the digits it kept from a real handle."
+    "notes": "A real one-message thread opened from Sent (#sent/<thread id>). No list: gmail.sent IDLE not_sent_list. The message key sits on an element inside the list item. It is the account's own message, which no receipt parser claims: gmail.receipt OK, no row. Subject and body hidden at capture; after capture, a phone link in the body kept only `tel:`, and the recipient's display name lost the digits it kept from a real handle."
   },
   "sent-thread-with-reply.html": {
     "capturedAt": "2026-10-06",
@@ -463,7 +463,7 @@
         "reasons": []
       }
     ],
-    "notes": "A real conversation of three messages opened from Sent: the last expanded, the two before it collapsed (they carry no message key). gmail.sent DEGRADED not_sent_list; gmail.receipt OK, no row. Subject and bodies hidden at capture."
+    "notes": "A real conversation of three messages opened from Sent: the last expanded, the two before it collapsed (they carry no message key). gmail.sent IDLE not_sent_list; gmail.receipt OK, no row. Subject and bodies hidden at capture."
   },
   "drafts.html": {
     "capturedAt": "2026-10-06",
@@ -495,7 +495,7 @@
         ]
       }
     ],
-    "notes": "Real Drafts folder, empty in this account. gmail.sent DEGRADED not_sent_folder: nothing read, no coverage."
+    "notes": "Real Drafts folder, empty in this account. gmail.sent IDLE not_sent_folder: nothing read, no coverage."
   },
   "inbox.html": {
     "capturedAt": "2026-10-06",
@@ -527,7 +527,7 @@
         ]
       }
     ],
-    "notes": "Real Inbox list (50 rows). gmail.sent DEGRADED not_sent_folder: nothing read, no coverage; a receipt is parsed only from an opened message. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+    "notes": "Real Inbox list (50 rows). gmail.sent IDLE not_sent_folder: nothing read, no coverage; a receipt is parsed only from an opened message. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
   },
   "second-account-sent.html": {
     "capturedAt": "2026-10-06",
@@ -861,6 +861,6 @@
         "windowEnd": "lastSyncAt"
       }
     ],
-    "notes": "Real Sent list of the second signed-in account (/mail/u/1/), head of the list. 50 rows: 17 conversations (a message count shown), 33 one-message rows, giving 33 observations: none has one id, every one has a thread id older than its message id and no count (19 in the `#thread-a:r-` thread form, 14 in the `#thread-f:` one). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. The newest conversation is at 12:13 today, so the window starts at 12:14 and ends at lastSyncAt. The account switcher's label carries a note after the address; the account is its last address in brackets. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
+    "notes": "Real Sent list of the second signed-in account (/mail/u/1/), head of the list. 50 rows: 17 conversations (a message count shown), 33 one-message rows, giving 33 observations: none has one id, every one has a thread id older than its message id and no count (19 in a `#thread-a:r` thread form, 5 of them `#thread-a:r-`, and 14 in the `#thread-f:` one). Under gmail.sent 1.3.0 (live smoke, 2026-10-07) a row whose thread id is older than its message id is one message when the page draws message counts and none is shown beside it (Gmail draws none for one message); a mail composed as a draft first is such a row, since it keeps the draft's id as its thread id. The observer does not read the thread form. The newest conversation is at 12:13 today, so the window starts at 12:14 and ends at lastSyncAt. The account switcher's label carries a note after the address; the account is its last address in brackets. Subjects, previews, attachment names and the screen-reader summary were hidden at capture (fake text); names and addresses are fake. After capture (security re-review, 2026-10-06) the Inbox tab previews were replaced with fake text, and every link to another site keeps only its host."
   }
 }

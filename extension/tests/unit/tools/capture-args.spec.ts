@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_CDP,
-  DEFAULT_SEED,
   isLoopbackEndpoint,
   localDate,
   parseCaptureArgs,
@@ -13,6 +12,8 @@ import { describeUrl, isCapturable } from '../../tools/capture-fixture';
 import { FIXTURE_PAGES_ROOT } from '../../tools/serve-fixtures';
 
 const NOW = new Date(2026, 9, 1, 0, 30); // 1 Oct 2026, 00:30 local time
+/** A seed of the length the tool asks for (a secret's; this one is public and only for this test). */
+const SEED = 'test-seed-0123456789abcdef-01234';
 
 /** Every option once, `--redact-selector` and `--keep-selector` twice, blanks in `--names`, after a leading `--`. */
 const EVERY_OPTION = [
@@ -23,7 +24,7 @@ const EVERY_OPTION = [
   '--cdp',
   'http://localhost:9333',
   '--seed',
-  's1',
+  SEED,
   '--date',
   '2024-02-29',
   '--tab',
@@ -49,7 +50,6 @@ describe('parseCaptureArgs', () => {
       vendor: 'muse',
       name: 'activity',
       cdp: DEFAULT_CDP,
-      seed: DEFAULT_SEED,
       date: '2026-10-01',
       names: [],
       redactSelectors: [],
@@ -65,7 +65,7 @@ describe('parseCaptureArgs', () => {
       vendor: 'gmail',
       name: 'sent-list',
       cdp: 'http://localhost:9333',
-      seed: 's1',
+      seed: SEED,
       date: '2024-02-29',
       tab: 'mail.google.com',
       names: ['Priya Raman', 'Daniel Okafor'],
@@ -96,6 +96,8 @@ describe('parseCaptureArgs: help and invalid commands', () => {
     ['remote CDP host', ['--vendor', 'muse', '--name', 'a', '--cdp', 'http://10.0.0.5:9222']],
     ['non-URL CDP', ['--vendor', 'muse', '--name', 'a', '--cdp', 'localhost:9222']],
     ['empty seed', ['--vendor', 'muse', '--name', 'a', '--seed', '']],
+    ['a public word as seed (SEC-L2)', ['--vendor', 'muse', '--name', 'a', '--seed', 'attest']],
+    ['a seed one character short of a secret', ['--vendor', 'muse', '--name', 'a', '--seed', SEED.slice(1)]],
     ['one-letter name to scrub', ['--vendor', 'muse', '--name', 'a', '--names', 'J']],
   ])('rejects %s with CaptureError(bad_args)', (_label, argv) => {
     expect(() => parseCaptureArgs(argv, NOW)).toThrow(expect.objectContaining({ code: 'bad_args' }));

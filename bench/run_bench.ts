@@ -6,6 +6,11 @@
  * bench/results/<name>-<yyyy-mm-dd>.json, then regenerates RESULTS.md from the newest result file of each bench
  * (bench/results.ts). RESULTS.md is generated, never hand-edited. The exit code is 1 when any gate of a result
  * measured in this run failed (QA-R8): the numbers are still written, and the command still fails.
+ *
+ * A tree that differs from its commit is refused (tech review TECH-L2): numbers measured on uncommitted code would
+ * cite a commit that does not hold that code, and could not be reproduced from it (Hard Rule 12). Commit, then run
+ * the bench, then commit its results. `--dirty` measures anyway, for a look while working; such results say
+ * `commitDirty: true` and are not committed.
  */
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -15,7 +20,7 @@ import { runCoreBench } from './core';
 import { runGcalBench } from './observers/gcal';
 import { runGmailBench } from './observers/gmail';
 import { runReceiptsBench } from './observers/receipts';
-import { gitIn, provenance } from './provenance';
+import { gitIn, type Provenance, provenance } from './provenance';
 import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
 
 const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,15 +83,28 @@ export async function runBenches(benches: readonly Bench[], options: BenchRunOpt
   return 1;
 }
 
+/** Why a run must not write results (a tree that differs from its commit, without `--dirty`), or null. */
+export function dirtyRefusal(measured: Provenance, argv: readonly string[]): string | null {
+  if (!measured.commitDirty || argv.includes('--dirty')) return null;
+  return 'pnpm bench: the tree differs from its commit, so these numbers could not be reproduced from it. Commit first (or pass --dirty for a look that is not committed).';
+}
+
 const invokedAs = process.argv[1];
 if (invokedAs !== undefined && import.meta.url === pathToFileURL(path.resolve(invokedAs)).href) {
-  process.exitCode = await runBenches(BENCHES, {
-    resultsDir: path.join(BENCH_DIR, 'results'),
-    resultsMd: path.join(REPO_ROOT, 'RESULTS.md'),
-    date: localDate(new Date()),
-    provenance: { ...provenance(gitIn(REPO_ROOT)) },
-    log: (line) => {
-      console.log(line);
-    },
-  });
+  const measured = provenance(gitIn(REPO_ROOT));
+  const refusal = dirtyRefusal(measured, process.argv.slice(2));
+  if (refusal !== null) {
+    console.log(refusal);
+    process.exitCode = 1;
+  } else {
+    process.exitCode = await runBenches(BENCHES, {
+      resultsDir: path.join(BENCH_DIR, 'results'),
+      resultsMd: path.join(REPO_ROOT, 'RESULTS.md'),
+      date: localDate(new Date()),
+      provenance: { ...measured },
+      log: (line) => {
+        console.log(line);
+      },
+    });
+  }
 }

@@ -9,8 +9,8 @@
  * registry sender posts one `coverage.ping` per such message, whose window is that message's own instant
  * (`windowStart = windowEnd` = its date, ./extract.ts `receiptWindows`). It asserts only that this message was read:
  * an opened message says nothing about the other mail around it. A generic receipt (any other sender) posts none,
- * so a stranger's mail is evidence at most, never coverage (SEC-6). A list view, or an opened conversation with
- * nothing parsed, posts no coverage (OK, by design). The account is the switcher's address, read in any display
+ * so a stranger's mail is evidence at most, never coverage (SEC-6). A list view (IDLE `no_conversation`: nothing to
+ * read, sprint_2 2.11) and an opened conversation with nothing parsed (OK, by design) post no coverage. The account is the switcher's address, read in any display
  * language (./message.ts, ../../google-account.ts); only its hash leaves.
  *
  * Read-only and pure over the DOM (Hard Rule 3; `attest/no-act` lints src/observers/**). Landmarks, sender lists,

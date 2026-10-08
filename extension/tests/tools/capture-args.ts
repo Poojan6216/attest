@@ -6,10 +6,10 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 
 import { CaptureError } from './capture-error';
+import { MIN_SEED_LENGTH } from './capture-key';
 import { FIXTURE_PAGES_ROOT } from './serve-fixtures';
 
 export const DEFAULT_CDP = 'http://127.0.0.1:9222';
-export const DEFAULT_SEED = 'attest';
 const SLUG = /^[a-z0-9-]+$/;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const CDP_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
@@ -35,7 +35,15 @@ export const CaptureOptionsSchema = z.strictObject({
     .string()
     .refine(isLoopbackEndpoint, '--cdp must be an http(s)/ws(s) URL on 127.0.0.1, localhost or [::1]')
     .default(DEFAULT_CDP),
-  seed: z.string().min(1).max(200).default(DEFAULT_SEED),
+  /** A secret: absent, the capture key file's key is used (./capture-key.ts; security review SEC-L2). */
+  seed: z
+    .string()
+    .min(
+      MIN_SEED_LENGTH,
+      `--seed must be a secret of at least ${String(MIN_SEED_LENGTH)} characters; leave it out to use the capture key file`,
+    )
+    .max(200)
+    .optional(),
   date: z.iso.date('--date must be a real calendar date, YYYY-MM-DD').optional(),
   tab: z.string().min(1).max(500).optional(),
   names: z.array(z.string().trim().min(2).max(100)).max(500).default([]),
@@ -72,7 +80,8 @@ export const HELP = `Capture a sanitised fixture from a page open in your own Ch
   --redact-selector <css>    replace the text and labels of matching elements (repeatable)
   --keep-selector <css>      areas a redacted text is never replaced in elsewhere (names, emails, amounts still are;
                              repeatable): a hidden list's dates, an open receipt's subject and body
-  --seed <text>              seed for fakes and injected secrets (default ${DEFAULT_SEED})
+  --seed <secret>            key for fakes and injected secrets, at least ${String(MIN_SEED_LENGTH)} characters (default: the
+                             capture key file, ~/.config/attest/capture-key, made on first use, never printed)
   --date <yyyy-mm-dd>        fixture folder date (default: today, local time)
   --out-root <dir>           fixture root (default tests/fixtures/pages)
   --force                    overwrite an existing fixture and its labels.json entry

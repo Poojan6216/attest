@@ -115,8 +115,8 @@ export interface Observer extends Adapter<RawRow> {
   /**
    * Every span this pass saw whole, each checked as `visibleWindow`'s is, each posted as its own `coverage.ping`
    * (a Calendar range split by a day that hides events; one instant per opened receipt). An empty list is a clean
-   * pass that asserts no coverage by design: health OK, its rows, no ping (a Sent page past the head of the list, a
-   * list view with no receipt open, a Calendar grid still drawing). Null when the observer should know its windows
+   * pass that asserts no coverage by design: health OK, its rows, no ping (a Sent page past the head of the list, an
+   * opened conversation with no receipt, a Calendar grid still drawing). Null when the observer should know its windows
    * and cannot read them: DEGRADED `window.unknown`, no coverage (Hard Rules 5, 6).
    */
   readonly visibleWindows?:

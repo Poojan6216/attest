@@ -179,7 +179,7 @@ export const PURGE_STARTUP_DELAY_MINUTES = 1;
  * older snapshot could have been made at any time since, so it is stored as a first sighting and never UNASKED. A quiet
  * tab is otherwise read only when its DOM changes, so its snapshot ages and almost no change could be attributed. A
  * read once a minute while the tab is visible keeps the snapshot inside that bound (since v1.12 no Calendar change is
- * UNASKED until the live smoke, sprint_2 2.8; the bound is kept for when one can be). Hard Rule 11: the beat reads only
+ * UNASKED until the account's own changes can be told, sprint_6 6.4; the bound is kept for when one can be). Hard Rule 11: the beat reads only
  * a tab the user has open and visible. Any open tab, hidden or not, is still read when its page changes, and a hidden
  * tab is read again when it becomes visible, never on a beat.
  */

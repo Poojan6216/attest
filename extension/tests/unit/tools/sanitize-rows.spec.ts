@@ -15,7 +15,7 @@ beforeAll(async () => {
   SEEDS = await loadSeeds(SEEDS_PATH);
 });
 
-/** Stripe's receipt rows, as captured (structure only; the values are made up). */
+/** Stripe's receipt rows, in the structure captured (every value is invented). */
 const RECEIPT = `
 <table><tbody><tr><td><table><tbody>
   <tr><td><span>Receipt number</span></td><td></td><td align="right"><span>1234-5678</span></td></tr>
@@ -98,11 +98,11 @@ describe('an order number beside its label (capture-rows.ts)', () => {
 
   it('replaces a number only where it stands alone, never inside a longer id', () => {
     const out = sanitized(
-      `<div data-id="a2399-4422b" data-head="x2399-4422" data-tail="2399-44225">x</div>${RECEIPT}`,
+      `<div data-id="a1234-5678b" data-head="x1234-5678" data-tail="1234-56785">x</div>${RECEIPT}`,
     );
-    expect(out).toContain('data-id="a2399-4422b"');
-    expect(out).toContain('data-head="x2399-4422"');
-    expect(out).toContain('data-tail="2399-44225"');
+    expect(out).toContain('data-id="a1234-5678b"');
+    expect(out).toContain('data-head="x1234-5678"');
+    expect(out).toContain('data-tail="1234-56785"');
   });
 
   it("is set off only by a whole label: an order's date or a sentence keeps its year; no digit, no number", () => {
@@ -144,10 +144,10 @@ describe('a code or an order number beside its label, outside a table row (captu
 });
 
 describe('a postal address after its label (capture-rows.ts)', () => {
-  /** Shopify's order confirmation, as captured (the values are made up). */
+  /** Shopify's order confirmation, in the structure captured (every value is invented). */
   const SHOPIFY = `<table><tr>
     <td class="m_-12customer-info__item"><h4>Shipping address</h4><p>Tara Sample<br>
-      <a href="https://www.google.com/">12/4 Fixture Nagar, Testpur</a><br><a href="https://www.google.com/">999999 Placeholderabad</a> ZZ<br>India</p></td>
+      <a href="https://www.google.com/">9/9 Fixture Nagar, Testpur</a><br><a href="https://www.google.com/">999999 Placeholderabad</a> ZZ<br>India</p></td>
     <td class="m_-12customer-info__item"><h4>Billing address:</h4><p>Tara Sample</p></td>
     <td><h4>Shipping method</h4><p>Free Shipping</p></td></tr></table>`;
 
@@ -179,14 +179,14 @@ describe("rupee amounts written 'Rs.' (capture-pii.ts CURRENCY)", () => {
 });
 
 describe('an order number in the row under its label, and an id a <wbr> splits (capture-rows.ts)', () => {
-  /** Spotify's receipt, as captured: the label's row, then the id's row, the id broken by a <wbr>. */
+  /** Spotify's receipt, in the structure captured (the id is invented): the label's row, then the id's row, split by a <wbr>. */
   const SPOTIFY =
     '<table><tr><td width="5%"></td><td>Invoice ID</td></tr>' +
     '<tr><td width="5%"></td><td>deadbeef-0000-4000-8000-<wbr>feedface0001</td></tr></table>';
 
   it('fakes the id in the row under a row whose only text is the label, both halves, in its shape', () => {
     const out = sanitized(SPOTIFY);
-    expect(out).not.toContain('bd1ecc0a');
+    expect(out).not.toContain('deadbeef');
     expect(out).not.toContain('feedface0001');
     expect(out).toMatch(/<td>[a-z\d]{8}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{4}-<wbr>[a-z\d]{12}<\/td>/u);
   });
@@ -242,5 +242,56 @@ describe('a Google Meet code (capture-rows.ts; the invitation week of 2026-10-07
 
   it('leaves the same shape where nothing names Meet', () => {
     expect(sanitized('<p>A one-time-use code</p>')).toContain('<p>A one-time-use code</p>');
+  });
+});
+
+describe('the cases the security review found the rules kept whole (SEC-L3, SEC-L4)', () => {
+  it('fakes an id after the other labels of one text: tracking, booking reference, membership, ticket', () => {
+    const out = sanitized(
+      '<p>Tracking number 1Z999AA10123456784</p><p>Booking reference: AB12CD34</p>' +
+        '<p>Membership ID 12345678</p><p>Ticket number 7781234</p>',
+    );
+    for (const id of ['1Z999AA10123456784', 'AB12CD34', '12345678', '7781234']) expect(out).not.toContain(id);
+    expect(out).toMatch(/<p>Tracking number \d[A-Z]\d{3}[A-Z]{2}\d{11}<\/p>/u);
+    expect(out).toMatch(/<p>Booking reference: [A-Z]{2}\d{2}[A-Z]{2}\d{2}<\/p>/u);
+  });
+
+  it('on a Calendar page fakes every Meet-shaped code, also where nothing names Meet; elsewhere only beside Meet', () => {
+    const page = (url: string) =>
+      sanitizeHtml(
+        '<!doctype html><html><head><title>t</title></head><body><div role="main"><p>Join: qrs-tuvw-xyz</p></div></body></html>',
+        { seed: 'rows', seeds: SEEDS, pageUrl: url },
+      ).html;
+    expect(page('https://calendar.google.com/calendar/u/0/r/week')).not.toContain('qrs-tuvw-xyz');
+    expect(page('https://calendar.google.com/calendar/u/0/r/week')).toMatch(
+      /<p>Join: [a-z]{3}-[a-z]{4}-[a-z]{3}<\/p>/u,
+    );
+    expect(page('https://mail.google.com/mail/u/0/')).toContain('<p>Join: qrs-tuvw-xyz</p>');
+  });
+
+  it('fakes every block of an address after its label, and stops at the next label, heading, table or amount', () => {
+    const out = sanitized(
+      '<div><p>Ship to</p><p>Tara Sample</p><p>9 Fixture Road</p><p>Testpur 999999</p>' +
+        '<p>Total $12.00</p><p>Mira Example</p></div><div><p>Billing address</p><p>Tara Sample</p><h3>Items</h3><p>Pens</p></div>',
+    );
+    for (const real of ['Tara', 'Fixture Road', 'Testpur', '999999']) expect(out).not.toContain(real);
+    expect(out).toContain('<p>Mira Example</p>');
+    expect(out).toContain('<h3>Items</h3><p>Pens</p>');
+    expect(out).toMatch(/<p>Total \$\d{2}\.\d{2}<\/p>/u);
+  });
+
+  it("fakes a UUID in an attribute (a trip's map image id), the same in every copy, never in Gmail's own ids", () => {
+    const uuid = 'deadbeef-0000-4000-8000-feedface0001';
+    const out = sanitized(
+      `<img id="m_123map_${uuid}_wide" alt="map"><a title="${uuid}">x</a>` +
+        '<span data-legacy-thread-id="19ed294786971681" data-legacy-last-message-id="19ed2952e2b6998a">s</span>',
+    );
+    expect(out).not.toContain(uuid);
+    const fake = /id="m_123map_([0-9a-f-]{36})_wide"/u.exec(out)?.[1] ?? '?';
+    expect(fake).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
+    expect(out).toContain(`<a title="${fake}">`);
+    expect(out).toContain(
+      'data-legacy-thread-id="19ed294786971681" data-legacy-last-message-id="19ed2952e2b6998a"',
+    );
   });
 });

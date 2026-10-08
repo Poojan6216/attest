@@ -63,6 +63,7 @@ import {
   type PassState,
   senderKey,
   serially,
+  tabKey,
   wasRefused,
 } from './observer-state';
 import { rowCodeOf, type RowCode, worstCode } from './row-codes';
@@ -151,7 +152,11 @@ export async function accepted(
  * up). Otherwise the clock guard runs and the report is stored by src/ledger/health.ts's rule; open UI pages hear of
  * it only when it says something new.
  */
-export async function onHealth(ctx: ObserverContext, message: AdapterHealthMessage): Promise<BusAck> {
+export async function onHealth(
+  ctx: ObserverContext,
+  message: AdapterHealthMessage,
+  sender?: MessageSender,
+): Promise<BusAck> {
   const { health } = message;
   if (sourceOf(health.adapterId) === undefined) return unknownObserver(health.adapterId, message.type);
   return serially(ctx.state, health.adapterId, async (): Promise<BusAck> => {
@@ -160,7 +165,12 @@ export async function onHealth(ctx: ObserverContext, message: AdapterHealthMessa
     if (instantMs(health.checkedAt) > clockMs) return clockBehind(health.adapterId, message.type);
     await guardClock(db, clockMs);
     noteOwnHealth(ctx.state, health);
-    if ((await recordOwnHealth(db, health)).changed) ctx.notify(['adapterHealth']);
+    const source = sender === undefined ? undefined : tabKey(sender);
+    const sameSource = source !== undefined && ctx.state.healthSource.get(health.adapterId) === source;
+    const write = await recordOwnHealth(db, health, { sameSource });
+    // The stored health is now this tab's when it says what this report says (src/ledger/health.ts, IDLE).
+    if (source !== undefined && write.agrees) ctx.state.healthSource.set(health.adapterId, source);
+    if (write.changed) ctx.notify(['adapterHealth']);
     return ACK_OK;
   });
 }

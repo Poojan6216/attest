@@ -816,3 +816,113 @@ Checklist corrections:
 | TECH-R9 | low | Docs and comments drifted: month-view wording, "the label ends with (address)", a README version example, a cache comment, line widths, six copies of the WXT stub, files at the size limit. |
 
 **Checked and clean.** The window arithmetic on a fresh list (all-conversation heads, a conversation in the current minute, an unreadable conversation time, refused inverted windows); the live `checked` read; month chips; the account regex (linear, last match); the capture tool's keep areas, short ids, stylesheet drop and checkbox state; lint and types.
+
+
+## Third review: receipts, live smoke and its fixes (2026-10-07)
+
+**Scope.** `git diff 8eb006d..c81480a` (13 commits, 92 files): the CI memory fix and the five-job workflow, the property floors, the capture tool's new rules (`capture-rows.ts`, `capture-url.ts`, `capture-fakes.ts`, `sanitize.ts`), gmail.receipt 1.4.0 (`rowCells`, `refuseText`) and the reference message reader, gmail.sent 1.3.0 (draft-first rows, contract v1.15), the IDLE status of task 2.11 (`src/core/schema.ts`, `src/observers/{types,plan,base}.ts`, both Gmail health modules, `src/ledger/health.ts`, `src/background/observer-state.ts`, `src/log-vocabulary.ts`, both benches, `tests/e2e/observer-tabs.spec.ts`), and the records (Decisions `[ci]`, `[2.1-receipts]`, `[2.1]`, `[2.8]`, `[2.10]`, `[2.11]`, CHANGELOG, docs/adapters.md, docs/grading.md, docs/privacy-architecture.md §5.5, the fixtures README, the labels, RESULTS.md). Targeted checks only; no code, test or doc was changed by this review.
+
+| ID | Severity | Where | Finding |
+|---|---|---|---|
+| TECH-L1 | medium | extension/tests/unit/fixtures/fixture-pages.spec.ts:49-58, fixture-labels.spec.ts:36-46 | Two fixture specs keep every parsed page alive and now need 1.92–2.05 GB and 1.79–1.92 GB of the 2,048 MB heap pinned for every run. |
+| TECH-L2 | medium | RESULTS.md:36-37, 69-70, 79, 101-102, 148-149 | The committed numbers were measured on an uncommitted tree and name the parent commit. |
+| TECH-L3 | medium | extension/src/ledger/health.ts:97-105; extension/src/observers/gmail/sent-page.ts:121-130 | The IDLE storage rule freezes the stored status: a Gmail route change goes silent, a transient DEGRADED sticks, `checkedAt` stops meaning "alive". |
+| TECH-L4 | medium | sprints/sprint_6.md:18-19; Decisions.md:1378, 1384 | Work "carried to Sprint 6.4" is in no sprint file; code and docs still defer to the closed task 2.8. |
+| TECH-L5 | low | extension/tests/unit/fixtures/fixture-pages.spec.ts:199-202 | The receipt truth check passes silently when the reference reader finds no message. |
+| TECH-L6 | low | extension/src/observers/types.ts:117-119 and the list below | Contract text and comments still call a page the observer does not read OK (or DEGRADED). |
+| TECH-L7 | low | 8 notes in the Gmail labels | Label notes say DEGRADED where their facts say IDLE. |
+| TECH-L8 | low | build_spec.md:539; Decisions.md:1379 | "51 more of your sends" counts 7 sends twice. |
+| TECH-L9 | low | extension/tests/tools/capture-rows.ts:10, 39, 147-150; capture-fixture.ts:145-147 | The capture tool's docs and summary describe more, or other, than the code does. |
+| TECH-L10 | low | extension/src/observers/gmail/sent-page.ts:186-187 and the list below | Duplicates added or left this round. |
+| TECH-L11 | low | docs/adapters.md:294; docs/grading.md:416 | Written rules contradict the decisions taken (version bumps; build_spec §7 deviations). |
+| TECH-L12 | low | CHANGELOG.md:44-92; Decisions.md:1370-1384 | CHANGELOG misses the capture-tool and CI changes; 9 of 15 new decisions name no Hard Rule. |
+| TECH-L13 | low | .github/workflows/ci.yml:18, 28-149 | Five copies of the setup steps; "each well inside its 30-minute limit" is unmeasured. |
+
+### TECH-L1 (MEDIUM): two fixture specs are back at CI's memory limit
+
+Measured with `npx vitest run <spec> --execArgv=--max-old-space-size=N` (the flag takes effect: lower values abort): `fixture-pages.spec.ts` runs out of heap at 1,024, 1,536, 1,792 and 1,920 MB and passes at the pinned 2,048 MB, `--logHeapUsage` reading about 1,920 MB on every test; `fixture-labels.spec.ts` runs out at 1,792 MB and passes at 1,920 MB. Both make one inert window per file and cache every parsed Gmail and Calendar page in `docs` until `afterAll`. The `[ci]` fix (53420c8, Decisions.md:1370) changed only `gcal-fixtures.ts`; 072e8d8 then added eight real pages. Consequence: one or two more real captures (the Calendar views carried to 6.4 are pages of about 26 MB parsed each) abort the worker on the Mac and in CI, and an aborted worker gives no verdict for any of its tests: CI run 37652047432 again. Fix: parse each page in its own window and close it, as `gcal-fixtures.ts` now does, and cache derived facts rather than Documents.
+
+### TECH-L2 (MEDIUM): RESULTS.md names a commit that does not hold the code it measured
+
+c81480a's RESULTS.md records `commit a98b2232…` with `commitDirty true` in all four sections, and `gmailSentSelectorsVersion 1.4.0`; a98b223's `gmail/selectors.json` is 1.3.0. a98b223's own RESULTS.md did the same (it names caadba8, dirty, and reports 1.3.0 where caadba8 has 1.2.0). The dirty flag ignores the bench's own outputs (Decisions.md:833), so both runs measured the 2.10 and 2.11 source before it was committed; caadba8 was the last run on a clean tree. Consequence: the numbers the README may quote (Hard Rule 12, adapter_engineer rule 10) cannot be reproduced from the commit they cite, and nothing refuses a dirty RESULTS.md. Fix: re-run `pnpm bench` on the clean HEAD and commit it; have the bench refuse to write RESULTS.md, or a test fail, when `commitDirty` is true.
+
+### TECH-L3 (MEDIUM): what the IDLE storage rule does beyond the two-tab case
+
+`nextOwnReport` never stores an IDLE over an OK or a DEGRADED, from whichever tab (health.ts:99-100). Three consequences no record states:
+
+- **A Gmail route change goes silent.** `activeSentPage` answers `not_sent_folder` from the route alone (sent-page.ts:124), before it reads the nav or the title. If Gmail's Sent list stopped routing as `#sent`, every pass on the real Sent list would be IDLE, none stored, and the stored gmail.sent health would stay the last OK, its `checkedAt` ageing, indefinitely. Before 2.11 the same page was DEGRADED. The reverse of `view.mismatch` (the nav's selected folder or the title naming Sent under another route) is not checked, though the selectors to read it are there.
+- **A transient DEGRADED sticks.** A Sent pass read mid-load (`selector.missing.row`: an empty list cannot be told from one loading), between views (`view.mismatch`), or a conversation read before its landmarks drew, stays stored once the same tab moves to another folder, until a Sent (or conversation) tab passes again. Decisions.md:1383 says `view.mismatch` "costs one DEGRADED pass, as `not_sent_folder` did before"; it now lasts until the next Sent pass, where the old `not_sent_folder` was replaced by the next report.
+- **`checkedAt` no longer says the observer is alive.** health.ts:25-29 says the stored `checkedAt` "stays at most that old [a minute] while the observer keeps reporting"; an observer that keeps reporting IDLE leaves it at any age. docs/adapters.md:171 promises "the popup will say 'Gmail Sent not checked'", but once an OK is stored nothing stored says so.
+
+Fix direction: let an IDLE replace the stored report when it comes from the document that sent that report (the worker knows the sender), or keep an `idleSince` beside the row; read the reverse nav or title contradiction as `view.mismatch`; correct the three texts.
+
+### TECH-L4 (MEDIUM): "carried to Sprint 6.4" is carried nowhere
+
+Task 6.4 (performance and memory) holds one Sprint 2 carry-forward, R-4/R-12's pass timing. Decisions.md:1378 and :1384, MANUAL.md:22, docs/adapters.md:554 and sent-time.ts:29 send these to 6.4, and none is in any sprint file: Calendar IDLE (captures of settings, search and month views); what an event the account organises with a guest reads, the only way back to Calendar UNASKED (`calendar-own.ts`); the account label in another display language; real edits per event per day against the cap of 20; Sent's count of rows given no row. The continue protocol reads sprint files, not Decisions, so these are dropped. Code and docs still defer to task 2.8, now closed: calendar-own.ts:13, calendar-pass.ts:31, calendar-seen.ts:21, config.ts:182, lifecycle.ts:22-23 (it defers the "online but cannot reach its server" case; the smoke emulated offline through `navigator.onLine`, the other case), docs/adapters.md:29, :485 ("Best knowledge until live smoke"), :554 ("until the live smoke (2.8) confirms", "Live smoke (2.8) must confirm…"), tests/fixtures/pages/README.md:193. The earlier MANUAL "still to read" item, the longest subject Gmail draws (security SEC-7, SEC-12), left both MANUAL.md and `[2.8]` without an answer. Fix: sub-bullets on a sprint task, as R-4 got; repoint the comments.
+
+### TECH-L5 (LOW): a receipt truth check that cannot fail
+
+`receiptMatches` finds the message with `.find(…)`, which gives `undefined` when none matches, asserts `.not.toBeNull()`, which `undefined` passes, then returns on `!message`. A receipt label whose message the reference reader does not recognise (a new capture whose message item differs) skips the id, subject, date, amount and merchant checks without a failure. fixture-labels.spec.ts:293 still checks the key occurs once in the page, which narrows the hole. Fix: `toBeDefined()`, or throw.
+
+### TECH-L6 (LOW): text that still gives the old statuses
+
+- The contract: types.ts:117-119 ("health OK … a list view with no receipt open"), base.ts:19-20 ("a Gmail view with no receipt open … stays OK"), docs/adapters.md:85-89 (§3.2's plan table has no IDLE row; plan.ts has an IDLE plan).
+- receipts/message.ts:9-11 ("health stays OK" on a list); ledger/health.ts:5-6 ("OK, or DEGRADED"), :15-16, :116-119 (`recordOwnHealth`'s list of reports it does not write omits an IDLE).
+- docs/adapters.md:29, §1, limitations first: a conversation row "is refused and the pass is DEGRADED" (false since v1.13; draft-first rows are timed since v1.15).
+- tests/fixtures/pages/README.md:198 ("`gmail.receipt` on a list view reports OK"), :160 (the reason codes used omit `receipt.amount_missing`, now labelled).
+- gmail/selectors.ts:28: the `patterns` comment describes `legacyId` only.
+
+### TECH-L7 (LOW): label notes contradict their facts
+
+The notes say DEGRADED `not_sent_folder` or `not_sent_list` where the facts say IDLE: gmail/2026-10-03/labels.json:32, :64, :1429; gmail/2026-10-06/labels.json:428, :466, :498, :530; gmail/2026-10-07/labels.json:56. 55db414 restamped the facts, not the notes.
+
+### TECH-L8 (LOW): counts that count page 2's repeats
+
+build_spec.md:539 ("51 more of your sends read") and Decisions.md:1379 ("those 51 are single sends") count rows across pages, and page 2 repeats 7 of the 51. The labels gained 44 distinct sends (14 to 58 distinct observations; 14 to 65 counted per page). "51 of the 158 rows" (docs/grading.md v1.15) is right as written.
+
+### TECH-L9 (LOW): the capture tool's text says more, or other, than the code
+
+- "Every word with a digit" (docs/adapters.md:384, Decisions.md:1374, capture-rows.ts:10): `idWords` keeps only words of 4 characters or more (capture-rows.ts:39, 76-77), so a labelled value of 1 to 3 characters with a digit stays as captured.
+- `fakeRowValues`'s comment (capture-rows.ts:147-150) says it fakes table rows' values "and returns how many"; it returns nothing (counts go to `stats`) and also fakes addresses, codes and Meet codes. sanitize.ts:12 still names card endings and order numbers only.
+- The capture summary (capture-fixture.ts:145-147) reports Meet, referral and coupon codes as "order numbers", and adds rewritten address text nodes to the address count.
+- docs/adapters.md:382 and :384, Decisions.md:1376, capture-url.ts:95, capture-rows.ts:18 and :47, sanitize-links.spec.ts:174 and :179, sanitize-rows.spec.ts:236-239 give two 12-character Meet-code strings as what the invitation-week capture showed. The page held one code (its one fake sits in the join button's label and in `jslog` attributes of week-invited.html); the two strings differ from each other and from that fake, so they are most likely invented. Confirm it; if either is real it is a meeting key, and the commits holding it, 2ce7b6c's message included, are not pushed yet (origin/main is e820765).
+
+### TECH-L10 (LOW): duplicates
+
+- `FOLLOWING = 4` in sent-page.ts:186-187 and receipts/message.ts:175-176, while src/observers/nodes.ts exists for "one definition, not one per observer" (TECH-14).
+- `escapeRegExp` in capture-rows.ts:143 and capture-pii.ts:98.
+- observer-tabs.spec.ts:38-58 is a fourth verbatim `Session` and `withSession` (observer-forged, observer-restart, observers); tests/e2e/support/ is their place.
+- The "closed windows contain [a, b]" oracle lives in five test files: two were fixed this round for a point (calendar-changes.property.spec.ts:207, coverage-accounts.property.spec.ts:128), three keep the point-unsafe form (calendar-markers.property.spec.ts:254, golden/v114-rules.ts:24, golden/v111-rules.ts:51), safe only while their inputs are never points.
+- `fakeRowValues` (capture-rows.ts:151-207) is 57 of the 60 lines allowed and does seven jobs.
+
+### TECH-L11 (LOW): written rules contradict the decisions
+
+docs/adapters.md:294 ("Bump `version` on any change to the file") and both selectors.json `$comment`s say "on any change"; Decisions.md:1377 changed gmail/ and gcal/selectors.json (their `fixtures` lists) with no bump because "a version names a reader", as §6.7 already reads. Rewrite §5 and the comments to the decision (TECH-R5 met the same tension). build_spec.md:369 defines `health()` as `OK | DEGRADED(reasons)`; IDLE deviates, and docs/grading.md:416 §14, which grading.md says lists every deviation from build_spec §7, does not.
+
+### TECH-L12 (LOW): records
+
+CHANGELOG [Unreleased] has no line for the capture tool's row, code, address, Meet-code and schemeless-address rules (capture changes were logged before, CHANGELOG.md:56 and :85), nor for CI's five jobs and the pinned 2 GB worker heap (CI changes were logged at :61). Nine of the 15 new Decisions entries name no Hard Rule (1370-1373, 1375, 1378, 1380, 1381, 1384), though CLAUDE.md asks each to name the one it protects.
+
+### TECH-L13 (LOW): CI workflow
+
+Each of the five jobs repeats checkout, pnpm setup, node setup and install (ci.yml:28-41, 57-70, 82-95, 107-120, 136-149): three pinned actions five times to keep in step. A local composite action (`.github/actions/setup`) would hold them once. ci.yml:18 and build_spec.md:536 say each job is "well inside" 30 minutes; no five-job run is recorded, and observer coverage has never been timed in CI (the one-job run was cancelled inside it). Record the first five-job run's times.
+
+### Checked and clean
+
+- **Boundaries.** The only `src/core` change is the `HealthReport` enum (schema.ts:217); grading reads no health. Observers stay pure over the Document (`messageCountOf`, `rowCells`, `refused` only read); content-script entrypoints untouched; IDLE crosses the bus through the Zod `HealthReport`, and plan.ts checks an IDLE's reasons as codes, as a DEGRADED's; `noteOwnHealth` keeps an IDLE out of the report that clears a ledger DEGRADED (worker-level test).
+- **The draft-first rule.** `holdsOneMessage`, `countsShown` and `messageCountOf` match docs/grading.md v1.15 and §3, docs/adapters.md §8.1, Decisions `[2.10]`, the README and the label notes. The quoted counts agree across them: 40, 33 and 17 conversations of 50, 90 and 51 of 158 rows, 37 and 14 thread forms, 108 of 108 observations, 324 of 324 fields, 720.8 against 690.0 ms.
+- **The IDLE rule as coded** is the one Decisions `[2.11]`, privacy-architecture §5.5, grading §3 and adapters §4 state; unit tests cover each branch (stored where nothing is, over an IDLE, never over an OK, an observer DEGRADED or a ledger DEGRADED, never holding back a page that reads).
+- **The reference readers** (`fixture-page-read.ts`, `fixture-message-read.ts`) import only `src/core` and each other. `shownCount` (siblings) and `pairRows` (`td`/`th` text) are written apart from `messageCountOf` (leaves in the cell) and `rowCells` (selectors.json cells), so they share no code with the observers; TECH-L5 is their one weak check.
+- **Versions.** gmail.sent 1.3.0 then 1.4.0 and gmail.receipt 1.4.0 then 1.5.0, each with its Decisions entry; every Gmail label carries `gmail.receipt@1.5.0 gmail.sent@1.4.0`, every Calendar label `gcal.event@1.5.0`.
+- **Quality.** ESLint on all 58 touched extension files and both bench files: 0 problems, the 400-line file and 60-line function limits included (largest touched: sanitize.ts 393, capture-pii.ts 389, fixture-labels.spec.ts 381, base.ts 376). No `any`, `as unknown as`, TODO or FIXME added; no host or URL added to `src`; the message-count and `refuseText` patterns live in selectors.json. Typecheck of all five projects, check-docs and Prettier: clean.
+- **CI.** SHA pins, `persist-credentials: false`, `permissions: contents: read`, no `continue-on-error`; the step pins in tooling-config, observer-coverage-config and mandatory-guard specs still match. The heap pin is in force: Vitest 5 takes top-level `execArgv`, and lowering it makes the fixture specs abort.
+- **Test layout** (build_spec §6): new files under tests/unit, tests/e2e, tests/property, tests/fixtures/pages/<vendor>/<date>/ and tests/tools.
+
+### Commands run
+
+- `git log`, `git diff`, `git show` over 8eb006d..c81480a (and the RESULTS.md and selectors.json of a98b223 and caadba8).
+- `npx eslint --max-warnings 0` on the 58 touched extension files, and on bench/observers/gmail.ts and receipts.ts: 0 problems.
+- `npx tsc --noEmit` for extension tsconfig.json, src/core, tests, tsconfig.node.json, and the root tsconfig.json: clean. `npx tsx scripts/check-docs.ts`: OK. `npx prettier --check` on the touched docs and workflow: clean.
+- `npx vitest run tests/unit/page-windows.spec.ts tests/unit/ledger/health.spec.ts tests/unit/observers/gmail/sent-time.spec.ts`: 3 files, 51 tests passed.
+- `npx vitest run tests/unit/fixtures/fixture-pages.spec.ts --logHeapUsage`: 10 passed, about 1,920 MB used; with `--execArgv=--max-old-space-size=` 1024, 1536, 1792, 1920: out of heap; under coverage at 2,048: passed. `fixture-labels.spec.ts`: passed at 2,048 (about 1,920 MB) and 1,920; out of heap at 1,792.
+- Node scripts over the labels (notes against facts; distinct Sent observations 14 to 58); greps for statuses, live-smoke references, sprint carry-forwards and duplicates; the Meet-code strings compared with the fixture by hash only, never printed.

@@ -29,7 +29,7 @@
         ]
       }
     ],
-    "notes": "Negative: the Drafts folder. Rows look like Sent rows (To: with email attributes, subject, time title) plus the red Draft marker. Nothing here was sent: zero observations, DEGRADED (not_sent_folder), no coverage, so Attest reports \"Gmail Sent not checked\" instead of pretending it looked."
+    "notes": "Negative: the Drafts folder. Rows look like Sent rows (To: with email attributes, subject, time title) plus the red Draft marker. Nothing here was sent: zero observations, IDLE (not_sent_folder), no coverage, so Attest reports \"Gmail Sent not checked\" instead of pretending it looked."
   },
   "synthetic-inbox.html": {
     "capturedAt": "2026-10-03",
@@ -61,7 +61,7 @@
         ]
       }
     ],
-    "notes": "Negative: the Inbox. One thread lists the account itself (\"Alex, me (2)\"), so an address of the account is on a row; a Stripe receipt row shows an amount in its snippet. Neither is a sent email, and a receipt is parsed only from an opened message: zero observations, gmail.sent DEGRADED (not_sent_folder), no coverage. gmail.receipt has no health entry on a list page (see README)."
+    "notes": "Negative: the Inbox. One thread lists the account itself (\"Alex, me (2)\"), so an address of the account is on a row; a Stripe receipt row shows an amount in its snippet. Neither is a sent email, and a receipt is parsed only from an opened message: zero observations, gmail.sent IDLE (not_sent_folder), no coverage. gmail.receipt has no health entry on a list page (see README)."
   },
   "synthetic-receipt-amazon.html": {
     "capturedAt": "2026-10-03",
@@ -1426,7 +1426,7 @@
         "reasons": []
       }
     ],
-    "notes": "The Sent row 1 of page 1, opened. The Sent folder is selected but no thread list is on the page, so the Sent observer reads nothing and reports DEGRADED (not_sent_list) with no coverage: an opened thread is not the list. The receipt observer sees an opened message from the account itself, which no parser claims: zero observations. The body holds three seeds."
+    "notes": "The Sent row 1 of page 1, opened. The Sent folder is selected but no thread list is on the page, so the Sent observer reads nothing and reports IDLE (not_sent_list) with no coverage: an opened thread is not the list. The receipt observer sees an opened message from the account itself, which no parser claims: zero observations. The body holds three seeds."
   },
   "synthetic-sent-time-unresolved.html": {
     "capturedAt": "2026-10-03",

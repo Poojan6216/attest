@@ -71,7 +71,7 @@ export function createHandlers(
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
     'adapter.health': (message, sender) =>
-      wrongSite(sender, message.health.adapterId, message.type) ?? onHealth(ctx, message),
+      wrongSite(sender, message.health.adapterId, message.type) ?? onHealth(ctx, message, sender),
     'observer.observations': (message, sender) =>
       wrongSite(sender, message.observerId, message.type) ?? onObservations(ctx, message),
     'coverage.ping': (message, sender) =>

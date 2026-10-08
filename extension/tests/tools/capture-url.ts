@@ -5,6 +5,7 @@
  * `#access_token=…` fragments and relative URLs. Every text node and attribute value goes through
  * stripQueryParts before the PII scrubber; link attributes go through trimUrl as well.
  */
+import { OBSERVER_HOSTS } from '../../src/config';
 
 /** Not a URL character: whitespace, quotes and angle brackets end a URL in text and attributes. */
 const END = String.raw`\s"'<>`;
@@ -124,4 +125,15 @@ export function trimForeignUrls(
 /** The host links may keep their path to: the captured page's own (null when the address is unknown). */
 export function pageHostOf(pageUrl: string | undefined): string | null {
   return pageUrl !== undefined && URL.canParse(pageUrl) ? new URL(pageUrl).host : null;
+}
+
+/** Google Calendar's hosts: on its pages every Meet-shaped code is an event's (capture-rows.ts `meetEverywhere`). */
+const CALENDAR_HOSTS: ReadonlySet<string> = new Set(
+  OBSERVER_HOSTS.gcal.map((pattern) => new URL(pattern).host),
+);
+
+/** Whether the captured page is a Google Calendar page. */
+export function isCalendarPage(pageUrl: string | undefined): boolean {
+  const host = pageHostOf(pageUrl);
+  return host !== null && CALENDAR_HOSTS.has(host);
 }

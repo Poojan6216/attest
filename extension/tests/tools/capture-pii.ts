@@ -95,7 +95,8 @@ export function nameTokens(name: string, keepStopwords = false): string[] {
     .filter((token) => token.length >= 2 && (keepStopwords || !NAME_STOPWORDS.has(token.toLowerCase())));
 }
 
-function escapeRegExp(text: string): string {
+/** `text` as a pattern that matches exactly it. */
+export function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -104,6 +105,11 @@ function keptAtPattern(domains: readonly string[]): RegExp | null {
   if (domains.length === 0) return null;
   const alternatives = domains.map(escapeRegExp).join('|');
   return new RegExp(String.raw`@(?:[A-Za-z0-9-]+\.)*(?:${alternatives})(?![A-Za-z0-9-]|\.[A-Za-z0-9])`, 'iy');
+}
+
+/** Whether `text` holds an amount with its currency (`$12.00`, `Rs. 100.00`, `12,00 €`). */
+export function holdsMoney(text: string): boolean {
+  return [MONEY_PREFIX, MONEY_SUFFIX].some((pattern) => new RegExp(pattern.source, 'u').test(text));
 }
 
 /**
@@ -184,6 +190,8 @@ export interface ScrubberOptions {
   readonly keptDomains?: readonly string[];
   /** Receipt-sender domains whose `Name <address>` display names are kept too (none when absent). */
   readonly keptNameDomains?: readonly string[];
+  /** The only kinds to fake (all when absent; without `email` no '@' is touched): ./capture-refake.ts. */
+  readonly kinds?: ReadonlySet<PiiKind>;
 }
 
 export class Scrubber {
@@ -196,8 +204,10 @@ export class Scrubber {
   readonly #localMatchers = new WeakMap<ReadonlySet<string>, RegExp | null>();
   readonly #keptDomains: readonly string[];
   readonly #keptNameDomains: readonly string[];
+  readonly #kinds: ReadonlySet<PiiKind> | undefined;
 
   constructor(faker: Faker, options: ScrubberOptions) {
+    this.#kinds = options.kinds;
     this.#faker = faker;
     this.#tokens = options.nameTokens;
     this.#literals = options.literals;
@@ -289,7 +299,7 @@ export class Scrubber {
     spans: Span[],
     replace: (match: RegExpExecArray) => string | null,
   ): void {
-    if (pattern === null) return;
+    if (pattern === null || this.#kinds?.has(kind) === false) return;
     pattern.lastIndex = 0;
     for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
       if (match[0] === '') {
@@ -328,6 +338,7 @@ export class Scrubber {
    * address is a receipt sender whose display name is kept (a business's name, the merchant a parser reads).
    */
   #collectNameBeforeEmail(text: string, spans: Span[]): void {
+    if (this.#kinds?.has('name') === false) return;
     NAME_BEFORE_EMAIL.lastIndex = 0;
     for (let match = NAME_BEFORE_EMAIL.exec(text); match !== null; match = NAME_BEFORE_EMAIL.exec(text)) {
       if (
@@ -380,7 +391,7 @@ export class Scrubber {
   }
 
   #strayAts(text: string): string {
-    if (!text.includes('@')) return text;
+    if (!text.includes('@') || this.#kinds?.has('email') === false) return text;
     const foreign = new Set(findForeignAts(text, this.#keptDomains));
     if (foreign.size === 0) return text;
     this.stats.strayAt += foreign.size;

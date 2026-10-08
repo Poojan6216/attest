@@ -6,6 +6,8 @@
 
 export const ELEMENT_NODE = 1;
 export const TEXT_NODE = 3;
+/** `Node.DOCUMENT_POSITION_FOLLOWING`: in `a.compareDocumentPosition(b)`, `b` comes after `a` in document order. */
+export const DOCUMENT_POSITION_FOLLOWING = 4;
 
 /** True when `node` is an element. */
 export function isElement(node: Node): node is Element {

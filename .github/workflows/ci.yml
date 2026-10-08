@@ -15,10 +15,11 @@ permissions:
 
 # Every action is pinned to a full commit SHA (the version is in the comment); Dependabot proposes updates
 # (.github/dependabot.yml). Hard Rule 9 for the build supply chain.
-# Five jobs run side by side, each well inside its 30-minute limit. As one job the steps ran in turn and did not fit:
-# CI run 37674271045 took 2.3 min for lint, 9.5 min for the unit and property tests and 16.5 min for core coverage,
-# and was cancelled at 30 minutes in observer coverage. CI's runner gives Vitest one worker. Each job installs from
-# the pnpm cache.
+# Five jobs run side by side, each inside its 30-minute limit. As one job the steps ran in turn and did not fit: CI
+# run 37674271045 took 2.3 min for lint, 9.5 min for the unit and property tests and 16.5 min for core coverage, and
+# was cancelled at 30 minutes in observer coverage. Split (run 37691867866, measured): unit 8.9 min, core coverage
+# 12.9, observer coverage 4.1, runtime guard and time zones 20.3 (the closest to its limit), build and e2e 12.3.
+# CI's runner gives Vitest one worker. Each job installs from the pnpm cache (./.github/actions/setup).
 jobs:
   unit:
     name: lint · typecheck · unit
@@ -30,15 +31,8 @@ jobs:
           # The job token is not left in .git/config for later steps (dependency install scripts included).
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
 
       - name: Lint
         run: pnpm lint
@@ -59,15 +53,8 @@ jobs:
           # The job token is not left in .git/config for later steps (dependency install scripts included).
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
 
       # The Sprint 1 Gate's "core coverage >= 95%": the suite again, instrumented. Prints lines, branches, functions
       # and statements for src/core and fails below 95% lines (extension/vitest.config.ts).
@@ -84,15 +71,8 @@ jobs:
           # The job token is not left in .git/config for later steps (dependency install scripts included).
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
 
       # qa_tester rule 8 (QA-8): the observers stay at or above 85% of lines, measured over the suites that run them
       # (extension/vitest.observers.config.ts).
@@ -109,15 +89,8 @@ jobs:
           # The job token is not left in .git/config for later steps (dependency install scripts included).
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
 
       # src/core under the runtime guard (Hard Rule 4): every core, golden and property test with every impure global
       # poisoned before src/core loads; fails on any impure use, any changed built-in, or below 95% of src/core's lines.
@@ -138,15 +111,8 @@ jobs:
           # The job token is not left in .git/config for later steps (dependency install scripts included).
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
 
       - name: Build
         run: pnpm build

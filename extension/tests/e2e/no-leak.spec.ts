@@ -54,6 +54,9 @@ const VENDOR_PAGES = [
   // Real captures (2026-10-06): their seeds go through content script, bus, ledger and export too (QA-R5).
   vendorFixture('gmail', 'sent-list-1.html'),
   vendorFixture('gcal', 'week-after.html'),
+  // Real receipts (2026-10-07): their seeds sit in the bodies the receipt reader reads (QA third review).
+  vendorFixture('gmail', 'receipt-stripe.html'),
+  vendorFixture('gmail', 'receipt-uber.html'),
 ];
 const SETTLE_MS = 5_000;
 

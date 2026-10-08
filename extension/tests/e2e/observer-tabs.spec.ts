@@ -5,7 +5,8 @@
  * whichever tab posted last (Hard Rule 6):
  *  - with a Sent tab and an Inbox tab open, the stored gmail.sent health is the Sent tab's OK, after the Inbox tab's
  *    own IDLE report was handled;
- *  - a real break on a Sent list (its time cells gone) is DEGRADED, and stays so while the Inbox tab reports again.
+ *  - a real break on a Sent list (its time cells gone) is DEGRADED, and stays so while the Inbox tab reports again;
+ *  - the broken tab itself moving to the Inbox replaces its own DEGRADED with IDLE (third review, QA-L8).
  * The real reports are seen arriving in the service worker, through a listener the test adds beside the extension's.
  * Then a neutral report is sent from the Inbox tab's content-script world (an OK dated before the stored one, which
  * the ledger never stores) and its answer awaited: one observer's messages are handled one at a time, in arrival
@@ -18,44 +19,18 @@ import type { WxtBrowser } from 'wxt/browser';
 
 import type { LedgerExport } from '../../src/ledger/export';
 import { SENT_SELECTORS } from '../../src/observers/gmail/selectors';
-import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { contentScriptPost } from './support/content-world';
-import { launchExtension, type LaunchedExtension } from './support/extension';
-import { installRouteGuard } from './support/network-guard';
+import { type VendorSession, withVendorSession } from './support/session';
 import {
-  FIXTURE_TIME_ZONE,
   fixtureUrl,
   openVendorPage,
   readLedger,
   requestUrl,
-  type VendorRoutes,
   vendorFixture,
   waitForLedger,
 } from './support/vendor-pages';
 
 declare const chrome: WxtBrowser;
-
-interface Session {
-  readonly server: FixtureServer;
-  readonly extension: LaunchedExtension;
-  readonly routes: VendorRoutes;
-  /** An extension page the test asks the ledger from. */
-  readonly ledgerPage: Page;
-}
-
-async function withSession(run: (session: Session) => Promise<void>): Promise<void> {
-  const server = await startFixtureServer();
-  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
-  try {
-    const routes: VendorRoutes = new Map();
-    await installRouteGuard(extension.context, { fixtureOrigin: server.origin, routedFixtures: routes });
-    const ledgerPage = await extension.openExtensionPage('options.html');
-    await run({ server, extension, routes, ledgerPage });
-  } finally {
-    await extension.close();
-    await server.close();
-  }
-}
 
 /** A gmail.sent report as the service worker received it: from which page, saying what. */
 interface SeenReport {
@@ -85,13 +60,13 @@ function watchSentReports(): void {
 }
 
 /** The reports the service worker has received so far (watchSentReports). */
-async function sentReports(session: Session): Promise<SeenReport[]> {
+async function sentReports(session: VendorSession): Promise<SeenReport[]> {
   const worker = await session.extension.serviceWorker();
   return worker.evaluate(() => Reflect.get(globalThis, 'attestE2eSentReports') as SeenReport[]);
 }
 
 /** Waits until the Inbox tab has reported more than `before` times, and returns its reports. */
-async function inboxReportsAfter(session: Session, before: number): Promise<SeenReport[]> {
+async function inboxReportsAfter(session: VendorSession, before: number): Promise<SeenReport[]> {
   let inbox: SeenReport[] = [];
   await expect
     .poll(async () => {
@@ -103,7 +78,7 @@ async function inboxReportsAfter(session: Session, before: number): Promise<Seen
 }
 
 /** Sends the neutral report from `tab` (module comment) and waits for its answer: every earlier report is handled. */
-async function handled(session: Session, tab: Page): Promise<void> {
+async function handled(session: VendorSession, tab: Page): Promise<void> {
   const post = await contentScriptPost(tab, session.extension.extensionId);
   const answer = await post({
     type: 'adapter.health',
@@ -133,7 +108,7 @@ function brokenSentList(): { url: string; html: string } {
   return { url: url.href, html };
 }
 
-async function tabsKeepTheSentStatus(session: Session): Promise<void> {
+async function tabsKeepTheSentStatus(session: VendorSession): Promise<void> {
   const worker = await session.extension.serviceWorker();
   await worker.evaluate(watchSentReports);
   const sent = await openVendorPage(
@@ -172,11 +147,20 @@ async function tabsKeepTheSentStatus(session: Session): Promise<void> {
   await inboxReportsAfter(session, first.length);
   await handled(session, inbox);
   expect(sentHealth(await readLedger(session.ledgerPage))).toEqual(sentHealth(degraded));
+
+  // The broken tab itself moves to the Inbox: its own IDLE replaces its DEGRADED (QA-L8: no status outlives its page).
+  await openVendorPage(
+    session.extension.context,
+    session.routes,
+    vendorFixture('gmail', 'synthetic-inbox.html'),
+    sent,
+  );
+  await waitForLedger(session.ledgerPage, (ledger) => sentHealth(ledger)?.status === 'IDLE');
 }
 
 test.describe('gmail.sent health with several Gmail tabs (sprint_2 2.11)', () => {
   test('an Inbox tab never flips the Sent tab status: OK stays OK, and a real break stays DEGRADED', async () => {
     test.setTimeout(3 * 60_000);
-    await withSession(tabsKeepTheSentStatus);
+    await withVendorSession(tabsKeepTheSentStatus);
   });
 });

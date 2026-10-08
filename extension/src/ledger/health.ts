@@ -3,7 +3,7 @@
  * wolf).
  *
  * Two writers set an observer's health. The observer reports its own at the start of every pass (`adapter.health`:
- * OK, or DEGRADED with its reasons). The service worker sets it DEGRADED itself when it refuses what a pass sent: a
+ * OK, IDLE or DEGRADED with its reasons). The service worker sets it DEGRADED itself when it refuses what a pass sent: a
  * row the ledger refused (`invalid_input`, `id_conflict`, `late_sighting`), a ping or snapshot that cannot be what it
  * says. Those reasons are `ledger.<code>` (LEDGER_REASON_PREFIX), so the popup can tell them from the page's.
  *
@@ -12,20 +12,23 @@
  *    health). The service worker clears it (`clearLedgerDegraded`) with that pass's own report once it has stored
  *    one of the pass's messages and refused none of them, at an instant after the DEGRADED one.
  *  - A DEGRADED report from the observer is stored with the service worker's reasons kept beside its own.
- *  - A pass that sends nothing but its health (a Gmail list view with no receipt open) clears nothing: there was
- *    nothing to accept.
+ *  - A pass that sends nothing but its health (an opened conversation with no receipt, an IDLE page) clears nothing:
+ *    there was nothing to accept.
  * Otherwise the observer's own report is stored as before: the latest wins (repo.ts `putAdapterHealth`).
  *
  * IDLE (sprint_2 2.11): a report from a page the observer does not read (an Inbox tab beside the Sent tab, a list with
- * no conversation open) is neither OK nor broken, so it never replaces an OK or a DEGRADED: it is stored only where
- * no page the observer reads has reported (nothing stored, or an IDLE), and a stored IDLE never holds back a report
- * from such a page, whatever its instant. Several tabs then never flip an observer's health, and a page that broke
- * stays DEGRADED while other tabs show other folders (Hard Rule 6).
+ * no conversation open) is neither OK nor broken. It is stored where nothing is, over an IDLE, and over the report of
+ * its own tab (`sameSource`: the tab moved off the page it reported, so its OK or DEGRADED no longer stands; the third
+ * review, QA-L8 and SEC-L5: a one-pass `view.mismatch` stayed for hours), never over another tab's report and never
+ * over a DEGRADED the service worker set. A stored IDLE never holds back a report from a page the observer reads,
+ * whatever its instant. Several tabs then never flip an observer's health, and a page that broke stays DEGRADED while
+ * other tabs show other folders (Hard Rule 6).
  *
  * A report that says what the stored one says (status, reasons and version) is written only once the stored one is
  * OBSERVER_HEALTH_REFRESH_MS old (TECH-2): a pass runs every few seconds on a busy page, and rewriting the same row
- * each time cost a readwrite transaction per pass. The stored `checkedAt` stays at most that old while the observer
- * keeps reporting, and a change of status, reasons or version is always written at once (`changed`), so a page that
+ * each time cost a readwrite transaction per pass. The stored `checkedAt` stays at most that old while a page the
+ * observer reads keeps reporting (an IDLE report from another tab writes nothing, so `checkedAt` is when such a page
+ * last reported: TECH-L3), and a change of status, reasons or version is always written at once (`changed`), so a page that
  * recovers still clears its DEGRADED at its next pass (Hard Rule 6). Every instant written here raises the clock's
  * high water (./clock-high-water.ts), so a report stamped while the clock ran ahead is repaired with the rest of the
  * ledger when the clock comes back (./clock-guard.ts, SEC-4).
@@ -79,9 +82,19 @@ export interface HealthWrite {
   readonly written: boolean;
   /** Status, reasons or version differ from the stored report (or there was none): open UI pages must re-read. */
   readonly changed: boolean;
+  /** The stored report says what this one says (status, reasons, version): its tab's status is the one that stands. */
+  readonly agrees: boolean;
 }
 
-const UNWRITTEN: HealthWrite = Object.freeze({ written: false, changed: false });
+/** How a report relates to the stored one, beyond what it says. */
+export interface OwnHealthOptions {
+  /** The stored report came from the same tab as this one (src/background/observer-state.ts `tabKey`). */
+  readonly sameSource?: boolean;
+}
+
+type Planned = Pick<HealthWrite, 'written' | 'changed'>;
+
+const UNWRITTEN: Planned = Object.freeze({ written: false, changed: false });
 
 /** Whether two reports say the same thing: status, reasons (in order) and version. */
 function sameReport(a: AdapterHealth, b: AdapterHealth): boolean {
@@ -94,10 +107,17 @@ function sameReport(a: AdapterHealth, b: AdapterHealth): boolean {
 }
 
 /** The row the rule in the header stores for `own` over `current`, or null when it stores nothing. */
-function nextOwnReport(own: AdapterHealth, current: AdapterHealth | undefined): AdapterHealth | null {
-  const older = current !== undefined && instantMs(own.checkedAt) < instantMs(current.checkedAt);
-  if (own.status === 'IDLE')
-    return current === undefined || (current.status === 'IDLE' && !older) ? own : null;
+function nextOwnReport(
+  own: AdapterHealth,
+  current: AdapterHealth | undefined,
+  sameSource: boolean,
+): AdapterHealth | null {
+  if (current === undefined) return own;
+  const older = instantMs(own.checkedAt) < instantMs(current.checkedAt);
+  if (own.status === 'IDLE') {
+    if (older) return null;
+    return current.status === 'IDLE' || (sameSource && !setByLedger(current)) ? own : null;
+  }
   if (older && current.status !== 'IDLE') return null;
   if (!setByLedger(current)) return own;
   if (own.status === 'OK') return null;
@@ -105,7 +125,7 @@ function nextOwnReport(own: AdapterHealth, current: AdapterHealth | undefined): 
 }
 
 /** What writing `next` over `current` comes to: nothing for a repeat of the stored report younger than the refresh. */
-function plannedWrite(next: AdapterHealth | null, current: AdapterHealth | undefined): HealthWrite {
+function plannedWrite(next: AdapterHealth | null, current: AdapterHealth | undefined): Planned {
   if (next === null) return UNWRITTEN;
   if (current === undefined || !sameReport(current, next)) return { written: true, changed: true };
   const age = instantMs(next.checkedAt) - instantMs(current.checkedAt);
@@ -114,22 +134,32 @@ function plannedWrite(next: AdapterHealth | null, current: AdapterHealth | undef
 
 /**
  * Stores an observer's (or adapter's) own report by the rule in the header. Returns whether anything was written
- * (false for a report older than the stored one, for an OK report while a DEGRADED the service worker set stands, and
- * for a repeat of the stored report younger than OBSERVER_HEALTH_REFRESH_MS) and whether it changed what the stored
- * report says. The common case, a repeat, is decided by a read alone: no readwrite transaction.
+ * (false for a report older than the stored one, for an OK report while a DEGRADED the service worker set stands, for
+ * an IDLE over another tab's report, and for a repeat of the stored report younger than OBSERVER_HEALTH_REFRESH_MS),
+ * whether it changed what the stored report says, and whether the stored report now says what this one says
+ * (`agrees`: the caller then knows the stored health is this tab's). The common case, a repeat, is decided by a read
+ * alone: no readwrite transaction.
  */
-export async function recordOwnHealth(db: LedgerDb, input: AdapterHealthInput): Promise<HealthWrite> {
+export async function recordOwnHealth(
+  db: LedgerDb,
+  input: AdapterHealthInput,
+  options: OwnHealthOptions = {},
+): Promise<HealthWrite> {
   const own = parseHealth(input);
+  const sameSource = options.sameSource ?? false;
+  const agrees = (report: AdapterHealth | undefined): boolean =>
+    report !== undefined && sameReport(report, own);
   const seen = await stored(db, own.adapterId);
-  if (!plannedWrite(nextOwnReport(own, seen), seen).written) return UNWRITTEN;
+  if (!plannedWrite(nextOwnReport(own, seen, sameSource), seen).written)
+    return { ...UNWRITTEN, agrees: agrees(seen) };
   return db.transaction('rw', [db.adapterHealth, db.meta], async (): Promise<HealthWrite> => {
     const current = await stored(db, own.adapterId);
-    const next = nextOwnReport(own, current);
+    const next = nextOwnReport(own, current, sameSource);
     const write = plannedWrite(next, current);
-    if (!write.written || next === null) return UNWRITTEN;
+    if (!write.written || next === null) return { ...UNWRITTEN, agrees: agrees(current) };
     await db.adapterHealth.put(next);
     await noteStoredInstant(db, next.checkedAt);
-    return write;
+    return { ...write, agrees: agrees(next) };
   });
 }
 

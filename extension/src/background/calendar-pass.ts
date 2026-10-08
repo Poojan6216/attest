@@ -28,7 +28,7 @@
  *  5. Each row is projected (core `project`, so it is exactly what an observer would have sent) with `observedAt` =
  *     when it was first seen, and stored (./calendar-rows.ts): a first sighting with its marker, a change as it is.
  *     Since v1.12 every row is a first sighting (docs/grading.md §3, §7; Decisions [2.close]): whether the account
- *     itself made a change is not known before the live smoke (sprint_2 2.8), so the step is given ./calendar-own.ts
+ *     itself made a change is not known yet (carried to sprint_6 6.4), so the step is given ./calendar-own.ts
  *     `accountMadeChange`, and no Calendar row accuses an agent. The rules that will still apply once it can know are
  *     in place: a change whose comparison base was read too long before it (./calendar-step.ts `staleChangeMs`) is a
  *     first sighting too, and so is a creation or an update another range's view held first (read after this range's

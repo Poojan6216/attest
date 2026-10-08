@@ -10,9 +10,9 @@
  * first-look marker. It is still evidence for a claim (§4.1); it is never an orphan, so never UNASKED: a missed
  * UNASKED, never a false one.
  *
- * Carry-forward (sprint_2 2.8, the live smoke): confirm on real pages which facts say that the account organises an
- * event and owns the calendar it is on (read-only, best knowledge), add them to the snapshot as derived facts, and
- * answer from them here. The rest of the rule (a change noticed late, a change another range held first) is already
+ * Carry-forward (sprint_6 6.4; the live smoke of 2026-10-07, sprint_2 2.8, could not read them): confirm on real
+ * pages which facts say that the account organises an event and owns the calendar it is on (read-only, best
+ * knowledge), add them to the snapshot as derived facts, and answer from them here. The rest of the rule (a change noticed late, a change another range held first) is already
  * in place for that day (./calendar-step.ts, ./calendar-seen.ts).
  */
 import type { CalendarEvent } from '../observers/gcal/diff';

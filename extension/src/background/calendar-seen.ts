@@ -18,7 +18,7 @@
  * events, so "held first" can never drift from "changed".
  *
  * Since v1.12 every change is a first sighting already (./calendar-own.ts `accountMadeChange` knows of no change the
- * account made), so this reads nothing until the live smoke (sprint_2 2.8) lets a change be the account's own again.
+ * account made), so this reads nothing until a change can be the account's own again (sprint_6 6.4).
  */
 import { instantMs } from '../core/normalize';
 import { CalendarRecord, type CalendarRecordKey } from '../ledger/calendar-snapshots';

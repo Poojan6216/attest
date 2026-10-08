@@ -10,6 +10,9 @@
  *    can clear a DEGRADED the service worker set (src/ledger/health.ts). Lost: the DEGRADED stays until the next pass.
  *    An IDLE report is not kept: its pass sends nothing else, and kept it would hide, from a tab on another folder,
  *    the report of the pass whose rows follow (sprint_2 2.11).
+ *  - Health source: the tab whose report the stored health is, so that tab's IDLE (it moved off the page it reported)
+ *    may replace it and another tab's may not (src/ledger/health.ts). Lost: no IDLE replaces an OK or a DEGRADED
+ *    until a tab reports again, so a DEGRADED may stay longer, never an OK made up.
  *  - Refused passes: the instants of passes with a refused row, so their coverage is refused too. Lost: the observer
  *    already stopped that pass when its post was refused (src/observers/base.ts), so it sends no coverage anyway.
  *  - Held Calendar pings: a Calendar pass with a known account posts its coverage pings before its snapshot, and its
@@ -39,10 +42,18 @@ export interface PassState {
   readonly ownHealth: Map<string, AdapterHealth>;
   readonly refused: Map<string, number[]>;
   readonly held: Map<string, HeldPass>;
+  /** Per observer: the tab (`tabKey`) whose report the stored health is. */
+  readonly healthSource: Map<string, string>;
 }
 
 export function createPassState(): PassState {
-  return { queues: new Map(), ownHealth: new Map(), refused: new Map(), held: new Map() };
+  return {
+    queues: new Map(),
+    ownHealth: new Map(),
+    refused: new Map(),
+    held: new Map(),
+    healthSource: new Map(),
+  };
 }
 
 /** Runs `job` after every earlier job of `observerId` settled; one failing job never blocks the next. */
@@ -88,6 +99,11 @@ export function wasRefused(state: PassState, observerId: string, passMs: number)
  * The tab, frame and document that sent a message: one content script, whose passes run one at a time. An extension
  * page has no tab; its URL names it.
  */
+/** A tab and frame, whatever page they show now: the source of a health report (it outlives a navigation). */
+export function tabKey(sender: MessageSender): string {
+  return `${sender.tab?.id === undefined ? '-' : String(sender.tab.id)}:${String(sender.frameId ?? '-')}`;
+}
+
 export function senderKey(sender: MessageSender): string {
   const tab = sender.tab?.id;
   const document = Reflect.get(sender, 'documentId');

@@ -51,6 +51,9 @@ const VENDOR_PAGES = [
   // Real captures (2026-10-06), so the content scripts run on what the real pages draw (QA-R5).
   vendorFixture('gmail', 'sent-list-1.html'),
   vendorFixture('gcal', 'week-after.html'),
+  // Real receipts (2026-10-07): the receipt reader on real opened mail (QA third review).
+  vendorFixture('gmail', 'receipt-stripe.html'),
+  vendorFixture('gmail', 'receipt-uber.html'),
 ];
 const VENDOR_ROUTES = routesFor(VENDOR_PAGES);
 

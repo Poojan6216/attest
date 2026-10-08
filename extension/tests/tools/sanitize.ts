@@ -9,8 +9,9 @@
  *     SVG presentation url(), escaped CSS function names included); drop session secrets (nonce, hidden-input
  *     values, csrf meta);
  *  2. learn display names (`Name <email>`, name/title/aria-label beside an email attribute, --names);
- *  3. replace --redact-selector text with fake phrases; fake the card endings and order numbers a table row labels
- *     (capture-rows.ts), an order number wherever else it stands alone too;
+ *  3. replace --redact-selector text with fake phrases; fake what a receipt's labels mark (capture-rows.ts): card
+ *     endings, order numbers and codes, Meet codes, attribute UUIDs and postal address blocks, each id the same
+ *     wherever else it stands alone;
  *  4. scrub every text node and attribute: query strings and parameter fragments anywhere (text, data-*,
  *     meta content, relative URLs), then emails (plain, percent-encoded, inside base64 ids), phones, cards,
  *     money, street addresses, names, redacted literals;
@@ -54,7 +55,7 @@ import {
   Scrubber,
   type ScrubStats,
 } from './capture-pii';
-import { pageHostOf, stripQueryParts, trimForeignLink, trimForeignUrls } from './capture-url';
+import { isCalendarPage, pageHostOf, stripQueryParts, trimForeignLink, trimForeignUrls } from './capture-url';
 
 export interface SeedSecret {
   readonly id: string;
@@ -358,7 +359,7 @@ export function sanitizeHtml(html: string, options: SanitizeOptions): SanitizeRe
     keepSenderNames(doc, book, kept, options.names ?? []);
     faker.reserve(book.tokens);
     const redactions = redactSelected(doc, options.redactSelectors ?? [], faker, stats);
-    fakeRowValues(doc, faker, stats);
+    fakeRowValues(doc, faker, stats, { meetEverywhere: isCalendarPage(options.pageUrl) });
     const scrubberOptions = {
       globalNames: book.global,
       nameTokens: book.tokens,

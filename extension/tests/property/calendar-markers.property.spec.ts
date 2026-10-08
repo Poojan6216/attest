@@ -254,7 +254,9 @@ function freshContains(raw: Generated<typeof claimArb>, entries: readonly Scenar
   let reached = from;
   for (const e of counted) {
     if (Date.parse(e.windowStart) > reached) return false;
-    reached = Math.max(reached, Date.parse(e.windowEnd));
+    // A window that ends before the point reached adds nothing: a point span is held only by a window over it.
+    if (Date.parse(e.windowEnd) < reached) continue;
+    reached = Date.parse(e.windowEnd);
     if (reached >= to) return true;
   }
   return false;

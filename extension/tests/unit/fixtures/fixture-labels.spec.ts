@@ -17,7 +17,6 @@ import { z } from 'zod';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { CONTENT_FIELDS, project } from '../../../src/core/redact';
-import { closeWindow, createInertWindow } from '../../tools/capture-dom';
 import { BaseSeed, SEEDS_PATH } from '../../tools/seeds';
 import { stillDrawing } from './fixture-page-read';
 import {
@@ -29,24 +28,13 @@ import {
   type ObservationFact,
   projectArgs,
 } from './fixture-labels';
+import { eachPage, fixtureDocs } from './fixture-docs';
 
 const SEEDS = z
   .object({ seeds: z.array(BaseSeed) })
   .parse(JSON.parse(readFileSync(SEEDS_PATH, 'utf8'))).seeds;
-const window = createInertWindow();
-afterAll(() => {
-  closeWindow(window);
-});
-
-const docs = new Map<string, Document>();
-function docOf(fixture: LabelledFixture): Document {
-  let doc = docs.get(fixture.htmlPath);
-  if (!doc) {
-    doc = new window.DOMParser().parseFromString(readFileSync(fixture.htmlPath, 'utf8'), 'text/html');
-    docs.set(fixture.htmlPath, doc);
-  }
-  return doc;
-}
+const { docOf, closeAll } = fixtureDocs();
+afterAll(closeAll);
 
 const collapse = (text: string | null | undefined): string => (text ?? '').replace(/\s+/gu, ' ').trim();
 /** The no-leak matching: NFKC, case-insensitive, ignoring whitespace, punctuation and symbols. */
@@ -99,8 +87,8 @@ describe('observer fixture labels', () => {
     for (const f of fixtures) expect(f.page.synthetic, f.file).toBe(f.file.startsWith('synthetic-'));
   });
 
-  it('page facts match their folder and their page (vendor, account switcher)', () => {
-    for (const f of fixtures) {
+  it('page facts match their folder and their page (vendor, account switcher)', async () => {
+    await eachPage(fixtures, (f) => {
       expect(f.page.vendor, f.file).toBe(f.vendor);
       expect(f.label.capturedAt, f.file).toBe(f.date);
       // The switcher's words are localised (and a capture may fake a brand in them); its address in brackets is not.
@@ -113,13 +101,13 @@ describe('observer fixture labels', () => {
         f.file,
       ).toHaveLength(1);
       expect(docOf(f).querySelector('[role="main"]'), f.file).not.toBeNull();
-    }
+    });
   });
 });
 
 describe('seeded secrets', () => {
-  it('each listed seed exists and sits in the text of its page (fixture-pages.spec.ts: drawn on screen)', () => {
-    for (const f of fixtures) {
+  it('each listed seed exists and sits in the text of its page (fixture-pages.spec.ts: drawn on screen)', async () => {
+    await eachPage(fixtures, (f) => {
       expect(f.label.seededSecrets.length, f.file).toBeGreaterThanOrEqual(3);
       const doc = docOf(f);
       const text = collapse(doc.body.textContent);
@@ -130,7 +118,7 @@ describe('seeded secrets', () => {
         expect(collapse(marked?.textContent), `${f.file}: ${id}`).toBe(collapse(secret?.value));
         expect(text, `${f.file}: ${id}`).toContain(collapse(secret?.value));
       }
-    }
+    });
   });
 
   it('no seed value or canary appears in any label string (expected values, notes, keys)', () => {
@@ -271,8 +259,8 @@ function withAttribute(doc: Document, name: string, value: string): Element[] {
 }
 
 describe('facts bind to the page', () => {
-  it('a gmail.sent fact names a list row holding its row id, recipient address and subject', () => {
-    for (const f of fixtures) {
+  it('a gmail.sent fact names a list row holding its row id, recipient address and subject', async () => {
+    await eachPage(fixtures, (f) => {
       for (const o of f.observations.filter((x) => x.source === 'gmail.sent')) {
         const span = withAttribute(docOf(f), 'data-legacy-last-message-id', o.rowKey ?? '')[0];
         const row = span?.closest('[role="row"]');
@@ -284,33 +272,36 @@ describe('facts bind to the page', () => {
         const subject = collapse(span.textContent);
         expect(subject.startsWith(o.subjectHint ?? '(no subject)'), `${f.file}: ${subject}`).toBe(true);
       }
-    }
+    });
   });
 
-  it('a gmail.receipt fact names an opened message by its id and its subject heading', () => {
-    for (const f of fixtures) {
+  it('a gmail.receipt fact names an opened message by its id and its subject heading', async () => {
+    await eachPage(fixtures, (f) => {
       for (const o of f.observations.filter((x) => x.source === 'gmail.receipt')) {
         expect(withAttribute(docOf(f), 'data-legacy-message-id', o.rowKey ?? ''), f.file).toHaveLength(1);
         const heading = collapse(docOf(f).querySelector('h2[data-legacy-thread-id]')?.textContent);
         expect(heading.startsWith(o.subjectHint ?? ''), `${f.file}: ${heading}`).toBe(true);
       }
-    }
+    });
   });
 
-  it('a Calendar event fact names a chip in the main grid with its id and visible title', () => {
-    for (const f of fixtures.filter((x) => x.vendor === 'gcal')) {
-      const main = docOf(f).querySelector('[role="main"]');
-      const chips = Array.from(main?.querySelectorAll('[role="button"][data-eventid]') ?? []);
-      // A page the pass does not read (DEGRADED, or still drawing) has no event; any other has one per chip.
-      const read = f.health.every((h) => h.status === 'OK') && !stillDrawing(docOf(f));
-      const ids = new Set(chips.map((c) => c.getAttribute('data-eventid')));
-      expect(read ? ids.size : 0, f.file).toBe(f.events.length);
-      for (const e of f.events) {
-        const chip = chips.find((c) => c.getAttribute('data-eventid') === e.rowKey);
-        const visible = collapse(chip?.querySelector('[aria-hidden="true"]')?.textContent);
-        expect(visible, `${f.file}: ${e.rowKey}`).toContain(e.subjectHint);
-      }
-    }
+  it('a Calendar event fact names a chip in the main grid with its id and visible title', async () => {
+    await eachPage(
+      fixtures.filter((x) => x.vendor === 'gcal'),
+      (f) => {
+        const main = docOf(f).querySelector('[role="main"]');
+        const chips = Array.from(main?.querySelectorAll('[role="button"][data-eventid]') ?? []);
+        // A page the pass does not read (DEGRADED, or still drawing) has no event; any other has one per chip.
+        const read = f.health.every((h) => h.status === 'OK') && !stillDrawing(docOf(f));
+        const ids = new Set(chips.map((c) => c.getAttribute('data-eventid')));
+        expect(read ? ids.size : 0, f.file).toBe(f.events.length);
+        for (const e of f.events) {
+          const chip = chips.find((c) => c.getAttribute('data-eventid') === e.rowKey);
+          const visible = collapse(chip?.querySelector('[aria-hidden="true"]')?.textContent);
+          expect(visible, `${f.file}: ${e.rowKey}`).toContain(e.subjectHint);
+        }
+      },
+    );
   });
 });
 

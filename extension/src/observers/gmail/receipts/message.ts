@@ -7,8 +7,8 @@
  * user left in the DOM, hidden, and a hidden conversation is never the one open (TECH-5). Is a conversation open?
  * Any one of three signals says so: the page address names a thread (`#inbox/<id>`, read through ../route.ts
  * `gmailFragment`), a shown main landmark holds the subject heading, or it holds a message. When none does, the
- * view is a list (or settings, or anything else): there is nothing to read and nothing is wrong, so health stays
- * OK (Hard Rule 6 must not cry wolf on every list view). When one does, every landmark the parsers need must be
+ * view is a list (or settings, or anything else): there is nothing to read and nothing is wrong, so health is IDLE
+ * `no_conversation`, neither OK nor broken (Hard Rule 6 must not cry wolf on every list view; sprint_2 2.11). When one does, every landmark the parsers need must be
  * there, exactly one shown main landmark first (two are `ambiguous`: which one the user sees cannot be told), so a
  * Gmail markup change that breaks one landmark is caught by the others, and one that breaks every DOM landmark by
  * the address.
@@ -28,7 +28,7 @@
  */
 import { asciiLower, email, type EmailAddress } from '../../../core/normalize';
 import { readGoogleAccount } from '../../google-account';
-import { isElement, TEXT_NODE } from '../../nodes';
+import { DOCUMENT_POSITION_FOLLOWING, isElement, TEXT_NODE } from '../../nodes';
 import { perPass } from '../../pass-memo';
 import { shownChecker, shownOnly } from '../../shown';
 import { oneLine } from '../../text';
@@ -129,7 +129,8 @@ function runsOf(root: Element): string[] {
  * text, or it holds another row (a layout row) and does not have exactly two cells with text. Empty cells (spacers,
  * `&nbsp;`) are left out, so a label and its amount stay side by side; a cell's own wrappers (`<p>`, `<div>`, `<br>`,
  * a table of its own) join its text with one space. A real Stripe receipt wraps the label in a table of its own:
- * `["", <table>Total</table>, "", "$12.34", ""]` (capture of 2026-10-07) is the line `Total | $12.34`.
+ * `["", <table>Total</table>, "", "$12.34", ""]` (the shape of the capture of 2026-10-07; amount invented) is the line
+ * `Total | $12.34`.
  */
 function rowCells(row: Element): string[] | null {
   if (row.localName !== 'tr') return null;
@@ -172,9 +173,6 @@ function dateCell(item: Element, sender: Element | null): Element | null {
   return cells.find((cell) => cell.hasAttribute(L.dateTitle)) ?? cells[0] ?? null;
 }
 
-/** `Node.DOCUMENT_POSITION_FOLLOWING`: the other node comes after this one in document order. */
-const FOLLOWING = 4;
-
 /**
  * The subject heading of the conversation `item` belongs to: among the headings of its nearest ancestor (up to the
  * main landmark) that holds any, the last one before it. Gmail can keep an earlier conversation's view in the page
@@ -184,7 +182,9 @@ const FOLLOWING = 4;
 function headingOf(item: Element, main: Element): Element | null {
   for (let node = item.parentElement; node !== null; node = node.parentElement) {
     const headings = Array.from(node.querySelectorAll(L.subject));
-    const before = headings.filter((heading) => (heading.compareDocumentPosition(item) & FOLLOWING) !== 0);
+    const before = headings.filter(
+      (heading) => (heading.compareDocumentPosition(item) & DOCUMENT_POSITION_FOLLOWING) !== 0,
+    );
     const heading = before.at(-1) ?? headings[0];
     if (heading !== undefined) return heading;
     if (node === main) return null;

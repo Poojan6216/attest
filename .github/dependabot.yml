@@ -6,7 +6,8 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows, and the composite setup action every job runs.
+    directories: ['/', '/.github/actions/setup']
     schedule:
       interval: monthly
     groups:

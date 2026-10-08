@@ -8,7 +8,8 @@
  *     list, so ./health.ts reports them IDLE, neither OK nor broken (sprint_2 2.11);
  *  2. the folder the nav marks as selected, when it marks one, is Sent, and the document title does not name
  *     another folder, else `view.mismatch`: Gmail is between two views and may still show the previous one, or the
- *     page changed so that a Sent list reads as another folder, which must stay loud (DEGRADED);
+ *     page changed so that a Sent list reads as another folder, which must stay loud (DEGRADED). A route Gmail changed
+ *     reads as IDLE (not checked), and the tab's IDLE replaces its own OK (src/ledger/health.ts): never a stale OK;
  *  3. exactly one `role="main"` is shown, and exactly one `role="grid"` is shown inside it: Gmail keeps earlier
  *     views in the DOM, hidden, and a hidden Inbox list must never be read as the Sent list (../shown.ts, with one
  *     shown-check per read);
@@ -26,6 +27,7 @@
  * the rows and the window share it, so a pass reads the page once (TECH-2).
  */
 import { email } from '../../core/normalize';
+import { DOCUMENT_POSITION_FOLLOWING } from '../nodes';
 import { perPass } from '../pass-memo';
 import { type ShownCheck, shownChecker, shownOnly } from '../shown';
 import { oneLine } from '../text';
@@ -183,9 +185,6 @@ function timeElement(cells: readonly Element[]): Element | null {
   return null;
 }
 
-/** `Node.DOCUMENT_POSITION_FOLLOWING`: the compared node comes after the reference node. */
-const FOLLOWING = 4;
-
 /**
  * The message count shown after a row's recipients, or null: in a cell before the subject, an element with no element
  * inside it, after the cell's last recipient, whose whole text is a count (selectors.json `patterns.messageCount`),
@@ -202,7 +201,7 @@ function messageCountOf(
     if (last === undefined) continue;
     for (const leaf of Array.from(cell.querySelectorAll('*'))) {
       if (leaf.childElementCount > 0 || last.contains(leaf)) continue;
-      if ((last.compareDocumentPosition(leaf) & FOLLOWING) === 0) continue;
+      if ((last.compareDocumentPosition(leaf) & DOCUMENT_POSITION_FOLLOWING) === 0) continue;
       const text = oneLine(leaf.textContent);
       if (MESSAGE_COUNT.test(text) && shown(leaf)) return Number(text);
     }

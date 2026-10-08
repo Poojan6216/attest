@@ -17,7 +17,7 @@
  *     refused (`RedactError`), an unreadable account, window or calendar list, or a message that failed its schema
  *     posts no coverage for that pass (Hard Rule 5; Sprint 1 close, SEC-3). The account's address never leaves,
  *     only its hash (./account.ts). A clean pass that saw no window by design (a Sent page past the head of the
- *     list, a Gmail view with no receipt open, a Calendar grid still drawing) posts none and stays OK;
+ *     list, an opened conversation with no receipt, a Calendar grid still drawing) posts none and stays OK;
  *  4. `calendar.snapshot`: the Calendar observer's snapshot of the range it read, after the coverage, only for a
  *     clean pass whose account is known (sprint_2 2.7). The background keeps it as the range's previous snapshot.
  * If a post rejects, the rest of the pass is not sent, so coverage never follows observations that were not

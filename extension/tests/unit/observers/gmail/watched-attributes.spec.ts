@@ -166,11 +166,6 @@ describe('the attributes the Gmail observers name (TECH-2)', () => {
     );
   });
 
-  it('no attribute they do not name changes what a pass reads, on any Gmail page', async () => {
-    expect(await readersOf(gmailSentObserver, unnamedBy(gmailSentObserver))).toEqual([]);
-    expect(await readersOf(receiptObserver, unnamedBy(receiptObserver))).toEqual([]);
-  }, 120_000);
-
   it('a named attribute does change what a pass reads (the check can fail)', async () => {
     const named = (list: readonly string[]) => (doc: Document) =>
       attributeNames(doc).filter((name) => list.includes(name));
@@ -186,4 +181,18 @@ describe('the attributes the Gmail observers name (TECH-2)', () => {
       expect.arrayContaining(['email', 'data-legacy-message-id', 'title']),
     );
   }, 120_000);
+});
+
+// One test per observer and page (QA-L2: the whole sweep in one test outran 120 s under coverage load once the real
+// receipt pages came; nothing is skipped, each page is checked on its own).
+describe.each([
+  ['gmail.sent', gmailSentObserver],
+  ['gmail.receipt', receiptObserver],
+] as const)('no attribute %s does not name changes what its pass reads', (_id, observer) => {
+  it.each(gmailFixtures().map((fixture) => [fixture.file, fixture] as const))(
+    '%s',
+    async (_file, fixture) => {
+      expect(await readersOf(observer, unnamedBy(observer), [fixture])).toEqual([]);
+    },
+  );
 });
