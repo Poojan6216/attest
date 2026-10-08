@@ -3,7 +3,7 @@
   "date": "2026-10-07",
   "command": "pnpm bench",
   "metrics": {
-    "gmailFixtures": 40,
+    "gmailFixtures": 41,
     "receiptRealFixtures": 6,
     "stripeFixtures": 3,
     "stripeExact": 3,
@@ -32,16 +32,16 @@
     "receiptFieldAccuracy": 1,
     "negatives": 7,
     "negativesUnparsed": 7,
-    "listViews": 14,
-    "listViewsNeutral": 14,
-    "coveragePages": 40,
-    "coveragePagesExact": 40,
+    "listViews": 15,
+    "listViewsNeutral": 15,
+    "coveragePages": 41,
+    "coveragePagesExact": 41,
     "coverageWindows": 11,
     "healthLabelled": 26,
     "healthMatched": 26,
     "receiptParsersGatePassed": true,
-    "commit": "072e8d8808f3a95fffae7455d902ffafdba6154d",
-    "commitDirty": false,
+    "commit": "caadba8d9cee27e4a876edeb9ddc9e3eecf3c549",
+    "commitDirty": true,
     "node": "v22.14.0"
   }
 }

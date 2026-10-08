@@ -12,20 +12,20 @@ Measured 2026-10-07 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 386 |
-| lookupMinMs | 334 |
-| lookupMaxMs | 482.8 |
-| lookupCpuMedianMs | 405.7 |
-| indexBuildMedianMs | 160.8 |
-| buildPlusLookupMedianMs | 533 |
+| lookupMedianMs | 390.6 |
+| lookupMinMs | 340.9 |
+| lookupMaxMs | 445.9 |
+| lookupCpuMedianMs | 417.2 |
+| indexBuildMedianMs | 150.7 |
+| buildPlusLookupMedianMs | 537.7 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1093 |
-| gradingMinMs | 1057.4 |
-| gradingMaxMs | 1328.5 |
-| gradingCpuMedianMs | 1304.7 |
+| gradingMedianMs | 1078.4 |
+| gradingMinMs | 1028.5 |
+| gradingMaxMs | 1321.3 |
+| gradingCpuMedianMs | 1282.3 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,8 +33,8 @@ Measured 2026-10-07 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
-| commitDirty | false |
+| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commitDirty | true |
 | node | v22.14.0 |
 
 ## gcal
@@ -66,8 +66,8 @@ Measured 2026-10-07 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
-| commitDirty | false |
+| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commitDirty | true |
 | node | v22.14.0 |
 
 ## gmail-sent
@@ -76,15 +76,15 @@ Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailSentSelectorsVersion | 1.2.0 |
+| gmailSentSelectorsVersion | 1.3.0 |
 | gmailFixtureFolders | 2026-10-03,2026-10-06,2026-10-07 |
-| gmailFixtures | 40 |
-| gmailSentListFixtures | 10 |
+| gmailFixtures | 41 |
+| gmailSentListFixtures | 11 |
 | gmailSentRealFixtures | 4 |
-| gmailSentLabelledObservations | 53 |
-| gmailSentProducedObservations | 53 |
-| gmailSentFieldsCompared | 159 |
-| gmailSentFieldsCorrect | 159 |
+| gmailSentLabelledObservations | 108 |
+| gmailSentProducedObservations | 108 |
+| gmailSentFieldsCompared | 324 |
+| gmailSentFieldsCorrect | 324 |
 | gmailSentRecipientAccuracy | 1 |
 | gmailSentSubjectHintAccuracy | 1 |
 | gmailSentOccurredAtAccuracy | 1 |
@@ -98,8 +98,8 @@ Measured 2026-10-07 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
-| commitDirty | false |
+| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commitDirty | true |
 | node | v22.14.0 |
 
 ## receipts
@@ -108,7 +108,7 @@ Measured 2026-10-07 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| gmailFixtures | 40 |
+| gmailFixtures | 41 |
 | receiptRealFixtures | 6 |
 | stripeFixtures | 3 |
 | stripeExact | 3 |
@@ -137,14 +137,14 @@ Measured 2026-10-07 with `pnpm bench`.
 | receiptFieldAccuracy | 1 |
 | negatives | 7 |
 | negativesUnparsed | 7 |
-| listViews | 14 |
-| listViewsNeutral | 14 |
-| coveragePages | 40 |
-| coveragePagesExact | 40 |
+| listViews | 15 |
+| listViewsNeutral | 15 |
+| coveragePages | 41 |
+| coveragePagesExact | 41 |
 | coverageWindows | 11 |
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | 072e8d8808f3a95fffae7455d902ffafdba6154d |
-| commitDirty | false |
+| commit | caadba8d9cee27e4a876edeb9ddc9e3eecf3c549 |
+| commitDirty | true |
 | node | v22.14.0 |

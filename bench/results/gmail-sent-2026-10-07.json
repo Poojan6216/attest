@@ -3,15 +3,15 @@
   "date": "2026-10-07",
   "command": "pnpm bench",
   "metrics": {
-    "gmailSentSelectorsVersion": "1.2.0",
+    "gmailSentSelectorsVersion": "1.3.0",
     "gmailFixtureFolders": "2026-10-03,2026-10-06,2026-10-07",
-    "gmailFixtures": 40,
-    "gmailSentListFixtures": 10,
+    "gmailFixtures": 41,
+    "gmailSentListFixtures": 11,
     "gmailSentRealFixtures": 4,
-    "gmailSentLabelledObservations": 53,
-    "gmailSentProducedObservations": 53,
-    "gmailSentFieldsCompared": 159,
-    "gmailSentFieldsCorrect": 159,
+    "gmailSentLabelledObservations": 108,
+    "gmailSentProducedObservations": 108,
+    "gmailSentFieldsCompared": 324,
+    "gmailSentFieldsCorrect": 324,
     "gmailSentRecipientAccuracy": 1,
     "gmailSentSubjectHintAccuracy": 1,
     "gmailSentOccurredAtAccuracy": 1,
@@ -25,8 +25,8 @@
     "gmailSentSubjectHintMaxCodePoints": 80,
     "gmailSentSubjectHintGatePassed": true,
     "gmailSentSeedsGatePassed": true,
-    "commit": "072e8d8808f3a95fffae7455d902ffafdba6154d",
-    "commitDirty": false,
+    "commit": "caadba8d9cee27e4a876edeb9ddc9e3eecf3c549",
+    "commitDirty": true,
     "node": "v22.14.0"
   }
 }
