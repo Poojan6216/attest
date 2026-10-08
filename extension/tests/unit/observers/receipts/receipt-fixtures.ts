@@ -83,9 +83,18 @@ export const receiptPositives = (fixtures: readonly LabelledFixture[]): Labelled
  * opened from a search, which selects no folder (the real captures of 2026-10-06). The account's own mail in Sent
  * is not one: no parser reads it.
  */
+/**
+ * Opened messages, not in Sent, that hold no receipt and whose pass is OK. A receipt whose total cannot be read (its
+ * labelled gmail.receipt health is DEGRADED: a total in "Rs.", real capture of 2026-10-07) is neither a positive nor
+ * a negative; its health and coverage are checked as every page's are.
+ */
 export const receiptNegatives = (fixtures: readonly LabelledFixture[]): LabelledFixture[] =>
   fixtures.filter(
-    (f) => f.page.view === 'gmail.message' && f.page.folder !== 'sent' && receiptFacts(f).length === 0,
+    (f) =>
+      f.page.view === 'gmail.message' &&
+      f.page.folder !== 'sent' &&
+      receiptFacts(f).length === 0 &&
+      receiptHealthLabel(f)?.status !== 'DEGRADED',
   );
 
 /**

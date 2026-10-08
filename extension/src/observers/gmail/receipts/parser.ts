@@ -97,11 +97,25 @@ function verdictFor(platform: Platform, kind: Kind, match: RegExpExecArray, mess
   });
 }
 
-/** The first kind whose subject matches (and whose `exclude` does not) decides; no kind: not a receipt. */
+/** Whether a line of the message's body holds text that makes it no receipt of `kind` (its `refuseText`). */
+function refused(kind: Kind, message: MessageView): boolean {
+  if (kind.refuseText.length === 0) return false;
+  for (const line of message.lines()) {
+    const text = line.cells.join(' ');
+    if (kind.refuseText.some((pattern) => pattern.test(text))) return true;
+  }
+  return false;
+}
+
+/**
+ * The first kind whose subject matches (and whose `exclude` does not) decides, unless the body refuses it (its
+ * `refuseText`); no kind: not a receipt.
+ */
 function parsePlatform(platform: Platform, message: MessageView): Verdict {
   for (const kind of platform.kinds) {
     const match = kind.subject.exec(message.subject);
     if (match === null || kind.exclude?.test(message.subject) === true) continue;
+    if (refused(kind, message)) continue;
     return verdictFor(platform, kind, match, message);
   }
   return NOT_A_RECEIPT;

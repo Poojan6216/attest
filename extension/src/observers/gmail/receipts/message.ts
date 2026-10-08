@@ -125,16 +125,19 @@ function runsOf(root: Element): string[] {
 }
 
 /**
- * The cells of a body table row read as one line, or null when the row is not one: it holds another row (a layout
- * row), or fewer than two of its cells hold text. Empty cells (spacers, `&nbsp;`) are left out, so a label and its
- * amount stay side by side; a cell's own wrappers (`<p>`, `<div>`, `<br>`) join its text with one space.
+ * The cells of a body table row read as one line, or null when the row is not one: fewer than two of its cells hold
+ * text, or it holds another row (a layout row) and does not have exactly two cells with text. Empty cells (spacers,
+ * `&nbsp;`) are left out, so a label and its amount stay side by side; a cell's own wrappers (`<p>`, `<div>`, `<br>`,
+ * a table of its own) join its text with one space. A real Stripe receipt wraps the label in a table of its own:
+ * `["", <table>Total</table>, "", "$12.34", ""]` (capture of 2026-10-07) is the line `Total | $12.34`.
  */
 function rowCells(row: Element): string[] | null {
-  if (row.localName !== 'tr' || row.querySelector('tr') !== null) return null;
+  if (row.localName !== 'tr') return null;
   const cells = Array.from(row.children)
     .filter((cell) => cell.matches(L.cells))
     .map((cell) => runsOf(cell).join(' '))
     .filter((text) => text !== '');
+  if (row.querySelector('tr') !== null) return cells.length === 2 ? cells : null;
   return cells.length >= 2 ? cells : null;
 }
 

@@ -2,7 +2,11 @@
   "$comment": "Gmail Sent observer (gmail.sent) selectors. role, aria-*, data-* and structure only, never a class name. Bump `version` on any change and record it with the fixture folder date in Decisions.md (agents/adapter_engineer.md rule 3). The Gmail host is src/config.ts OBSERVER_HOSTS.gmail, never a copy here. Parsed by ./selectors.ts.",
   "observer": "gmail.sent",
   "version": "1.2.0",
-  "fixtures": ["tests/fixtures/pages/gmail/2026-10-03", "tests/fixtures/pages/gmail/2026-10-06"],
+  "fixtures": [
+    "tests/fixtures/pages/gmail/2026-10-03",
+    "tests/fixtures/pages/gmail/2026-10-06",
+    "tests/fixtures/pages/gmail/2026-10-07"
+  ],
   "route": {
     "folder": "sent",
     "pageSegment": "^p([1-9][0-9]{0,5})$"

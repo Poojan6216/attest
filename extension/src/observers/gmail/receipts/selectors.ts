@@ -43,6 +43,7 @@ const DOLLAR = z.string().refine(isCurrencyCode, 'expected an ISO 4217 code');
 const KindShape = z.strictObject({
   subject: SOURCE,
   exclude: SOURCE.optional(),
+  refuseText: z.array(SOURCE).min(1).optional(),
   type: z.enum(RECEIPT_TYPES),
   labels: z.array(LABEL),
   amount: z.enum(['required', 'optional']),
@@ -111,6 +112,11 @@ const SelectorsShape = z.strictObject({
 export interface Kind {
   readonly subject: RegExp;
   readonly exclude: RegExp | null;
+  /**
+   * Body text that makes a message of this subject no receipt: Uber sends a charge summary under the trip's subject
+   * that says "This is not a payment receipt" before the trip receipt (live smoke, 2026-10-07).
+   */
+  readonly refuseText: readonly RegExp[];
   readonly type: ReceiptType;
   /** Total-line labels, most preferred first (`Amount paid` before `Total`). */
   readonly labels: readonly string[];
@@ -186,7 +192,15 @@ function compileKind(input: KindInput, merchant: PlatformInput['merchant']): Kin
     throw new ReceiptError('invalid_selectors');
   }
   const exclude = input.exclude === undefined ? null : compile(input.exclude);
-  return Object.freeze({ subject, exclude, type: input.type, labels: input.labels, amount: input.amount });
+  const refuseText = Object.freeze((input.refuseText ?? []).map(compile));
+  return Object.freeze({
+    subject,
+    exclude,
+    refuseText,
+    type: input.type,
+    labels: input.labels,
+    amount: input.amount,
+  });
 }
 
 function compilePlatform(id: PlatformId, input: PlatformInput): Platform {

@@ -1,0 +1,320 @@
+{
+  "receipt-stripe.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T18:41:39-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/from%3Astripe.com+subject%3Areceipt/196a898e1d35c526",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Garnet quarry timber",
+        "amountCents": 6766,
+        "currency": "USD",
+        "subjectHint": "Your receipt from Eleven Labs Inc. #2156-3073",
+        "occurredAt": "2025-05-06T22:35:00-04:00",
+        "rowKey": "196a898e1d35c526",
+        "parser": "stripe"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2025-05-06T22:35:00-04:00",
+        "windowEnd": "2025-05-06T22:35:00-04:00"
+      }
+    ],
+    "notes": "Real Stripe receipt (a company's monthly plan), opened from a search, so no folder is selected and gmail.sent is DEGRADED not_sent_folder. The merchant is the sender's display name, which the capture fakes (\"Garnet quarry timber\"; the body's \"Receipt from Eleven Labs Inc.\" is the company). Stripe wraps each total label in a table of its own: [\"\", Total, \"\", $67.66, \"\"] reads as one line from gmail.receipt 1.4.0. The total is \"Amount paid $67.66\" (also \"Total\"); amounts, the card ending, the receipt and invoice numbers are fakes, the subject's number with them. One point of coverage at the message date."
+  },
+  "receipt-instacart.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T18:52:06-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/from%3Ainstacart.com+subject%3Areceipt/1a112939eed088bb",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Instacart",
+        "amountCents": 5127,
+        "currency": "USD",
+        "subjectHint": "Your Instacart order receipt",
+        "occurredAt": "2026-10-06T14:57:00-04:00",
+        "rowKey": "1a112939eed088bb",
+        "parser": "instacart"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-06T14:57:00-04:00",
+        "windowEnd": "2026-10-06T14:57:00-04:00"
+      }
+    ],
+    "notes": "Real Instacart receipt opened from a search. The total is \"Total charged $51.27\" (also \"Total\"); the items subtotal, tip and fees are not the total. The shopper's first name, the card label and ending, the referral code and every amount are fakes; the store (Kroger) and the items are kept."
+  },
+  "receipt-uber.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T18:59:54-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/from%3Auber.com+subject%3Atrip/1a10271f6bffb89a",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "observation",
+        "source": "gmail.receipt",
+        "type": "purchase.made",
+        "merchant": "Uber",
+        "amountCents": 7221,
+        "currency": "USD",
+        "subjectHint": "Your Saturday morning trip with Uber",
+        "occurredAt": "2026-10-03T22:14:00-04:00",
+        "rowKey": "1a104b0e72af6ba0",
+        "parser": "uber"
+      },
+      {
+        "kind": "coverage",
+        "source": "gmail.receipt",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-03T22:14:00-04:00",
+        "windowEnd": "2026-10-03T22:14:00-04:00"
+      }
+    ],
+    "notes": "Real Uber thread of two messages under the trip's subject: a charge summary at 11:46 that says \"This is not a payment receipt\", then the trip receipt at 22:14. Only the receipt is a purchase (gmail.receipt 1.4.0 refuses the summary by its text; the live smoke of 2026-10-07 had recorded both, one trip twice). Total $72.21. Your name, the driver's, both trip addresses, the airport code and the card ending are fakes; the state (OH) and the distance are kept."
+  },
+  "receipt-shopify.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T19:09:38-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/from%3Ashopifyemail.com+subject%3A(order+OR+receipt)/196b8adb853f6784",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "DEGRADED",
+        "reasons": [
+          "receipt.amount_missing"
+        ]
+      }
+    ],
+    "notes": "Real Shopify order confirmation from a store in India: its totals read \"Rs. 954.92\". \"Rs.\" is the rupee of India, Pakistan, Sri Lanka, Nepal and Mauritius, so normalize.amount reads no currency (Hard Rule 5): the message is a receipt by sender and subject with no readable total, gmail.receipt DEGRADED receipt.amount_missing, no row, no coverage. The order number (subject and body), the recipient's name and both addresses (phrases), and every amount are fakes."
+  },
+  "receipt-generic-order.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T19:15:02-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/subject%3A%22order+confirmation%22/19c4ea618c956146",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Real order confirmation from a sender outside the registry (a streaming service's trial). The generic rule needs a total line; the only amount is the fee \"you will automatically be charged\" after the trial, in a sentence: no receipt, no row. The invoice id (in the row under its label, split by a <wbr>) is a fake."
+  },
+  "newsletter-prices-1.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T19:28:31-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/category%3Apromotions+sale/1a10b1747e778cbc",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a retailer's promotion with a price in the subject (\"from $35\") and a discount in the body. No order or receipt words: no row. The coupon code made for the customer is a fake."
+  },
+  "newsletter-prices-2.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gmail.receipt@1.4.0 gmail.sent@1.2.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gmail",
+        "view": "gmail.message",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T19:35:09-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://mail.google.com/mail/u/0/#search/category%3Apromotions+sale/1a11865ed516a649",
+        "defaultDollar": "USD"
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.sent",
+        "status": "DEGRADED",
+        "reasons": [
+          "not_sent_folder"
+        ]
+      },
+      {
+        "kind": "health",
+        "observer": "gmail.receipt",
+        "status": "OK",
+        "reasons": []
+      }
+    ],
+    "notes": "Negative: a chocolatier's sale (\"25% Off Sitewide\", a promo code for everyone, faked anyway). No order or receipt words: no row."
+  }
+}

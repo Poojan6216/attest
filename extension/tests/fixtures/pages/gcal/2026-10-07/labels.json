@@ -1,0 +1,56 @@
+{
+  "week-invited.html": {
+    "capturedAt": "2026-10-07",
+    "selectorsVersion": "gcal.event@1.5.0",
+    "seededSecrets": [
+      "api_key_anthropic_shape",
+      "api_key_aws_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "gcal",
+        "view": "gcal.week",
+        "synthetic": false,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-07T19:58:38-04:00",
+        "account": "pemian.dalard@example.org",
+        "liveUrl": "https://calendar.google.com/calendar/u/0/r/week"
+      },
+      {
+        "kind": "health",
+        "observer": "gcal.event",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "aGRhbHJ1ajY3NHVuMHVlN3Z0ampiNmg1amsgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Reservation at Ciao!",
+        "occurredAt": "2026-10-04T20:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "event",
+        "rowKey": "MjMwa2RkcXRlb2VjNWFrbjJzdTY3dWNqN2YgY29ybW9yZS5wZW1mb3JkQG0",
+        "calendar": "Faling Marley",
+        "subjectHint": "Attest invite test",
+        "occurredAt": "2026-10-08T14:00:00-04:00",
+        "allDay": false,
+        "attendees": []
+      },
+      {
+        "kind": "coverage",
+        "source": "gcal.event",
+        "account": "pemian.dalard@example.org",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "allCalendars": false
+      }
+    ],
+    "notes": "Real week view, Sun 4 to Sat 10 Oct 2026, with an invitation from the founder's second account (\"Attest invite test\", Thu 8 Oct 14:00) opened: its details dialog sits over the grid and is not a chip. The invitation's label reads \"Needs RSVP\" where the account's own reservation reads \"Accepted\" (the question the live smoke asked). Neither label lists a guest, so neither event has attendees: the week grid never shows guests. 3 of 9 calendars ticked: allCalendars false. The organiser's address, the owner's name and the Meet code are fakes."
+  }
+}

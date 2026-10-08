@@ -2,8 +2,9 @@
  * bench/observers/receipts.ts says what its numbers were measured on (QA-4, QA-V3; Hard Rule 12; agents/
  * adapter_engineer.md rule 10): `receiptRealFixtures` counts the real captures among the pages the receipt numbers
  * are scored on (the positives and the negatives), never among every Gmail page. It is 0 on the hand-built synthetic
- * pages; the founder's receipt captures of 2026-10-06 were held out for privacy (Decisions.md), so it is still 0, and
- * RESULTS.md shows the count beside the accuracy.
+ * pages and 6 on the corpus: the receipt captures of 2026-10-07 (the founder's of 2026-10-06 were held out for
+ * privacy, Decisions.md) hold 3 receipts and 3 negatives; their Shopify order, whose total reads "Rs.", is DEGRADED
+ * and scored on its health only. RESULTS.md shows the count beside the accuracy.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -25,9 +26,9 @@ describe('the receipt bench counts real captures among the pages it scores', () 
     expect(metrics.receiptParsersGatePassed).toBe(true);
   });
 
-  it('counts no real capture: the receipt captures of 2026-10-06 were held out for privacy; the gate passes', async () => {
+  it('counts the 6 real captures it scores (3 receipts, 3 negatives of 2026-10-07); the gate passes', async () => {
     const metrics = await runReceiptsBench();
-    expect(metrics.receiptRealFixtures).toBe(0);
+    expect(metrics.receiptRealFixtures).toBe(6);
     expect(metrics.receiptParsersGatePassed).toBe(true);
   });
 

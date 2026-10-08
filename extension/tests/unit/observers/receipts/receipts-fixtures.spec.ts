@@ -114,7 +114,11 @@ describe('health and coverage honesty (Hard Rules 5, 6)', () => {
     for (const f of fixtures) {
       const plan = runOf(f).plan;
       expect(planCoverage(plan), f.file).toEqual(expectedReceiptCoverage(f));
-      if (platformInstants(f).length === 0) expect(plan.status, f.file).toBe('OK_NO_COVERAGE');
+      // A receipt whose total is unreadable reports DEGRADED and covers nothing (Hard Rules 5, 6).
+      const unreadable = receiptHealthLabel(f)?.status === 'DEGRADED';
+      if (platformInstants(f).length === 0) {
+        expect(plan.status, f.file).toBe(unreadable ? 'DEGRADED' : 'OK_NO_COVERAGE');
+      }
     }
   });
 

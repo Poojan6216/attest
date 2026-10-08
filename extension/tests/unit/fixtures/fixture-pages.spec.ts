@@ -38,13 +38,13 @@ import {
   longDate,
   newerDisabled,
   olderDisabled,
-  openedMessage,
   ownMailbox,
   selectedFolder,
   sentRows,
   stillDrawing,
   timeOf,
 } from './fixture-page-read';
+import { openedMessages } from './fixture-message-read';
 
 const window = createInertWindow();
 afterAll(() => {
@@ -101,7 +101,7 @@ describe('page facts match the page', () => {
       expect(selectedFolder(doc) ?? undefined, f.file).toBe(f.page.folder);
       expect(accountPaths(doc), f.file).toEqual([/^\/mail\/u\/\d+\//u.exec(url.pathname)?.[0]]);
       expect(url.hash.startsWith(`#${f.page.folder ?? ''}`), f.file).toBe(true);
-      const isMessage = openedMessage(doc, f.page.defaultDollar) !== null;
+      const isMessage = openedMessages(doc, f.page.defaultDollar).length > 0;
       expect(isMessage, f.file).toBe(f.page.view === 'gmail.message');
       // A message view shows no list row; a Sent list shows rows (a Drafts folder may be empty: real, 2026-10-06).
       if (isMessage) expect(sentRows(doc), f.file).toEqual([]);
@@ -197,7 +197,7 @@ describe('Gmail Sent windows (2.2 truth; Hard Rule 5)', () => {
 });
 
 function receiptMatches(f: LabelledFixture, o: ObservationFact): void {
-  const message = openedMessage(docOf(f), f.page.defaultDollar);
+  const message = openedMessages(docOf(f), f.page.defaultDollar).find((m) => m.key === o.rowKey);
   expect(message, f.file).not.toBeNull();
   if (!message) return;
   expect(o.rowKey, f.file).toBe(message.key);

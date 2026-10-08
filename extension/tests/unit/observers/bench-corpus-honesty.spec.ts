@@ -45,10 +45,10 @@ describe('every observer bench says how many of its fixtures are real captures',
     for (const { name, reported, actual } of counts) expect(reported, name).toBe(actual);
   });
 
-  it('the scored pages hold the real captures: 4 Sent lists, no receipt page (held out) and 9 Calendar pages', () => {
+  it('the scored pages hold the real captures: 4 Sent lists, 6 receipt pages and 10 Calendar pages', () => {
     const real = (corpus: readonly LabelledFixture[]) => corpus.filter((f) => !f.page.synthetic).length;
     expect(real(loadVendor('gmail').filter((f) => f.page.view === 'gmail.list.sent'))).toBe(4);
-    expect(real(receiptScoredFixtures(loadVendor('gmail')))).toBe(0);
-    expect(real(loadVendor('gcal'))).toBe(9);
+    expect(real(receiptScoredFixtures(loadVendor('gmail')))).toBe(6);
+    expect(real(loadVendor('gcal'))).toBe(10);
   });
 });
