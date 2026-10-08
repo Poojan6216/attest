@@ -11,8 +11,10 @@
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */
+import { idDigitsLength, idDigitsValue } from './base32';
 import { freshFacts, type ObservedFacts, type TextFacts } from './features';
 import { InvariantError } from './invariant-error';
+import { compareText as compareTextShared } from './order';
 import { candidatesHashOfRows, refHashInto } from './receipt';
 import type { Observation, Ulid } from './schema';
 import { DIGEST_WORDS } from './sha256';
@@ -24,13 +26,14 @@ import { DIGEST_WORDS } from './sha256';
 const refHashIntoLocal = refHashInto;
 const candidatesHashOfRowsLocal = candidatesHashOfRows;
 const freshFactsLocal = freshFacts;
+const idDigitsValueLocal = idDigitsValue;
+const compareText = compareTextShared;
 
 /**
- * Each row's position among `rows` in id order (UTF-16 code unit order, as `<` compares strings), or null when two
- * rows share an id. The built-in sort with no comparator orders strings by UTF-16 code units, in native code; a
- * map from id to row then places each rank.
+ * `idRanks` for any ids: the built-in sort with no comparator orders strings by UTF-16 code units, in native code;
+ * a map from id to row then places each rank.
  */
-function idRanks(rows: readonly Observation[]): Int32Array | null {
+function idRanksByText(rows: readonly Observation[]): Int32Array | null {
   const rowOf = new Map<string, number>();
   const ids: string[] = [];
   for (let row = 0; row < rows.length; row += 1) {
@@ -42,6 +45,68 @@ function idRanks(rows: readonly Observation[]): Int32Array | null {
   ids.sort();
   const ranks = new Int32Array(ids.length);
   for (let rank = 0; rank < ids.length; rank += 1) ranks[rowOf.get(ids[rank] ?? '') ?? 0] = rank;
+  return ranks;
+}
+
+/**
+ * Orders by whole id each run of `order` whose keys tie (`key - row`, the value times the row count, is exact); false
+ * when two rows share an id (they tie on every character, so they meet in one run).
+ */
+function orderTies(rows: readonly Observation[], keys: Float64Array, order: Int32Array): boolean {
+  const idOf = (row: number): string => rows[row]?.id ?? '';
+  let start = 0;
+  while (start < order.length) {
+    const prefix = (keys[start] ?? 0) - (order[start] ?? 0);
+    let end = start + 1;
+    while (end < order.length && (keys[end] ?? 0) - (order[end] ?? 0) === prefix) end += 1;
+    if (end - start > 1) {
+      const run = Array.from(order.subarray(start, end)).sort((a, b) => compareText(idOf(a), idOf(b)));
+      for (let i = 1; i < run.length; i += 1) if (idOf(run[i - 1] ?? 0) === idOf(run[i] ?? 0)) return false;
+      order.set(run, start);
+    }
+    start = end;
+  }
+  return true;
+}
+
+/** How many leading characters every id of `rows` shares. */
+function sharedHead(rows: readonly Observation[]): number {
+  const first = rows[0]?.id ?? '';
+  let shared = first.length;
+  for (let row = 1; row < rows.length && shared > 0; row += 1) {
+    const id = rows[row]?.id ?? '';
+    let i = 0;
+    while (i < shared && id.charCodeAt(i) === first.charCodeAt(i)) i += 1;
+    shared = i;
+  }
+  return shared;
+}
+
+/**
+ * Each row's position among `rows` in id order (UTF-16 code unit order, as `<` compares strings), or null when two
+ * rows share an id. Past the head every id shares (which orders nothing), each row is keyed by the number its id's
+ * next Crockford characters read as (base32.ts `idDigitsValue`: the numbers compare as those characters do) times
+ * the row count, plus the row, and the keys are sorted as numbers in native code; rows whose characters there tie
+ * are then ordered by whole id (`orderTies`). A table with an id that has no such characters there (another alphabet,
+ * or an id that ends sooner) is ordered by text (`idRanksByText`).
+ */
+function idRanks(rows: readonly Observation[]): Int32Array | null {
+  const count = rows.length;
+  const from = sharedHead(rows);
+  const width = Math.min(idDigitsLength(count), (rows[0]?.id.length ?? 0) - from);
+  if (width < 1) return idRanksByText(rows);
+  const keys = new Float64Array(count);
+  for (let row = 0; row < count; row += 1) {
+    const value = idDigitsValueLocal(rows[row]?.id ?? '', from, width);
+    if (value < 0) return idRanksByText(rows);
+    keys[row] = value * count + row;
+  }
+  keys.sort();
+  const order = new Int32Array(count);
+  for (let i = 0; i < count; i += 1) order[i] = (keys[i] ?? 0) % count;
+  if (!orderTies(rows, keys, order)) return null;
+  const ranks = new Int32Array(count);
+  for (let rank = 0; rank < count; rank += 1) ranks[order[rank] ?? 0] = rank;
   return ranks;
 }
 

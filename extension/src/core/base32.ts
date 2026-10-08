@@ -18,9 +18,49 @@ const BITS_PER_CHAR = 5;
 const FIRST_CHAR_BITS = 3;
 const ASCII_LIMIT = 128;
 
+/** The ULID form's length: 26 characters. */
+const ID_LENGTH = 26;
+/** Integers below 2^53 are exact in a double. */
+const EXACT_LIMIT = 2 ** 53;
+
 /** Each ASCII code unit's value as a lowercase hex digit, or -1 (uppercase and every other unit are refused). */
 const HEX_VALUE = new Int8Array(ASCII_LIMIT).fill(-1);
 for (let digit = 0; digit < HEX_DIGITS.length; digit += 1) HEX_VALUE[HEX_DIGITS.charCodeAt(digit)] = digit;
+
+/** Each ASCII code unit's value as an ALPHABET character, or -1. */
+const ALPHABET_VALUE = new Int8Array(ASCII_LIMIT).fill(-1);
+for (let digit = 0; digit < ALPHABET.length; digit += 1) ALPHABET_VALUE[ALPHABET.charCodeAt(digit)] = digit;
+
+/**
+ * How many characters of an id `idDigitsValue` reads for a table of `rows` ids: the most (at most the ULID length)
+ * whose value times `rows`, plus a row index below `rows`, stays an exact integer.
+ */
+export function idDigitsLength(rows: number): number {
+  let length = 0;
+  let span = Math.max(rows, 1);
+  while (length < ID_LENGTH && span * ALPHABET.length <= EXACT_LIMIT) {
+    span *= ALPHABET.length;
+    length += 1;
+  }
+  return length;
+}
+
+/**
+ * The `length` characters of `id` from `from` read as one number in ALPHABET's digits (most significant first), or -1
+ * when `id` ends before them or one of them is not an ALPHABET character. ALPHABET is in code-unit order, so for ids
+ * whose characters there both read, comparing the numbers compares those characters exactly as `<` compares strings.
+ */
+export function idDigitsValue(id: string, from: number, length: number): number {
+  if (id.length < from + length) return -1;
+  let value = 0;
+  for (let i = from; i < from + length; i += 1) {
+    const unit = id.charCodeAt(i);
+    const digit = unit < ASCII_LIMIT ? (ALPHABET_VALUE[unit] ?? -1) : -1;
+    if (digit < 0) return -1;
+    value = value * ALPHABET.length + digit;
+  }
+  return value;
+}
 
 export class IdError extends Error {
   readonly code = 'invalid_hash';

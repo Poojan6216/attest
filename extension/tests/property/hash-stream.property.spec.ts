@@ -8,7 +8,7 @@
  *  - `refHash` writes a plain id, contentHash and observedAt without JSON.stringify: its digest is the SHA-256 of
  *    `canonicalJson({id, contentHash, observedAt})` for any three strings;
  *  - a batch table's `ranks()` sorts ids natively: each row's position in UTF-16 code unit order, null exactly when
- *    two rows share an id.
+ *    two rows share an id, whether the ids are read by number (the ULID form) or as text.
  */
 import { createHash } from 'node:crypto';
 
@@ -180,26 +180,59 @@ const ids = fc.array(
   { maxLength: 30 },
 );
 
+/**
+ * Ids of the ULID form, read by `ranks()` as numbers (base32.ts `idDigitsValue`): heads shared to every depth make
+ * prefixes tie, a repeated id is frequent in a long list, and one id now and then leaves the alphabet.
+ */
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const crockfordIds = fc
+  .array(
+    fc
+      .tuple(
+        fc.constantFrom(
+          '',
+          '01J9ZK',
+          '01J9ZK5Y8M7Q',
+          '7ZZZZZZZZZZZZZZZZZZZZZZZZ',
+          '0000000000000000000000000',
+        ),
+        fc.string({ unit: fc.constantFrom(...Array.from(CROCKFORD)), minLength: 26, maxLength: 26 }),
+      )
+      .map(([head, tail]) => (head + tail).slice(0, 26)),
+    { maxLength: 300 },
+  )
+  .chain((list) =>
+    fc.oneof(
+      { weight: 8, arbitrary: fc.constant(list) },
+      { weight: 1, arbitrary: fc.constant(list.length > 0 ? [...list, list[0] ?? ''] : list) },
+      { weight: 1, arbitrary: fc.constant([...list, '01J9ZK5Y8M7Qz000000000000']) },
+    ),
+  );
+
+/** `ranks()` of a table of `list`: each row's position in id order (UTF-16 code units), null when an id repeats. */
+function expectRanks(list: readonly string[]): void {
+  const table = new CandidateTable(
+    list.map((id) => rowOf(id)),
+    list.map(() => 0),
+    new TextFacts([]),
+  );
+  const ranks = table.ranks();
+  if (new Set(list).size < list.length) {
+    expect(ranks).toBeNull();
+    return;
+  }
+  const order = list.map((_, row) => row).sort((a, b) => ((list[a] ?? '') < (list[b] ?? '') ? -1 : 1));
+  const expected = new Int32Array(list.length);
+  order.forEach((row, rank) => (expected[row] = rank));
+  expect(ranks).toEqual(expected);
+}
+
 describe('CandidateTable.ranks', () => {
   it('gives each row its position in id order (UTF-16 code units), or null exactly when an id repeats', () => {
-    fc.assert(
-      fc.property(ids, (list) => {
-        const table = new CandidateTable(
-          list.map((id) => rowOf(id)),
-          list.map(() => 0),
-          new TextFacts([]),
-        );
-        const ranks = table.ranks();
-        if (new Set(list).size < list.length) {
-          expect(ranks).toBeNull();
-          return;
-        }
-        const order = list.map((_, row) => row).sort((a, b) => ((list[a] ?? '') < (list[b] ?? '') ? -1 : 1));
-        const expected = new Int32Array(list.length);
-        order.forEach((row, rank) => (expected[row] = rank));
-        expect(ranks).toEqual(expected);
-      }),
-      RUNS,
-    );
+    fc.assert(fc.property(ids, expectRanks), RUNS);
+  });
+
+  it('reads ULID-form ids by number exactly as by text: ties broken by whole id, repeats null', () => {
+    fc.assert(fc.property(crockfordIds, expectRanks), RUNS);
   });
 });
