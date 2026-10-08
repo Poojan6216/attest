@@ -6,9 +6,11 @@
  *    TEXT_HINT code units as a hint, and its time; `id = idFromHash(sha256(canonicalJson({agent, conversationId,
  *    textHash, ts})))` (§10). A page with no conversation id gives no Requests.
  *  - Each sentence of an agent turn (`sourceKind: chat`) and each activity entry (`activity_view`) that ./patterns.ts
- *    reads as a claim is a Claim, linked to the conversation's last Request before it, with `rawHash =
- *    sha256(canonicalJson({agent, sourceKind, rowKeyHash or null, text, claimedAt truncated to its precision unit}))`
- *    and `id = idFromHash(rawHash)` (§10): a sentence re-rendered is one claim, the same words at another time another.
+ *    reads as an action of an ActionType is a Claim; a turn or entry that reports no such action makes at most one,
+ *    `other`, from its first claiming sentence (`claimsOfTurn`). Each is linked to the conversation's last Request
+ *    before it, with `rawHash = sha256(canonicalJson({agent, sourceKind, rowKeyHash or null, text, claimedAt truncated
+ *    to its precision unit}))` and `id = idFromHash(rawHash)` (§10): a sentence re-rendered is one claim, the same
+ *    words at another time another.
  *  - A turn's time is read from the page: an ISO 8601 instant, written again in the user's offset, or vendor-relative
  *    text resolved against the pass instant in the user's zone (core `resolveRelative`). A turn whose time the page
  *    does not show, shows in a way neither reads, or puts after the pass gives nothing: a claim at a guessed time
@@ -221,6 +223,16 @@ function requestFields(text: string, stated: Stated, conversationId: string, ctx
   };
 }
 
+/**
+ * The claims one turn or entry makes, of the sentences `classify` read as claims: one per sentence that reports an
+ * action of an ActionType; a turn that reports none makes at most one `other`, its first. A "Done!" before the email it
+ * reports, or a second sentence of the same approval prompt, would only add a receipt that says nothing.
+ */
+export function claimsOfTurn<T extends { readonly read: Classified }>(found: readonly T[]): readonly T[] {
+  const actions = found.filter(({ read }) => read.type !== 'other');
+  return actions.length > 0 ? actions : found.slice(0, 1);
+}
+
 /** The Requests and Claims one read of an agent page holds (rules in the module comment). */
 export function buildFacts(read: AgentRead, ctx: FactsContext): AgentFacts {
   const requests = new Map<string, Request>();
@@ -246,7 +258,7 @@ export function buildFacts(read: AgentRead, ctx: FactsContext): AgentFacts {
       untimed += 1;
       return;
     }
-    for (const { sentence, read } of found) {
+    for (const { sentence, read } of claimsOfTurn(found)) {
       const linked = kind === 'chat' ? requestId : undefined;
       const parsed = Claim.safeParse(claimFields(sentence, read, kind, stated, rowKey, linked, ctx));
       if (parsed.success) claims.set(parsed.data.id, parsed.data);

@@ -174,6 +174,25 @@ describe('Claims: kinds and links', () => {
   });
 });
 
+describe('Claims: one turn', () => {
+  it('makes one claim per action it reports, and no `other` beside them', () => {
+    const facts = build(
+      read([agent('Done! I emailed dana@example.com the agenda. I also texted Sam the address.')]),
+    );
+    expect(facts.claims.map((c) => c.type)).toEqual(['email.sent', 'message.sent']);
+  });
+
+  it('makes at most one `other` when it reports no action: an approval prompt is one proposal', () => {
+    const facts = buildFacts(
+      read([agent('Ready to buy the lamp for $34.99? Tap Approve to place the order.')]),
+      { ...CTX, agent: 'muse' },
+    );
+    expect(facts.claims.map((c) => [c.type, c.extractor.confidence])).toEqual([
+      ['other', PROPOSAL_CONFIDENCE],
+    ]);
+  });
+});
+
 describe('times', () => {
   it('reads vendor-relative text against the pass instant in the user’s zone', () => {
     const facts = build(read([agent('Sent an email to sam@example.org.', '2:03 PM')]));

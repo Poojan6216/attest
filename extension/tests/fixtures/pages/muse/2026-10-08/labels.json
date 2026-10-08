@@ -1,0 +1,278 @@
+{
+  "synthetic-conversation.html": {
+    "capturedAt": "2026-10-08",
+    "selectorsVersion": "muse.chat@0.1.0",
+    "seededSecrets": [
+      "email_body_1",
+      "person_name_1",
+      "street_address"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "muse",
+        "agent": "muse",
+        "view": "agent.conversation",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-08T14:30:00-04:00"
+      },
+      {
+        "kind": "health",
+        "adapter": "muse.chat",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "request",
+        "textHint": "Can you email Dana about the venue for Saturday?",
+        "ts": "2026-10-08T13:40:00-04:00"
+      },
+      {
+        "kind": "request",
+        "textHint": "Put a dentist appointment on my calendar for Tuesday at 9.",
+        "ts": "2026-10-08T13:45:00-04:00"
+      },
+      {
+        "kind": "request",
+        "textHint": "Order more coffee beans, the usual kind.",
+        "ts": "2026-10-08T13:50:00-04:00"
+      },
+      {
+        "kind": "request",
+        "textHint": "Can you list my old bike for sale?",
+        "ts": "2026-10-08T13:55:00-04:00"
+      },
+      {
+        "kind": "request",
+        "textHint": "Tell Sam I'm running late.",
+        "ts": "2026-10-08T14:00:00-04:00"
+      },
+      {
+        "kind": "claim",
+        "text": "I sent an email to dana@example.com about the venue on Saturday.",
+        "type": "email.sent",
+        "counterparty": "dana@example.com",
+        "claimedAt": "2026-10-08T13:41:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      },
+      {
+        "kind": "claim",
+        "text": "I created an event called \"Dentist\" for Tuesday at 9:00 AM.",
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "claimedAt": "2026-10-08T13:46:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      },
+      {
+        "kind": "claim",
+        "text": "I ordered 2 bags of coffee beans for $24.50.",
+        "type": "purchase.made",
+        "subjectHint": "2 bags of coffee beans",
+        "amountCents": 2450,
+        "claimedAt": "2026-10-08T13:52:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      },
+      {
+        "kind": "claim",
+        "text": "Listed your old bike on Facebook Marketplace for $150.",
+        "type": "listing.posted",
+        "subjectHint": "your old bike",
+        "amountCents": 15000,
+        "claimedAt": "2026-10-08T13:57:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      },
+      {
+        "kind": "claim",
+        "text": "I texted Sam that you're running ten minutes late.",
+        "type": "message.sent",
+        "counterparty": "Sam",
+        "claimedAt": "2026-10-08T14:01:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      }
+    ],
+    "notes": "Five requests, each answered with one action the reply claims. \"Done!\" is no claim of its own beside the email it opens, \"Anything else?\" is none, and the email preview under the second turn is page text no claim reads (a seeded body). Times come from each message's datetime attribute. A bare $ keeps its cents and no currency."
+  },
+  "synthetic-activity.html": {
+    "capturedAt": "2026-10-08",
+    "selectorsVersion": "muse.chat@0.1.0",
+    "seededSecrets": [
+      "email_body_2",
+      "card_shape",
+      "phone_number"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "muse",
+        "agent": "muse",
+        "view": "agent.activity",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-08T14:30:00-04:00"
+      },
+      {
+        "kind": "health",
+        "adapter": "muse.chat",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "claim",
+        "text": "Sent email to sam@example.org",
+        "type": "email.sent",
+        "counterparty": "sam@example.org",
+        "claimedAt": "2026-10-08T10:15:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "activity_view"
+      },
+      {
+        "kind": "claim",
+        "text": "Created event \"Team lunch\"",
+        "type": "calendar.created",
+        "claimedAtEnd": "2026-10-08T00:00:00-04:00",
+        "subjectHint": "Team lunch",
+        "claimedAt": "2026-10-07T00:00:00-04:00",
+        "claimedAtPrecision": "day",
+        "sourceKind": "activity_view"
+      },
+      {
+        "kind": "claim",
+        "text": "Order placed: desk lamp, $34.99",
+        "type": "purchase.made",
+        "claimedAt": "2026-10-08T09:02:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "activity_view"
+      },
+      {
+        "kind": "claim",
+        "text": "Unsubscribed from the Daily Deals newsletter",
+        "type": "subscription.changed",
+        "claimedAtEnd": "2026-10-08T00:00:00-04:00",
+        "claimedAt": "2026-10-07T00:00:00-04:00",
+        "claimedAtPrecision": "day",
+        "sourceKind": "activity_view"
+      },
+      {
+        "kind": "claim",
+        "text": "Drafted a reply to Priya",
+        "type": "other",
+        "claimedAt": "2026-10-08T08:30:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "activity_view"
+      }
+    ],
+    "notes": "Activity entries with times only as the page shows them (\"10:15 AM\", \"Yesterday\"): read against the pass instant, \"Yesterday\" at day precision. A search is no claim; a draft is a proposal (other). The details under three entries are seeded text no claim reads, among them a card number."
+  },
+  "synthetic-settings.html": {
+    "capturedAt": "2026-10-08",
+    "selectorsVersion": "muse.chat@0.1.0",
+    "seededSecrets": [
+      "email_local_part",
+      "api_key_openai_shape",
+      "passphrase"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "muse",
+        "agent": "muse",
+        "view": "agent.settings",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-08T14:30:00-04:00"
+      },
+      {
+        "kind": "health",
+        "adapter": "muse.chat",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "scopes",
+        "scopes": [
+          "Gmail",
+          "Google Calendar",
+          "Shopping",
+          "Facebook Marketplace",
+          "WhatsApp"
+        ]
+      }
+    ],
+    "notes": "Connected apps: the five switched on are the scopes, in page order; Instagram, switched off, is not. The account section holds seeded text no scope reads."
+  },
+  "synthetic-approval.html": {
+    "capturedAt": "2026-10-08",
+    "selectorsVersion": "muse.chat@0.1.0",
+    "seededSecrets": [
+      "street_address",
+      "card_shape",
+      "person_name_2"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "muse",
+        "agent": "muse",
+        "view": "agent.conversation",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-08T14:30:00-04:00"
+      },
+      {
+        "kind": "health",
+        "adapter": "muse.chat",
+        "status": "OK",
+        "reasons": []
+      },
+      {
+        "kind": "request",
+        "textHint": "Buy the blender we looked at yesterday.",
+        "ts": "2026-10-08T14:10:00-04:00"
+      },
+      {
+        "kind": "claim",
+        "text": "Ready to buy the KitchenPro blender for $89.99?",
+        "type": "other",
+        "claimedAt": "2026-10-08T14:11:00-04:00",
+        "claimedAtPrecision": "minute",
+        "sourceKind": "chat"
+      }
+    ],
+    "notes": "Muse asks before it buys: the reply is a proposal, captured once as other (chat) at the proposal confidence, never as purchase.made (sprint_3 3.2). The approval card holds a seeded address and card number no claim reads."
+  },
+  "synthetic-business.html": {
+    "capturedAt": "2026-10-08",
+    "selectorsVersion": "muse.chat@0.1.0",
+    "seededSecrets": [
+      "ssn_shape",
+      "token_lowercase",
+      "base64_blob"
+    ],
+    "expected": [
+      {
+        "kind": "page",
+        "vendor": "muse",
+        "agent": "muse",
+        "view": "agent.other",
+        "synthetic": true,
+        "timeZone": "America/New_York",
+        "readAt": "2026-10-08T14:30:00-04:00"
+      },
+      {
+        "kind": "health",
+        "adapter": "muse.chat",
+        "status": "IDLE",
+        "reasons": [
+          "view.unread"
+        ]
+      }
+    ],
+    "notes": "Negative: a dashboard with no conversation, activity or connected apps. IDLE, nothing read."
+  }
+}

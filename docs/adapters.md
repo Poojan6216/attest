@@ -591,7 +591,7 @@ Since Sprint 2.7 the service worker also handles the four observer messages (`sr
 
 ## 10. Agent adapters
 
-Sprint 3.0 adds the skeleton every Muse, ChatGPT/Dots and Claude adapter runs ([`src/adapters/base.ts`](../extension/src/adapters/base.ts)) and the tables that read an agent's sentences ([`src/adapters/patterns.ts`](../extension/src/adapters/patterns.ts)). No vendor adapter exists yet: each is written against captured pages (3.2 to 3.4, which wait on captures in `MANUAL.md`). An agent page gives Requests (what the user asked), Claims (what the agent says it did) and, on a settings page, a scope snapshot (what the agent may reach). It gives no Observations and no coverage: those come only from the observers.
+Sprint 3.0 adds the skeleton every Muse, ChatGPT/Dots and Claude adapter runs ([`src/adapters/base.ts`](../extension/src/adapters/base.ts)) and the tables that read an agent's sentences ([`src/adapters/patterns.ts`](../extension/src/adapters/patterns.ts)). The Muse adapter ([`src/adapters/muse/`](../extension/src/adapters/muse/)) reads the hand-built pages of `tests/fixtures/pages/muse/`; its selectors are replaced from the founder's captures, and it runs nowhere until Muse's web address is confirmed (`MANUAL.md`). The ChatGPT and Claude adapters wait on captures (3.3, 3.4). An agent page gives Requests (what the user asked), Claims (what the agent says it did) and, on a settings page, a scope snapshot (what the agent may reach). It gives no Observations and no coverage: those come only from the observers.
 
 ### 10.1 The contract
 
@@ -643,3 +643,16 @@ Beside the reasons an adapter's `health()` names, a pass can be DEGRADED with th
 | `time.unknown` | A turn or entry that held a Request or a Claim shows no time the skeleton reads, or one after the pass. What was read is still posted; no scope snapshot is. |
 | `claim.invalid` | A Request or a Claim failed its schema: a bug, never expected. What else was read is still posted. |
 | `message.invalid` | A message of the pass failed its bus schema: only this health report is posted. |
+
+### 10.5 `muse.chat` reasons
+
+| Reason | Status | Meaning |
+|---|---|---|
+| `view.unread` | IDLE | The page shows no conversation, activity view or connected apps (a business dashboard, a help page): nothing to read, nothing wrong. |
+| `selector.missing.conversation_id` | DEGRADED | A conversation shows no id: its Requests cannot be named. |
+| `selector.missing.message_text` | DEGRADED | A message has no text element: Muse changed how it draws one. |
+| `selector.missing.entry_summary` | DEGRADED | An activity entry has no summary. |
+| `selector.missing.app` | DEGRADED | A connected app has no name or no switch. |
+
+Every Muse selector is synthetic until the captures; a capture that changes one bumps `selectors.json`'s version ([§5](#5-selectorsjson-and-versions)).
+

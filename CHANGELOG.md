@@ -43,6 +43,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Claim pattern tables for the agent adapters (`src/adapters/patterns.ts`): a sentence an agent writes is read as one of the eight action types only when it reports the action done. A question, an offer, a draft or an approval prompt is recorded as `other` at low confidence, and a refusal or a step still under way is no claim, so a misread sentence loses a claim rather than inventing one. Each vendor's table is tested on 47 or 48 invented sentences plus 20 shared ones.
 - The agent adapter skeleton (`src/adapters/base.ts`): each pass on a Muse, ChatGPT or Claude page reports its health, the requests the user made, the claims the agent's sentences make, and on a settings page the apps the agent can reach (a new bus message, `adapter.scope`). A claim whose time the page does not show is left out and the adapter shows as degraded, rather than placed at a guessed time. No vendor adapter uses it yet; each waits on captured pages.
+- The Muse adapter (`src/adapters/muse/`), written against five hand-made Muse pages until real ones are captured: the requests in a conversation, the actions the replies claim, the activity view, and the apps switched on in the connected-apps settings. An approval prompt is recorded as a proposal, never as the purchase it asks about, and a text Muse quotes or an approval card beside a message is never read. It runs nowhere until Muse's web address is confirmed.
 
 ### Changed
 

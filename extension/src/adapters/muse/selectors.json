@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0",
+  "note": "Synthetic. Muse's web DOM is not known yet: every selector reads the hand-built pages of tests/fixtures/pages/muse/2026-10-08 and is replaced from the founder's captures (MANUAL.md; sprint_3 3.1, 3.2). Anchored on role, aria-* and data-* attributes and structure only, never a class.",
+  "conversation": "main[data-conversation-id]",
+  "conversationId": "data-conversation-id",
+  "message": "[role='article'][data-author]",
+  "author": "data-author",
+  "userAuthor": "user",
+  "messageKey": "data-message-id",
+  "messageText": "[data-message-text]",
+  "time": "time",
+  "activity": "main[data-view='activity']",
+  "activityEntry": "[data-activity-entry]",
+  "entrySummary": "[data-entry-summary]",
+  "settings": "main[data-view='connected-apps']",
+  "app": "[data-app]",
+  "appName": "[data-app-name]",
+  "appSwitch": "[role='switch']"
+}

@@ -198,3 +198,18 @@ The readers parse the page model above. When a real capture shows a different sh
 - `gmail.receipt` on a list view reports IDLE `no_conversation`, reads nothing and posts no coverage (2.3, 2.11), so no Gmail view keeps a yellow banner up for an observer with nothing to read, and a list tab never hides another tab's DEGRADED.
 - A Sent page past the head of the list reports its rows, health OK and no coverage; an opened receipt reports one point of coverage at its own date (2.7). Every reason code a health fact can name is listed in `docs/adapters.md` §4.
 - The generic receipt rule is tightened: a trigger, no refusal marker (promotions, cart reminders, orders still to confirm), an unambiguous total line, and no impersonation of a registry merchant (`src/observers/gmail/receipts/`). Every labelled negative stays unparsed.
+
+## Agent fixtures: Muse (synthetic only)
+
+`muse/2026-10-08/` holds five hand-written pages (sprint 3.1). Muse's web DOM is not known: the founder has not captured it yet and its web address is not confirmed (`MANUAL.md`), so this structure is **invented**, not modelled on a real page, and every Muse selector (`src/adapters/muse/selectors.json`) reads it until the captures replace both. The conventions above hold: fake people and addresses, class names random per file, three seeded secrets per page in visible text, each in its `data-attest-seeded` element, set where an adapter must never read (a quoted email body, an approval card's address and card number, an entry's details, the account section).
+
+| Fixture | View | What it tests |
+|---|---|---|
+| `synthetic-conversation.html` | Conversation | Five requests, each answered with one action the reply claims (email, calendar event, purchase, listing, text message); "Done!" makes no claim of its own beside the action it opens; times from each message's `datetime`; a bare `$` keeps its cents and no currency |
+| `synthetic-activity.html` | Activity view | Terse entries with times only as shown ("10:15 AM", "Yesterday" at day precision); a search is no claim; a draft is `other` |
+| `synthetic-settings.html` | Connected apps | The five apps switched on are the scopes, in page order; one switched off is not |
+| `synthetic-approval.html` | Conversation | Muse asks before it buys: one `other` claim from the chat at the proposal confidence, never `purchase.made` |
+| `synthetic-business.html` | Business dashboard | Negative: a page Muse does not read, IDLE `view.unread` |
+
+Their `labels.json` follows `tests/unit/fixtures/agent-labels.ts`: a `page` fact (vendor, agent, view, time zone, `readAt`; `liveUrl` once the host is known), one `health` fact for the adapter, then `request` facts (hint and time), `claim` facts (the sentence, type, fields, time, precision and source kind) and, on a settings page, one `scopes` fact. `tests/unit/fixtures/agent-fixtures.spec.ts` checks every page against its label (each hint and sentence is shown, each seed is drawn on screen and carried by no label, no labelled time is after `readAt`); `tests/unit/adapters/muse/muse-fixtures.spec.ts` holds the Muse adapter to them.
+
