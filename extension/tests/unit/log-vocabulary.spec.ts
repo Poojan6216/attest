@@ -11,7 +11,7 @@ import { INSTALL_REASONS } from '../../src/background/install';
 import { BUS_ERROR_CODES } from '../../src/bus/errors';
 import { DROP_REASONS } from '../../src/bus/listen';
 import { BusMessageType, LedgerTable, UiQueryKind, UiResultError } from '../../src/bus/messages';
-import { ALARM_NAMES } from '../../src/config';
+import { ADAPTER_SITES, ALARM_NAMES, OBSERVER_SOURCES } from '../../src/config';
 import { logTableId } from '../../src/ledger/db';
 import { LEDGER_ERROR_CODES } from '../../src/ledger/errors';
 import { INSTALL_ID_ERROR_CODES } from '../../src/ledger/install-id';
@@ -35,6 +35,7 @@ describe('LOG_VALUES covers every enum the code logs', () => {
     ['ledger tables as logged', LedgerTable.options.map(logTableId)],
     ['alarm names', Object.values(ALARM_NAMES)],
     ['agent ids', AgentId.options],
+    ['observer and adapter ids', [...Object.keys(OBSERVER_SOURCES), ...Object.keys(ADAPTER_SITES)]],
     ['grades', Grade.options],
     ['receipt states', Receipt.shape.state.options],
     ['health statuses', AdapterHealth.shape.status.options],

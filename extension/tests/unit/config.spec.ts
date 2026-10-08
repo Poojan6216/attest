@@ -6,12 +6,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ADAPTER_SITES,
   AGENT_HOSTS,
   FEATURE_FLAG_DEFAULTS,
   FEATURE_FLAGS,
-  type FeatureFlag,
   NETWORK_ALLOWLIST,
   OBSERVER_HOSTS,
+  type FeatureFlag,
 } from '../../src/config';
 
 /** Chrome match pattern for exactly one https host and all of its paths. No wildcard hosts. */
@@ -57,17 +58,23 @@ describe('host lists', () => {
     });
   });
 
-  it('agent hosts are exactly ChatGPT and Claude; Muse has none until its host is confirmed', () => {
+  it('agent hosts are exactly ChatGPT, Claude and Muse (confirmed by the founder on 2026-10-08)', () => {
     expect(AGENT_HOSTS).toEqual({
       chatgpt: ['https://chatgpt.com/*'],
       claude: ['https://claude.ai/*'],
-      muse: [],
+      muse: ['https://muse.ai/*'],
     });
+  });
+
+  it('every adapter the service worker hears from speaks from an agent site that has a host', () => {
+    expect(ADAPTER_SITES).toEqual({ 'muse.chat': 'muse' });
+    for (const site of Object.values(ADAPTER_SITES)) expect(AGENT_HOSTS[site].length).toBeGreaterThan(0);
+    expect(Object.isFrozen(ADAPTER_SITES)).toBe(true);
   });
 
   it('every pattern names one exact https host: no <all_urls>, no wildcard host, no http', () => {
     const patterns = allHostPatterns();
-    expect(patterns).toHaveLength(4);
+    expect(patterns).toHaveLength(5);
     expect(patterns.filter((pattern) => !EXACT_HOST_PATTERN.test(pattern))).toEqual([]);
     expect(EXACT_HOST_PATTERN.test('<all_urls>')).toBe(false);
     expect(EXACT_HOST_PATTERN.test('https://*.google.com/*')).toBe(false);
@@ -80,7 +87,7 @@ describe('host lists', () => {
       expect(Object.values(hosts).every((list) => Object.isFrozen(list))).toBe(true);
     }
     expect(() => (AGENT_HOSTS.muse as string[]).push('https://example.com/*')).toThrow(TypeError);
-    expect(AGENT_HOSTS.muse).toEqual([]);
+    expect(AGENT_HOSTS.muse).toEqual(['https://muse.ai/*']);
   });
 });
 

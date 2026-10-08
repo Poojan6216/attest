@@ -547,6 +547,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-08] [3.1] Muse captures are yours to make (MANUAL.md); meanwhile five hand-made Muse pages stand in, clearly named synthetic: a conversation, the activity view, connected apps, an approval prompt and a page Muse does not read, each labelled with what should be read from it.
 [2026-10-08] [3.2] The Muse reader is written and passes all five pages: it reads your requests, the actions Muse says it took, and the apps it is connected to; an approval prompt counts only as a proposal, and a quoted email or a payment card on the page is never read. It runs nowhere until you confirm Muse's web address, and its page details are redone from your captures.
 [2026-10-08] [3] Paused: every remaining Sprint 3 task now waits on you (MANUAL.md, Sprint 3 list). The most useful one: Muse's web address, which lets the Muse reader run and the end-to-end checks of 3.5 to 3.7 proceed. Captures of Muse, ChatGPT agent mode (and Dots, with Pro) and Claude follow; please use test conversations with invented details. Seven commits wait for your push.
+[2026-10-08] [3.2] Muse's address (muse.ai) is in: Attest now asks for that site and runs the Muse reader on the Muse pages you open. For now it only reports whether the reader works, and it will say it is not reading until your captures teach it the real pages; nothing else leaves the page. The privacy policy says so (version 0.1). This also unblocks 3.5 to 3.7, whose end-to-end checks can now run on the stand-in Muse pages.
 ```
 
 ---

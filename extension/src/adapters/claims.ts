@@ -118,7 +118,7 @@ export function unitStart(at: IsoTs, precision: ClaimPrecision): string {
 export function sentences(text: string): string[] {
   return text
     .split(/[\n\r\u2028\u2029]+/u)
-    .flatMap((line) => oneLine(line).split(/(?<=[.!?…])\s+/u))
+    .flatMap((line) => oneLine(line).split(/(?<=[.!?\u2026])\s+/u))
     .filter((sentence) => sentence !== '');
 }
 

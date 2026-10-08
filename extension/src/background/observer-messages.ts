@@ -67,6 +67,7 @@ import {
   wasRefused,
 } from './observer-state';
 import { rowCodeOf, type RowCode, worstCode } from './row-codes';
+import { isAdapterId } from './sender-site';
 
 export { type RowCode, worstCode } from './row-codes';
 
@@ -158,7 +159,9 @@ export async function onHealth(
   sender?: MessageSender,
 ): Promise<BusAck> {
   const { health } = message;
-  if (sourceOf(health.adapterId) === undefined) return unknownObserver(health.adapterId, message.type);
+  if (sourceOf(health.adapterId) === undefined && !isAdapterId(health.adapterId)) {
+    return unknownObserver(health.adapterId, message.type);
+  }
   return serially(ctx.state, health.adapterId, async (): Promise<BusAck> => {
     const db = await ctx.db();
     const clockMs = instantMs(ctx.now());

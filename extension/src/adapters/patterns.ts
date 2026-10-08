@@ -120,7 +120,7 @@ const PROPOSAL_BY_AGENT: Readonly<Record<AgentId, readonly RegExp[]>> = Object.f
 
 /** Curly quotes and apostrophes as their ASCII forms, so one pattern reads both. */
 function straightQuotes(sentence: string): string {
-  return sentence.replace(/[‘’ʼ]/gu, "'").replace(/[“”]/gu, '"');
+  return sentence.replace(/[\u2018\u2019\u02bc]/gu, "'").replace(/[\u201c\u201d]/gu, '"');
 }
 
 /** The first quoted run of the sentence: an event's or an item's name, when the agent quotes it. */

@@ -1,7 +1,8 @@
 /**
- * Sprint 2.0 Done-when "manifest diff shows exactly two hosts" (Hard Rule 8), at the source: wxt.config.ts declares
- * host_permissions as exactly Gmail and Google Calendar, from src/config.ts OBSERVER_HOSTS, and nothing else that
- * widens access. tests/e2e/built-bundle.spec.ts checks the same in the manifest of the build that ships.
+ * Hard Rule 8 at the source: wxt.config.ts declares host_permissions as exactly the two observer hosts (Gmail, Google
+ * Calendar; sprint_2 2.0, from src/config.ts OBSERVER_HOSTS) and the agent hosts that have a reader (sprint_3: each
+ * enters with its content script, never before, Decisions [3.0]; Muse's since 2026-10-08), and nothing else that widens
+ * access. tests/e2e/built-bundle.spec.ts checks the same in the manifest of the build that ships.
  */
 import { describe, expect, it, vi } from 'vitest';
 
@@ -20,18 +21,23 @@ function manifest(): Record<string, unknown> {
   return { ...block };
 }
 
-describe('wxt.config.ts host permissions (sprint_2 2.0, Hard Rule 8)', () => {
-  it('are exactly https://mail.google.com/* and https://calendar.google.com/*', () => {
+describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)', () => {
+  it('are exactly Gmail, Google Calendar and Muse', () => {
     expect(manifest().host_permissions).toEqual([
       'https://mail.google.com/*',
       'https://calendar.google.com/*',
+      'https://muse.ai/*',
     ]);
   });
 
-  it('are the observer hosts of src/config.ts, and no agent host yet (Sprint 3.0 adds those)', () => {
-    expect(manifest().host_permissions).toEqual([...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal]);
-    const agentHosts: readonly string[] = Object.values(AGENT_HOSTS).flat();
-    expect(agentHosts.filter((host) => (manifest().host_permissions as string[]).includes(host))).toEqual([]);
+  it('are the observer hosts of src/config.ts and the agent hosts with a reader: no ChatGPT or Claude host yet', () => {
+    expect(manifest().host_permissions).toEqual([
+      ...OBSERVER_HOSTS.gmail,
+      ...OBSERVER_HOSTS.gcal,
+      ...AGENT_HOSTS.muse,
+    ]);
+    const unread: readonly string[] = [...AGENT_HOSTS.chatgpt, ...AGENT_HOSTS.claude];
+    expect(unread.filter((host) => (manifest().host_permissions as string[]).includes(host))).toEqual([]);
   });
 
   it('declare no optional hosts, content scripts or web-accessible resources', () => {

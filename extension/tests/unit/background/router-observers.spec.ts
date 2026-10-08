@@ -207,6 +207,28 @@ describe('SEC-V1: a sender speaks only for the observers of the site Chrome says
   });
 });
 
+const MUSE_PAGE = 'https://muse.ai/thread/new';
+
+describe('an agent adapter’s health is taken only from a page on its agent’s site (sprint_3 3.2)', () => {
+  const logs = captureLogs();
+  it('Muse’s health from a muse.ai page is stored; from a Gmail page it is refused; a Muse page speaks for no observer', async () => {
+    const page = movableSender();
+    connectAs(page.sender);
+    stop = listen(createHandlers(clock, contextOf(db)));
+    page.on(GMAIL_PAGE);
+    expect(await sendChecked(healthOf('muse.chat', SIGHTED))).toEqual(refused);
+    page.on(MUSE_PAGE);
+    expect(await sendChecked(healthOf('gmail.sent', SIGHTED))).toEqual(refused);
+    await nothingStored();
+    expect(await sendChecked(healthOf('muse.chat', SIGHTED))).toEqual({ ok: true });
+    expect(await getAdapterHealth(db, 'muse.chat')).toMatchObject({ adapterId: 'muse.chat', status: 'OK' });
+    expect(logs.filter((record) => record.event === 'observer.wrong_site').map((r) => r.fields)).toEqual([
+      { observer: 'muse.chat', type: 'adapter.health' },
+      { observer: 'gmail.sent', type: 'adapter.health' },
+    ]);
+  });
+});
+
 /** Every `ledger.changed` the fake browser delivered while `act` ran. */
 async function broadcasts(act: () => void): Promise<unknown[]> {
   const seen: unknown[] = [];

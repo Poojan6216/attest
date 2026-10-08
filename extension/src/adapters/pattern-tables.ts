@@ -31,7 +31,7 @@ const PARTY = String.raw`(?<counterparty>${ADDRESS}|[^\s,;:!?()"]{1,60}(?: [^\s,
 /** A number as an amount writes it: digits and separators, ending on a digit (a sentence's full stop is not one). */
 const NUMBER = String.raw`\d(?:[\d,.]{0,14}\d)?`;
 /** An amount as core `amount()` reads it: a sign or code before or after the number. */
-const AMOUNT = String.raw`(?<amount>(?:[$€£¥₹]|(?:US|CA|AU|NZ)\$|(?:USD|EUR|GBP|CAD|AUD|INR|JPY|CHF) ?)${NUMBER}|${NUMBER} ?(?:USD|EUR|GBP|CAD|AUD|INR|JPY|CHF|€|£)(?![a-z]))`;
+const AMOUNT = String.raw`(?<amount>(?:[$\u20ac\u00a3\u00a5\u20b9]|(?:US|CA|AU|NZ)\$|(?:USD|EUR|GBP|CAD|AUD|INR|JPY|CHF) ?)${NUMBER}|${NUMBER} ?(?:USD|EUR|GBP|CAD|AUD|INR|JPY|CHF|\u20ac|\u00a3)(?![a-z]))`;
 /** Words for a calendar entry, one or several. */
 const EVENT = String.raw`(?:events?|meetings?|appointments?|calls?|invites?|invitations?|reminders?|syncs?|stand-?ups?|1:1s?|one-on-ones?|check-ins?|catch-ups?|interviews?|calendar (?:entry|entries|events?|holds?))`;
 /** A meeting's papers and places, which are not the meeting: notes made or deleted change no calendar. */

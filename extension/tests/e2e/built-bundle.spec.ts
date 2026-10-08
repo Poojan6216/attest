@@ -1,10 +1,11 @@
 /**
  * Audits the build that ships (pnpm e2e rebuilds it first), not the source:
  *  - the manifest says exactly what Decisions.md says (permissions, exactly the two observer host permissions of
- *    sprint_2 2.0, strict CSP, the toolbar tooltip from the popup's <title>: TECH-14);
+ *    sprint_2 2.0 and the agent hosts with a reader, Decisions [3.0], strict CSP, the toolbar tooltip from the popup's
+ *    <title>: TECH-14);
  *  - no test code ships: no file holds the observer harness marker (tests/e2e/support/observer-harness.ts), and no
  *    host, content-script match or web-accessible resource reaches the fixture server (sprint_2 2.0);
- *  - the content scripts are exactly the Gmail and Calendar ones, each matching exactly its observer host, and no
+ *  - the content scripts are exactly the Gmail, Calendar and Muse ones, each matching exactly its own host, and no
  *    other (sprint_2 2.7: the E2E tests route fixtures to these hosts; there is no test build), and every shipped
  *    script is ASCII (Chrome refuses an extension whose content script holds a Unicode noncharacter);
  *  - no shipped script contains a network call, eval, or a Function constructor (SECURITY-6, Hard Rules 1
@@ -62,8 +63,13 @@ test('the shipped manifest matches the decisions', () => {
     default_popup: 'popup.html',
   });
   expect(manifest.permissions).toEqual(['storage', 'alarms', 'sidePanel']);
-  // sprint_2 2.0 (Hard Rule 8): exactly Gmail and Google Calendar, nothing broader. Sprint 3.0 adds the agent hosts.
-  expect(manifest.host_permissions).toEqual(['https://mail.google.com/*', 'https://calendar.google.com/*']);
+  // Hard Rule 8: exactly Gmail and Google Calendar (sprint_2 2.0) and the agent hosts with a reader (sprint_3,
+  // Decisions [3.0]: Muse's since 2026-10-08), nothing broader.
+  expect(manifest.host_permissions).toEqual([
+    'https://mail.google.com/*',
+    'https://calendar.google.com/*',
+    'https://muse.ai/*',
+  ]);
   expect(manifest.content_security_policy).toEqual({
     extension_pages: "script-src 'self'; object-src 'none'",
   });
@@ -105,7 +111,7 @@ function nonAscii(text: string): number {
   return count;
 }
 
-test('the content scripts are exactly Gmail and Calendar, on exactly their hosts (sprint_2 2.7)', () => {
+test('the content scripts are exactly Gmail, Calendar and Muse, on exactly their hosts (sprint_2 2.7, sprint_3)', () => {
   const manifest = JSON.parse(readFileSync(path.join(EXTENSION_PATH, 'manifest.json'), 'utf8')) as Record<
     string,
     unknown
@@ -113,6 +119,7 @@ test('the content scripts are exactly Gmail and Calendar, on exactly their hosts
   expect(manifest.content_scripts).toEqual([
     { matches: ['https://calendar.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gcal.js'] },
     { matches: ['https://mail.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gmail.js'] },
+    { matches: ['https://muse.ai/*'], run_at: 'document_idle', js: ['content-scripts/muse.js'] },
   ]);
   for (const file of scripts(EXTENSION_PATH)) {
     expect(nonAscii(readFileSync(file, 'utf8')), path.relative(EXTENSION_PATH, file)).toBe(0);

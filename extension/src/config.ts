@@ -40,15 +40,15 @@ export const OBSERVER_HOSTS: Readonly<Record<'gmail' | 'gcal', readonly string[]
 });
 
 /**
- * Host match patterns for the agent pages (Hard Rule 8). NOT in the manifest yet (Sprint 3 adds them).
- * Dots runs on the ChatGPT host behind the ATTEST_DOTS flag.
+ * Host match patterns for the agent pages (Hard Rule 8). Each enters the manifest's `host_permissions` with the
+ * content script that reads it, never before (wxt.config.ts; Decisions [3.0]): Muse's since 2026-10-08, ChatGPT's and
+ * Claude's with their readers (sprint_3 3.3, 3.4). Dots runs on the ChatGPT host behind the ATTEST_DOTS flag.
  */
 export const AGENT_HOSTS: Readonly<Record<'chatgpt' | 'claude' | 'muse', readonly string[]>> = Object.freeze({
   chatgpt: Object.freeze(['https://chatgpt.com/*']),
   claude: Object.freeze(['https://claude.ai/*']),
-  // The exact Muse web app host is pending MANUAL.md ("confirm Muse web app host for host_permissions").
-  // Never guess a host: until the founder confirms it, Muse gets no host pattern at all.
-  muse: Object.freeze([]),
+  // Confirmed by the founder on 2026-10-08 (MANUAL.md): the address of Muse's web app.
+  muse: Object.freeze(['https://muse.ai/*']),
 });
 
 /**
@@ -151,6 +151,17 @@ export const OBSERVER_SITES: Readonly<Record<ObserverId, keyof typeof OBSERVER_H
   'gmail.receipt': 'gmail',
   'gcal.event': 'gcal',
 });
+
+/**
+ * The agent adapters the service worker accepts health from, each with the site whose content script speaks for it
+ * (sprint_3 3.2; as OBSERVER_SITES): an adapter's report is taken only from a page on `AGENT_HOSTS[site]`
+ * (src/background/sender-site.ts). Claims and scope snapshots are stored from 3.6 and 3.7.
+ */
+export const ADAPTER_SITES = Object.freeze({
+  'muse.chat': 'muse',
+} as const satisfies Record<string, keyof typeof AGENT_HOSTS>);
+
+export type AdapterId = keyof typeof ADAPTER_SITES;
 
 /**
  * An observer's own health report that says what the stored one says (status, reasons, version) is written only once

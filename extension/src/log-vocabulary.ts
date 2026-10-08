@@ -195,6 +195,7 @@ export const LOG_VALUES = [
   'gmail.sent',
   'gmail.receipt',
   'gcal.event',
+  'muse.chat',
   // Grades, receipt states, health statuses.
   'VERIFIED',
   'PARTIAL',
