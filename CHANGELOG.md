@@ -38,6 +38,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - The founder's first real captures, labelled, beside the synthetic pages: 8 Gmail pages (three Sent pages, a second account's Sent, Drafts, Inbox, two opened Sent threads) and 9 Google Calendar pages (a week before and after creating, moving and deleting a test event, a month, calendars ticked and unticked). The receipt captures are held out until re-captured with the stricter sanitiser. The benches say how many of the pages they score are real, and a test decodes every link and token of every capture (compressed and encoded forms included) and fails on any address that is not a fake.
 
+- `docs/claims-import.md` v1: the design for taking an agent's claims from a log the person pastes into the side panel, since Attest reads no agent's site (tasks 3.11 to 3.14).
 - `docs/privacy-architecture.md` v1: every ledger table and field, the allowlist of each observation source, what is hashed and what that does not hide, retention and purge, and the export.
 - `pnpm check-docs` also fails when `docs/privacy-architecture.md` does not describe a field `policy/default.json` allowlists, or describes one it does not (`scripts/check-docs-allowlist.ts`).
 

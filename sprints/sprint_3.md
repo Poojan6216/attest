@@ -39,6 +39,16 @@
 
 [x] 3.10 | Done 2026-10-08: the four terms read (Decisions [3.10], with dates and sections). The founder chose ship disabled for Muse, ChatGPT/Dots and Claude, and ship for Google. The options page's Adapters section shows each reader's state and its note. | Vendor terms reading. MANUAL + agent: read Meta, OpenAI, Anthropic, Google terms for reading their web UI in the user's own browser; summarise in `Decisions.md` (date, section, decision: ship enabled / ship disabled / ship with notice). Add the notice string to the options page's Adapters section. | Read: agents/privacy_reviewer.md | Done when: four entries in `Decisions.md`; options page shows per-adapter status and notice.
 
+**Paste/import path (added 2026-10-08 at the founder's choice; design in `docs/claims-import.md`; Decisions [3.11]).** Claims come from the agent's own activity log, which the person copies and pastes into Attest, so Attest reads no agent's site. Permission letters to Meta, OpenAI and Anthropic go out in parallel (MANUAL.md).
+
+[ ] 3.11 | The paste parser: pasted text → `AgentRead` → claims through `claims.ts` and `patterns.ts`. Entries of one to three lines under day headers, times in the person's zone, no time → not imported, a time after the paste refused, at most 100,000 characters and `SCHEMA_LIMITS.BATCH` claims. | Read: agents/adapter_engineer.md | Done when: unit and property tests over invented logs of each agent's shape pass; re-pasting adds no claim; an over-long paste and a future time are refused, never cut or guessed.
+
+[ ] 3.12 | Side panel **Add agent activity**: pick the agent, paste, preview each claim and each line not used (and why), confirm. The text is dropped once the preview closes. | Read: agents/extension_engineer.md | Done when: component tests cover every preview state; keyboard and screen-reader labels; nothing of the text is kept after the preview closes.
+
+[ ] 3.13 | `claims.import` (extension pages only) and the service worker: store claims, build candidates from the ledger, grade, store receipts, grace alarm, UNASKED from orphans. | Read: agents/extension_engineer.md, agents/ledger_engineer.md | Done when: unit tests per step; a service worker stopped mid-grace still finalises; the secret-seed test pastes the seeds and finds none in storage, logs or exports.
+
+[ ] 3.14 | End to end on the built extension. | Read: agents/qa_tester.md | Done when: pasting the §2 demo's log with the Gmail Sent and Calendar fixtures gives exactly VERIFIED, NOT_FOUND (after a simulated grace) and UNASKED; both mandatory tests stay green.
+
 🔥 The pattern tables (3.0) carry the accuracy number. Spend the time there. A regex that matches "I'll send an email" as `email.sent` is a false VERIFIED waiting to happen; patterns must require past tense / completion markers and the activity view's structure, not conversational intent.
 🔥 Default Grants are permissive on purpose. Attest's first run must produce receipts, not a wall of OVER_SCOPE. Tightening is the user's choice in Sprint 4.
 🔥 Dots stays flagged. Do not write Dots selectors from screenshots in press. Wait for the fixture.
