@@ -20,6 +20,7 @@ import type { WxtBrowser } from 'wxt/browser';
 import { NETWORK_ALLOWLIST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
+import { datedClock, pasteActivity } from './support/paste';
 import { FIXTURE_TIME_ZONE, fixtureUrl, routesFor, vendorFixture } from './support/vendor-pages';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
@@ -138,6 +139,11 @@ async function openAll(session: GuardedSession): Promise<Page[]> {
     const page = await session.extension.openExtensionPage(extensionPage);
     recordConsole(page, extensionPage, session.consoleLines);
     pages.push(page);
+    // A pasted log imported and graded through the side panel (sprint_3 3.13): that path makes no request either.
+    if (extensionPage === 'sidepanel.html') {
+      const log = ['Sent an email to sam@example.com', datedClock(30, FIXTURE_TIME_ZONE)].join('\n');
+      expect(await pasteActivity(page, 'Claude', log)).toBe('Imported 1 claim.');
+    }
   }
   return pages;
 }

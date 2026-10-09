@@ -42,7 +42,7 @@ The parser is pure and has no DOM: text in, an `AgentRead` out, the same shape a
 
 ## 5. Storing and grading
 
-The service worker stores each claim (`upsertClaim`), builds candidates from the Gmail and Calendar observations already in the ledger, grades with `gradeBatch` and stores the receipts. A PENDING receipt is finalised by the grace alarm, and orphan observations become UNASKED receipts (`attribution.ts`). This is the background wiring Sprint 3.6 planned, now fed by imports instead of a content script. Agent session pings are not available without reading the agent's site, so `agentSessionActive` never fires and UNASKED attribution rests on the other signals.
+The service worker stores each claim (`upsertClaim`), builds candidates from the Gmail and Calendar observations already in the ledger, grades with `gradeBatch` and stores the receipts. A PENDING receipt is finalised by the grace alarm, and orphan observations become UNASKED receipts (`attribution.ts`). This is the background wiring Sprint 3.6 planned, now fed by imports instead of a content script. Attest sees no agent's session without reading its site, so the pasted log stands in: each timed entry, a claim or not, is a moment the agent's own log says it worked, stored as a session ping (3.14). The person's idle time comes from Chrome only if they turn it on (3.14, an optional permission). Until both are recorded, UNASKED rests on the activity log's own entries.
 
 ## 6. What this path does not do (yet)
 
@@ -57,4 +57,5 @@ The service worker stores each claim (`upsertClaim`), builds candidates from the
 | 3.11 | The paste parser: text → `AgentRead` → claims, with the rules of §3 | Unit and property tests over invented logs of each agent's shape: entries, headers, times, proposals and chatter; re-pasting adds no claim; a time after the paste and a log over the limit are refused |
 | 3.12 | The side panel's **Add agent activity**: paste, preview, confirm | Component tests for every preview state; keyboard and screen-reader labels; the text is gone once the preview closes |
 | 3.13 | `claims.import` and the service worker: store, grade, receipts, grace alarm, UNASKED | Unit tests per step; a service worker stopped mid-grace still finalises (the 3.6 rule) |
-| 3.14 | End to end | In the built extension, pasting the §2 demo's log with the Gmail Sent and Calendar fixtures gives exactly VERIFIED, NOT_FOUND (after a simulated grace) and UNASKED; the no-leak test covers the paste |
+| 3.14 | The UNASKED signals: the pasted log's timed entries as session pings, and opt-in idle detection | The §2 demo graded through the ledger with its log's sessions and a recorded idle interval gives UNASKED; nothing records idle without the person's opt-in |
+| 3.15 | End to end | In the built extension, pasting the §2 demo's log with the Gmail Sent and Calendar fixtures gives exactly VERIFIED, NOT_FOUND (after a simulated grace) and UNASKED |

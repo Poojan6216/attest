@@ -2,7 +2,8 @@
  * @mandatory — Hard Rules 2 and 10: derived facts only; never log secrets.
  *
  * Every seeded secret (tests/fixtures/secrets/seeded.json) is injected into the fixture pages the
- * extension sees, and the Gmail and Calendar fixtures (VENDOR_PAGES, sprint_2 2.7) are opened as they are, with the
+ * extension sees, a log holding every seed is pasted into the side panel and imported (sprint_3 3.13), and the Gmail
+ * and Calendar fixtures (VENDOR_PAGES, sprint_2 2.7) are opened as they are, with the
  * seeds in their own bodies, at the vendors' own addresses (./support/vendor-pages.ts), so the observers really read
  * them and real rows reach the ledger before the channels are searched. After a session, no seed value or canary fragment may appear in: the extension's
  * own ledger export, any IndexedDB database, any chrome.storage area, the extension origin's web storage
@@ -32,6 +33,7 @@ import { launchExtension } from './support/extension';
 import { findLeaks, type Leak, loadSeeds, type Seed } from './support/leaks';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import { guardArgs, installRouteGuard, type RouteRecord } from './support/network-guard';
+import { pasteActivity, seededLog } from './support/paste';
 import { injectSeeds } from './support/seed-pages';
 import {
   FIXTURE_TIME_ZONE,
@@ -276,6 +278,12 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       }
       await openVendorPages(extension);
       for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
+      // A pasted log with every seed in it, imported through the side panel (sprint_3 3.13): the claims are stored
+      // and graded, and no seed may reach any channel.
+      const panel = await extension.openExtensionPage('sidepanel.html');
+      expect(await pasteActivity(panel, 'Muse', seededLog(SEEDS, FIXTURE_TIME_ZONE))).toMatch(
+        /^Imported 3 claims\.$/u,
+      );
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
     });
 
