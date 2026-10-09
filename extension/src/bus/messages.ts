@@ -42,6 +42,7 @@ import { oneLineText } from '../core/schema-text';
 import { CoveragePing } from '../ledger/types';
 import { CalendarSnapshot } from '../observers/gcal/snapshot';
 import {
+  FlagSetMessage,
   GrantSaveMessage,
   LedgerWipeMessage,
   ReaderToggleMessage,
@@ -86,11 +87,12 @@ export const BusMessageType = z.enum([
   'grant.save',
   'retention.save',
   'reader.toggle',
+  'flag.set',
   'ledger.wipe',
 ]);
 
 /**
- * The twelve type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -295,6 +297,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   GrantSaveMessage,
   RetentionSaveMessage,
   ReaderToggleMessage,
+  FlagSetMessage,
   LedgerWipeMessage,
 ]);
 

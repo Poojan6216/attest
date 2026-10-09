@@ -31,6 +31,7 @@ import {
   ClaimsImportResult,
   type GrantSaveMessage,
   GrantSaveResult,
+  type FlagSetMessage,
   type LedgerWipeMessage,
   type ReaderToggleMessage,
   type ReceiptEventMessage,
@@ -179,12 +180,12 @@ export async function sendGrant(
 
 /**
  * Sends one of a person's settings to the service worker (sprint_4 4.5: `retention.save`, `reader.toggle`,
- * `ledger.wipe`) and resolves its `SettingResult`: for a valid message it always resolves, an absent or malformed
+ * `ledger.wipe`; 4.9: `flag.set`) and resolves its `SettingResult`: for a valid message it always resolves, an absent or malformed
  * answer becoming `{ ok: false, code: 'failed' }` (logged as `bus.setting_unavailable` with the type). An invalid
  * message is never sent: it is logged (`bus.setting_refused`) and rejects with `BusError('invalid_outgoing')`.
  */
 export async function sendSetting(
-  message: RetentionSaveMessage | ReaderToggleMessage | LedgerWipeMessage,
+  message: RetentionSaveMessage | ReaderToggleMessage | FlagSetMessage | LedgerWipeMessage,
 ): Promise<SettingResult> {
   let response: unknown;
   try {

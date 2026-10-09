@@ -22,6 +22,7 @@ import {
 import { nextDigestMs } from '../ledger/digest-week';
 import { getLedger } from '../ledger/repo';
 import type { LedgerTable } from '../bus/messages';
+import { autoCheckGmail, browserAutoCheck } from './auto-check';
 import { browserDigest, runWeeklyDigest } from './digest';
 import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
 import { announce } from './router';
@@ -45,12 +46,14 @@ export async function runRetentionPurge(): Promise<void> {
  * The grace alarm (sprint_3 3.13; docs/grading.md §3, §8): one grading batch (./grading.ts), which finalises every
  * PENDING receipt whose grace has elapsed and grades whatever arrived since the last batch. Everything it needs is in
  * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts. When it wrote,
- * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8).
+ * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8). Then the Gmail
+ * auto-check, which does nothing unless the person turned it on (sprint_4 4.9, ./auto-check.ts).
  */
 export async function runGraceBatch(
   notify: (tables: readonly LedgerTable[]) => void = announce(nowIso),
 ): Promise<void> {
   if (changedReceipts(await runGradingBatch(await getLedger(), SHIPPED_GRADING))) notify(['receipts']);
+  await autoCheckGmail(browserAutoCheck(notify));
 }
 
 /** The weekly digest (sprint_4 4.7; ./digest.ts), whose handler sets the next one. */

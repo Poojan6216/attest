@@ -18,6 +18,7 @@
  * must paint in under 100 ms (sprint_4 4.2).
  */
 import { compareText } from '../core/order';
+import { type AutoCheckRecord, readAutoCheck } from './auto-check-record';
 import { lastBatchMs } from './batch-instant';
 import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
@@ -229,6 +230,8 @@ export interface PopupView {
    * one the batches no longer regrade (a claim-less receipt holding reverted overrides, docs/grading.md §7, §8).
    */
   readonly lastBatchMs: number | null;
+  /** The last time the Gmail auto-check opened Gmail (sprint_4 4.9; ./auto-check.ts), or null. */
+  readonly autoCheck: AutoCheckRecord | null;
 }
 
 /** The popup's reads (header) in one read transaction, so every part is of the same instant of the ledger. */
@@ -237,13 +240,14 @@ export async function popupView(db: LedgerDb, query: ReceiptQuery): Promise<Popu
   const tables = [db.receipts, db.claims, db.observations, db.coverage, db.adapterHealth, db.meta];
   return db.transaction('r', tables, async () => {
     // Every read at once: each is a round trip to IndexedDB, and the popup has 100 ms (sprint_4 4.2).
-    const [today, coverage, health, last] = await Promise.all([
+    const [today, coverage, health, last, autoCheck] = await Promise.all([
       receiptPage(db, query),
       coverageSummary(db),
       healthReports(db),
       lastBatchMs(db),
+      readAutoCheck(db),
     ]);
-    return { today, coverage, health, lastBatchMs: last ?? null };
+    return { today, coverage, health, lastBatchMs: last ?? null, autoCheck };
   });
 }
 

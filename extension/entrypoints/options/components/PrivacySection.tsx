@@ -25,8 +25,10 @@ export function PrivacySection({ sources = LIVE_SETTINGS }: PrivacySectionProps)
       </p>
       <p>
         This version reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs
-        you have open. It does not read your AI agents' pages: you paste an agent's activity log in the side
-        panel, and Attest checks each action it reports.
+        you have open, with one exception you choose: Check Gmail for me, under Adapters, off unless you turn
+        it on, lets Attest open your Gmail Sent folder itself, in a pinned tab. This version does not read
+        your AI agents' pages: you paste an agent's activity log in the side panel, and Attest checks each
+        action it reports.
       </p>
       <p>
         <a href={PRIVACY_DOC_URL} target="_blank" rel="noopener noreferrer" class="underline">

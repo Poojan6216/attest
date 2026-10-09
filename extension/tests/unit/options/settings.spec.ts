@@ -38,6 +38,7 @@ beforeEach(() => {
   view = {
     retentionDays: 90,
     readersOff: new Set(['gcal']),
+    autoCheckGmail: false,
     health: [
       AdapterHealth.parse({
         adapterId: 'gmail.sent',
@@ -124,6 +125,40 @@ describe('Adapters', () => {
     await show(h(AdaptersSection, { sources, nowMs: () => NOW_MS }));
     await click(button('Turn off Gmail'));
     expect(root.querySelector('[role="alert"]')?.textContent).toBe('Not changed. Try again.');
+  });
+});
+
+describe('Adapters: Check Gmail for me (sprint_4 4.9)', () => {
+  const group = () => root.querySelector('[role="group"][aria-labelledby="auto-check-heading"]');
+
+  it('is off, says what it would open, when, how often and that it only reads, and turns on', async () => {
+    await show(h(AdaptersSection, { sources, nowMs: () => NOW_MS }));
+    const text = group()?.textContent ?? '';
+    expect(text).toContain('Off unless you turn it on.');
+    expect(text).toContain('in the 15 minutes since Attest read that claim');
+    expect(text).toContain('one tab, pinned and in front of you, never in the background');
+    expect(text).toContain('at most one tab every 30 minutes, and never twice for the same claim');
+    expect(text).toContain('This is the only time Attest opens a page.');
+    expect(text).toContain('never acts on it');
+    expect(group()?.querySelector('[role="status"]')?.textContent).toBe('Checking Gmail for you is off.');
+    await click(button('Turn on checking Gmail'));
+    expect(send.mock.calls).toEqual([[{ type: 'flag.set', flag: 'ATTEST_AUTO_CHECK_GMAIL', on: true }]]);
+    view = { ...view, autoCheckGmail: true, readersOff: new Set(['gmail']) };
+    await act(() => {
+      announce();
+    });
+    await settle();
+    expect(group()?.querySelector('[role="status"]')?.textContent).toBe(
+      'Checking Gmail for you is on. It does nothing while the Gmail reader is off.',
+    );
+    expect(button('Turn off checking Gmail')).toBeDefined();
+  });
+
+  it('says when it could not be changed', async () => {
+    send.mockRejectedValue(new Error('no receiver'));
+    await show(h(AdaptersSection, { sources, nowMs: () => NOW_MS }));
+    await click(button('Turn on checking Gmail'));
+    expect(group()?.querySelector('[role="alert"]')?.textContent).toBe('Not changed. Try again.');
   });
 });
 

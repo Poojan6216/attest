@@ -1,15 +1,18 @@
 /**
  * The options page's settings (sprint_4 4.5): the retention window (ledger meta), which page readers are off
- * (`chrome.storage.local`, src/background/readers.ts) and each observer's last health report (the ledger). They are
- * read when a section opens and again when the service worker announces a change to meta or adapter health, or the
- * readers' choice changes. Every change goes to the service worker (`retention.save`, `reader.toggle`, `ledger.wipe`):
- * pages never write. A read that fails is said and logged (Hard Rule 6).
+ * (`chrome.storage.local`, src/background/readers.ts), whether the Gmail auto-check is on (the flags, also there:
+ * src/background/flags.ts; 4.9) and each observer's last health report (the ledger). They are read when a section
+ * opens and again when the service worker announces a change to meta or adapter health, or the readers' choice or the
+ * flags change. Every change goes to the service worker (`retention.save`, `reader.toggle`, `flag.set`,
+ * `ledger.wipe`): pages never write. A read that fails is said and logged (Hard Rule 6).
  */
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 
+import { readFlags } from '../../src/background/flags';
 import { readersOff } from '../../src/background/readers';
 import type {
+  FlagSetMessage,
   LedgerWipeMessage,
   ReaderToggleMessage,
   RetentionSaveMessage,
@@ -25,10 +28,12 @@ import { loadHealth, loadRetentionDays, onLedgerChanged } from '../../src/ui/dat
 export interface SettingsView {
   readonly retentionDays: RetentionChoice;
   readonly readersOff: ReadonlySet<ReaderId>;
+  /** Whether the Gmail auto-check is on (flag ATTEST_AUTO_CHECK_GMAIL). */
+  readonly autoCheckGmail: boolean;
   readonly health: readonly AdapterHealth[];
 }
 
-export type SettingCommand = RetentionSaveMessage | ReaderToggleMessage | LedgerWipeMessage;
+export type SettingCommand = RetentionSaveMessage | ReaderToggleMessage | FlagSetMessage | LedgerWipeMessage;
 
 export interface SettingsSources {
   readonly load: () => Promise<SettingsView>;
@@ -37,10 +42,11 @@ export interface SettingsSources {
   readonly subscribe: (onChange: () => void) => () => void;
 }
 
-/** Calls `onChange` when the readers' choice changes in `chrome.storage.local`. */
+/** Calls `onChange` when the readers' choice or the flags change in `chrome.storage.local`. */
 function onReadersChanged(onChange: () => void): () => void {
   const listener = (changes: Record<string, unknown>): void => {
-    if (Object.hasOwn(changes, STORAGE_KEYS.READERS_OFF)) onChange();
+    if (Object.hasOwn(changes, STORAGE_KEYS.READERS_OFF) || Object.hasOwn(changes, STORAGE_KEYS.FLAGS))
+      onChange();
   };
   browser.storage.local.onChanged.addListener(listener);
   return () => {
@@ -52,6 +58,7 @@ export const LIVE_SETTINGS: SettingsSources = {
   load: async () => ({
     retentionDays: await loadRetentionDays(),
     readersOff: await readersOff(browser.storage.local),
+    autoCheckGmail: (await readFlags(browser.storage.local)).ATTEST_AUTO_CHECK_GMAIL,
     health: await loadHealth(),
   }),
   send: sendSetting,

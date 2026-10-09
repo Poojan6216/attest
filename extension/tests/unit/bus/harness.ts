@@ -19,6 +19,7 @@ import {
   CalendarSnapshotMessage,
   ClaimsImportMessage,
   CoveragePingMessage,
+  FlagSetMessage,
   GrantSaveMessage,
   LedgerWipeMessage,
   ReaderToggleMessage,
@@ -290,6 +291,7 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   }),
   'retention.save': RetentionSaveMessage.parse({ type: 'retention.save', days: 30 }),
   'reader.toggle': ReaderToggleMessage.parse({ type: 'reader.toggle', reader: 'gcal', on: false }),
+  'flag.set': FlagSetMessage.parse({ type: 'flag.set', flag: 'ATTEST_AUTO_CHECK_GMAIL', on: true }),
   'ledger.wipe': LedgerWipeMessage.parse({ type: 'ledger.wipe' }),
 };
 
@@ -327,5 +329,6 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'grant.save': { ...VALID['grant.save'], grant: { ...VALID['grant.save'].grant, notes: SECRET } },
   'retention.save': { type: 'retention.save', days: 7 },
   'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' },
+  'flag.set': { ...VALID['flag.set'], flag: 'ATTEST_TELEMETRY' },
   'ledger.wipe': { type: 'ledger.wipe', confirm: SECRET },
 };

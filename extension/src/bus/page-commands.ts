@@ -1,13 +1,14 @@
 /**
  * The commands an extension page sends the service worker for a change a person made (sprint_4): a mark on a receipt
  * (`receipt.event`), an agent's grant (`grant.save`), the retention window (`retention.save`), a page reader on or off
- * (`reader.toggle`), and deleting every Attest datum (`ledger.wipe`). Pages read the ledger but never write it: the
+ * (`reader.toggle`), a feature flag on or off (`flag.set`), and deleting every Attest datum (`ledger.wipe`). Pages read
+ * the ledger but never write it: the
  * service worker, its one writer, applies each and answers with the command's result. Only an extension page may send
  * one (listen.ts `EXTENSION_PAGE_ONLY`); src/bus/messages.ts puts each in the bus union and re-exports this module.
  */
 import { z } from 'zod';
 
-import { READERS, RETENTION_CHOICES } from '../config';
+import { READERS, RETENTION_CHOICES, SETTABLE_FLAGS } from '../config';
 import { Grant, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
 
 /**
@@ -101,13 +102,26 @@ export const ReaderToggleMessage = z.strictObject({
   on: z.boolean(),
 });
 
+/** A feature flag the person can turn on or off: one of `SETTABLE_FLAGS`. */
+export const SettableFlag = z.enum(SETTABLE_FLAGS);
+
+/**
+ * A feature flag on or off (sprint_4 4.9, the options page's Adapters: the Gmail auto-check): the service worker keeps
+ * the choice in `chrome.storage.local` (src/background/flags.ts), and the next grading batch reads it.
+ */
+export const FlagSetMessage = z.strictObject({
+  type: z.literal('flag.set'),
+  flag: SettableFlag,
+  on: z.boolean(),
+});
+
 /**
  * Delete all Attest data (sprint_4 4.5, the options page's Danger zone): the service worker deletes the ledger's
  * database and clears `chrome.storage.local` (src/background/wipe.ts). The page asks twice before it sends this.
  */
 export const LedgerWipeMessage = z.strictObject({ type: z.literal('ledger.wipe') });
 
-/** The answer to a `retention.save`, a `reader.toggle` or a `ledger.wipe`: done, or failed. */
+/** The answer to a `retention.save`, a `reader.toggle`, a `flag.set` or a `ledger.wipe`: done, or failed. */
 export const SettingResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true) }),
   z.strictObject({ ok: z.literal(false), code: z.enum(['failed']) }),
@@ -122,5 +136,6 @@ export type GrantSaveResult = z.infer<typeof GrantSaveResult>;
 export type RetentionDays = z.infer<typeof RetentionDays>;
 export type RetentionSaveMessage = z.infer<typeof RetentionSaveMessage>;
 export type ReaderToggleMessage = z.infer<typeof ReaderToggleMessage>;
+export type FlagSetMessage = z.infer<typeof FlagSetMessage>;
 export type LedgerWipeMessage = z.infer<typeof LedgerWipeMessage>;
 export type SettingResult = z.infer<typeof SettingResult>;

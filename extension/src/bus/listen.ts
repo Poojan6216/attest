@@ -11,8 +11,8 @@
  *     this runs before parsing, so a foreign message is never parsed (only `type` is read, for the log);
  *  2. it parses as a `BusMessage`, else drop `malformed` (unknown types land here too);
  *  3. `ui.query` and the pages' commands (`claims.import`, and ./page-commands.ts: `receipt.event`, `grant.save`,
- *     `retention.save`, `reader.toggle`, `ledger.wipe`) come from an extension page, never a content script, else drop
- *     `untrusted_context`;
+ *     `retention.save`, `reader.toggle`, `flag.set`, `ledger.wipe`) come from an extension page, never a content
+ *     script, else drop `untrusted_context`;
  *  4. a handler exists for its type, else drop `no_handler`.
  * A dropped message gets no response (the listener returns false) and one `bus.dropped` record: a warning,
  * except `no_handler`, which is expected wherever several contexts listen (every open extension page sees
@@ -72,7 +72,7 @@ export type BusHandlerResult<T extends BusMessageType> = T extends 'ui.query'
             : unknown;
 
 /** The page commands that answer a `SettingResult`. */
-type SettingCommand = 'retention.save' | 'reader.toggle' | 'ledger.wipe';
+type SettingCommand = 'retention.save' | 'reader.toggle' | 'flag.set' | 'ledger.wipe';
 
 export type BusHandler<T extends BusMessageType> = (
   message: BusMessageOf<T>,
@@ -95,6 +95,7 @@ const EXTENSION_PAGE_ONLY: ReadonlySet<BusMessageType> = new Set<BusMessageType>
   'grant.save',
   'retention.save',
   'reader.toggle',
+  'flag.set',
   'ledger.wipe',
 ]);
 
@@ -155,6 +156,7 @@ const PAGE_RESULTS = {
   'grant.save': GrantSaveResult,
   'retention.save': SettingResult,
   'reader.toggle': SettingResult,
+  'flag.set': SettingResult,
   'ledger.wipe': SettingResult,
 } as const satisfies Record<SettingCommand | 'claims.import' | 'receipt.event' | 'grant.save', unknown>;
 

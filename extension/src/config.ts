@@ -117,6 +117,22 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
 });
 
 /**
+ * The flags a person turns on or off in the options page (sprint_4 4.9): the Gmail auto-check. Each other flag comes
+ * with its feature.
+ */
+export const SETTABLE_FLAGS = Object.freeze([
+  'ATTEST_AUTO_CHECK_GMAIL',
+] as const satisfies readonly FeatureFlag[]);
+
+export type SettableFlag = (typeof SETTABLE_FLAGS)[number];
+
+/**
+ * What the Gmail auto-check opens (sprint_4 4.9; src/background/auto-check.ts): the Sent folder of the first account
+ * signed in, which the Gmail reader's Sent observer reads. One of OBSERVER_HOSTS.gmail.
+ */
+export const AUTO_CHECK_URL = 'https://mail.google.com/mail/u/0/#sent';
+
+/**
  * Service-worker alarm names (extension_engineer: alarm names are constants; duplicates are cleared on
  * install/update): the retention purge (Sprint 2.6), the grace alarm that runs a grading batch (sprint_3 3.13) and the
  * weekly digest (sprint_4 4.7).

@@ -21,6 +21,7 @@ import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
+import { type FlagStorage, onFlagSet } from './flags';
 import { onGrantSave } from './grant-save';
 import { BROWSER_READERS, onReaderToggle, type ReaderDeps, readerOff, syncReaders } from './readers';
 import { onLedgerWipe, onRetentionSave } from './settings';
@@ -83,6 +84,8 @@ export function createHandlers(
   ctx: ObserverContext = observerContext(clock),
   imports: ImportContext = importContext(clock),
   readers: ReaderDeps = BROWSER_READERS,
+  /** Where the feature flags are kept: `chrome.storage.local`, as the readers' choice is. */
+  flags: FlagStorage = readers.storage,
 ): BusHandlers {
   const settings = { db: imports.db, notify: imports.notify };
   return {
@@ -93,6 +96,7 @@ export function createHandlers(
       onReceiptEvent({ db: imports.db, nowMs: imports.grading.nowMs, notify: imports.notify }, message),
     'retention.save': (message) => onRetentionSave(settings, message),
     'reader.toggle': (message) => onReaderToggle(message, readers),
+    'flag.set': (message) => onFlagSet(message, flags),
     'ledger.wipe': () => onLedgerWipe({ notify: imports.notify, syncReaders: () => syncReaders(readers) }),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??

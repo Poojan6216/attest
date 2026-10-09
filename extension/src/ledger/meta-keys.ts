@@ -4,6 +4,7 @@
  * prefix: one key per agent, or per clock repair. Instants, counts and an id only, never content (Hard Rule 2).
  */
 import { OPEN_IDLE } from './activity';
+import { AUTO_CHECK_AGENTS, AUTO_CHECK_AT, AUTO_CHECK_CLAIMS, AUTO_CHECK_UNTIL } from './auto-check-record';
 import { GRADED_WRITES, LAST_EVALUATED_AT } from './batch-instant';
 import { CLOCK_FLOOR_AT } from './clock-guard';
 import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
@@ -28,4 +29,8 @@ export const META_KEYS: readonly string[] = Object.freeze([
   LAST_IMPORT_PREFIX,
   ALERTS_MUTED_PREFIX,
   RETENTION_DAYS_KEY,
+  AUTO_CHECK_AT,
+  AUTO_CHECK_UNTIL,
+  AUTO_CHECK_CLAIMS,
+  AUTO_CHECK_AGENTS,
 ]);

@@ -42,6 +42,7 @@ function view(items: PopupView['today']['items'], health: AdapterHealth[] = []):
     coverage: { coverage: [], imports: {} },
     health,
     lastBatchMs: NOW.getTime() - MINUTE,
+    autoCheck: null,
   };
 }
 
@@ -188,6 +189,36 @@ describe('the popup when the day is empty, the read fails, or the ledger changes
     });
     expect(stand.load).toHaveBeenCalledTimes(2);
     expect(root.querySelectorAll('li[data-receipt]')).toHaveLength(3);
+  });
+});
+
+describe('the popup after the Gmail auto-check opened Gmail (sprint_4 4.9)', () => {
+  const opened = (atMs: number): PopupView => ({
+    ...view([]),
+    autoCheck: {
+      at: IsoTs.parse(new Date(atMs).toISOString()),
+      until: IsoTs.parse(new Date(atMs + 30 * MINUTE).toISOString()),
+      claims: 1,
+      agents: ['muse'],
+    },
+  });
+  const notice = () =>
+    [...root.querySelectorAll('[role="status"]')].find(({ textContent }) =>
+      textContent.includes('Gmail Sent folder'),
+    );
+
+  it('says why the tab opened, until its window ends', async () => {
+    await show(sources(opened(NOW.getTime() - 10 * MINUTE)).given);
+    expect(notice()?.textContent).toBe(
+      'At 11:50 Attest opened your Gmail Sent folder in a pinned tab, to check an email Muse says it sent: ' +
+        'Attest had not seen the folder since. It only reads the folder. Close the tab whenever you like, or turn ' +
+        'this off in Options.',
+    );
+  });
+
+  it('says nothing once the window has ended', async () => {
+    await show(sources(opened(NOW.getTime() - 30 * MINUTE)).given);
+    expect(notice()).toBeUndefined();
   });
 });
 

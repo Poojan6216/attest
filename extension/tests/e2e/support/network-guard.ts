@@ -86,9 +86,12 @@ export interface AnalyseOptions {
   readonly routedFixtureUrls?: ReadonlySet<string>;
 }
 
+/** The Chromium switch that sends every request leaving the machine to the dead proxy. */
+export const DEAD_PROXY_ARG = `--proxy-server=${DEAD_PROXY}`;
+
 /** Chromium switches that turn on NetLog capture and the dead proxy. */
 export function guardArgs(netLogPath: string): string[] {
-  return [`--log-net-log=${netLogPath}`, '--net-log-capture-mode=Default', `--proxy-server=${DEAD_PROXY}`];
+  return [`--log-net-log=${netLogPath}`, '--net-log-capture-mode=Default', DEAD_PROXY_ARG];
 }
 
 function parse(url: string): URL | null {

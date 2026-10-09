@@ -77,6 +77,7 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     // A window the options page does not offer, a reader that is an agent's, a field the wipe does not name.
     'retention.save': { type: 'retention.save', days: 45 as 30 },
     'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' as 'gmail' },
+    'flag.set': { ...VALID['flag.set'], flag: 'ATTEST_TELEMETRY' as 'ATTEST_AUTO_CHECK_GMAIL' },
     'ledger.wipe': { type: 'ledger.wipe', ...{ confirm: SECRET } },
   };
 }

@@ -26,6 +26,9 @@ export const LOG_EVENTS = [
   'alerts.opened',
   'alerts.settled',
   'alerts.show_failed',
+  'autocheck.failed',
+  'autocheck.no_window',
+  'autocheck.opened',
   'background.started',
   'bus.dropped',
   'bus.handler_failed',
@@ -80,6 +83,7 @@ export const LOG_EVENTS = [
   'observer.wrong_site',
   'options.away_change_failed',
   'options.away_check_failed',
+  'options.auto_check_toggle_failed',
   'options.export_failed',
   'options.grant_save_failed',
   'options.grants_read_failed',
@@ -96,6 +100,9 @@ export const LOG_EVENTS = [
   'popup.side_panel_failed',
   'popup.window_unknown',
   'grant.saved',
+  'flags.invalid',
+  'flags.set',
+  'flags.set_failed',
   'readers.choice_invalid',
   'readers.sync_failed',
   'readers.synced',
@@ -133,6 +140,7 @@ export const LOG_VALUES = [
   'grant.save',
   'retention.save',
   'reader.toggle',
+  'flag.set',
   'ledger.wipe',
   // A person's receipt events (src/background/user-events.ts): the kind and the refusal codes.
   'override',
@@ -300,6 +308,8 @@ export const LOG_VALUES = [
   'options',
   'digest',
   'dev',
+  // The flags a person sets (src/config.ts SETTABLE_FLAGS).
+  'ATTEST_AUTO_CHECK_GMAIL',
 ] as const;
 
 /**

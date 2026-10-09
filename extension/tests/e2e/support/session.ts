@@ -2,13 +2,15 @@
  * One end-to-end session of the shipped build (sprint_2 2.7): a local fixture server, the extension launched in the
  * fixtures' time zone, the route guard (vendor addresses answered from fixtures, nothing reaches the network) and the
  * options page a test asks the ledger from. The observer specs run their tests in one each (tech review TECH-L10: the
- * same harness had been copied into four specs).
+ * same harness had been copied into four specs). The browser also runs behind the dead proxy (sprint_4 4.9): a tab the
+ * extension creates itself starts loading before the route guard is attached to it, and without the proxy its first
+ * request reached the real host; now it fails on this machine, and a test reloads the tab under the guard.
  */
 import type { Page } from '@playwright/test';
 
 import { type FixtureServer, startFixtureServer } from '../../tools/serve-fixtures';
 import { launchExtension, type LaunchedExtension } from './extension';
-import { installRouteGuard } from './network-guard';
+import { DEAD_PROXY_ARG, installRouteGuard } from './network-guard';
 import { FIXTURE_TIME_ZONE, type VendorRoutes } from './vendor-pages';
 
 export interface VendorSession {
@@ -21,7 +23,7 @@ export interface VendorSession {
 
 export async function startVendorSession(): Promise<VendorSession> {
   const server = await startFixtureServer();
-  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
+  const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE, extraArgs: [DEAD_PROXY_ARG] });
   try {
     const routes: VendorRoutes = new Map();
     await installRouteGuard(extension.context, { fixtureOrigin: server.origin, routedFixtures: routes });

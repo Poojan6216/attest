@@ -11,7 +11,7 @@ import { INSTALL_REASONS } from '../../src/background/install';
 import { BUS_ERROR_CODES } from '../../src/bus/errors';
 import { DROP_REASONS } from '../../src/bus/listen';
 import { BusMessageType, LedgerTable, UiQueryKind, UiResultError } from '../../src/bus/messages';
-import { ADAPTER_SITES, ALARM_NAMES, OBSERVER_SOURCES } from '../../src/config';
+import { ADAPTER_SITES, ALARM_NAMES, OBSERVER_SOURCES, SETTABLE_FLAGS } from '../../src/config';
 import { logTableId } from '../../src/ledger/db';
 import { LEDGER_ERROR_CODES } from '../../src/ledger/errors';
 import { INSTALL_ID_ERROR_CODES } from '../../src/ledger/install-id';
@@ -42,6 +42,7 @@ describe('LOG_VALUES covers every enum the code logs', () => {
     ['query failure reasons', ['no_response', 'malformed_result', 'kind_mismatch']],
     ['install id states', ['missing', 'corrupt']],
     ['ui surfaces', ['popup', 'sidepanel', 'options']],
+    ['flags a person sets', SETTABLE_FLAGS],
   ])('%s', (_label, values) => {
     for (const value of values) expect(isSafeString(value), value).toBe(true);
   });
