@@ -234,6 +234,7 @@ describe('ledger.changed', () => {
   it('names only the ledger tables', () => {
     expect([...LedgerTable.options].sort()).toEqual(
       [
+        'activity',
         'adapterHealth',
         'calendarSnapshots',
         'claims',

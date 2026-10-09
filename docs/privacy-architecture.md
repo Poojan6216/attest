@@ -47,6 +47,10 @@ Each observer reads one vendor page in a tab you opened, and only while you have
 | `gmail.receipt` | Every expanded message of a conversation you opened: its sender, subject and date; the body only of a message whose sender and subject make it a receipt candidate, and only to find the total line | One row per receipt: merchant, amount, currency, subject (80 characters), date, a hash of Gmail's message id | The rest of the body (items, addresses, card digits), any message that is not a receipt |
 | `gcal.event` | The visible days, each event chip's label (start, end, title, calendar, guests), the calendar list | One row per event first seen, created, changed or removed: title (80 characters), start, one guest address, a hash of the event key; and the range's snapshot ([§5.4](#54-calendarsnapshots)) | Locations, conference links, descriptions, response status |
 
+**A pasted activity log** (Sprint 3.13). The side panel reads the text you paste in the panel itself ([`paste.ts`](../extension/src/adapters/paste.ts)) and sends the service worker only the claims it found (the fields of [§5.8](#58-claims)) and the minutes the log names ([§5.11](#511-activity)); the text is dropped when the preview closes, and is never stored, logged or sent. The paste box has spell check off, so Chrome's enhanced spell check never sends it to Google.
+
+**Away detection** (Sprint 3.14, off unless you turn it on in the options page). With the optional `idle` permission, Chrome tells the service worker when you go away (no input for a minute, or the screen locked) and when you are back; the ledger keeps the start and end of each time away ([§5.11](#511-activity)) and nothing else. Turning it off gives the permission back and deletes every interval.
+
 Attest does not run in incognito windows (the manifest says `"incognito": "not_allowed"`): an incognito Gmail or Calendar tab is never read, so nothing from it reaches the ledger, which lives in your regular profile and outlives the incognito session.
 
 Every observer also reads the signed-in account's address, and keeps only its hash ([§6](#6-what-is-hashed)). While a tab is open, the observer notes the instant of your last key press, pointer move, scroll or touch in it (never which key, where, or on what), and sends one yes/no with each coverage ping: whether there was input in the last minute ([§5.3](#53-coverage)).
@@ -257,7 +261,20 @@ Empty until Sprint 3.6: the grade for each claim, each unclaimed action, each un
 
 Index field: `date`.
 
-### 5.11 `receiptInputs`
+### 5.11 `activity`
+
+Since Sprint 3.14 (schema version 6): when an agent's own log says it worked, and, only if you turn on away detection, when you were away ([`activity.ts`](../extension/src/ledger/activity.ts)). Read by the grading batch to say "likely" with evidence ([`docs/grading.md` §7](grading.md#7-unasked-attributionts)). Instants and an agent id only. Key `id`.
+
+| Field | Meaning |
+|---|---|
+| `id` | A SHA-256 that keeps each row once (a session from its agent and minute, an interval from its start). |
+| `kind` | `session` or `idle`. |
+| `agent`, `at` | A session: the agent, and a minute a log you pasted names for one of its entries. |
+| `from`, `to` | An idle interval: when Chrome says you went away (the last moment input could have been), and when you were back. Recorded only while you have away detection on (the optional `idle` permission); turning it off deletes every one. |
+
+Index fields: `startMs`, `endMs`.
+
+### 5.12 `receiptInputs`
 
 Since Sprint 3.13 (schema version 5): what each receipt was graded with besides its claim and evidence, so `pnpm attest replay` can grade it again from an export and prove it ([`replay-records.ts`](../extension/src/ledger/replay-records.ts); [`docs/grading.md` §9](grading.md#9-replay-replayts)). Written only by a grading batch, beside the receipt; deleted when the receipt is graded again, deleted or purged. Key `inputsHash`. Derived data only: the fields below are copies of what other tables already hold, and none is content.
 
@@ -271,7 +288,7 @@ Since Sprint 3.13 (schema version 5): what each receipt was graded with besides 
 
 Index field: none (`policyHash` is indexed as stored, so the purge finds the policies no input names any more).
 
-### 5.12 `policies`
+### 5.13 `policies`
 
 Since Sprint 3.13: each policy document a receipt was graded under, as [`policy/default.json`](../policy/default.json) writes it, so replay grades with exactly that policy. Thresholds, windows, weights and rules; no data of yours. Key `policyHash`; deleted once no stored input names it.
 
@@ -312,13 +329,13 @@ The retention setting (30, 90 or 180 days) arrives in the options page in Sprint
 
 ## 8. The export
 
-`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data. `pnpm attest replay` reads it once Sprint 3.6 adds each receipt's inputs and policy to it; until then replay runs on test ledgers. The options page's Export section saves it as one JSON file, `attest-ledger-<date>.json`, through your browser's own download: nothing is sent anywhere, and no `downloads` permission is needed. Any extension page can also ask for it with the bus query `ledger.export`. Receipts as JSON or CSV arrive in Sprint 4.5.
+`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data. `pnpm attest replay` reads it as it is: since Sprint 3.13 it carries each receipt's inputs and policy (`receiptInputs`, `policies`, [§5.12](#512-receiptinputs), [§5.13](#513-policies)). The options page's Export section saves it as one JSON file, `attest-ledger-<date>.json`, through your browser's own download: nothing is sent anywhere, and no `downloads` permission is needed. Any extension page can also ask for it with the bus query `ledger.export`. Receipts as JSON or CSV arrive in Sprint 4.5.
 
 ```json
 {
   "format": "attest-ledger",
-  "schemaVersion": 4,
-  "exportedAt": "2026-10-04T09:30:00.000-04:00",
+  "schemaVersion": 6,
+  "exportedAt": "2026-10-09T09:30:00.000-04:00",
   "tables": {
     "requests": [],
     "claims": [],
@@ -329,8 +346,11 @@ The retention setting (30, 90 or 180 days) arrives in the options page in Sprint
     "coverage": [],
     "meta": [],
     "coverageIntervals": [],
-    "calendarSnapshots": []
-  }
+    "calendarSnapshots": [],
+    "activity": []
+  },
+  "receiptInputs": {},
+  "policies": {}
 }
 ```
 

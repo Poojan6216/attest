@@ -110,6 +110,16 @@ export const GRADE_ALARM_PERIOD_MINUTES = 5;
 export const GRADE_STARTUP_DELAY_MINUTES = 1;
 
 /**
+ * Away detection, opt-in (sprint_3 3.14; src/background/idle.ts): Chrome says the person is away after this many
+ * seconds without input. An interval starts this long before Chrome says so (the last instant input could have been),
+ * so it is positive evidence only (docs/grading.md §7 `userIdle`). Chrome's own minimum is 15.
+ */
+export const IDLE_DETECTION_SECONDS = 60;
+
+/** The optional permission away detection asks for when the person turns it on (Hard Rule 8). */
+export const IDLE_PERMISSION = 'idle' as const;
+
+/**
  * The observer skeleton's pass scheduling (sprint_2 2.0, src/observers/batch.ts). A burst of DOM mutations on a
  * Gmail or Calendar page runs one pass OBSERVER_DEBOUNCE_MS after the last mutation, and never later than
  * OBSERVER_MAX_WAIT_MS after the first one, so a page that never stops changing is still read.

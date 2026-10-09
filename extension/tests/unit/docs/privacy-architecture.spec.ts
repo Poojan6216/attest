@@ -20,6 +20,7 @@ import {
   type StoredTableName,
 } from '../../../src/ledger/index-fields';
 import {
+  ActivityRecord,
   AdapterHealth,
   Attribution,
   Claim,
@@ -71,6 +72,7 @@ const TABLE_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
     ...keys(PendingAbsence),
     ...keys(UpdateWindow),
   ],
+  activity: [...new Set(ActivityRecord.options.flatMap((option) => keys(option)))],
   receiptInputs: [
     ...keys(ReceiptInputsRecord),
     ...keys(Coverage),

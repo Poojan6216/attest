@@ -23,6 +23,7 @@ import {
   type RequestRow,
   type StoredTableName,
 } from './index-fields';
+import type { ActivityRow } from './activity';
 import type { CalendarRecordRow } from './calendar-snapshots';
 import {
   AgentId,
@@ -53,7 +54,7 @@ export const STORES_V1 = {
   coverage: '[observerId+accountKey], observerId, lastSyncAt',
   meta: 'key',
 } as const satisfies Readonly<
-  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots'>, string>
+  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity'>, string>
 >;
 
 export type CoverageKey = [observerId: string, accountKey: string];
@@ -127,6 +128,18 @@ export const STORES_V5 = {
   [POLICIES]: 'policyHash',
 } as const;
 
+/** The activity store (./activity.ts). */
+export const ACTIVITY = 'activity';
+
+/**
+ * Schema v6 (sprint_3 3.14; Decisions [3.14]): `activity` holds the session pings of pasted logs and the idle
+ * intervals Chrome reported (opt-in), keyed by `id`, with `endMs` indexed so the grading batch reads its horizon and the
+ * purge its cutoff by range. New and empty on upgrade, so v6 needs no data upgrade.
+ */
+export const STORES_V6 = {
+  [ACTIVITY]: 'id, endMs',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -160,6 +173,7 @@ const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonl
   // Outbound auto-increment key: the observer names the row in logs.
   coverageIntervals: { field: 'observerId', schema: PLAIN_KEY },
   calendarSnapshots: { field: 'observerId', schema: PLAIN_KEY },
+  activity: { field: 'id', schema: Sha256 },
   receiptInputs: { field: 'inputsHash', schema: Sha256 },
   policies: { field: 'policyHash', schema: Sha256 },
 };
@@ -205,6 +219,11 @@ export class LedgerDb extends Dexie {
   /** Schema v3. Read and written only through ./calendar-snapshots.ts. */
   get calendarSnapshots(): Table<CalendarRecordRow, CalendarKey> {
     return this.table<CalendarRecordRow, CalendarKey>(CALENDAR_SNAPSHOTS);
+  }
+
+  /** Schema v6. Read and written only through ./activity.ts. */
+  get activity(): Table<ActivityRow, string> {
+    return this.table<ActivityRow, string>(ACTIVITY);
   }
 
   /** Schema v5. Read and written only through ./replay-records.ts. */

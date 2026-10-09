@@ -76,7 +76,7 @@ export async function replayRecords(db: LedgerDb): Promise<ReplayRecords> {
 }
 
 /**
- * The purge's part (./retention.ts rule 7): the inputs of the purged receipts, then every policy document no stored
+ * The purge's part (./retention.ts rule 8): the inputs of the purged receipts, then every policy document no stored
  * input names any more. Runs in the purge's transaction. Returns how many rows of each went.
  */
 export async function purgeReplayRecords(

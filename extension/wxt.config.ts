@@ -113,6 +113,8 @@ export default defineConfig({
     // outlives an incognito session, so an incognito Gmail or Calendar page is never read (Hard Rules 2, 11).
     incognito: 'not_allowed',
     permissions: ['storage', 'alarms'],
+    // Away detection is opt-in (sprint_3 3.14, Hard Rule 8): the options page asks for it when the person turns it on.
+    optional_permissions: ['idle'],
     host_permissions: [...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal],
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'none'",

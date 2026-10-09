@@ -4,6 +4,7 @@ import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 
 import { ensureAlarms, handleAlarm } from '../src/background/alarms';
+import { type IdleApi, onPermissionsRemoved, watchIdle } from '../src/background/idle';
 import { onInstalled } from '../src/background/install';
 import { createHandlers } from '../src/background/router';
 import { listen } from '../src/bus/listen';
@@ -28,6 +29,18 @@ export default defineBackground({
 
     browser.alarms.onAlarm.addListener((alarm) => {
       void handleAlarm(alarm);
+    });
+
+    // Away detection, opt-in (sprint_3 3.14): Chrome's `idle` exists only while its optional permission is held.
+    const idle = (): IdleApi | undefined => (browser as { idle?: IdleApi }).idle;
+    watchIdle(idle());
+    browser.permissions.onAdded.addListener(() => {
+      watchIdle(idle());
+    });
+    browser.permissions.onRemoved.addListener((removed) => {
+      onPermissionsRemoved(removed).catch((error: unknown) => {
+        log.error('idle.record_failed', { error });
+      });
     });
 
     log.info('background.started');

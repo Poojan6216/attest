@@ -38,6 +38,11 @@ describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)',
     expect(offHosts.filter((host) => (manifest().host_permissions as string[]).includes(host))).toEqual([]);
   });
 
+  it('ask for one optional permission, idle, and only when the person turns away detection on (sprint_3 3.14)', () => {
+    expect(manifest().permissions).toEqual(['storage', 'alarms']);
+    expect(manifest().optional_permissions).toEqual(['idle']);
+  });
+
   it('declare no optional hosts, content scripts or web-accessible resources', () => {
     const block = manifest();
     expect(block).not.toHaveProperty('optional_host_permissions');

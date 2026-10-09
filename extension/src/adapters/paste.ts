@@ -22,10 +22,10 @@
  * log twice gives the same claims. A time that cannot be read, or one after the paste, gives no claim either. The text
  * never leaves the side panel: only the claims are sent on (Hard Rule 2).
  */
-import { type OffsetAt, resolveRelative } from '../core/normalize';
+import { instantMs, type OffsetAt, resolveRelative } from '../core/normalize';
 import { type AgentId, type Claim, type IsoTs, SCHEMA_LIMITS } from '../core/schema';
 import { oneLine } from '../observers/text';
-import { buildFacts } from './claims';
+import { buildFacts, statedTime } from './claims';
 
 /** The parser's version: every pasted claim's `extractor.version`, beside the id `import.<agent>`. */
 export const PASTE_VERSION = '1.0.0';
@@ -65,6 +65,11 @@ export interface PastedLog {
   readonly entries: readonly PastedEntry[];
   /** Every entry's claims, each once (the same claim reported twice is one). */
   readonly claims: readonly Claim[];
+  /**
+   * The minutes the log's timed entries name, a claim or not, each once and in order: when the agent's own log says it
+   * worked, the session pings attribution reads (sprint_3 3.14; docs/grading.md §7). A day, or no time, names none.
+   */
+  readonly activeAt: readonly IsoTs[];
 }
 
 /** Why a paste was refused as a whole. */
@@ -191,6 +196,22 @@ function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
   return { text: draft.text, time: draft.shown, outcome, claims: facts.claims };
 }
 
+/** The minutes `drafts` name at minute precision (`PastedLog.activeAt`), each once, in time order. */
+function activeAtOf(drafts: readonly Draft[], ctx: PasteContext): IsoTs[] {
+  const facts = {
+    agent: ctx.agent,
+    extractor: { id: `import.${ctx.agent}`, version: PASTE_VERSION },
+    observedAt: ctx.pastedAt,
+    offsetAt: ctx.offsetAt,
+  };
+  const minutes = new Map<number, IsoTs>();
+  for (const draft of drafts) {
+    const stated = statedTime(draft.time, facts);
+    if (stated?.precision === 'minute') minutes.set(instantMs(stated.at), stated.at);
+  }
+  return [...minutes].sort(([a], [b]) => a - b).map(([, at]) => at);
+}
+
 /**
  * The entries and claims of a pasted log (rules in the module comment), or why the paste is refused as a whole: it
  * holds nothing, it is longer than MAX_PASTE_CHARS, or it reports more claims than one import may carry
@@ -199,9 +220,10 @@ function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
 export function readPastedLog(text: string, ctx: PasteContext): PasteResult {
   if (text.length > MAX_PASTE_CHARS) return { ok: false, refusal: 'too_long' };
   if (text.trim() === '') return { ok: false, refusal: 'empty' };
-  const entries = draftsOf(text, ctx).map((draft) => readEntry(draft, ctx));
+  const drafts = draftsOf(text, ctx);
+  const entries = drafts.map((draft) => readEntry(draft, ctx));
   const claims = new Map<string, Claim>();
   for (const entry of entries) for (const claim of entry.claims) claims.set(claim.id, claim);
   if (claims.size > SCHEMA_LIMITS.BATCH) return { ok: false, refusal: 'too_many_claims' };
-  return { ok: true, log: { entries, claims: [...claims.values()] } };
+  return { ok: true, log: { entries, claims: [...claims.values()], activeAt: activeAtOf(drafts, ctx) } };
 }

@@ -63,6 +63,8 @@ test('the shipped manifest matches the decisions', () => {
     default_popup: 'popup.html',
   });
   expect(manifest.permissions).toEqual(['storage', 'alarms', 'sidePanel']);
+  // Hard Rule 8: away detection asks for `idle` only when the person turns it on (sprint_3 3.14).
+  expect(manifest.optional_permissions).toEqual(['idle']);
   // Hard Rule 8: exactly Gmail and Google Calendar (sprint_2 2.0), nothing broader; no agent host while every agent
   // reader is off under its vendor's terms (Decisions [3.10]).
   expect(manifest.host_permissions).toEqual(['https://mail.google.com/*', 'https://calendar.google.com/*']);

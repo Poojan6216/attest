@@ -6,6 +6,7 @@ import { handleInstalled, onInstalled } from '../../../src/background/install';
 import { ALARM_NAMES, STORAGE_KEYS } from '../../../src/config';
 import { InstallIdError } from '../../../src/ledger/install-id';
 import { type LogRecord, setLogSink } from '../../../src/log';
+import { asFreshInstall } from './chrome-fakes';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = STORAGE_KEYS.INSTALL_ID;
@@ -20,6 +21,7 @@ let restoreSink: () => void = () => undefined;
 
 beforeEach(() => {
   fakeBrowser.reset();
+  asFreshInstall();
   records = [];
   restoreSink = setLogSink((record) => {
     records.push(record);

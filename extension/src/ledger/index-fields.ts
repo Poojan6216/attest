@@ -16,8 +16,8 @@ import { LedgerError } from './errors';
 import type { Claim, CoveragePing, Observation, Receipt, Request } from './types';
 
 /**
- * Every ledger table (build_spec §6): the eight of Sprint 0, the coverage intervals of 2.6 (./coverage.ts) and the
- * Calendar snapshots of 2.7 (./calendar-snapshots.ts). The bus `LedgerTable` enum, the export, the migrations and
+ * Every ledger table (build_spec §6): the eight of Sprint 0, the coverage intervals of 2.6 (./coverage.ts), the
+ * Calendar snapshots of 2.7 (./calendar-snapshots.ts) and the activity of 3.14 (./activity.ts). The bus `LedgerTable` enum, the export, the migrations and
  * the logger's table names list exactly these.
  */
 export const LEDGER_TABLE_NAMES = [
@@ -31,6 +31,7 @@ export const LEDGER_TABLE_NAMES = [
   'meta',
   'coverageIntervals',
   'calendarSnapshots',
+  'activity',
 ] as const;
 
 export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
@@ -64,6 +65,8 @@ export const INDEX_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> 
   coverageIntervals: ['accountKey', 'startMs', 'endMs', 'syncMs', 'kind', 'lenMs'],
   // The snapshot's `readAt` in epoch ms, for the retention purge (./calendar-snapshots.ts).
   calendarSnapshots: ['readMs'],
+  // The epoch ms a row's window spans (a session's instant, an idle interval's ends): range reads (./activity.ts).
+  activity: ['startMs', 'endMs'],
   receiptInputs: [],
   policies: [],
 };

@@ -9,8 +9,8 @@ import type { ImportClaims, PasteClock } from './use-paste-flow';
 const CLOCK: PasteClock = { now: () => IsoTs.parse(nowIso()), offsetAt: browserOffsetAt };
 
 /** Sends the claims, never the text, to the service worker (`claims.import`, sprint_3 3.13). */
-export const sendImport: ImportClaims = async (agent, claims) => {
-  const result = await importClaims(agent, claims);
+export const sendImport: ImportClaims = async (agent, claims, activeAt) => {
+  const result = await importClaims(agent, claims, activeAt);
   return result.ok ? { ok: true, received: result.received, added: result.added } : { ok: false };
 };
 

@@ -235,6 +235,7 @@ describe('purgeExpired removes exactly the old rows', () => {
       // No batch stored replay records for these receipts (tests/unit/ledger/replay-records.spec.ts purges some).
       receiptInputs: 0,
       policies: 0,
+      activity: 0,
     });
   });
 

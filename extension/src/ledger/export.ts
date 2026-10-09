@@ -21,6 +21,7 @@ import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { replayRecords } from './replay-records';
 import {
+  ActivityRecord,
   AdapterHealth,
   Claim,
   CoveragePing,
@@ -53,6 +54,7 @@ export const LedgerExport = z.strictObject({
     meta: z.array(MetaEntry),
     coverageIntervals: z.array(ObserverCoverage).default([]),
     calendarSnapshots: z.array(CalendarRecord).default([]),
+    activity: z.array(ActivityRecord).default([]),
   }),
   /**
    * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
@@ -124,6 +126,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
         await db.coverageIntervals.toArray(),
       ),
       calendarSnapshots: readRows('calendarSnapshots', CalendarRecord, await db.calendarSnapshots.toArray()),
+      activity: readRows('activity', ActivityRecord, await db.activity.toArray()),
     },
     ...(await replayRecords(db)),
   }));

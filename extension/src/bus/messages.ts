@@ -55,6 +55,7 @@ export const LedgerTable = z.enum([
   'meta',
   'coverageIntervals',
   'calendarSnapshots',
+  'activity',
 ]);
 
 export const BusMessageType = z.enum([
@@ -226,6 +227,8 @@ export const ClaimsImportMessage = z
     type: z.literal('claims.import'),
     agent: AgentId,
     claims: z.array(Claim).min(1).max(SCHEMA_LIMITS.BATCH),
+    /** The minutes the log's timed entries name (sprint_3 3.14): the agent's session pings, instants only. */
+    activeAt: z.array(IsoTs).max(SCHEMA_LIMITS.GRADING_INPUT),
   })
   .superRefine((message, ctx) => {
     message.claims.forEach((claim, index) => {

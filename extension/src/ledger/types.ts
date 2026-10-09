@@ -8,7 +8,9 @@
 import { z } from 'zod';
 
 import { PolicyDocument } from '../core/policy-document';
+import { instantMs } from '../core/normalize';
 import {
+  AgentId,
   ComponentId,
   Coverage,
   GradeContext,
@@ -74,6 +76,22 @@ export const ReceiptInputs = z.strictObject({
 /** A `receiptInputs` row: the inputs keyed by the receipt's `inputsHash`. */
 export const ReceiptInputsRecord = ReceiptInputs.extend({ inputsHash: Sha256 });
 
+/**
+ * An `activity` row (sprint_3 3.14, ./activity.ts): a moment an agent's own log says it worked (`session`: a pasted
+ * entry's time), or an interval Chrome reported the person away (`idle`, opt-in), `from` no later than `to`. Instants
+ * and an agent id only. `id` is the SHA-256 that keeps each once.
+ */
+export const ActivityRecord = z
+  .discriminatedUnion('kind', [
+    z.strictObject({ id: Sha256, kind: z.literal('session'), agent: AgentId, at: IsoTs }),
+    z.strictObject({ id: Sha256, kind: z.literal('idle'), from: IsoTs, to: IsoTs }),
+  ])
+  .superRefine((record, ctx) => {
+    if (record.kind === 'idle' && instantMs(record.from) > instantMs(record.to)) {
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'an interval ends at or after it starts' });
+    }
+  });
+
 /** A `policies` row: a policy document as policy/default.json writes one, keyed by its `policyHash`. */
 export const PolicyRecord = z.strictObject({ policyHash: Sha256, document: PolicyDocument });
 
@@ -81,5 +99,7 @@ export type CoveragePing = z.infer<typeof CoveragePing>;
 export type CoveragePingInput = z.input<typeof CoveragePing>;
 export type MetaEntry = z.infer<typeof MetaEntry>;
 export type ReceiptInputs = z.infer<typeof ReceiptInputs>;
+export type ActivityRecord = z.infer<typeof ActivityRecord>;
+export type ActivityRecordInput = z.input<typeof ActivityRecord>;
 export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;
 export type PolicyRecord = z.infer<typeof PolicyRecord>;

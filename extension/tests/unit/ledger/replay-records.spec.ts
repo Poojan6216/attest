@@ -136,7 +136,7 @@ describe('v4 → v5', () => {
     old.close();
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(MIGRATIONS.at(-1)?.version); // v5, then v6's activity store (sprint_3 3.14)
     expect(await getReceipt(db, Receipt.parse(makeReceipt()).id)).toEqual(Receipt.parse(makeReceipt()));
     expect([await db.receiptInputs.count(), await db.policies.count()]).toEqual([0, 0]);
     expect(db.table('receiptInputs').schema.indexes.map((index) => index.name)).toEqual(['policyHash']);

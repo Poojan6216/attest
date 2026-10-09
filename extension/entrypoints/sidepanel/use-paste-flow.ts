@@ -22,8 +22,15 @@ export interface PasteClock {
 export type ImportOutcome =
   { readonly ok: true; readonly received: number; readonly added: number } | { readonly ok: false };
 
-/** Sends the claims, never the text, to the service worker (`claims.import`, sprint_3 3.13). */
-export type ImportClaims = (agent: AgentId, claims: readonly Claim[]) => Promise<ImportOutcome>;
+/**
+ * Sends the claims and the minutes the log names, never the text, to the service worker (`claims.import`, sprint_3
+ * 3.13, 3.14).
+ */
+export type ImportClaims = (
+  agent: AgentId,
+  claims: readonly Claim[],
+  activeAt: readonly IsoTs[],
+) => Promise<ImportOutcome>;
 
 export interface FormStep {
   readonly kind: 'form';
@@ -127,9 +134,9 @@ export function usePasteFlow(clock: PasteClock, onImport: ImportClaims): PasteFl
   };
   const importNow = async (current: PreviewStep): Promise<void> => {
     go({ ...current, importing: true, failed: false }, null);
-    const outcome = await onImport(current.agent, current.log.claims).catch((): ImportOutcome => ({
-      ok: false,
-    }));
+    const outcome = await onImport(current.agent, current.log.claims, current.log.activeAt).catch(
+      (): ImportOutcome => ({ ok: false }),
+    );
     if (outcome.ok) {
       setNotice(importedNotice(outcome.received, outcome.added));
       go(CLOSED, 'add');

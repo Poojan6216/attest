@@ -30,6 +30,8 @@ export const LOG_EVENTS = [
   'grading.batch',
   'grading.batch_out_of_order',
   'grading.failed',
+  'idle.forgotten',
+  'idle.record_failed',
   'import.refused',
   'import.stored',
   'install.details_invalid',
@@ -189,6 +191,7 @@ export const LOG_VALUES = [
   'meta',
   'coverage_intervals',
   'calendar_snapshots',
+  'activity',
   'receipt_inputs',
   'policies',
   // Alarm names (src/config.ts ALARM_NAMES).

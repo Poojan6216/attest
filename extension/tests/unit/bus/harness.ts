@@ -264,6 +264,7 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     type: 'claims.import',
     agent: 'muse',
     claims: [IMPORTED_CLAIM],
+    activeAt: [IMPORTED_CLAIM.claimedAt],
   }),
 };
 

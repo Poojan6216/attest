@@ -56,8 +56,8 @@ function claimsOf(lines: readonly string[]): Claim[] {
   return [...read.log.claims];
 }
 
-const message = (claims: readonly Claim[]) =>
-  ClaimsImportMessage.parse({ type: 'claims.import', agent: 'muse', claims });
+const message = (claims: readonly Claim[], activeAt: readonly string[] = []) =>
+  ClaimsImportMessage.parse({ type: 'claims.import', agent: 'muse', claims, activeAt });
 
 async function setup(
   policy = DEFAULT_POLICY,
@@ -96,8 +96,21 @@ describe('claims.import', () => {
       ['email.sent', 'UNVERIFIABLE', 'PENDING', 'no_coverage'],
       ['subscription.changed', 'UNVERIFIABLE', 'FINAL', 'underspecified'],
     ]);
-    expect(notify.mock.calls).toEqual([[['claims', 'grants', 'meta']], [['receipts']]]);
+    expect(notify.mock.calls).toEqual([[['claims', 'activity', 'grants', 'meta']], [['receipts']]]);
     expect(JSON.stringify(records)).not.toContain('sam@example.com');
+  });
+
+  it('stores the minutes the log names as Muse’s session pings, each once (sprint_3 3.14)', async () => {
+    const { db, ctx } = await setup();
+    const minutes = ['2026-10-08T16:33:00-04:00', '2026-10-08T16:40:00-04:00'];
+    await onClaimsImport(ctx, message(claimsOf(LOG), minutes));
+    pinClock('2026-10-08T17:05:00-04:00');
+    await onClaimsImport(ctx, message(claimsOf(LOG), minutes));
+    const rows = await db.activity.toArray();
+    expect(rows.map((row) => [row.kind, row.kind === 'session' ? row.agent : null]).sort()).toEqual([
+      ['session', 'muse'],
+      ['session', 'muse'],
+    ]);
   });
 
   it('a log pasted twice adds nothing the second time', async () => {

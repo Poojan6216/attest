@@ -69,7 +69,7 @@ const UNIT_MS: Readonly<Record<ClaimPrecision, number>> = {
 };
 
 /** When a turn was written, as a claim states it (§4.1). */
-interface Stated {
+export interface Stated {
   readonly at: IsoTs;
   readonly precision: ClaimPrecision;
   /** `day` precision only: the next local midnight. */
@@ -97,7 +97,7 @@ function relative(text: string, ctx: FactsContext): Stated | null {
 }
 
 /** The time the page shows for a turn, or null when it shows none, none either reader reads, or one after the pass. */
-function statedTime(time: string | null, ctx: FactsContext): Stated | null {
+export function statedTime(time: string | null, ctx: FactsContext): Stated | null {
   if (time === null) return null;
   const text = oneLine(time);
   const iso = inUserOffset(text, ctx.offsetAt);

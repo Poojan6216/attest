@@ -29,7 +29,8 @@
  *     (./calendar-snapshots.ts): a range not looked at since is compared with nothing next time, so its events are
  *     first sightings again, never changes (Hard Rule 5). An interval's `changesSince` is an instant of looking,
  *     not of the window, and is kept as it is.
- *  7. The replay records go with their receipts (sprint_3 3.13, ./replay-records.ts): the `receiptInputs` rows keyed
+ *  7. Session pings and idle intervals (./activity.ts) go once their window ended before C.
+ *  8. The replay records go with their receipts (sprint_3 3.13, ./replay-records.ts): the `receiptInputs` rows keyed
  *     by the purged receipts' `inputsHash`, then every policy document no stored input names any more, in this
  *     same transaction.
  * Grants, adapter health and meta are not dated history and are kept.
@@ -54,6 +55,7 @@ import { MS_PER_DAY } from '../core/units';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { bucketOfMs } from './index';
+import { purgeActivity } from './activity';
 import { purgeCalendarRecords } from './calendar-snapshots';
 import { purgeReplayRecords } from './replay-records';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
@@ -80,6 +82,8 @@ export interface PurgeReport {
   readonly coveragePings: number;
   /** Calendar snapshot records deleted. */
   readonly calendarSnapshots: number;
+  /** Activity rows deleted: session pings and idle intervals that ended before the cutoff (./activity.ts). */
+  readonly activity: number;
   /** Replay records deleted: the purged receipts' inputs, and the policy documents no input names any more. */
   readonly receiptInputs: number;
   readonly policies: number;
@@ -297,6 +301,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.coverage,
     db.coverageIntervals,
     db.calendarSnapshots,
+    db.activity,
     db.receiptInputs,
     db.policies,
   ];
@@ -326,6 +331,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       coverageCut: coverage.cut,
       coveragePings: await purgeCoveragePings(db, cutoffMs),
       calendarSnapshots: await purgeCalendarRecords(db, cutoffMs),
+      activity: await purgeActivity(db, cutoffMs),
       receiptInputs: replay.receiptInputs,
       policies: replay.policies,
     };

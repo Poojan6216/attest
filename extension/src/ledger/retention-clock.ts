@@ -83,6 +83,7 @@ export async function purgeAtTrustedClock(db: LedgerDb, options: PurgeOptions): 
     db.coverage,
     db.coverageIntervals,
     db.calendarSnapshots,
+    db.activity,
     db.receiptInputs,
     db.policies,
   ];

@@ -212,7 +212,7 @@ describe('claims.import (sprint_3 3.13)', () => {
     const result: ClaimsImportResult = { ok: true, received: 1, added: 1 };
     const handler = vi.fn<BusHandler<'claims.import'>>(() => Promise.resolve(result));
     listen({ 'claims.import': handler });
-    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual(result);
+    await expect(importClaims('muse', [IMPORTED_CLAIM], [IMPORTED_CLAIM.claimedAt])).resolves.toEqual(result);
     expect(handler.mock.calls[0]?.[0]).toEqual(VALID['claims.import']);
     expect(eventsAt(records, 'warn')).toEqual([]);
   });
@@ -231,7 +231,9 @@ describe('claims.import (sprint_3 3.13)', () => {
       fields: { reason: 'untrusted_context', type: 'claims.import' },
     });
   });
+});
 
+describe('claims.import: malformed and failed (sprint_3 3.13)', () => {
   it('malformed: a field the schema does not name is dropped, and nothing of it is logged', async () => {
     connectAs(SENDER_OF['claims.import']());
     const handler = vi.fn<BusHandler<'claims.import'>>(() =>
@@ -253,8 +255,14 @@ describe('claims.import (sprint_3 3.13)', () => {
       'claims.import': () =>
         (answers.shift() ?? (() => Promise.resolve({})))() as Promise<ClaimsImportResult>,
     });
-    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual({ ok: false, code: 'failed' });
-    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual({ ok: false, code: 'failed' });
+    await expect(importClaims('muse', [IMPORTED_CLAIM], [IMPORTED_CLAIM.claimedAt])).resolves.toEqual({
+      ok: false,
+      code: 'failed',
+    });
+    await expect(importClaims('muse', [IMPORTED_CLAIM], [IMPORTED_CLAIM.claimedAt])).resolves.toEqual({
+      ok: false,
+      code: 'failed',
+    });
     expect(eventsAt(records, 'error').map((record) => record.event)).toEqual([
       'bus.handler_failed',
       'bus.handler_failed',

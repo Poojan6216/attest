@@ -1,6 +1,6 @@
 # Attest privacy policy
 
-Version 0.1. Effective 8 October 2026 (version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
+Version 0.2. Effective 8 October 2026 (version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
@@ -8,7 +8,7 @@ Nothing leaves your browser. Attest reads only pages you have open, keeps what i
 
 ## Where things stand today
 
-Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. It does not read your AI agents' pages: Meta (Muse), OpenAI (ChatGPT) and Anthropic (Claude) do not allow collecting data from their sites by automated means, so Attest's readers for them are off, and stay off unless those companies permit them. It stores no requests, claims or receipts yet and grades nothing.
+Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. It does not read your AI agents' pages: Meta (Muse), OpenAI (ChatGPT) and Anthropic (Claude) do not allow collecting data from their sites by automated means, so Attest's readers for them are off, and stay off unless those companies permit them. Instead, you can paste an agent's own activity log into Attest's side panel: Attest reads the paste there, keeps only the actions it finds and the minutes the log names, and checks each action against your Gmail and Calendar. The text you paste is never stored.
 
 The rest of this policy describes how later versions will work, so you can judge the design before Attest reads anything. Any version that changes what is read, stored or sent updates this policy first.
 
@@ -44,6 +44,9 @@ It also keeps:
 - the limits you set for each agent, and the names of the apps and accounts each agent's settings page shows as connected
 - when your Gmail and Calendar tabs were open and whether you were active in them, with a fingerprint of the account instead of its address, so a receipt can say UNVERIFIABLE when Attest could not see, and can flag sends made while you were away
 - whether each page reader is working
+- for an activity log you paste: the actions it reports, kept as above, and the minutes its entries name, which show when the agent was working; never the text you pasted
+- for each receipt, what it was checked with (which tabs had been seen and when, the limits you set for the agent, and the rules in force), so the receipt can be checked again later from your export
+- only if you turn on away detection in the options page: when each time you were away from this computer began and ended, as Chrome reports it, and nothing else
 - for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, its first guest's email address, and a one-way fingerprint of each guest's address (never the address), so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
 
 It never stores email bodies, attachments, chat transcripts or full pages. The full list, table by table and field by field, is in docs/privacy-architecture.md.
@@ -76,7 +79,7 @@ Attest deletes stored facts once they are 90 days old; the purge runs once a day
 
 ## Deleting your data
 
-Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
+Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. Turning away detection off deletes every time away it kept. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
 
 ## Permissions
 
@@ -85,6 +88,10 @@ Attest 0.0.1 asks Chrome for:
 - storage, to keep settings and the install id
 - alarms, to schedule checks
 - side panel, to show receipts beside the page you are on
+
+Only if you turn on away detection in the options page, it then asks for one more:
+
+- idle, to know when you are away from this computer; turning the feature off gives it back
 
 It asks for access to two websites, to read them in tabs you open: mail.google.com and calendar.google.com. A later version adds an AI agent's site only if its maker permits Attest to read it, and nothing broader.
 
