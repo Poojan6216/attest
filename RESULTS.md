@@ -12,20 +12,20 @@ Measured 2026-10-09 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 377.8 |
-| lookupMinMs | 337.3 |
-| lookupMaxMs | 580.5 |
-| lookupCpuMedianMs | 402.5 |
-| indexBuildMedianMs | 167.3 |
-| buildPlusLookupMedianMs | 565 |
+| lookupMedianMs | 369.6 |
+| lookupMinMs | 323.8 |
+| lookupMaxMs | 401.7 |
+| lookupCpuMedianMs | 373.9 |
+| indexBuildMedianMs | 160.3 |
+| buildPlusLookupMedianMs | 527.2 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1237 |
-| gradingMinMs | 1164.1 |
-| gradingMaxMs | 1687.2 |
-| gradingCpuMedianMs | 1405.3 |
+| gradingMedianMs | 1099.6 |
+| gradingMinMs | 1069 |
+| gradingMaxMs | 1405.6 |
+| gradingCpuMedianMs | 1271.6 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,7 +33,7 @@ Measured 2026-10-09 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -66,7 +66,7 @@ Measured 2026-10-09 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -98,7 +98,7 @@ Measured 2026-10-09 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -114,7 +114,7 @@ Measured 2026-10-09 with `pnpm bench`.
 | pasteAccuracyThreshold | 0.95 |
 | pasteCorpusInvented | true |
 | pasteGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -139,7 +139,34 @@ Measured 2026-10-09 with `pnpm bench`.
 | patternsAccuracyThreshold | 0.9 |
 | patternsCorpusInvented | true |
 | patternsGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## popup
+
+Measured 2026-10-09 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| popupReceipts | 5000 |
+| popupRuns | 5 |
+| popupRows | 50 |
+| popupFirstPaintMedianMs | 60 |
+| popupFirstPaintMinMs | 56 |
+| popupFirstPaintMaxMs | 64 |
+| popupDayPaintMedianMs | 96 |
+| popupDayPaintMinMs | 92 |
+| popupDayPaintMaxMs | 112 |
+| popupCpuMedianMs | 76 |
+| popupCpuMinMs | 67.4 |
+| popupCpuMaxMs | 84 |
+| popupChromeMajor | 153 |
+| popupTrace | bench/traces/popup-paint.zip |
+| popupPaintGateMs | 100 |
+| popupPaintGateMetric | popupFirstPaintMedianMs |
+| popupPaintGatePassed | true |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -186,7 +213,7 @@ Measured 2026-10-09 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -201,17 +228,17 @@ Measured 2026-10-09 with `pnpm bench`.
 | uiPopupItems | 50 |
 | uiPopupReceiptRowsRead | 204 |
 | uiPopupFullScans | 0 |
-| uiPopupMedianMs | 16.8 |
-| uiPopupMinMs | 12.6 |
-| uiPopupMaxMs | 17.6 |
-| uiPopupCpuMedianMs | 18 |
-| uiTimelineCpuMedianMs | 14.5 |
-| uiFilteredCpuMedianMs | 19.8 |
-| uiDetailCpuMedianMs | 1.1 |
+| uiPopupMedianMs | 15.3 |
+| uiPopupMinMs | 11.1 |
+| uiPopupMaxMs | 16.5 |
+| uiPopupCpuMedianMs | 17.9 |
+| uiTimelineCpuMedianMs | 9.5 |
+| uiFilteredCpuMedianMs | 21.8 |
+| uiDetailCpuMedianMs | 0.9 |
 | uiGateMs | 50 |
 | uiGateMetric | uiPopupCpuMedianMs |
 | uiGatePassed | true |
 | uiTimelineGatePassed | true |
-| commit | c684e497a053959ad81b3b0b01cfde85554772f8 |
+| commit | ccf101477e0134bc729dc755cddcac2b20bbd8dc |
 | commitDirty | false |
 | node | v22.14.0 |
