@@ -15,6 +15,8 @@ export const DB_NAME = 'attest';
 export const STORAGE_KEYS = {
   INSTALL_ID: 'attest.installId',
   FLAGS: 'attest.flags',
+  /** The page readers the person turned off (sprint_4 4.5; src/background/readers.ts). */
+  READERS_OFF: 'attest.readersOff',
 } as const;
 
 /**
@@ -53,6 +55,17 @@ export const OBSERVER_HOSTS: Readonly<Record<'gmail' | 'gcal', readonly string[]
   gmail: Object.freeze(['https://mail.google.com/*']),
   gcal: Object.freeze(['https://calendar.google.com/*']),
 });
+
+/**
+ * The page readers a person can turn off in the options page (sprint_4 4.5): one per site of `OBSERVER_HOSTS`, each
+ * the content script of that name (entrypoints/content/<reader>.content.ts), registered while it is on.
+ */
+export const READERS = Object.freeze([
+  'gmail',
+  'gcal',
+] as const satisfies readonly (keyof typeof OBSERVER_HOSTS)[]);
+
+export type ReaderId = (typeof READERS)[number];
 
 /**
  * Host match patterns for the agent pages (Hard Rule 8). A host enters the manifest's `host_permissions` only with the
@@ -169,6 +182,12 @@ export const PAGE_TICK_MS = 30_000;
 export const RETENTION_DAYS = 90;
 
 /**
+ * The retention windows a person may choose in the options page (sprint_4 4.5), in days; `RETENTION_DAYS` until they
+ * choose. Stored in ledger meta (src/ledger/settings.ts), read by the daily purge.
+ */
+export const RETENTION_CHOICES = Object.freeze([30, 90, 180] as const);
+
+/**
  * How far one purge may move past the purge before it when the ledger stored nothing newer (src/ledger/
  * retention-clock.ts, SEC-5): the purge trusts the wall clock only up to the latest instant the ledger stored, or the
  * last purge's instant plus this, so a clock that jumped far ahead deletes no current history, while a ledger left
@@ -255,6 +274,12 @@ export const POPUP_RECEIPT_LIMIT = 50;
 export const TIMELINE_PAGE_SIZE = 50;
 
 /**
+ * Rows per read when the options page builds an export file (sprint_4 4.5; src/ledger/export-file.ts): each table is
+ * read this many keys at a time, never whole, and each page is written into the file before the next is read.
+ */
+export const EXPORT_PAGE_SIZE = 500;
+
+/**
  * How recent an observer's last check must be for the coverage header to say "checked" rather than "not checked since"
  * (sprint_4 4.1; agents/ux_engineer.md rule 2). An open Gmail or Calendar tab reports at least every 5 minutes even
  * hidden (PAGE_RESYNC_HIDDEN_MS), so a check older than this means the tab was closed or asleep.
@@ -267,3 +292,9 @@ export const COVERAGE_FRESH_MINUTES = 10;
  * and nothing is sent unless the person follows it.
  */
 export const ISSUES_URL = 'https://github.com/Poojan6216/attest/issues/new';
+
+/**
+ * The privacy architecture document on the project's repository (agents/ux_engineer.md rule 8: the options page's
+ * first line links to it; sprint_4 4.5). Opened by the person's click, in a new tab; nothing is sent.
+ */
+export const PRIVACY_DOC_URL = 'https://github.com/Poojan6216/attest/blob/main/docs/privacy-architecture.md';

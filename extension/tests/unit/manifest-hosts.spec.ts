@@ -39,7 +39,7 @@ describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)',
   });
 
   it('ask for one optional permission, idle, and only when the person turns away detection on (sprint_3 3.14)', () => {
-    expect(manifest().permissions).toEqual(['storage', 'alarms']);
+    expect(manifest().permissions).toEqual(['storage', 'alarms', 'scripting']);
     expect(manifest().optional_permissions).toEqual(['idle']);
   });
 
@@ -51,9 +51,11 @@ describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)',
     expect(block).not.toHaveProperty('externally_connectable');
   });
 
-  it('keep the permissions and CSP unchanged', () => {
+  it('keep the permissions and CSP unchanged: scripting only to register the page readers (sprint_4 4.5)', () => {
     const block = manifest();
-    expect(block.permissions).toEqual(['storage', 'alarms']);
+    // `scripting` registers the readers' content scripts at runtime, so one the person turns off is unregistered
+    // (src/background/readers.ts; Decisions [4.5]). It reaches no host beyond host_permissions.
+    expect(block.permissions).toEqual(['storage', 'alarms', 'scripting']);
     expect(block.content_security_policy).toEqual({
       extension_pages: "script-src 'self'; object-src 'none'",
     });

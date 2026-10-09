@@ -6,6 +6,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { ensureAlarms, handleAlarm } from '../src/background/alarms';
 import { type IdleApi, onPermissionsRemoved, watchIdle } from '../src/background/idle';
 import { onInstalled } from '../src/background/install';
+import { syncReaders } from '../src/background/readers';
 import { createHandlers } from '../src/background/router';
 import { listen } from '../src/bus/listen';
 import { log } from '../src/log';
@@ -41,6 +42,11 @@ export default defineBackground({
       onPermissionsRemoved(removed).catch((error: unknown) => {
         log.error('idle.record_failed', { error });
       });
+    });
+
+    // The page readers' content scripts are registered at runtime, as the person chose (sprint_4 4.5).
+    syncReaders().catch((error: unknown) => {
+      log.error('readers.sync_failed', { error });
     });
 
     log.info('background.started');

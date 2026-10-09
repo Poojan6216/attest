@@ -23,6 +23,9 @@ import { browserOffsetAt } from '../../src/observers/time-zone';
 export default defineContentScript({
   matches: [...OBSERVER_HOSTS.gcal],
   runAt: 'document_idle',
+  // Registered by the service worker while the person keeps this reader on (src/background/readers.ts, sprint_4 4.5),
+  // never in the manifest: a reader turned off has no registration.
+  registration: 'runtime',
   // WXT's start-up handshake must not post a message the vendor page can read.
   noScriptStartedPostMessage: true,
   main() {

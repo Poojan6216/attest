@@ -293,17 +293,20 @@ function startOptions(overrides: Partial<StartOptions>): Omit<StartOptions, 'use
   };
 }
 
-/** A post rejected because this content script lost its extension: reloaded, updated or removed under the page. */
-const contextLost = (error: unknown): boolean =>
-  error instanceof BusError && error.code === 'context_invalidated';
+/**
+ * A post rejected for good: this content script lost its extension (reloaded, updated or removed under the page), or
+ * the person turned its page reader off (sprint_4 4.5: the service worker answered `reader_off`).
+ */
+const stopsForGood = (error: unknown): boolean =>
+  error instanceof BusError && (error.code === 'context_invalidated' || error.code === 'reader_off');
 
-/** `post`, calling `stop` when it rejects because the extension context is gone; the rejection still ends the pass. */
+/** `post`, calling `stop` when it rejects for good (`stopsForGood`, or no context); the rejection still ends the pass. */
 function stoppingWhenGone(post: Post, contextAlive: () => boolean, stop: () => void): Post {
   return async (message) => {
     try {
       return await post(message);
     } catch (error) {
-      if (contextLost(error) || !contextAlive()) stop();
+      if (stopsForGood(error) || !contextAlive()) stop();
       throw error;
     }
   };

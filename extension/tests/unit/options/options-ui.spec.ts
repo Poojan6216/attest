@@ -13,6 +13,7 @@ import { browser } from 'wxt/browser';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import { App as OptionsApp } from '../../../entrypoints/options/App';
+import { AgentReaders } from '../../../entrypoints/options/components/AgentReaders';
 import { InstallIdPanel } from '../../../entrypoints/options/components/InstallIdPanel';
 import { ResetInstallIdControl } from '../../../entrypoints/options/components/ResetInstallIdControl';
 import { SECTIONS, sectionTitle } from '../../../entrypoints/options/sections';
@@ -96,12 +97,15 @@ describe('options App', () => {
     expect(navLinks).toEqual(SECTIONS.map((s) => [`#${s.id}`, s.title]));
     const headings = Array.from(root.querySelectorAll('section > h2')).map((el) => el.textContent);
     expect(headings).toEqual(SECTIONS.map((s) => s.title));
-    // Stubs say they are not built and carry no controls; the buttons are away detection (off on a fresh install,
-    // sprint_3 3.14), the export and the reset.
+    // Stubs say they are not built and carry no controls. With no ledger to read here (no IndexedDB), the grants and
+    // the readers say they could not be read and show no form; the buttons are away detection (off on a fresh
+    // install, sprint_3 3.14), the two exports, the reset and Delete all data (sprint_4 4.5).
     expect(Array.from(root.querySelectorAll('button')).map((b) => b.textContent.trim())).toEqual([
       'Turn on',
       'Export ledger',
+      'Export receipts',
       'Reset install id',
+      'Delete all data',
     ]);
     expect(root.querySelector('#install-id-value')?.textContent).toBe(ID_A);
   });
@@ -112,26 +116,22 @@ describe('options App', () => {
   });
 });
 
-describe('the Adapters section (sprint_3 3.10)', () => {
-  it("lists each reader, on or off, and why: Muse, ChatGPT and Claude off under their makers' terms", async () => {
-    render(h(OptionsApp, null), root);
+describe("the Adapters section: the agents' readers (sprint_3 3.10)", () => {
+  it("lists Muse, ChatGPT and Claude off under their makers' terms, with no control", async () => {
+    render(h(AgentReaders, null), root);
     await settle();
-    const section = root.querySelector('#adapters');
-    if (section === null) throw new Error('no Adapters section');
-    const items = Array.from(section.querySelectorAll('li'), (item) => item.textContent);
-    expect(items).toHaveLength(4);
-    expect(items[0]).toContain('Gmail and Google Calendar');
-    expect(items[0]).toContain('On');
+    const items = Array.from(root.querySelectorAll('li'), (item) => item.textContent);
+    expect(items).toHaveLength(3);
     for (const [index, vendor] of [
-      [1, 'Meta'],
-      [2, 'OpenAI'],
-      [3, 'Anthropic'],
+      [0, 'Meta'],
+      [1, 'OpenAI'],
+      [2, 'Anthropic'],
     ] as const) {
       expect(items[index]).toContain('Off');
       expect(items[index]).toContain(`${vendor}'s terms`);
       expect(items[index]).toContain('permission');
     }
-    expect(section.querySelectorAll('button, input, select')).toHaveLength(0);
+    expect(root.querySelectorAll('button, input, select')).toHaveLength(0);
   });
 });
 

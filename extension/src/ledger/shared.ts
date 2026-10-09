@@ -4,6 +4,9 @@
  * retention code, all of which ran at the popup's start before (sprint_4 4.2: the popup paints in under 100 ms).
  * src/ledger/repo.ts re-exports both functions.
  */
+import { Dexie } from 'dexie';
+
+import { DB_NAME } from '../config';
 import { log } from '../log';
 import type { LedgerDb } from './db';
 import { openLedger } from './migrations';
@@ -35,4 +38,14 @@ export async function closeLedger(): Promise<void> {
   } catch (error) {
     log.warn('ledger.close_skipped', { error });
   }
+}
+
+/**
+ * Deletes the ledger's database (sprint_4 4.5, Delete all data): closes this context's instance, then deletes the
+ * database once every other connection closed (Dexie closes a page's when Chrome asks it to; that page opens a new,
+ * empty one at its next read, after the delete). The next `getLedger()` here opens a new, empty ledger.
+ */
+export async function deleteLedger(): Promise<void> {
+  await closeLedger();
+  await Dexie.delete(DB_NAME);
 }

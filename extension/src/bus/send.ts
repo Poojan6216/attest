@@ -31,8 +31,12 @@ import {
   ClaimsImportResult,
   type GrantSaveMessage,
   GrantSaveResult,
+  type LedgerWipeMessage,
+  type ReaderToggleMessage,
   type ReceiptEventMessage,
   ReceiptEventResult,
+  type RetentionSaveMessage,
+  SettingResult,
 } from './messages';
 
 /**
@@ -174,6 +178,29 @@ export async function sendGrant(
 }
 
 /**
+ * Sends one of a person's settings to the service worker (sprint_4 4.5: `retention.save`, `reader.toggle`,
+ * `ledger.wipe`) and resolves its `SettingResult`: for a valid message it always resolves, an absent or malformed
+ * answer becoming `{ ok: false, code: 'failed' }` (logged as `bus.setting_unavailable` with the type). An invalid
+ * message is never sent: it is logged (`bus.setting_refused`) and rejects with `BusError('invalid_outgoing')`.
+ */
+export async function sendSetting(
+  message: RetentionSaveMessage | ReaderToggleMessage | LedgerWipeMessage,
+): Promise<SettingResult> {
+  let response: unknown;
+  try {
+    response = await send(message);
+  } catch (error) {
+    log.warn('bus.setting_refused', { type: message.type, error });
+    throw error;
+  }
+  const parsed = SettingResult.safeParse(response);
+  if (parsed.success) return parsed.data;
+  const reason = response === undefined ? 'no_response' : 'malformed_result';
+  log.warn('bus.setting_unavailable', { type: message.type, reason });
+  return { ok: false, code: 'failed' };
+}
+
+/**
  * Sends one acknowledged message (messages.ts ACKED_TYPES) and resolves the service worker's `BusAck`, whether it
  * says `ok` or not. Rejects with a `BusError`: `invalid_outgoing` (an invalid or unacknowledged message, never
  * sent), the transport's code (`no_receiver`, `port_closed`, `context_invalidated`, `send_failed`), or
@@ -214,13 +241,14 @@ export function extensionContextAlive(): boolean {
 
 /**
  * The `post` a content script gives the observer skeleton (src/observers/base.ts `Post`): resolves once the service
- * worker stored the message, and rejects with a `BusError` when it refused any of it (`refused`; the refusal's code
- * is logged at debug as `bus.refused`) or the message never arrived. The skeleton then stops the pass, so no
- * coverage follows a row that was not stored (Hard Rule 5).
+ * worker stored the message, and rejects with a `BusError` when it refused any of it (`refused`, or `reader_off` when
+ * the person turned this page's reader off; the refusal's code is logged at debug as `bus.refused`) or the message
+ * never arrived. The skeleton then stops the pass, so no coverage follows a row that was not stored (Hard Rule 5), and
+ * on `reader_off` it stops the observer.
  */
 export async function postAcked(message: BusMessage): Promise<void> {
   const ack = await sendChecked(message);
   if (ack.ok) return;
   log.debug('bus.refused', { type: message.type, code: ack.code });
-  throw new BusError('refused');
+  throw new BusError(ack.code === 'reader_off' ? 'reader_off' : 'refused');
 }

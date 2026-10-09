@@ -11,16 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import background from '../../../entrypoints/background';
 import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES, STORAGE_KEYS } from '../../../src/config';
 import { type LogRecord, setLogSink } from '../../../src/log';
-import { asFreshInstall } from './chrome-fakes';
+import { asFreshInstall, type FakeScripting } from './chrome-fakes';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let records: LogRecord[] = [];
 let restoreSink: () => void = () => undefined;
+let scripting: FakeScripting;
 
 beforeEach(() => {
   fakeBrowser.reset();
-  asFreshInstall();
+  scripting = asFreshInstall();
   records = [];
   restoreSink = setLogSink((record) => {
     records.push(record);
@@ -39,8 +40,11 @@ async function storedId(): Promise<unknown> {
 }
 
 describe('background main()', () => {
-  it('logs its start once', () => {
-    expect(events()).toEqual(['info:background.started']);
+  it('logs its start once, and registers every page reader, each on until the person turns it off (sprint_4 4.5)', async () => {
+    await vi.waitFor(() => {
+      expect([...scripting.registered.keys()].sort()).toEqual(['gcal', 'gmail']);
+    });
+    expect(events()).toEqual(['info:background.started', 'info:readers.synced']);
   });
 
   it('on install: creates the install id, then schedules the purge alarm with its period', async () => {

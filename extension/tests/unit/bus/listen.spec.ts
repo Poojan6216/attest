@@ -119,7 +119,7 @@ describe('drops: malformed, unknown and unhandled messages', () => {
     const handlers = { 'adapter.health': vi.fn(), 'ui.query': vi.fn() };
     listen(handlers);
 
-    await sendRaw({ type: 'ledger.wipe', confirm: true });
+    await sendRaw({ type: 'ledger.erase', confirm: true });
     await sendRaw({ type: SECRET });
 
     expect(handlers['adapter.health']).not.toHaveBeenCalled();

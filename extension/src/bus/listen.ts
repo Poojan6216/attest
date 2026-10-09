@@ -10,8 +10,8 @@
  *  1. sender is this extension (`sender.id === runtime.id`, both known), else drop `foreign_sender`;
  *     this runs before parsing, so a foreign message is never parsed (only `type` is read, for the log);
  *  2. it parses as a `BusMessage`, else drop `malformed` (unknown types land here too);
- *  3. `ui.query` and the pages' commands (`claims.import`, `receipt.event`, `grant.save`) come from an extension page,
- *     never a content script, else drop
+ *  3. `ui.query` and the pages' commands (`claims.import`, and ./page-commands.ts: `receipt.event`, `grant.save`,
+ *     `retention.save`, `reader.toggle`, `ledger.wipe`) come from an extension page, never a content script, else drop
  *     `untrusted_context`;
  *  4. a handler exists for its type, else drop `no_handler`.
  * A dropped message gets no response (the listener returns false) and one `bus.dropped` record: a warning,
@@ -21,9 +21,8 @@
  * A handled message is always answered (classic protocol: return true, call `sendResponse` once the
  * handler settles), so the sender never sees a closed port for a message that was processed.
  * `ui.query` handlers answer with a `ui.result`, each page command's handler with its own result (`ClaimsImportResult`,
- * `ReceiptEventResult`, `GrantSaveResult`), and the
- * handlers of acknowledged messages (observer health, rows,
- * coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is validated before it leaves, and
+ * `ReceiptEventResult`, `GrantSaveResult`, `SettingResult`), and the handlers of acknowledged messages (observer
+ * health, rows, coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is validated before it leaves, and
  * a handler that throws or answers badly is answered `handler_failed` / `{ ok: false, code: 'failed' }` and logged
  * at error (fail loud). Every other handler is acknowledged with `undefined`. The listener never throws.
  */
@@ -41,6 +40,7 @@ import {
   type BusMessageType,
   GrantSaveResult,
   ReceiptEventResult,
+  SettingResult,
   isAckedType,
   isBusMessageType,
   type UiQueryMessage,
@@ -65,9 +65,14 @@ export type BusHandlerResult<T extends BusMessageType> = T extends 'ui.query'
       ? ReceiptEventResult | Promise<ReceiptEventResult>
       : T extends 'grant.save'
         ? GrantSaveResult | Promise<GrantSaveResult>
-        : T extends AckedType
-          ? BusAck | Promise<BusAck>
-          : unknown;
+        : T extends SettingCommand
+          ? SettingResult | Promise<SettingResult>
+          : T extends AckedType
+            ? BusAck | Promise<BusAck>
+            : unknown;
+
+/** The page commands that answer a `SettingResult`. */
+type SettingCommand = 'retention.save' | 'reader.toggle' | 'ledger.wipe';
 
 export type BusHandler<T extends BusMessageType> = (
   message: BusMessageOf<T>,
@@ -88,6 +93,9 @@ const EXTENSION_PAGE_ONLY: ReadonlySet<BusMessageType> = new Set<BusMessageType>
   'claims.import',
   'receipt.event',
   'grant.save',
+  'retention.save',
+  'reader.toggle',
+  'ledger.wipe',
 ]);
 
 function typeOf(raw: unknown): BusMessageType | undefined {
@@ -145,7 +153,10 @@ const PAGE_RESULTS = {
   'claims.import': ClaimsImportResult,
   'receipt.event': ReceiptEventResult,
   'grant.save': GrantSaveResult,
-} as const;
+  'retention.save': SettingResult,
+  'reader.toggle': SettingResult,
+  'ledger.wipe': SettingResult,
+} as const satisfies Record<SettingCommand | 'claims.import' | 'receipt.event' | 'grant.save', unknown>;
 
 type PageCommand = keyof typeof PAGE_RESULTS;
 

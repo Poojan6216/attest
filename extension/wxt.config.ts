@@ -21,7 +21,9 @@ import { OBSERVER_HOSTS } from './src/config';
 // the read-only rules (eslint-rules/fences.js ACT_SCOPES: attest/no-act, no ledger imports). WXT only discovers
 // content scripts at the top of entrypoints/, so the hook below adds these, each named by its file. Their `matches`
 // come from src/config.ts OBSERVER_HOSTS: no test build and no other host exists (Decisions.md [2.7]); the E2E tests
-// serve fixtures at the vendors' own addresses through Playwright routing instead.
+// serve fixtures at the vendors' own addresses through Playwright routing instead. Since sprint_4 4.5 each is
+// registered at runtime (`registration: 'runtime'`), by the service worker while the person keeps that reader on
+// (src/background/readers.ts), so the manifest lists none.
 const CONTENT_DIR = path.resolve(import.meta.dirname, 'entrypoints/content');
 const CONTENT_SCRIPT = /^([a-z][a-z0-9-]*)\.content\.ts$/;
 
@@ -126,7 +128,9 @@ export default defineConfig({
     // Never in incognito tabs (Decisions [2.close] S3, SEC-9): the ledger is the regular profile's IndexedDB and
     // outlives an incognito session, so an incognito Gmail or Calendar page is never read (Hard Rules 2, 11).
     incognito: 'not_allowed',
-    permissions: ['storage', 'alarms'],
+    // `scripting` (sprint_4 4.5; Decisions [4.5]): the page readers' content scripts are registered at runtime, so a
+    // reader the person turns off is unregistered (src/background/readers.ts). Host access stays the two observer hosts.
+    permissions: ['storage', 'alarms', 'scripting'],
     // Away detection is opt-in (sprint_3 3.14, Hard Rule 8): the options page asks for it when the person turns it on.
     optional_permissions: ['idle'],
     host_permissions: [...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal],

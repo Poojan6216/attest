@@ -12,6 +12,7 @@
 import type { LedgerTable } from '../bus/messages';
 import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../config';
 import type { ReceiptDetail } from '../ledger/detail';
+import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
 import { log } from '../log';
 import { AgentId, type AdapterHealth, type Grade, type Grant } from '../ledger/types';
@@ -128,6 +129,11 @@ export async function loadHealth(): Promise<AdapterHealth[]> {
 /** The options page's Grants: every agent's grant, and each agent whose alerts are muted. */
 export async function loadGrantSettings(): Promise<GrantSettings> {
   return grantSettings(await getLedger());
+}
+
+/** The retention window in force (sprint_4 4.5): what the options page's Privacy shows. */
+export async function loadRetentionDays(): Promise<RetentionChoice> {
+  return readRetentionDays(await getLedger());
 }
 
 /** Every agent's grant. */

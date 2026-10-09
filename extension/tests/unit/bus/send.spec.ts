@@ -74,6 +74,10 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
       ...VALID['grant.save'],
       grant: { ...VALID['grant.save'].grant, spendCurrency: undefined },
     },
+    // A window the options page does not offer, a reader that is an agent's, a field the wipe does not name.
+    'retention.save': { type: 'retention.save', days: 45 as 30 },
+    'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' as 'gmail' },
+    'ledger.wipe': { type: 'ledger.wipe', ...{ confirm: SECRET } },
   };
 }
 

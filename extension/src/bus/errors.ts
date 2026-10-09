@@ -22,6 +22,8 @@ export const BUS_ERROR_CODES = [
   'invalid_reply',
   /** The service worker answered an acknowledged message with `{ ok: false }`: it refused (part of) it. */
   'refused',
+  /** It answered `reader_off`: the person turned this page's reader off (sprint_4 4.5); the observer stops. */
+  'reader_off',
 ] as const;
 
 export type BusErrorCode = (typeof BUS_ERROR_CODES)[number];

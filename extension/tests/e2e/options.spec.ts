@@ -22,8 +22,22 @@ declare const chrome: WxtBrowser;
 
 const SECTION_TITLES = ['Grants', 'Adapters', 'Privacy', 'Model', 'Export', 'Danger zone'];
 // Grants are editable since sprint_4 4.4 (tests/e2e/grants.spec.ts).
-const STUB_SECTION_IDS = ['adapters', 'model'];
-const INTERACTIVE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+const STUB_SECTION_IDS = ['model'];
+/**
+ * Every tab stop: each enabled control, and of a radio group only its checked radio (the arrow keys move within the
+ * group, which the retention test below walks). A disabled control is no tab stop: the telemetry choice until Sprint 5,
+ * and Save retention until another window is chosen (sprint_4 4.5).
+ */
+const INTERACTIVE = [
+  'a[href]',
+  'button:not(:disabled)',
+  'input:not(:disabled):not([type="radio"])',
+  'input[type="radio"]:checked',
+  'select:not(:disabled)',
+  'textarea:not(:disabled)',
+  'summary',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 
 test.describe('options page', () => {
   test('opens from the extension menu', async ({ attest }) => {
@@ -54,7 +68,10 @@ test.describe('options page', () => {
       .map((line) => line.trim())
       .filter((line) => line !== '');
     expect(firstLine).toBe('Nothing leaves your browser.');
-    expect(secondLine).toMatch(/^Attest reads only pages you have open\b.*sends nothing to any server\.$/);
+    // The statement, then its link to the privacy architecture (ux_engineer rule 8; sprint_4 4.5).
+    expect(secondLine).toMatch(
+      /^Attest reads only pages you have open\b.*sends nothing to any server\. Read how\b/,
+    );
 
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.locator('main h2')).toHaveText(SECTION_TITLES);
@@ -104,6 +121,26 @@ test.describe('options page: keyboard', () => {
       expect(errors).toEqual([]);
     });
   }
+});
+
+test.describe('options page: the retention choice from the keyboard (sprint_4 4.5)', () => {
+  test('the arrows move between the windows, and Tab then reaches Save retention', async ({ attest }) => {
+    await installedId(attest);
+    const { page, errors } = await openOptions(attest);
+    const ninety = page.getByRole('radio', { name: '90 days (the default)' });
+    await expect(ninety).toBeChecked();
+    await ninety.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('radio', { name: '180 days' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: '180 days' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Save retention' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#privacy').getByRole('status').first()).toHaveText(
+      'Saved. Attest keeps 180 days of history.',
+    );
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe('options page: focus timing and colour schemes', () => {

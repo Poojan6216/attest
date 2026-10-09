@@ -4,6 +4,7 @@
  * is no longer shown, and the page logs no console errors. Split from options.spec.ts (file and function size
  * limits, TECH-C8).
  */
+import type { Page } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { STORAGE_KEYS } from '../../src/config';
@@ -20,6 +21,9 @@ import { expect, test } from './support/test';
 declare const chrome: WxtBrowser;
 
 const RESET_DONE = 'Install id reset. The new id is shown above.';
+
+/** The install id panel's status line: the Danger zone holds Delete all data's too (sprint_4 4.5). */
+const installIdStatus = (page: Page) => page.getByRole('group', { name: 'Install id' }).getByRole('status');
 
 test.describe('options page: the two-step reset from the keyboard', () => {
   for (const colorScheme of ['light', 'dark'] as const) {
@@ -52,7 +56,7 @@ test.describe('options page: the two-step reset from the keyboard', () => {
       await expectVisibleFocus(page, await focusState(page));
       await page.keyboard.press('Enter');
 
-      await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
+      await expect(installIdStatus(page)).toHaveText(RESET_DONE);
       await expect(start).toBeFocused();
       const after = await storedInstallId(worker);
       expect(after).toMatch(UUID_V4);
@@ -80,12 +84,12 @@ test.describe('options page: the install id reset', () => {
     await expect(start).toBeFocused();
     expect(await storedInstallId(worker)).toBe(before);
     await expect(shown).toHaveText(before);
-    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText('');
+    await expect(installIdStatus(page)).toHaveText('');
 
     await start.click();
     await page.getByRole('button', { name: 'Reset id', exact: true }).click();
 
-    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
+    await expect(installIdStatus(page)).toHaveText(RESET_DONE);
     const after = await storedInstallId(worker);
     expect(after).toMatch(UUID_V4);
     expect(after).not.toBe(before);
@@ -104,7 +108,7 @@ test.describe('options page: the install id reset', () => {
 
     await first.page.getByRole('button', { name: 'Reset install id', exact: true }).click();
     await first.page.getByRole('button', { name: 'Reset id', exact: true }).click();
-    await expect(first.page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
+    await expect(installIdStatus(first.page)).toHaveText(RESET_DONE);
 
     const after = await first.page.locator('#install-id-value').innerText();
     await expect(second.page.locator('#install-id-value')).toHaveText(after);
@@ -131,7 +135,7 @@ test.describe('options page: an install id changed elsewhere', () => {
 
     await page.getByRole('button', { name: 'Reset install id', exact: true }).click();
     await page.getByRole('button', { name: 'Reset id', exact: true }).click();
-    await expect(page.locator('#danger-zone').getByRole('status')).toHaveText(RESET_DONE);
+    await expect(installIdStatus(page)).toHaveText(RESET_DONE);
     const after = await storedInstallId(worker);
     expect(after).toMatch(UUID_V4);
     await expect(shown).toHaveText(after);

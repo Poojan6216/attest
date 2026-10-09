@@ -23,8 +23,16 @@ import {
 import { Claim, ComponentId, HealthReport, Observation, Request } from '../../../src/core/schema';
 import { CLAIM, HASH, MALFORMED, OBSERVATION, REQUEST, SECRET, TS, VALID } from './harness';
 
+describe('BUS_MESSAGE_TYPES', () => {
+  it('is frozen, so no consumer can reorder or extend it', () => {
+    expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
+    expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.erase'])).toThrow(TypeError);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(15);
+  });
+});
+
 describe('BusMessage', () => {
-  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3 and the grant of 4.4', () => {
+  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3, the grant of 4.4 and the three settings of 4.5', () => {
     expect([...BUS_MESSAGE_TYPES].sort()).toEqual(
       [
         'adapter.claims',
@@ -35,20 +43,17 @@ describe('BusMessage', () => {
         'coverage.ping',
         'grant.save',
         'ledger.changed',
+        'ledger.wipe',
         'observer.observations',
+        'reader.toggle',
         'receipt.event',
+        'retention.save',
         'ui.query',
         'ui.result',
       ].sort(),
     );
     expectTypeOf<BusMessage['type']>().toEqualTypeOf<BusMessageType>();
     expectTypeOf<UiQuery['kind']>().toEqualTypeOf<UiQueryKind>();
-  });
-
-  it('BUS_MESSAGE_TYPES is frozen, so no consumer can reorder or extend it', () => {
-    expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
-    expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.wipe'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(12);
   });
 
   it.each(BUS_MESSAGE_TYPES)('accepts a valid %s', (type) => {
@@ -63,7 +68,7 @@ describe('BusMessage', () => {
 
   it('rejects unknown types and non-objects', () => {
     for (const raw of [
-      { type: 'ledger.wipe' },
+      { type: 'ledger.erase' },
       { type: 'adapter.act', selector: '#send' },
       {},
       null,
@@ -305,7 +310,7 @@ describe('ui.query / ui.result', () => {
 describe('isBusMessageType', () => {
   it('is true only for the seven type strings', () => {
     for (const type of BUS_MESSAGE_TYPES) expect(isBusMessageType(type)).toBe(true);
-    for (const value of ['ui.Query', 'ledger.wipe', '', 'adapter.health ', 7, null, undefined, {}]) {
+    for (const value of ['ui.Query', 'ledger.erase', '', 'adapter.health ', 7, null, undefined, {}]) {
       expect(isBusMessageType(value)).toBe(false);
     }
   });

@@ -6,8 +6,10 @@ import { ResetInstallIdControl } from './ResetInstallIdControl';
 export function InstallIdPanel() {
   const { view, reset } = useInstallId();
   return (
-    <div class="space-y-3">
-      <h3 class="font-semibold">Install id</h3>
+    <div role="group" aria-labelledby="install-id-heading" class="space-y-3">
+      <h3 id="install-id-heading" class="font-semibold">
+        Install id
+      </h3>
       <p>
         A random id, not made from anything about you, your accounts or this device. Only the opt-in telemetry
         in a later version uses it. Resetting it means past and future reports can no longer be linked to each

@@ -8,6 +8,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { type BrowserContext, chromium, errors, type Page, type Worker } from '@playwright/test';
+import type { WxtBrowser } from 'wxt/browser';
+
+/** The extension API inside the worker, where `waitForReaders` runs. */
+declare const chrome: WxtBrowser;
 
 /**
  * The unpacked build under test. ATTEST_EXTENSION_PATH points at another build (used to prove that a
@@ -54,6 +58,25 @@ export const LAUNCH_TIMEOUT_MS = 15_000;
 export const LAUNCH_ATTEMPTS = 3;
 /** Bounded wait for the extension's worker: a stuck start fails with its own message, inside the test timeout. */
 export const SERVICE_WORKER_TIMEOUT_MS = 30_000;
+
+/**
+ * Waits until the worker's page readers are registered as the profile's choice says (sprint_4 4.5: the content scripts
+ * are registered at runtime, src/background/readers.ts): each reader on is registered, each off is not. A test that
+ * opened Gmail before then would find no reader. The ids and the storage key are src/config.ts READERS and
+ * STORAGE_KEYS.READERS_OFF, written out: the worker evaluates this alone.
+ */
+export async function waitForReaders(worker: Worker): Promise<void> {
+  await worker.evaluate(async () => {
+    for (let tries = 0; tries < 400; tries += 1) {
+      const stored: unknown = (await chrome.storage.local.get('attest.readersOff'))['attest.readersOff'];
+      const off: unknown[] = Array.isArray(stored) ? stored : [];
+      const ids = (await chrome.scripting.getRegisteredContentScripts()).map((script) => script.id);
+      if (['gmail', 'gcal'].every((reader) => off.includes(reader) !== ids.includes(reader))) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error('the page readers were never registered');
+  });
+}
 
 /** Closes a context and removes its profile; used when a launch fails after the browser started. */
 async function discard(context: BrowserContext, userDataDir: string, ownsProfile: boolean): Promise<void> {
@@ -116,7 +139,9 @@ export async function launchExtension(options: LaunchOptions = {}): Promise<Laun
   };
   let extensionId: string;
   try {
-    extensionId = new URL((await serviceWorker()).url()).host;
+    const worker = await serviceWorker();
+    extensionId = new URL(worker.url()).host;
+    await waitForReaders(worker);
   } catch (error) {
     await discard(context, userDataDir, ownsProfile);
     throw error;

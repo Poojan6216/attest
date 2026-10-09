@@ -38,6 +38,7 @@ import { readInstant } from './clock-high-water';
 import type { LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { purgeExpired, type PurgeOptions, type PurgeReport } from './retention';
+import { readRetentionDays } from './settings';
 import { IsoTs } from './types';
 
 /** The meta key of the last purge's trusted instant. Written only by `purgeAtTrustedClock`. */
@@ -65,8 +66,9 @@ export async function trustedPurgeMs(db: LedgerDb, nowMs: number): Promise<numbe
 
 /**
  * ./retention.ts `purgeExpired` at the trusted instant of the header, in one readwrite transaction over the purge's
- * tables and `meta`, which also stores the trusted instant. Throws `LedgerError('invalid_input')` for a malformed
- * `now`, before anything is read.
+ * tables and `meta`, which also stores the trusted instant, with the retention window the person chose (./settings.ts)
+ * unless `options.retentionDays` names one. Throws `LedgerError('invalid_input')` for a malformed `now`, before anything
+ * is read.
  */
 export async function purgeAtTrustedClock(db: LedgerDb, options: PurgeOptions): Promise<PurgeReport> {
   const now = IsoTs.safeParse(options.now);
@@ -92,7 +94,9 @@ export async function purgeAtTrustedClock(db: LedgerDb, options: PurgeOptions): 
     const trustedMs = await trustedPurgeMs(db, nowMs);
     const trustedAt = trustedMs === nowMs ? now.data : IsoTs.parse(new Date(trustedMs).toISOString());
     if (nowMs - trustedMs > CATCH_UP_MS) log.warn('ledger.purge_clock_ahead', { now: now.data, trustedAt });
-    const report = await purgeExpired(db, { ...options, now: trustedAt });
+    // The window the person chose (./settings.ts), unless the caller names one.
+    const retentionDays = options.retentionDays ?? (await readRetentionDays(db));
+    const report = await purgeExpired(db, { ...options, now: trustedAt, retentionDays });
     await db.meta.put({ key: PURGE_TRUSTED_AT, value: trustedAt });
     return report;
   });

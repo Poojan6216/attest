@@ -89,7 +89,7 @@ function sortedRecord<V>(record: Readonly<Record<string, V>>): Record<string, V>
  * Records (`signals`, each reason's `params`) keep the key order they were written in, so two ledgers with
  * the same receipt could export different bytes. Sorting their keys keeps the export deterministic.
  */
-function canonicalReceipt(receipt: Receipt): Receipt {
+export function canonicalReceipt(receipt: Receipt): Receipt {
   return {
     ...receipt,
     reasons: receipt.reasons.map((reason) => ({ ...reason, params: sortedRecord(reason.params) })),
@@ -98,22 +98,28 @@ function canonicalReceipt(receipt: Receipt): Receipt {
 }
 
 /** `accounts` is a record too: its sources export in sorted order. */
-function canonicalGrant(grant: Grant): Grant {
+export function canonicalGrant(grant: Grant): Grant {
   if (grant.accounts === undefined) return grant;
   return { ...grant, accounts: sortedRecord(grant.accounts) };
 }
 
-export async function exportLedger(db: LedgerDb, options: ExportOptions): Promise<LedgerExport> {
+/** `exportedAt` as an instant, or `LedgerError('invalid_input')`. */
+export function exportInstant(options: ExportOptions): IsoTs {
   const exportedAt = IsoTs.safeParse(options.exportedAt);
   if (!exportedAt.success) {
     throw new LedgerError('invalid_input', 'exportedAt must be ISO 8601 with an offset', {
       field: 'exportedAt',
     });
   }
+  return exportedAt.data;
+}
+
+export async function exportLedger(db: LedgerDb, options: ExportOptions): Promise<LedgerExport> {
+  const exportedAt = exportInstant(options);
   return db.transaction('r', db.tables, async (): Promise<LedgerExport> => ({
     format: LEDGER_EXPORT_FORMAT,
     schemaVersion: db.verno,
-    exportedAt: exportedAt.data,
+    exportedAt,
     tables: {
       requests: readRows('requests', Request, await db.requests.toArray()),
       claims: readRows('claims', Claim, await db.claims.toArray()),

@@ -20,8 +20,12 @@ export interface RecordedRead {
   readonly op: 'get' | 'getMany' | 'query' | 'openCursor' | 'count';
   /** The index read through; null for the primary key. */
   readonly index: string | null;
-  /** Whether the read spans the whole index: a full scan of the table. */
+  /** Whether the read spans the whole index: a full scan of the table, unless `limit` bounds it. */
   readonly whole: boolean;
+  /** The most rows the request asks for (a query's `limit`, a get's keys); null when the request names none. */
+  readonly limit: number | null;
+  /** The rows the read delivered: every row its cursor stepped onto, its query returned or its keys found. */
+  delivered: number;
 }
 
 export interface Recorder {
@@ -36,14 +40,20 @@ const ANY_RANGE = 3;
 
 type RangedRequest = DBCoreQueryRequest | DBCoreOpenCursorRequest | DBCoreCountRequest;
 
-function ranged(table: string, op: RecordedRead['op'], request: RangedRequest): RecordedRead {
+function ranged(
+  table: string,
+  op: RecordedRead['op'],
+  request: RangedRequest,
+): Omit<RecordedRead, 'delivered'> {
   const { index, range } = request.query;
   const rangeType: number = range.type;
+  const limit: unknown = Reflect.get(request, 'limit');
   return {
     table,
     op,
     index: index.isPrimaryKey === true ? null : index.name,
     whole: rangeType === ANY_RANGE,
+    limit: typeof limit === 'number' && Number.isFinite(limit) ? limit : null,
   };
 }
 
@@ -69,38 +79,56 @@ function counting(cursor: DBCoreCursor, step: () => void): DBCoreCursor {
 
 function recording(down: DBCoreTable, recorder: Recorder): DBCoreTable {
   const { name } = down;
-  const add = (rows: number) => recorder.rows.set(name, (recorder.rows.get(name) ?? 0) + rows);
+  /** Records `read`, and returns how to count the rows it delivers (for the read and for its table). */
+  const start = (read: Omit<RecordedRead, 'delivered'>): ((rows: number) => void) => {
+    const entry: RecordedRead = { ...read, delivered: 0 };
+    recorder.reads.push(entry);
+    return (rows) => {
+      entry.delivered += rows;
+      recorder.rows.set(name, (recorder.rows.get(name) ?? 0) + rows);
+    };
+  };
   return {
     ...down,
     get: (request) => {
-      recorder.reads.push({ table: name, op: 'get', index: null, whole: false });
+      const add = start({ table: name, op: 'get', index: null, whole: false, limit: 1 });
       return down.get(request).then((value: unknown) => {
         if (value !== undefined) add(1);
         return value;
       });
     },
     getMany: (request) => {
-      recorder.reads.push({ table: name, op: 'getMany', index: null, whole: false });
+      const add = start({
+        table: name,
+        op: 'getMany',
+        index: null,
+        whole: false,
+        limit: request.keys.length,
+      });
       return down.getMany(request).then((values: unknown[]) => {
         add(values.filter((value) => value !== undefined).length);
         return values;
       });
     },
     query: (request) => {
-      recorder.reads.push(ranged(name, 'query', request));
+      const add = start(ranged(name, 'query', request));
       return down.query(request).then((response) => {
         add(response.result.length);
         return response;
       });
     },
     openCursor: (request) => {
-      recorder.reads.push(ranged(name, 'openCursor', request));
-      return down
-        .openCursor(request)
-        .then((cursor) => (cursor === null ? null : counting(cursor, () => add(1))));
+      const add = start(ranged(name, 'openCursor', request));
+      return down.openCursor(request).then((cursor) =>
+        cursor === null
+          ? null
+          : counting(cursor, () => {
+              add(1);
+            }),
+      );
     },
     count: (request) => {
-      recorder.reads.push(ranged(name, 'count', request));
+      start(ranged(name, 'count', request));
       return down.count(request);
     },
   };

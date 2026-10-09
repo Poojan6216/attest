@@ -1,58 +1,50 @@
-import { AGENT_READERS } from '../../../src/config';
-import { LaterVersionNote } from './LaterVersionNote';
+import { READERS } from '../../../src/config';
+import { Skeleton } from '../../../src/ui/Skeleton';
+import { LIVE_SETTINGS, type SettingsSources, useSettings } from '../use-settings';
+import { AgentReaders } from './AgentReaders';
+import { ReaderRow } from './ReaderRow';
 import { Section } from './Section';
 
-/** One page reader as the Adapters section shows it: what it reads, whether it runs, and why. */
-interface Reader {
-  readonly name: string;
-  readonly on: boolean;
-  readonly note: string;
+export interface AdaptersSectionProps {
+  /** Where the section reads and changes the readers; the ledger, storage and the bus when absent. */
+  readonly sources?: SettingsSources;
+  /** The instant "last checked" is written against; the page's clock when absent. */
+  readonly nowMs?: () => number;
 }
 
 /**
- * Every reader, in page order (sprint_3 3.10). Gmail and Google Calendar run in the tabs you open. The readers for
- * Muse, ChatGPT and Claude are off: their makers' terms forbid collecting data from their sites by automated means,
- * and Attest reads none of them without written permission (src/config.ts AGENT_READERS; Decisions [3.10]).
+ * The Adapters section (sprint_4 4.5): each page reader, on or off, with its observers' health (status, version, last
+ * check) and the button that turns it off or on; then the agents' readers, off under their makers' terms (3.10).
  */
-export const READERS: readonly Reader[] = [
-  {
-    name: 'Gmail and Google Calendar',
-    on: true,
-    note: 'Reads your Gmail Sent folder, the receipts you open and Google Calendar, only in tabs you open yourself.',
-  },
-  {
-    name: 'Muse (Meta)',
-    on: AGENT_READERS.muse !== 'off',
-    note: "Meta's terms do not allow collecting data from its products by automated means without its permission (Meta Terms of Service, section 3.2). Attest will read Muse only with Meta's written permission.",
-  },
-  {
-    name: 'ChatGPT and Dots (OpenAI)',
-    on: AGENT_READERS.chatgpt !== 'off',
-    note: 'OpenAI\'s terms do not allow automatically or programmatically extracting data or output from its services (Terms of Use, "What you cannot do"). Attest will read ChatGPT only with OpenAI\'s permission.',
-  },
-  {
-    name: 'Claude (Anthropic)',
-    on: AGENT_READERS.claude !== 'off',
-    note: "Anthropic's terms do not allow scraping or harvesting data from its services, or reaching them through a script (Consumer Terms, section 3). Attest will read Claude only with Anthropic's permission.",
-  },
-];
-
-/** The Adapters section: each reader, on or off, and why. Health per reader comes later; no controls here. */
-export function AdaptersSection() {
+export function AdaptersSection({ sources = LIVE_SETTINGS, nowMs = Date.now }: AdaptersSectionProps) {
+  const state = useSettings(sources);
   return (
     <Section id="adapters">
-      <p>The pages Attest reads, each in tabs you open yourself:</p>
-      <ul class="space-y-2">
-        {READERS.map((reader) => (
-          <li key={reader.name}>
-            <span class="font-medium">{reader.name}</span>
-            <span class="ml-2 text-neutral-600 dark:text-neutral-400">{reader.on ? 'On' : 'Off'}</span>
-            <p class="text-neutral-700 dark:text-neutral-300">{reader.note}</p>
-          </li>
-        ))}
-      </ul>
-      <p>Which readers are working, and which need repair after a site changes:</p>
-      <LaterVersionNote />
+      <p>
+        The pages Attest reads, each only in tabs you open yourself. Turning a reader off stops it at once: a
+        page you open afterwards is not read, and a tab already open stops at its next check.
+      </p>
+      {state.status === 'loading' ? <Skeleton rows={2} label="Loading the readers" /> : null}
+      {state.status === 'failed' ? (
+        <p role="alert" class="text-red-700 dark:text-red-300">
+          Attest could not read its settings. Reload the page.
+        </p>
+      ) : null}
+      {state.status === 'ready' ? (
+        <ul class="space-y-3">
+          {READERS.map((reader) => (
+            <ReaderRow
+              key={reader}
+              reader={reader}
+              on={!state.view.readersOff.has(reader)}
+              health={state.view.health}
+              nowMs={nowMs()}
+              toggle={(on) => sources.send({ type: 'reader.toggle', reader, on })}
+            />
+          ))}
+        </ul>
+      ) : null}
+      <AgentReaders />
     </Section>
   );
 }

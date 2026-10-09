@@ -62,7 +62,8 @@ test('the shipped manifest matches the decisions', () => {
     default_title: 'Attest: receipts for your AI agents',
     default_popup: 'popup.html',
   });
-  expect(manifest.permissions).toEqual(['storage', 'alarms', 'sidePanel']);
+  // `scripting` registers the page readers at runtime, so a reader the person turns off is unregistered (sprint_4 4.5).
+  expect(manifest.permissions).toEqual(['storage', 'alarms', 'scripting', 'sidePanel']);
   // Hard Rule 8: away detection asks for `idle` only when the person turns it on (sprint_3 3.14).
   expect(manifest.optional_permissions).toEqual(['idle']);
   // Hard Rule 8: exactly Gmail and Google Calendar (sprint_2 2.0), nothing broader; no agent host while every agent
@@ -109,15 +110,17 @@ function nonAscii(text: string): number {
   return count;
 }
 
-test('the content scripts are exactly Gmail and Calendar, on exactly their hosts (sprint_2 2.7, sprint_3 3.10)', () => {
+test('the content scripts are exactly Gmail and Calendar, registered at runtime, never in the manifest (sprint_4 4.5)', () => {
   const manifest = JSON.parse(readFileSync(path.join(EXTENSION_PATH, 'manifest.json'), 'utf8')) as Record<
     string,
     unknown
   >;
-  expect(manifest.content_scripts).toEqual([
-    { matches: ['https://calendar.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gcal.js'] },
-    { matches: ['https://mail.google.com/*'], run_at: 'document_idle', js: ['content-scripts/gmail.js'] },
-  ]);
+  // The service worker registers each while the person keeps it on (src/background/readers.ts), on exactly its hosts:
+  // tests/e2e/options-settings.spec.ts reads the registrations of the running build.
+  expect(manifest).not.toHaveProperty('content_scripts');
+  expect(
+    readdirSync(path.join(EXTENSION_PATH, 'content-scripts')).filter((file) => file.endsWith('.js')),
+  ).toEqual(['gcal.js', 'gmail.js']);
   for (const file of scripts(EXTENSION_PATH)) {
     expect(nonAscii(readFileSync(file, 'utf8')), path.relative(EXTENSION_PATH, file)).toBe(0);
   }

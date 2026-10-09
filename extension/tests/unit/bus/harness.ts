@@ -20,6 +20,9 @@ import {
   ClaimsImportMessage,
   CoveragePingMessage,
   GrantSaveMessage,
+  LedgerWipeMessage,
+  ReaderToggleMessage,
+  RetentionSaveMessage,
   LedgerChangedMessage,
   ObserverObservationsMessage,
   ReceiptEventMessage,
@@ -201,7 +204,7 @@ export const IMPORTED_CLAIM: Claim = (() => {
   return claim;
 })();
 
-/** One valid message per type. The mapped type makes the compiler demand all ten. */
+/** One valid message per type. The mapped type makes the compiler demand every one. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'adapter.health': AdapterHealthMessage.parse({
     type: 'adapter.health',
@@ -285,6 +288,9 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     },
     alertsMuted: false,
   }),
+  'retention.save': RetentionSaveMessage.parse({ type: 'retention.save', days: 30 }),
+  'reader.toggle': ReaderToggleMessage.parse({ type: 'reader.toggle', reader: 'gcal', on: false }),
+  'ledger.wipe': LedgerWipeMessage.parse({ type: 'ledger.wipe' }),
 };
 
 /**
@@ -319,4 +325,7 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
     event: { kind: 'override', grade: 'PARTIAL', reason: SECRET },
   },
   'grant.save': { ...VALID['grant.save'], grant: { ...VALID['grant.save'].grant, notes: SECRET } },
+  'retention.save': { type: 'retention.save', days: 7 },
+  'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' },
+  'ledger.wipe': { type: 'ledger.wipe', confirm: SECRET },
 };

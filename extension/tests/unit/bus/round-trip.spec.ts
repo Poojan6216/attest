@@ -61,6 +61,9 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'claims.import': () => extensionPage('/sidepanel.html'),
   'receipt.event': () => extensionPage('/sidepanel.html'),
   'grant.save': () => extensionPage('/options.html'),
+  'retention.save': () => extensionPage('/options.html'),
+  'reader.toggle': () => extensionPage('/options.html'),
+  'ledger.wipe': () => extensionPage('/options.html'),
 };
 
 function sendFailures(): number {
@@ -172,6 +175,17 @@ acknowledged('adapter.health');
 acknowledged('observer.observations');
 acknowledged('coverage.ping');
 acknowledged('calendar.snapshot');
+
+describe('reader off (sprint_4 4.5)', () => {
+  it.each(['adapter.health', 'observer.observations', 'coverage.ping', 'calendar.snapshot'] as const)(
+    '%s: postAcked() rejects with reader_off, so the skeleton stops',
+    async (type) => {
+      connectAs(SENDER_OF[type]());
+      listen({ [type]: () => Promise.resolve({ ok: false as const, code: 'reader_off' as const }) });
+      await expect(postAcked(VALID[type])).rejects.toEqual(new BusError('reader_off'));
+    },
+  );
+});
 
 describe('ui.query', () => {
   it('valid: query() round-trips to the handler and resolves its ui.result', async () => {

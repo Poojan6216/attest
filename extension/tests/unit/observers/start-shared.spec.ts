@@ -182,7 +182,7 @@ describe('a page that is offline or catching up posts no coverage (Decisions [2.
   });
 });
 
-describe('the skeleton stops only when the extension context is gone (Decisions [2.close] S5)', () => {
+describe('the skeleton stops only when the extension context is gone or its reader is off (Decisions [2.close] S5)', () => {
   it('a post refused context_invalidated stops every observer and removes every listener', async () => {
     const posted: string[] = [];
     const post = (message: BusMessage): Promise<unknown> => {
@@ -194,6 +194,21 @@ describe('the skeleton stops only when the extension context is gone (Decisions 
     await settle();
     expect(posted).toEqual(['adapter.health', 'adapter.health']);
     expect(removed).toHaveBeenCalled();
+    document.querySelector('[role="grid"]')?.append(document.createElement('div'));
+    await settle(OBSERVER_DEBOUNCE_MS * 4);
+    expect(posted).toEqual(['adapter.health', 'adapter.health']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a post refused reader_off (the person turned the reader off, sprint_4 4.5) stops every observer too', async () => {
+    const posted: string[] = [];
+    const post = (message: BusMessage): Promise<unknown> => {
+      posted.push(message.type);
+      return Promise.reject(new BusError('reader_off'));
+    };
+    handle = startObservers([sentObserver(), second()], { post, now });
+    await settle();
+    expect(posted).toEqual(['adapter.health', 'adapter.health']);
     document.querySelector('[role="grid"]')?.append(document.createElement('div'));
     await settle(OBSERVER_DEBOUNCE_MS * 4);
     expect(posted).toEqual(['adapter.health', 'adapter.health']);
