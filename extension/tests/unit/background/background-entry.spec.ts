@@ -65,6 +65,7 @@ describe('background main()', () => {
       expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([
         ALARM_NAMES.PURGE,
         ALARM_NAMES.GRADE,
+        ALARM_NAMES.DIGEST,
       ]);
     });
   });

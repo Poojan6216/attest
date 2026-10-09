@@ -13,6 +13,8 @@ import { ClaimsImportMessage } from '../../../src/bus/messages';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { IsoTs, Receipt } from '../../../src/core/schema';
 import { queueAlerts } from '../../../src/ledger/alerts';
+import { buildDigest, saveDigest } from '../../../src/ledger/digest';
+import { lastWeek } from '../../../src/ledger/digest-week';
 import { putCalendarRecord } from '../../../src/ledger/calendar-snapshots';
 import { recordCoverage } from '../../../src/ledger/coverage';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -134,6 +136,8 @@ async function populate(): Promise<void> {
   );
   await putReceipt(db, alerted);
   await queueAlerts(db, [alerted]);
+  // A weekly digest (sprint_4 4.7).
+  await saveDigest(db, await buildDigest(db, lastWeek(Date.now()), IsoTs.parse(NOW)));
   await pasted();
   // A row no reader accepts: both exports skip it, logged by id.
   await db.requests.put({ id: ulid(299), agent: 'nobody' } as never);

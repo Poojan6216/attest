@@ -277,6 +277,7 @@ describe('popup and side panel shells', () => {
     expect(statusText()).toBe("Loading today's receipts");
     expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
       'Open timeline',
+      'Weekly digest',
       'Open settings',
     ]);
     expect(root.querySelectorAll('a, input')).toHaveLength(0);

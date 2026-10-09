@@ -10,9 +10,13 @@ import { z } from 'zod';
 import { PolicyDocument } from '../core/policy-document';
 import { instantMs } from '../core/normalize';
 import {
+  ActionType,
   AgentId,
   ComponentId,
   Coverage,
+  Currency,
+  Grade,
+  HealthReport,
   GradeContext,
   Grant,
   IsoTs,
@@ -20,7 +24,9 @@ import {
   SCHEMA_LIMITS,
   Sha256,
   Ulid,
+  AmountCents,
 } from '../core/schema';
+import { oneLineText } from '../core/schema-text';
 import { coverageProblems, refineWith } from '../core/schema-checks';
 
 export * from '../core/schema';
@@ -138,6 +144,66 @@ export const AlertRecord = z.strictObject({
   handledAt: IsoTs.optional(),
 });
 
+/** A local calendar date, `YYYY-MM-DD`. */
+const LocalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, 'must be a YYYY-MM-DD date');
+
+const count = z.number().int().min(0);
+
+/** One agent's week in a digest (sprint_4 4.7): its receipts graded that week, counted; every number stored. */
+export const AgentWeek = z.strictObject({
+  agent: AgentId,
+  /** Receipts by grade, superseded ones aside: FINAL ones, and those the person marked, by Attest's own grade. */
+  grades: z.strictObject(
+    Object.fromEntries(Grade.options.map((grade) => [grade, count])) as Record<Grade, typeof count>,
+  ),
+  /** Still checking (PENDING) when the digest was made. */
+  checking: count,
+  /** Marked by the person (USER_OVERRIDDEN). */
+  marked: count,
+  /** Its FINAL claim receipts Attest could check (Verified, Partial, Not found, Over scope), and the Verified among them. */
+  checked: count,
+  verified: count,
+});
+
+/**
+ * A receipt a digest calls out (sprint_4 4.7): FINAL NOT_FOUND, UNASKED or OVER_SCOPE, with what a share may show of
+ * it: the action and its time, the counterparty's domain only (never the address or a name), the amount, and the
+ * subject hint the ledger keeps.
+ */
+export const NotableReceipt = z.strictObject({
+  receiptId: Ulid,
+  agent: AgentId,
+  grade: AlertGrade,
+  type: ActionType.optional(),
+  at: IsoTs.optional(),
+  domain: oneLineText(L.COUNTERPARTY).optional(),
+  amountCents: AmountCents.optional(),
+  currency: Currency.optional(),
+  subjectHint: oneLineText(L.SUBJECT_HINT).optional(),
+});
+
+/**
+ * A `digests` row (sprint_4 4.7; ./digest.ts): one week, Monday to Monday on the browser's clock, keyed by its Monday's
+ * date, made by the weekly alarm and kept so the weeks can be read again. Counts, ids, dates, domains, amounts and
+ * hints only, each read from the ledger when it was made: the digest page shows these and computes nothing.
+ */
+export const DigestRecord = z.strictObject({
+  week: LocalDate,
+  from: IsoTs,
+  to: IsoTs,
+  createdAt: IsoTs,
+  agents: z.array(AgentWeek).max(AgentId.options.length),
+  notable: z.array(NotableReceipt).max(L.LIST),
+  /** How many notable receipts there were in all: `notable` keeps the newest `L.LIST`. */
+  notableCount: count,
+  /** Per source, the days of the week no window of it covered: Attest could not check them. */
+  gaps: z
+    .array(z.strictObject({ source: ObservationSource, days: z.array(LocalDate).max(7) }))
+    .max(ObservationSource.options.length),
+  /** Each reader's latest health when the digest was made. */
+  health: z.array(HealthReport).max(L.LIST),
+});
+
 export type CoveragePing = z.infer<typeof CoveragePing>;
 export type CoveragePingInput = z.input<typeof CoveragePing>;
 export type MetaEntry = z.infer<typeof MetaEntry>;
@@ -149,5 +215,8 @@ export type ActivityRecordInput = z.input<typeof ActivityRecord>;
 export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;
 export type PolicyRecord = z.infer<typeof PolicyRecord>;
 export type AlertGrade = z.infer<typeof AlertGrade>;
+export type DigestRecord = z.infer<typeof DigestRecord>;
+export type AgentWeek = z.infer<typeof AgentWeek>;
+export type NotableReceipt = z.infer<typeof NotableReceipt>;
 export type AlertState = z.infer<typeof AlertState>;
 export type AlertRecord = z.infer<typeof AlertRecord>;

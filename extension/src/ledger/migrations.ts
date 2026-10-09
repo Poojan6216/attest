@@ -32,6 +32,7 @@ import {
   STORES_V7,
   STORES_V8,
   STORES_V9,
+  STORES_V10,
 } from './db';
 import { LedgerError } from './errors';
 import { LEDGER_TABLE_NAMES, REPLAY_TABLE_NAMES } from './index-fields';
@@ -114,7 +115,8 @@ async function upgradeToV8(tx: Transaction): Promise<void> {
  * v6 (sprint_3 3.14): the activity store (db.ts STORES_V6), new and empty too. v7 (Sprint 3 close, TECH-1): each batch's
  * coverage stored once (db.ts STORES_V7), every stored copy moved there by `upgradeToV7`. v8 (sprint_4 4.0): receipts
  * indexed by agent and grading instant (db.ts STORES_V8), the instant derived over every stored receipt by `upgradeToV8`.
- * v9 (sprint_4 4.6): the alerts store (db.ts STORES_V9), new and empty, so no data upgrade.
+ * v9 (sprint_4 4.6): the alerts store (db.ts STORES_V9), new and empty, so no data upgrade. v10 (sprint_4 4.7): the
+ * digests store (db.ts STORES_V10), new and empty too.
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, stores: STORES_V1 },
@@ -126,6 +128,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 7, stores: STORES_V7, upgrade: upgradeToV7 },
   { version: 8, stores: STORES_V8, upgrade: upgradeToV8 },
   { version: 9, stores: STORES_V9 },
+  { version: 10, stores: STORES_V10 },
 ];
 
 /** Throws `invalid_migrations` unless versions ascend and every ledger table survives to the last one. */

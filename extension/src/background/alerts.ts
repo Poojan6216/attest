@@ -13,7 +13,7 @@
 import { browser } from 'wxt/browser';
 
 import { isoWithLocalOffset } from '../clock';
-import { SESSION_KEYS } from '../config';
+import { DIGEST_NOTIFICATION_ID, SESSION_KEYS } from '../config';
 import { Ulid } from '../core/schema';
 import { takeAlerts } from '../ledger/alerts';
 import type { LedgerDb } from '../ledger/db';
@@ -105,8 +105,19 @@ export const BROWSER_OPEN: OpenDeps = {
   pageUrl: (path) => browser.runtime.getURL(path as '/sidepanel.html'),
 };
 
-/** A click on the alert `notificationId` (header). An id that is no receipt's is not one of Attest's alerts. */
+/**
+ * A click on the alert `notificationId` (header), or on the notice that a weekly digest is ready, which opens the digest
+ * page in a tab (sprint_4 4.7). Any other id is not one of Attest's.
+ */
 export function onAlertClicked(notificationId: string, deps: OpenDeps = BROWSER_OPEN): void {
+  if (notificationId === DIGEST_NOTIFICATION_ID) {
+    Promise.all([deps.openTab(deps.pageUrl('/digest.html')), deps.clear(notificationId)]).catch(
+      (error: unknown) => {
+        log.error('alerts.open_failed', { error });
+      },
+    );
+    return;
+  }
   const receiptId = Ulid.safeParse(notificationId);
   if (!receiptId.success) return;
   const id = receiptId.data;

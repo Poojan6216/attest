@@ -5,6 +5,7 @@ import { browser } from 'wxt/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureAlarms, handleAlarm, isAttestAlarm, resetAlarms } from '../../../src/background/alarms';
+import { nextDigestMs } from '../../../src/ledger/digest-week';
 import {
   ALARM_NAMES,
   GRADE_ALARM_PERIOD_MINUTES,
@@ -42,13 +43,18 @@ describe('alarm names', () => {
 });
 
 describe('resetAlarms (install/update)', () => {
-  it('creates each of our alarms once with its period', async () => {
+  it('creates each of our alarms once with its period, and the digest once at the next Monday 09:00', async () => {
+    const before = Date.now();
     await resetAlarms();
     const alarms = await browser.alarms.getAll();
     expect(alarms.map((a) => [a.name, a.periodInMinutes])).toEqual([
       [ALARM_NAMES.PURGE, PURGE_ALARM_PERIOD_MINUTES],
       [ALARM_NAMES.GRADE, GRADE_ALARM_PERIOD_MINUTES],
+      [ALARM_NAMES.DIGEST, undefined],
     ]);
+    const digest = await browser.alarms.get(ALARM_NAMES.DIGEST);
+    expect(digest?.scheduledTime).toBeGreaterThanOrEqual(nextDigestMs(before));
+    expect(digest?.scheduledTime).toBeLessThanOrEqual(nextDigestMs(Date.now()));
   });
 
   it('clears foreign alarms and never duplicates ours when run twice', async () => {
@@ -58,6 +64,7 @@ describe('resetAlarms (install/update)', () => {
     expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([
       ALARM_NAMES.PURGE,
       ALARM_NAMES.GRADE,
+      ALARM_NAMES.DIGEST,
     ]);
   });
 });
@@ -68,6 +75,7 @@ describe('ensureAlarms (browser startup)', () => {
     expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([
       ALARM_NAMES.PURGE,
       ALARM_NAMES.GRADE,
+      ALARM_NAMES.DIGEST,
     ]);
   });
 

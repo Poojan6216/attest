@@ -26,6 +26,7 @@ import {
   AdapterHealth,
   AlertRecord,
   Claim,
+  DigestRecord,
   CoveragePing,
   Grant,
   IsoTs,
@@ -59,6 +60,8 @@ export const LedgerExport = z.strictObject({
     activity: z.array(ActivityRecord).default([]),
     /** Each receipt that alerted and what became of its alert (sprint_4 4.6); empty in an export taken before. */
     alerts: z.array(AlertRecord).default([]),
+    /** The weekly digests kept (sprint_4 4.7); empty in an export taken before. */
+    digests: z.array(DigestRecord).default([]),
   }),
   /**
    * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
@@ -140,6 +143,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       calendarSnapshots: readRows('calendarSnapshots', CalendarRecord, await db.calendarSnapshots.toArray()),
       activity: readRows('activity', ActivityRecord, await db.activity.toArray()),
       alerts: readRows('alerts', AlertRecord, await db.alerts.toArray()),
+      digests: readRows('digests', DigestRecord, await db.digests.toArray()),
     },
     ...(await replayRecords(db)),
   }));

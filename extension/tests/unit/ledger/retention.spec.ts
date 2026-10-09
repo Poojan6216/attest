@@ -27,7 +27,7 @@ import {
 } from '../../../src/ledger/repo';
 import { RETENTION_DAYS } from '../../../src/config';
 import { purgeExpired } from '../../../src/ledger/retention';
-import { AlertRecord, CoveragePing } from '../../../src/ledger/types';
+import { AlertRecord, CoveragePing, DigestRecord } from '../../../src/ledger/types';
 import {
   claimId,
   expectLedgerError,
@@ -238,7 +238,29 @@ describe('purgeExpired removes exactly the old rows', () => {
       clockRepairs: 0,
       batchCoverages: 0,
       alerts: 0,
+      digests: 0,
     });
+  });
+});
+
+describe('purgeExpired and weekly digests', () => {
+  it('deletes a digest whose week ended before the cutoff, and keeps a later one (sprint_4 4.7)', async () => {
+    const digest = (week: string, from: string, to: string) =>
+      DigestRecord.parse({
+        week,
+        from,
+        to,
+        createdAt: to,
+        agents: [],
+        notable: [],
+        notableCount: 0,
+        gaps: [],
+        health: [],
+      });
+    await db.digests.put(digest('2026-09-21', '2026-09-21T00:00:00-04:00', '2026-09-28T00:00:00-04:00'));
+    await db.digests.put(digest('2026-10-05', '2026-10-05T00:00:00-04:00', '2026-10-12T00:00:00-04:00'));
+    expect((await purgeExpired(db, { now: NOW })).digests).toBe(1);
+    expect(await db.digests.toCollection().primaryKeys()).toEqual(['2026-10-05']);
   });
 });
 

@@ -90,6 +90,7 @@ export async function purgeAtTrustedClock(db: LedgerDb, options: PurgeOptions): 
     db.policies,
     db.batchCoverages,
     db.alerts,
+    db.digests,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const trustedMs = await trustedPurgeMs(db, nowMs);

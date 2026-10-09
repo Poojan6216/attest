@@ -31,6 +31,7 @@ import {
   type AdapterHealth,
   type AlertRecord,
   type BatchCoverageRecord,
+  type DigestRecord,
   type Grant,
   type MetaEntry,
   type ObserverCoverage,
@@ -56,7 +57,10 @@ export const STORES_V1 = {
   coverage: '[observerId+accountKey], observerId, lastSyncAt',
   meta: 'key',
 } as const satisfies Readonly<
-  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity' | 'alerts'>, string>
+  Record<
+    Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity' | 'alerts' | 'digests'>,
+    string
+  >
 >;
 
 export type CoverageKey = [observerId: string, accountKey: string];
@@ -182,6 +186,17 @@ export const STORES_V9 = {
   [ALERTS]: 'receiptId, state',
 } as const;
 
+/** The digests store (./digest.ts). */
+export const DIGESTS = 'digests';
+
+/**
+ * Schema v10 (sprint_4 4.7; Decisions [4.7]): `digests` holds one weekly digest per week, keyed by the week's Monday
+ * (`YYYY-MM-DD`), so the weeks can be read again, newest first, by key. New and empty on upgrade.
+ */
+export const STORES_V10 = {
+  [DIGESTS]: 'week',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -220,6 +235,7 @@ const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonl
   policies: { field: 'policyHash', schema: Sha256 },
   batchCoverages: { field: 'coverageHash', schema: Sha256 },
   alerts: { field: 'receiptId', schema: Ulid },
+  digests: { field: 'week', schema: PLAIN_KEY },
 };
 
 export class LedgerDb extends Dexie {
@@ -288,6 +304,11 @@ export class LedgerDb extends Dexie {
   /** Schema v9. Read and written only through ./alerts.ts. */
   get alerts(): Table<AlertRecord, string> {
     return this.table<AlertRecord, string>(ALERTS);
+  }
+
+  /** Schema v10. Read and written only through ./digest.ts. */
+  get digests(): Table<DigestRecord, string> {
+    return this.table<DigestRecord, string>(DIGESTS);
   }
 }
 

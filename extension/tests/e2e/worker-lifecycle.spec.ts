@@ -106,7 +106,7 @@ async function watchWorker(
 }
 
 test.describe('service worker lifecycle', () => {
-  test('install creates the install id and schedules the purge and grace alarms with their periods', async ({
+  test('install creates the install id and schedules the purge and grace alarms with their periods, the digest weekly', async ({
     attest,
   }) => {
     const worker = await attest.serviceWorker();
@@ -115,13 +115,22 @@ test.describe('service worker lifecycle', () => {
       .poll(() => purgeAlarm(worker))
       .toMatchObject({ name: ALARM_NAMES.PURGE, periodInMinutes: PURGE_ALARM_PERIOD_MINUTES });
     const alarms = await worker.evaluate(() => chrome.alarms.getAll());
-    // The grace alarm runs a grading batch every few minutes (sprint_3 3.13).
+    // The grace alarm runs a grading batch every few minutes (sprint_3 3.13); the digest is a one-shot alarm, set again
+    // each Monday (sprint_4 4.7).
     expect(alarms.map((alarm) => [alarm.name, alarm.periodInMinutes]).sort()).toEqual(
       [
         [ALARM_NAMES.PURGE, PURGE_ALARM_PERIOD_MINUTES],
         [ALARM_NAMES.GRADE, GRADE_ALARM_PERIOD_MINUTES],
+        [ALARM_NAMES.DIGEST, undefined],
       ].sort(),
     );
+    // Its time on the worker's own clock: Monday at 09:00.
+    const digestAt = await worker.evaluate(async () => {
+      const alarm = await chrome.alarms.get('attest.digest');
+      const at = new Date(alarm?.scheduledTime ?? 0);
+      return [at.getDay(), at.getHours(), at.getMinutes()];
+    });
+    expect(digestAt).toEqual([1, 9, 0]);
   });
 
   test('popup, options and side panel open with zero console errors, warnings or exceptions', async ({

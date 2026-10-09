@@ -320,6 +320,21 @@ Since schema version 9 (Sprint 4.6): one row per receipt that alerts, keyed by t
 | `finalAt` | When grading made the receipt FINAL. |
 | `handledAt` | When the service worker settled the alert; absent while `pending`. |
 
+### 5.16 `digests`
+
+Since schema version 10 (Sprint 4.7): one weekly digest per week, keyed by the week's Monday, made by the service worker on Monday at 09:00 from what the ledger holds for the week before ([`src/ledger/digest.ts`](../extension/src/ledger/digest.ts)), and kept so earlier weeks can be read again. The digest page ([`extension/entrypoints/digest/`](../extension/entrypoints/digest)) shows it and computes nothing. Its share is markdown made from it alone ([`src/ui/digest-share.ts`](../extension/src/ui/digest-share.ts)), and a digest keeps no address and no name, so a share cannot hold one: a counterparty is its domain, a subject only its hint. Deleted once its week ended before the retention cutoff ([§7](#7-retention-and-purge)).
+
+| Field | Meaning |
+|---|---|
+| `week` | The week's Monday, `YYYY-MM-DD`: the key. |
+| `from`, `to` | The week, Monday 00:00 to the next Monday 00:00 on the browser's clock. |
+| `createdAt` | When the digest was made. |
+| `agents` | Per agent with a receipt graded that week: `agent`; `grades`, its FINAL receipts counted by grade; `checking`, those still PENDING; `marked`, those you marked; `checked`, its FINAL claim receipts Attest could check (Verified, Partial, Not found, Over scope); `verified`, the Verified among them. Counts only. |
+| `notable` | Up to 200 FINAL NOT_FOUND, UNASKED and OVER_SCOPE receipts, newest first: `receiptId`, `agent`, `grade`, the action's `type` and time (`at`), the counterparty's `domain` only, `amountCents` and `currency`, and the `subjectHint` the ledger keeps. |
+| `notableCount` | How many there were in all. |
+| `gaps` | Per source (`gmail.sent`, `gcal.event`), the `days` of the week no window of it covered: Attest could not check them. |
+| `health` | Each reader's latest health report when the digest was made (as in [§5.5](#55-adapterhealth)). |
+
 ## 6. What is hashed
 
 Every hash is SHA-256 ([`docs/grading.md` §10](grading.md#10-ids-and-hashes-hashts)). Addresses and calendar names are hashed as their UTF-8 text; a vendor's row or event id is hashed as its canonical JSON string (the id in quotes), so that two ids differing only in a lone surrogate stay distinct. A hash hides a value from someone reading the ledger; it does not stop someone who can guess the value from confirming it ([§2](#2-what-attest-cannot-hide)).
@@ -348,6 +363,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 - **Calendar snapshots** go when they were read before the cutoff. A range not looked at since is compared with nothing next time, so its events come back as first sightings, never as changes.
 - **Clock repair spans** (`meta` `clockRepair.*`) go once they ended before the cutoff.
 - **Alerts** ([§5.15](#515-alerts)) go with their receipts.
+- **Weekly digests** ([§5.16](#516-digests)) go once their week ended before the cutoff.
 - **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
 - **Turning away detection off** deletes every time away at once, and the `idleOpen` key with them. Receipts already made keep their reasons: an UNASKED receipt that counted a time away keeps the reason `unasked.idle`, and its replay inputs the signal, until the receipt itself goes.
 

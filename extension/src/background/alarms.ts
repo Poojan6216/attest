@@ -8,7 +8,7 @@
  * The onAlarm listener itself is registered synchronously in `entrypoints/background.ts`; this module only
  * holds the logic.
  */
-import { browser } from 'wxt/browser';
+import { type Browser, browser } from 'wxt/browser';
 
 import { nowIso } from '../clock';
 import {
@@ -19,8 +19,10 @@ import {
   PURGE_ALARM_PERIOD_MINUTES,
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../config';
+import { nextDigestMs } from '../ledger/digest-week';
 import { getLedger } from '../ledger/repo';
 import type { LedgerTable } from '../bus/messages';
+import { browserDigest, runWeeklyDigest } from './digest';
 import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
 import { announce } from './router';
 import { purgeAtTrustedClock } from '../ledger/retention-clock';
@@ -51,22 +53,39 @@ export async function runGraceBatch(
   if (changedReceipts(await runGradingBatch(await getLedger(), SHIPPED_GRADING))) notify(['receipts']);
 }
 
-/** One handler per alarm name; later sprints add theirs (4.7 digest). */
+/** The weekly digest (sprint_4 4.7; ./digest.ts), whose handler sets the next one. */
+export async function runDigestAlarm(): Promise<void> {
+  await runWeeklyDigest(browserDigest(announce(nowIso)));
+}
+
+/** One handler per alarm name. */
 const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
   [ALARM_NAMES.PURGE]: runRetentionPurge,
   [ALARM_NAMES.GRADE]: runGraceBatch,
+  [ALARM_NAMES.DIGEST]: runDigestAlarm,
 };
 
-const PERIODS: Readonly<Record<AlarmName, number>> = {
-  [ALARM_NAMES.PURGE]: PURGE_ALARM_PERIOD_MINUTES,
-  [ALARM_NAMES.GRADE]: GRADE_ALARM_PERIOD_MINUTES,
-};
-
-/** How soon a recreated alarm first fires after a browser start (the period follows). */
-const STARTUP_DELAYS: Readonly<Record<AlarmName, number>> = {
-  [ALARM_NAMES.PURGE]: PURGE_STARTUP_DELAY_MINUTES,
-  [ALARM_NAMES.GRADE]: GRADE_STARTUP_DELAY_MINUTES,
-};
+/**
+ * How each alarm is created, at `nowMs`: on install or update, each periodic one first fires a whole period out; one
+ * recreated at a browser start (`startup`) fires a short delay after it, the period following. The digest is a one-shot
+ * alarm at the next Monday 09:00 (src/ledger/digest-week.ts), set again each time it fires.
+ */
+function createInfo(name: AlarmName, nowMs: number, startup: boolean): Browser.alarms.AlarmCreateInfo {
+  switch (name) {
+    case ALARM_NAMES.PURGE:
+      return {
+        delayInMinutes: startup ? PURGE_STARTUP_DELAY_MINUTES : PURGE_ALARM_PERIOD_MINUTES,
+        periodInMinutes: PURGE_ALARM_PERIOD_MINUTES,
+      };
+    case ALARM_NAMES.GRADE:
+      return {
+        delayInMinutes: startup ? GRADE_STARTUP_DELAY_MINUTES : GRADE_ALARM_PERIOD_MINUTES,
+        periodInMinutes: GRADE_ALARM_PERIOD_MINUTES,
+      };
+    case ALARM_NAMES.DIGEST:
+      return { when: nextDigestMs(nowMs) };
+  }
+}
 
 export function isAttestAlarm(name: string): name is AlarmName {
   return Object.values<string>(ALARM_NAMES).includes(name);
@@ -78,7 +97,7 @@ export async function resetAlarms(): Promise<void> {
     if (!isAttestAlarm(alarm.name)) await browser.alarms.clear(alarm.name);
   }
   for (const name of Object.values(ALARM_NAMES)) {
-    await browser.alarms.create(name, { delayInMinutes: PERIODS[name], periodInMinutes: PERIODS[name] });
+    await browser.alarms.create(name, createInfo(name, Date.now(), false));
   }
 }
 
@@ -90,12 +109,7 @@ export async function resetAlarms(): Promise<void> {
 export async function ensureAlarms(): Promise<void> {
   const existing = new Set((await browser.alarms.getAll()).map((alarm) => alarm.name));
   for (const name of Object.values(ALARM_NAMES)) {
-    if (!existing.has(name)) {
-      await browser.alarms.create(name, {
-        delayInMinutes: STARTUP_DELAYS[name],
-        periodInMinutes: PERIODS[name],
-      });
-    }
+    if (!existing.has(name)) await browser.alarms.create(name, createInfo(name, Date.now(), true));
   }
 }
 

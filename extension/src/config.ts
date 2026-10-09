@@ -118,12 +118,25 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
 
 /**
  * Service-worker alarm names (extension_engineer: alarm names are constants; duplicates are cleared on
- * install/update): the retention purge (Sprint 2.6) and the grace alarm that runs a grading batch (sprint_3 3.13).
+ * install/update): the retention purge (Sprint 2.6), the grace alarm that runs a grading batch (sprint_3 3.13) and the
+ * weekly digest (sprint_4 4.7).
  */
 export const ALARM_NAMES = Object.freeze({
   PURGE: 'attest.purge',
   GRADE: 'attest.grade',
+  DIGEST: 'attest.digest',
 } as const);
+
+/**
+ * When the weekly digest is made (sprint_4 4.7; src/background/digest.ts): Monday (`Date.getDay()` 1) at 09:00 on the
+ * browser's clock, for the week that ended at the Monday's midnight. A one-shot alarm, set again each time it fires, so
+ * a change to or from daylight saving time never moves it off 09:00.
+ */
+export const DIGEST_WEEKDAY = 1;
+export const DIGEST_HOUR = 9;
+
+/** The notification that says a weekly digest is ready (sprint_4 4.7); a click opens it. */
+export const DIGEST_NOTIFICATION_ID = 'attest.digest';
 
 export type AlarmName = (typeof ALARM_NAMES)[keyof typeof ALARM_NAMES];
 

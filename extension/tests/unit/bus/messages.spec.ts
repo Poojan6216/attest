@@ -248,6 +248,7 @@ describe('ledger.changed', () => {
         'claims',
         'coverage',
         'coverageIntervals',
+        'digests',
         'grants',
         'meta',
         'observations',

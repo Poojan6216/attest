@@ -24,8 +24,11 @@ import {
   ActivityRecord,
   AdapterHealth,
   Attribution,
+  AgentWeek,
   AlertRecord,
   BatchCoverageRecord,
+  DigestRecord,
+  NotableReceipt,
   Claim,
   Coverage,
   CoveragePing,
@@ -86,6 +89,7 @@ const TABLE_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
   policies: keys(PolicyRecord),
   batchCoverages: [...keys(BatchCoverageRecord), ...keys(Coverage), ...keys(ObserverCoverage)],
   alerts: keys(AlertRecord),
+  digests: [...keys(DigestRecord), ...keys(AgentWeek), ...keys(NotableReceipt)],
 };
 
 /** Every table the ledger database holds: the ledger tables and the replay records (sprint_3 3.13). */

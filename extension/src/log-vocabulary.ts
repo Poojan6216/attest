@@ -19,6 +19,9 @@ export const LOG_EVENTS = [
   'alarm.handler_failed',
   'alarm.reset_failed',
   'alarm.unknown',
+  'digest.made',
+  'digest.read_failed',
+  'digest.copy_failed',
   'alerts.deliver_failed',
   'alerts.open_failed',
   'alerts.opened',
@@ -88,6 +91,7 @@ export const LOG_EVENTS = [
   'options.retention_save_failed',
   'options.settings_read_failed',
   'options.wipe_failed',
+  'popup.digest_failed',
   'popup.options_failed',
   'popup.read_failed',
   'popup.side_panel_failed',
@@ -256,6 +260,7 @@ export const LOG_VALUES = [
   'policies',
   'batch_coverages',
   'alerts',
+  'digests',
   // The Activity lists a grading batch reads (src/background/grading.ts `latest`).
   'sessions',
   'idle_intervals',
@@ -263,6 +268,7 @@ export const LOG_VALUES = [
   // Alarm names (src/config.ts ALARM_NAMES).
   'attest.purge',
   'attest.grade',
+  'attest.digest',
   // Agents and observers: our own adapter and observer ids.
   'muse',
   'chatgpt',
@@ -291,6 +297,7 @@ export const LOG_VALUES = [
   'popup',
   'sidepanel',
   'options',
+  'digest',
   'dev',
 ] as const;
 

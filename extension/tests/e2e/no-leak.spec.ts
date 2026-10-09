@@ -8,8 +8,9 @@
  * them and real rows reach the ledger before the channels are searched. After a session, no seed value or canary fragment may appear in: the extension's
  * own ledger export, any IndexedDB database, any chrome.storage area, the extension origin's web storage
  * and CacheStorage, the web storage, IndexedDB or cookies of the pages it reads, console output from any
- * context, or any network URL or body (telemetry included, from Sprint 5). Later sprints extend the page
- * list with real vendor fixtures and add the share output; the channels stay. The negative control plants
+ * context, any network URL or body (telemetry included, from Sprint 5), or the share output (sprint_4 4.7: the weekly
+ * digest the session's ledger makes, through its alarm, as the digest page would copy it; searched as written and with
+ * its markdown escapes removed). Later sprints extend the page list with real vendor fixtures; the channels stay. The negative control plants
  * a seed in each channel, some of them lightly transformed, and proves the collectors catch it. Never
  * skipped, retried, or weakened.
  */
@@ -29,6 +30,7 @@ import {
   recordConsole,
   type StorageChannels,
 } from './support/channels';
+import { makeDigestNow, readShare } from './support/digest';
 import { launchExtension } from './support/extension';
 import { findLeaks, type Leak, loadSeeds, type Seed } from './support/leaks';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
@@ -68,6 +70,8 @@ interface Collected {
   readonly consoleLines: readonly string[];
   readonly routeRecords: readonly RouteRecord[];
   readonly netLogUrls: readonly string[];
+  /** Each share the session read, as written and with its markdown escapes removed. */
+  readonly share: readonly string[];
 }
 
 function allLeaks(collected: Collected, seeds: readonly Seed[]): Leak[] {
@@ -85,6 +89,7 @@ function allLeaks(collected: Collected, seeds: readonly Seed[]): Leak[] {
       [...collected.netLogUrls, ...collected.routeRecords.map((r) => `${r.url} ${r.body}`)],
       seeds,
     ),
+    ...findLeaks('share', collected.share, seeds),
   ];
 }
 
@@ -95,11 +100,13 @@ const seed = (id: string): Seed => {
 };
 
 /** Runs `act` inside a guarded extension session and returns everything every channel holds. */
+interface SessionContext {
+  readonly extension: Awaited<ReturnType<typeof launchExtension>>;
+  readonly seededUrl: (page: string) => string;
+}
+
 async function collectAfter(
-  act: (ctx: {
-    extension: Awaited<ReturnType<typeof launchExtension>>;
-    seededUrl: (page: string) => string;
-  }) => Promise<void>,
+  act: (ctx: SessionContext) => Promise<readonly string[] | undefined>,
 ): Promise<Collected> {
   const server = await startFixtureServer();
   const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-noleak-'));
@@ -118,6 +125,7 @@ async function collectAfter(
   let storage: StorageChannels;
   let pages: PageChannels;
   let routeRecords: readonly RouteRecord[];
+  let shares: readonly string[];
   // One NetLog per browser launch attempt; every one is searched (tests/e2e/support/extension.ts).
   const extension = await launchExtension({
     extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)),
@@ -133,7 +141,7 @@ async function collectAfter(
     extension.context.on('page', (page) => {
       recordConsole(page, page.url() || 'page', consoleLines);
     });
-    await act({ extension, seededUrl });
+    shares = (await act({ extension, seededUrl })) ?? [];
     const probe = await extension.openExtensionPage('options.html');
     storage = await collectStorageChannels(probe, extension.context);
     pages = await collectPageChannels(extension.context);
@@ -143,7 +151,8 @@ async function collectAfter(
   }
   const netLogUrls = readNetLogRequests(dir).map((r) => r.url);
   rmSync(dir, { recursive: true, force: true });
-  return { storage, pages, consoleLines, routeRecords, netLogUrls };
+  const share = shares.flatMap((text) => [text, text.replace(/\\(.)/gu, '$1')]);
+  return { storage, pages, consoleLines, routeRecords, netLogUrls, share };
 }
 
 /**
@@ -245,6 +254,52 @@ async function plantInNetwork(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The negative control's plant into the share: a digest whose notable receipt's hint is a seed, stored behind the
+ * ledger's back, so the share the digest page makes holds it, markdown-escaped (the seed has a hyphen).
+ */
+async function plantInDigest(page: Page): Promise<void> {
+  const digest = {
+    week: '2026-10-05',
+    from: '2026-10-05T00:00:00.000-04:00',
+    to: '2026-10-12T00:00:00.000-04:00',
+    createdAt: '2026-10-12T09:00:00.000-04:00',
+    agents: [],
+    notable: [
+      {
+        receiptId: '01JA0000000000000000000001',
+        agent: 'muse',
+        grade: 'NOT_FOUND',
+        subjectHint: seed('person_name_2').value,
+      },
+    ],
+    notableCount: 1,
+    gaps: [],
+    health: [],
+  };
+  await page.evaluate(
+    (row) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('attest');
+        open.onsuccess = () => {
+          const tx = open.result.transaction('digests', 'readwrite');
+          tx.objectStore('digests').put(row);
+          tx.oncomplete = () => {
+            open.result.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            reject(new Error('the digest was not planted'));
+          };
+        };
+        open.onerror = () => {
+          reject(new Error('the ledger did not open'));
+        };
+      }),
+    digest,
+  );
+}
+
 /** Every plant the negative control makes, as `channel:seedId`: the collectors must catch each one. */
 const PLANTED = [
   'chrome-storage:api_key_openai_shape',
@@ -264,28 +319,42 @@ const PLANTED = [
   'network:url_with_token',
   'network:person_name_2',
   'network:ssn_shape',
+  'share:person_name_2',
 ] as const;
+
+/**
+ * The seeded session: the seeded pages and the vendor fixtures read, every extension page opened, a log holding every
+ * seed pasted and imported, then the week's digest made by its alarm with the clock advanced, and its share read as it
+ * would be copied (sprint_4 4.7). Returns the share.
+ */
+async function seededSession({ extension, seededUrl }: SessionContext): Promise<readonly string[]> {
+  for (const page of SEEDED_PAGES) {
+    const tab = await extension.context.newPage();
+    await tab.goto(seededUrl(page));
+    // The seeds really are on the page the extension sees.
+    await expect(tab.locator('[data-attest-seeded]')).toHaveCount(SEEDS.length);
+  }
+  await openVendorPages(extension);
+  for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
+  // A pasted log with every seed in it, imported through the side panel (sprint_3 3.13): the claims are stored
+  // and graded, and no seed may reach any channel.
+  const panel = await extension.openExtensionPage('sidepanel.html');
+  expect(await pasteActivity(panel, 'Muse', seededLog(SEEDS, FIXTURE_TIME_ZONE))).toMatch(
+    /^Imported 3 claims\.$/u,
+  );
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+  // The week's digest, made by its alarm with the clock advanced, and its share as it would be copied (4.7).
+  await makeDigestNow(extension, await extension.openExtensionPage('options.html'));
+  return [(await readShare(extension)).share];
+}
 
 test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
   test('seeded pages leave no trace in export, IndexedDB, storage, console, or network', async () => {
     test.setTimeout(3 * 60_000);
-    const collected = await collectAfter(async ({ extension, seededUrl }) => {
-      for (const page of SEEDED_PAGES) {
-        const tab = await extension.context.newPage();
-        await tab.goto(seededUrl(page));
-        // The seeds really are on the page the extension sees.
-        await expect(tab.locator('[data-attest-seeded]')).toHaveCount(SEEDS.length);
-      }
-      await openVendorPages(extension);
-      for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
-      // A pasted log with every seed in it, imported through the side panel (sprint_3 3.13): the claims are stored
-      // and graded, and no seed may reach any channel.
-      const panel = await extension.openExtensionPage('sidepanel.html');
-      expect(await pasteActivity(panel, 'Muse', seededLog(SEEDS, FIXTURE_TIME_ZONE))).toMatch(
-        /^Imported 3 claims\.$/u,
-      );
-      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    });
+    const collected = await collectAfter(seededSession);
+    // The share was read, and holds no counterparty beyond its domain: no address at all.
+    expect(collected.share.join('\n')).toContain('# Attest weekly digest');
+    expect(collected.share.join('\n')).not.toMatch(/@/u);
 
     // Every channel was actually read: an unreadable channel must never pass as "no leaks".
     expect(collected.storage.ledgerExport).toMatchObject({
@@ -314,6 +383,8 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       await plantInPage(fixture);
       await plantInConsole(await extension.serviceWorker());
       await plantInNetwork(await extension.openExtensionPage('options.html'));
+      await plantInDigest(await extension.openExtensionPage('options.html'));
+      return [(await readShare(extension)).share];
     });
     const caught = new Set(allLeaks(collected, SEEDS).map((leak) => `${leak.channel}:${leak.seedId}`));
     for (const expected of PLANTED) {

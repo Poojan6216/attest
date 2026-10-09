@@ -45,7 +45,7 @@ describe('v8 → v9', () => {
     old.close();
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(MIGRATIONS.at(-1)?.version);
     expect(await getReceipt(db, ulid(1))).toEqual(receipt);
     expect(await db.alerts.count()).toBe(0);
   });

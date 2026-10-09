@@ -36,6 +36,7 @@
  *  9. A clock repair's span (`meta` `clockRepair.*`, ./clock-repairs.ts) goes once it ended before C: no claim it
  *     bears on is still graded by then.
  * 10. A receipt's alert (./alerts.ts, sprint_4 4.6) goes with the receipt.
+ * 11. A weekly digest (./digest.ts, sprint_4 4.7) goes once its week ended before C: it describes history now gone.
  * Grants, adapter health and the rest of meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
@@ -63,7 +64,7 @@ import { purgeClockRepairs } from './clock-repairs';
 import { purgeCalendarRecords } from './calendar-snapshots';
 import { purgeReplayRecords } from './replay-records';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
-import { ActionType, AgentId, Claim, IsoTs, Observation, Receipt, Request } from './types';
+import { ActionType, AgentId, Claim, DigestRecord, IsoTs, Observation, Receipt, Request } from './types';
 import { RETENTION_DAYS } from '../config';
 
 export interface PurgeOptions {
@@ -96,6 +97,8 @@ export interface PurgeReport {
   readonly clockRepairs: number;
   /** Alerts deleted: those of the purged receipts (./alerts.ts, sprint_4 4.6). */
   readonly alerts: number;
+  /** Weekly digests deleted: those whose week ended before the cutoff (./digest.ts, sprint_4 4.7). */
+  readonly digests: number;
 }
 
 /** What goes, decided before anything is deleted. */
@@ -295,6 +298,15 @@ async function doomedRequests(db: LedgerDb, cutoffMs: number, doomed: Doomed): P
   return [...ids];
 }
 
+/** Rule 11: the digests whose week ended before the cutoff. The table holds one row per week: read whole. */
+async function purgeDigests(db: LedgerDb, cutoffMs: number): Promise<number> {
+  const old = readRows('digests', DigestRecord, await db.digests.toArray()).filter(
+    ({ to }) => instantMs(to) < cutoffMs,
+  );
+  await db.digests.bulkDelete(old.map(({ week }) => week));
+  return old.length;
+}
+
 /**
  * Purges the dated history older than the retention cutoff by the rule in the header, in one readwrite transaction,
  * and reports what went (counts only: Hard Rule 10). Throws `LedgerError('invalid_input')` for a malformed `now` or
@@ -316,6 +328,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.batchCoverages,
     db.meta,
     db.alerts,
+    db.digests,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
@@ -352,6 +365,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       batchCoverages: replay.batchCoverages,
       clockRepairs: await purgeClockRepairs(db, cutoffMs),
       alerts,
+      digests: await purgeDigests(db, cutoffMs),
     };
   });
 }
