@@ -94,12 +94,22 @@ const SKIPPED_REASONS: Readonly<Record<Exclude<EntryOutcome, 'claim'>, string>> 
 /** Why an entry gives no claim, in the preview's words. */
 export const skippedReason = (outcome: Exclude<EntryOutcome, 'claim'>): string => SKIPPED_REASONS[outcome];
 
-/** An entry's lines on one line, cut to `max` characters with an ellipsis, so the person can tell which it is. */
+/**
+ * An entry's lines on one line, cut to `max` characters with an ellipsis, so the person can tell which it is. It is
+ * cut between characters (code points), never inside a surrogate pair, which would show as a replacement character
+ * (Sprint 3 QA review GAP 8).
+ */
 export function excerpt(text: string, max = 120): string {
   const line = text
     .split('\n')
     .map((part) => part.trim())
     .filter((part) => part !== '')
     .join(' · ');
-  return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`;
+  const characters = Array.from(line);
+  return characters.length <= max
+    ? line
+    : `${characters
+        .slice(0, max - 1)
+        .join('')
+        .trimEnd()}…`;
 }

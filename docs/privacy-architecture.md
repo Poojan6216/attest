@@ -97,9 +97,9 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 ## 5. Every ledger table and field
 
-The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 5 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
+The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 7 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
 
-Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). The only other key Attest may use there is `attest.flags` ([`src/config.ts`](../extension/src/config.ts) `STORAGE_KEYS`), for the feature flags you turn on; nothing writes it yet, and every flag is off by default.
+Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). The only other key Attest may use there is `attest.flags` ([`src/config.ts`](../extension/src/config.ts) `STORAGE_KEYS`), for the feature flags you turn on; nothing writes it yet, and every flag is off by default. While away detection is on, `chrome.storage.session` (memory Chrome empties when the browser closes) holds one flag, `attest.idleSession`: `true` once this browser session has started watching, so a time away that the previous session left open is closed at what was confirmed, never stretched over the next day ([`src/background/idle.ts`](../extension/src/background/idle.ts)).
 
 ### 5.1 `observations`
 
@@ -190,7 +190,7 @@ Small facts about the ledger itself. Key `key`.
 
 | Field | Meaning |
 |---|---|
-| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync, a snapshot read at or a health check since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)); `clockRepair.<ms>`, one per time the clock went back, from Sprint 3.17: the span of instants that may have been stamped while it ran ahead, `<from>/<to>`, which grading reads ([`src/ledger/clock-repairs.ts`](../extension/src/ledger/clock-repairs.ts); [`docs/grading.md` §3](grading.md#3-inputs)); `purgeTrustedAt`, the instant the last retention purge trusted ([§7](#7-retention-and-purge)). Instants only, never content. |
+| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync, a snapshot read at or a health check since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)); `lastImportAt.<agent>`, the instant the service worker stored that agent's last pasted import, which counts as the agent's adapter sync for UNASKED finality ([`docs/grading.md` §7](grading.md#7-unasked-attributionts)); `idleOpen`, while Chrome says you are away, the id of that time away (a SHA-256 hash, [`src/ledger/activity.ts`](../extension/src/ledger/activity.ts)); `clockRepair.<ms>`, one per time the clock went back, from Sprint 3.17: the span of instants that may have been stamped while it ran ahead, `<from>/<to>`, which grading reads ([`src/ledger/clock-repairs.ts`](../extension/src/ledger/clock-repairs.ts); [`docs/grading.md` §3](grading.md#3-inputs)); `purgeTrustedAt`, the instant the last retention purge trusted ([§7](#7-retention-and-purge)). Instants only, never content. |
 | `value` | A string of at most 256 characters, a number or a boolean. |
 
 ### 5.7 `requests`
@@ -210,7 +210,7 @@ Index field: `date` (the local date of `ts`).
 
 ### 5.8 `claims`
 
-Empty until Sprint 3: what an agent says it did. Key `id`; `rawHash` is unique.
+What an agent says it did, read from an activity log you paste into the side panel (since Sprint 3.13; the readers of the agents' own pages are off, [`Decisions.md`](../Decisions.md) `[3.10]`). Key `id`; `rawHash` is unique.
 
 | Field | Meaning |
 |---|---|
@@ -220,15 +220,15 @@ Empty until Sprint 3: what an agent says it did. Key `id`; `rawHash` is unique.
 | `counterparty`, `amountCents`, `currency`, `subjectHint` | What the agent said it did it to or with: an address or a name, an amount, a subject (80 code points). |
 | `claimedAt`, `claimedAtPrecision`, `claimedAtEnd` | When the agent says it acted, and to what precision (minute, hour, day). |
 | `targetAt` | For a calendar claim, the event start it names. |
-| `observedAt` | When Attest read the claim. |
-| `sourceKind` | Where on the agent's page: activity view, chat, notification or settings. |
-| `extractor` | Which adapter read it: its `id`, `version` and the pattern's `confidence`. |
+| `observedAt` | When Attest read the claim: the instant you pasted the log. |
+| `sourceKind` | Where the claim came from: `activity_view` for a pasted log. Chat, notification and settings belong to the page readers, which are off. |
+| `extractor` | Which reader made it (`import.<agent>` for a pasted log), its `version`, and the pattern's `confidence`. |
 
 Index field: `date`.
 
 ### 5.9 `grants`
 
-Empty until Sprint 4: what you allow each agent to do, as you declare it in the options page. Key `agent`.
+What you allow each agent to do. Until the options page lets you declare it (Sprint 4), the service worker writes a default grant for each of the four agents before it stores your first import: every action type, no allowlist, no spending limit and no declared access, so your first receipts are grades rather than all OVER SCOPE ([`default-grants.ts`](../extension/src/background/default-grants.ts)). It never replaces a grant you set. Key `agent`.
 
 | Field | Meaning |
 |---|---|
@@ -243,7 +243,7 @@ Empty until Sprint 4: what you allow each agent to do, as you declare it in the 
 
 ### 5.10 `receipts`
 
-Empty until Sprint 3.6: the grade for each claim, each unclaimed action, each undeclared permission. Key `id`. A receipt holds ids, hashes, codes and numbers; the only free text in it is the reason you type when you override a grade.
+Written by the grading batch since Sprint 3.13: the grade for each claim, each unclaimed action, each undeclared permission. Key `id`. A receipt holds ids, hashes, codes and numbers; the only free text in it is the reason you type when you override a grade.
 
 | Field | Meaning |
 |---|---|
@@ -281,12 +281,12 @@ Since Sprint 3.13 (schema version 5): what each receipt was graded with besides 
 | Field | Meaning |
 |---|---|
 | `inputsHash` | The receipt's own `inputsHash`. |
-| `coverage` | The coverage the batch graded with: its `evaluatedAt`, its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`), and its `repairs` when the clock ever went back: each repair's span (`from`, `to`), as `meta` holds it ([§5.6](#56-meta)). |
+| `coverageHash` | The coverage the batch graded with, named by its hash (since schema version 7): every receipt of a batch shares one, stored once in `batchCoverages` ([§5.14](#514-batchcoverages)). |
 | `grant` | The agent's grant in force then, as `grants` holds it (`agent`, `allowedTypes`, `counterpartyAllowlist`, `spendCeilingCents`, `spendCurrency`, `declaredScopes`, `observedScopes`, `accounts`, `updatedAt`). |
 | `context` | `priorSpendCents` (the agent's spending before this claim, in cents), `attribution` on an UNASKED receipt (the likely `agent`, its `scoreBp`, the `signals` that fired, and `adapterLastSyncAt`), and `scope` on a permission receipt (the `observed` permission). |
 | `policyHash` | The policy it was graded under. |
 
-Index field: none (`policyHash` is indexed as stored, so the purge finds the policies no input names any more).
+Index field: none (`policyHash` and `coverageHash` are indexed as stored, so a policy or a coverage no input names any more is found and deleted).
 
 ### 5.13 `policies`
 
@@ -296,6 +296,15 @@ Since Sprint 3.13: each policy document a receipt was graded under, as [`policy/
 |---|---|
 | `policyHash` | SHA-256 of the document's canonical JSON. |
 | `document` | The policy document. |
+
+### 5.14 `batchCoverages`
+
+Since schema version 7 (the Sprint 3 close): the coverage a grading batch graded with, once per batch, named by the receipts' inputs ([§5.12](#512-receiptinputs)). Before, every receipt's inputs held its own copy: with many Calendar events in view a copy was tens of kilobytes, written again for each receipt still checking at every batch. Key `coverageHash`; deleted once no stored input names it. Derived data only: instants, sources and account hashes, never content.
+
+| Field | Meaning |
+|---|---|
+| `coverageHash` | SHA-256 of the coverage as grading hashes it ([`docs/grading.md` §3](grading.md#3-inputs)). |
+| `coverage` | The coverage: its `evaluatedAt`, its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`), and its `repairs` when the clock ever went back: each repair's span (`from`, `to`), as `meta` holds it ([§5.6](#56-meta)). |
 
 ## 6. What is hashed
 
@@ -325,17 +334,18 @@ Dated history is kept `RETENTION_DAYS` (90 days, [`src/config.ts`](../extension/
 - **Calendar snapshots** go when they were read before the cutoff. A range not looked at since is compared with nothing next time, so its events come back as first sightings, never as changes.
 - **Clock repair spans** (`meta` `clockRepair.*`) go once they ended before the cutoff.
 - **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
+- **Turning away detection off** deletes every time away at once, and the `idleOpen` key with them. Receipts already made keep their reasons: an UNASKED receipt that counted a time away keeps the reason `unasked.idle`, and its replay inputs the signal, until the receipt itself goes.
 
 The retention setting (30, 90 or 180 days) arrives in the options page in Sprint 4.5. Removing the extension removes its IndexedDB database and `chrome.storage.local` with it; Attest keeps nothing anywhere else.
 
 ## 8. The export
 
-`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data. `pnpm attest replay` reads it as it is: since Sprint 3.13 it carries each receipt's inputs and policy (`receiptInputs`, `policies`, [§5.12](#512-receiptinputs), [§5.13](#513-policies)). The options page's Export section saves it as one JSON file, `attest-ledger-<date>.json`, through your browser's own download: nothing is sent anywhere, and no `downloads` permission is needed. Any extension page can also ask for it with the bus query `ledger.export`. Receipts as JSON or CSV arrive in Sprint 4.5.
+`exportLedger` ([`src/ledger/export.ts`](../extension/src/ledger/export.ts)) is your copy of your data. `pnpm attest replay` reads it as it is: since Sprint 3.13 it carries each receipt's inputs and policy (`receiptInputs`, `policies`, [§5.12](#512-receiptinputs), [§5.13](#513-policies)), and since schema version 7 each batch's coverage once (`batchCoverages`, [§5.14](#514-batchcoverages)). The options page's Export section saves it as one JSON file, `attest-ledger-<date>.json`, through your browser's own download: nothing is sent anywhere, and no `downloads` permission is needed. Any extension page can also ask for it with the bus query `ledger.export`. Receipts as JSON or CSV arrive in Sprint 4.5.
 
 ```json
 {
   "format": "attest-ledger",
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "exportedAt": "2026-10-09T09:30:00.000-04:00",
   "tables": {
     "requests": [],
@@ -351,6 +361,7 @@ The retention setting (30, 90 or 180 days) arrives in the options page in Sprint
     "activity": []
   },
   "receiptInputs": {},
+  "batchCoverages": {},
   "policies": {}
 }
 ```

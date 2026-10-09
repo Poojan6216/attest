@@ -125,7 +125,7 @@ describe('reads, purge, export and schema v6', () => {
     old.close();
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7); // v6, then v7's batch coverages (Sprint 3 close, TECH-1)
     expect(await getReceipt(db, Receipt.parse(makeReceipt()).id)).toEqual(Receipt.parse(makeReceipt()));
     expect(await db.activity.count()).toBe(0);
   });

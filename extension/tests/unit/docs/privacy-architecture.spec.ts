@@ -23,11 +23,12 @@ import {
   ActivityRecord,
   AdapterHealth,
   Attribution,
+  BatchCoverageRecord,
   Claim,
   Coverage,
   CoveragePing,
-  Grant,
   GradeContext,
+  Grant,
   MetaEntry,
   Observation,
   ObserverCoverage,
@@ -75,14 +76,13 @@ const TABLE_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
   activity: [...new Set(ActivityRecord.options.flatMap((option) => keys(option)))],
   receiptInputs: [
     ...keys(ReceiptInputsRecord),
-    ...keys(Coverage),
-    ...keys(ObserverCoverage),
     ...keys(Grant),
     ...keys(GradeContext),
     ...keys(Attribution),
     ...keys(GradeContext.shape.scope.unwrap()),
   ],
   policies: keys(PolicyRecord),
+  batchCoverages: [...keys(BatchCoverageRecord), ...keys(Coverage), ...keys(ObserverCoverage)],
 };
 
 /** Every table the ledger database holds: the ledger tables and the replay records (sprint_3 3.13). */

@@ -2,9 +2,18 @@ import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 
 import { IDLE_PERMISSION } from '../../../src/config';
+import { log } from '../../../src/log';
 import { Button } from '../../../src/ui/Button';
 
-type AwayState = 'checking' | 'on' | 'off';
+type AwayState = 'checking' | 'on' | 'off' | 'unknown';
+
+/** What the status line says in each state (nothing while Chrome has not answered). */
+const STATUS: Readonly<Record<AwayState, string>> = Object.freeze({
+  checking: '',
+  on: 'Away detection is on.',
+  off: 'Away detection is off.',
+  unknown: 'Attest could not tell whether away detection is on.',
+});
 
 const PERMISSION = { permissions: [IDLE_PERMISSION] };
 
@@ -13,14 +22,15 @@ function useAway(): { state: AwayState; problem: string | null; change: (on: boo
   const [state, setState] = useState<AwayState>('checking');
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
-    // Any failure to tell reads as off: Attest never assumes it may notice when you are away.
+    // A failure to tell is said, never read as on: Attest never assumes it may notice when you are away (Hard Rule 6).
     Promise.resolve()
       .then(() => browser.permissions.contains(PERMISSION))
       .then((held) => {
         setState(held ? 'on' : 'off');
       })
-      .catch(() => {
-        setState('off');
+      .catch((error: unknown) => {
+        log.warn('options.away_check_failed', { error });
+        setState('unknown');
       });
   }, []);
   const change = (on: boolean) => {
@@ -29,7 +39,8 @@ function useAway(): { state: AwayState; problem: string | null; change: (on: boo
     let asked: Promise<boolean>;
     try {
       asked = on ? browser.permissions.request(PERMISSION) : browser.permissions.remove(PERMISSION);
-    } catch {
+    } catch (error) {
+      log.warn('options.away_change_failed', { error });
       setProblem('Something went wrong. Try again.');
       return;
     }
@@ -38,7 +49,8 @@ function useAway(): { state: AwayState; problem: string | null; change: (on: boo
         if (done) setState(on ? 'on' : 'off');
         else setProblem(on ? 'Chrome did not allow it, so it stays off.' : 'Chrome kept it on. Try again.');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        log.warn('options.away_change_failed', { error });
         setProblem('Something went wrong. Try again.');
       });
   };
@@ -61,8 +73,8 @@ export function AwayDetection() {
         be put down to an agent that was working then, still as “likely”. It keeps only when each time away
         began and ended, in this browser, never what you did.
       </p>
-      <p role="status">{state === 'checking' ? '' : `Away detection is ${state}.`}</p>
-      {state === 'off' && (
+      <p role="status">{STATUS[state]}</p>
+      {(state === 'off' || state === 'unknown') && (
         <Button
           variant="secondary"
           onClick={() => {

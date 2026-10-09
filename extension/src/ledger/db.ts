@@ -29,6 +29,7 @@ import {
   AgentId,
   Ulid,
   type AdapterHealth,
+  type BatchCoverageRecord,
   type Grant,
   type MetaEntry,
   type ObserverCoverage,
@@ -140,6 +141,21 @@ export const STORES_V6 = {
   [ACTIVITY]: 'id, endMs',
 } as const;
 
+/** The batch coverage store (./replay-records.ts). */
+export const BATCH_COVERAGES = 'batchCoverages';
+
+/**
+ * Schema v7 (Sprint 3 close; tech review TECH-1): `batchCoverages` holds each batch's coverage once, keyed by its
+ * `coverageHash`, and each `receiptInputs` row names its coverage by that hash, indexed so a coverage no row names any
+ * more is released. v5 kept a copy in every row, and every receipt of a batch was graded with the same coverage: at 200
+ * Calendar markers a copy was 62 KB, rewritten for every PENDING receipt by every batch. The upgrade moves each stored
+ * copy into the new store (./migrations.ts).
+ */
+export const STORES_V7 = {
+  [RECEIPT_INPUTS]: 'inputsHash, policyHash, coverageHash',
+  [BATCH_COVERAGES]: 'coverageHash',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -176,6 +192,7 @@ const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonl
   activity: { field: 'id', schema: Sha256 },
   receiptInputs: { field: 'inputsHash', schema: Sha256 },
   policies: { field: 'policyHash', schema: Sha256 },
+  batchCoverages: { field: 'coverageHash', schema: Sha256 },
 };
 
 export class LedgerDb extends Dexie {
@@ -234,6 +251,11 @@ export class LedgerDb extends Dexie {
   /** Schema v5. Read and written only through ./replay-records.ts. */
   get policies(): Table<PolicyRecord, string> {
     return this.table<PolicyRecord, string>(POLICIES);
+  }
+
+  /** Schema v7. Read and written only through ./replay-records.ts. */
+  get batchCoverages(): Table<BatchCoverageRecord, string> {
+    return this.table<BatchCoverageRecord, string>(BATCH_COVERAGES);
   }
 }
 

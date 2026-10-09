@@ -5,11 +5,12 @@
  *
  * A log is read line by line (docs/claims-import.md §3):
  *  - a line that names only a day ("Today", "Yesterday", a weekday, "Oct 7") is a heading for the entries below it;
- *    a heading that names a period or a date in digits ("Earlier", "Last week", "10/6/2026") is one whose day is
- *    unknown;
+ *    a heading that names a period or a date in digits ("Earlier", "Last week", "10/6/2026"), or any other line made
+ *    only of date words and numbers that names no one day ("September 2026", "2 weeks ago", "Last Thursday", "Oct
+ *    1st"), is one whose day is unknown (Sprint 3 QA review GAP 1);
  *  - a line that is only a clock time ("4:33 pm", "16:33") ends the entry above it, which happened then, on its
- *    heading's day; a line that names a time with its own day ("Yesterday, 4:33 pm", "5 minutes ago") does the same,
- *    read as it is;
+ *    heading's day, also when a copy put full-width digits or an invisible character in it (QA review GAP 2); a line
+ *    that names a time with its own day ("Yesterday, 4:33 pm", "5 minutes ago") does the same, read as it is;
  *  - a line that starts with a clock time and a separator ("4:33 PM · Sent the invoice") is an entry of its own; a
  *    time anywhere else in a line ("for Friday at 12:30 pm") is part of its text;
  *  - a blank line ends the entry above it, which then has only its heading's day;
@@ -22,13 +23,18 @@
  * `other` when it reports none, the §10 ids, so pasting the same log twice gives the same claims. A time that cannot be read, or one after the paste, gives no claim either. The text
  * never leaves the side panel: only the claims are sent on (Hard Rule 2).
  */
-import { instantMs, type OffsetAt, resolveRelative } from '../core/normalize';
+import { asciiLower, instantMs, type OffsetAt, resolveRelative } from '../core/normalize';
+import { MONTH_NAMES, WEEKDAY_NAMES } from '../core/normalize-names';
 import { type AgentId, type Claim, type IsoTs, SCHEMA_LIMITS } from '../core/schema';
 import { oneLine } from '../observers/text';
 import { buildFacts, statedTime } from './claims';
 
-/** The parser's version: every pasted claim's `extractor.version`, beside the id `import.<agent>`. */
-export const PASTE_VERSION = '1.0.0';
+/**
+ * The parser's version: every pasted claim's `extractor.version`, beside the id `import.<agent>`. 1.1.0 (Sprint 3 close):
+ * date-only headings are unplaced, time lines read after folding and dropping invisible characters, the paste read in
+ * NFC, a move's start read after its last "to", and a log over GRADING_INPUT timed entries refused.
+ */
+export const PASTE_VERSION = '1.1.0';
 /** The longest paste read; a longer one is refused, never cut. */
 export const MAX_PASTE_CHARS = 100_000;
 
@@ -73,7 +79,7 @@ export interface PastedLog {
 }
 
 /** Why a paste was refused as a whole. */
-export type PasteRefusal = 'empty' | 'too_long' | 'too_many_claims';
+export type PasteRefusal = 'empty' | 'too_long' | 'too_many_claims' | 'too_many_times';
 
 export type PasteResult =
   { readonly ok: true; readonly log: PastedLog } | { readonly ok: false; readonly refusal: PasteRefusal };
@@ -90,6 +96,64 @@ const LEADING_CLOCK = new RegExp(
 /** A heading that names a period, or a date in digits, rather than one day: its entries' day is unknown. */
 const UNPLACED_HEADING =
   /^(?:earlier|older|(?:earlier )?(?:this|last|previous|past) (?:week|month|year)|(?:last|previous|past) \d+ days|\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4})$/iu;
+
+/** The words a heading naming a period or a date is made of, beside numbers (QA review GAP 1). */
+const DATE_WORDS: ReadonlySet<string> = new Set([
+  ...[
+    'ago',
+    'last',
+    'this',
+    'next',
+    'previous',
+    'past',
+    'earlier',
+    'later',
+    'today',
+    'yesterday',
+    'tomorrow',
+  ],
+  ...[
+    'day',
+    'days',
+    'week',
+    'weeks',
+    'month',
+    'months',
+    'year',
+    'years',
+    'a',
+    'an',
+    'one',
+    'of',
+    'the',
+    'on',
+  ],
+  ...WEEKDAY_NAMES.flat(),
+  ...MONTH_NAMES.flat(),
+]);
+/** A number a date heading can hold: a day, an ordinal day ("1st") or a year. */
+const DATE_NUMBER = /^\d{1,4}(?:st|nd|rd|th)?$/u;
+
+/**
+ * Whether `line`, which the resolver does not read as one day, is only date words and numbers: a heading that names a
+ * period or a date ("September 2026", "2 weeks ago", "Last Thursday", "Oct 1st"), never an entry's text. Under it, an
+ * entry's day is unknown, so it is never read on the day of a heading above it (Hard Rule 5).
+ */
+function namesOnlyADate(line: string): boolean {
+  const words = asciiLower(line)
+    .split(/[\s,.]+/u)
+    .filter((word) => word !== '');
+  return words.length > 0 && words.every((word) => DATE_WORDS.has(word) || DATE_NUMBER.test(word));
+}
+
+/** Characters a copy can carry inside a time that show as nothing: zero-width ones, joiners, the soft hyphen, the BOM. */
+const INVISIBLE = /[\u00ad\u180e\u200b-\u200f\u2060-\u2064\ufeff]/gu;
+
+/**
+ * A line as its time is read (QA review GAP 2): compatibility forms folded, so full-width digits and colon are a clock,
+ * and invisible characters dropped, as the resolver reads it. A line whose clock only these hide is still a clock.
+ */
+const timeForm = (line: string): string => line.normalize('NFKC').replace(INVISIBLE, '');
 
 type Line =
   | { readonly kind: 'blank' }
@@ -122,15 +186,17 @@ function lineOf(raw: string, ctx: PasteContext): Line {
   const line = oneLine(raw);
   if (line === '') return { kind: 'blank' };
   if (UNPLACED_HEADING.test(line)) return { kind: 'heading', heading: { text: line, placed: false } };
-  if (BARE_CLOCK.test(line)) return { kind: 'clock', clock: line };
+  const plain = timeForm(line);
+  if (BARE_CLOCK.test(plain)) return { kind: 'clock', clock: plain };
   const alone = resolveRelative(line, { referenceIso: ctx.pastedAt, offsetAt: ctx.offsetAt });
   if (alone !== null) {
     // A time with its clock read as a whole day (one that happened twice as the clocks went back) is still a time.
-    return alone.precision === 'day' && !ANY_CLOCK.test(line)
+    return alone.precision === 'day' && !ANY_CLOCK.test(plain)
       ? { kind: 'heading', heading: { text: line, placed: true } }
       : { kind: 'stamp', time: line };
   }
-  const inline = LEADING_CLOCK.exec(line)?.groups;
+  if (namesOnlyADate(plain)) return { kind: 'heading', heading: { text: line, placed: false } };
+  const inline = LEADING_CLOCK.exec(plain)?.groups;
   if (inline?.clock !== undefined && inline.text !== undefined) {
     return { kind: 'entry', text: inline.text, clock: inline.clock };
   }
@@ -234,16 +300,20 @@ function activeAtOf(drafts: readonly Draft[], ctx: PasteContext): IsoTs[] {
 
 /**
  * The entries and claims of a pasted log (rules in the module comment), or why the paste is refused as a whole: it
- * holds nothing, it is longer than MAX_PASTE_CHARS, or it reports more claims than one import may carry
- * (SCHEMA_LIMITS.BATCH). Nothing is cut to fit.
+ * holds nothing, it is longer than MAX_PASTE_CHARS, it reports more claims than one import may carry
+ * (SCHEMA_LIMITS.BATCH), or its timed entries name more minutes than one import carries (SCHEMA_LIMITS.GRADING_INPUT;
+ * tech review TECH-3). Nothing is cut to fit, so every log it accepts is one `claims.import` message.
  */
-export function readPastedLog(text: string, ctx: PasteContext): PasteResult {
-  if (text.length > MAX_PASTE_CHARS) return { ok: false, refusal: 'too_long' };
-  if (text.trim() === '') return { ok: false, refusal: 'empty' };
-  const drafts = draftsOf(text, ctx);
+export function readPastedLog(pasted: string, ctx: PasteContext): PasteResult {
+  if (pasted.length > MAX_PASTE_CHARS) return { ok: false, refusal: 'too_long' };
+  if (pasted.trim() === '') return { ok: false, refusal: 'empty' };
+  // One form of the text, whatever the copy gave: the same log gives the same claims (QA review GAP 6).
+  const drafts = draftsOf(pasted.normalize('NFC'), ctx);
   const entries = drafts.map((draft) => readEntry(draft, ctx));
   const claims = new Map<string, Claim>();
   for (const entry of entries) for (const claim of entry.claims) claims.set(claim.id, claim);
   if (claims.size > SCHEMA_LIMITS.BATCH) return { ok: false, refusal: 'too_many_claims' };
-  return { ok: true, log: { entries, claims: [...claims.values()], activeAt: activeAtOf(drafts, ctx) } };
+  const activeAt = activeAtOf(drafts, ctx);
+  if (activeAt.length > SCHEMA_LIMITS.GRADING_INPUT) return { ok: false, refusal: 'too_many_times' };
+  return { ok: true, log: { entries, claims: [...claims.values()], activeAt } };
 }

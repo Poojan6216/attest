@@ -83,3 +83,11 @@ describe('paste preview labels', () => {
     expect(excerpt('x'.repeat(200), 10)).toBe(`${'x'.repeat(9)}…`);
   });
 });
+
+describe('excerpt and surrogate pairs', () => {
+  it('cuts between characters, never inside a surrogate pair (QA review GAP 8)', () => {
+    const cut = excerpt(`${'x'.repeat(118)}\u{1F600} and more`);
+    expect(cut).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/u);
+    expect(cut).toBe(`${'x'.repeat(118)}\u{1F600}…`);
+  });
+});

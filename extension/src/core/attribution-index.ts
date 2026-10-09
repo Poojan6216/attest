@@ -40,7 +40,7 @@ export interface IntervalIndex {
 }
 
 /** The number of entries of the ascending `sorted` that are ≤ `value`. */
-function countAtMost(sorted: readonly number[], value: number): number {
+export function countAtMost(sorted: readonly number[], value: number): number {
   let low = 0;
   let high = sorted.length;
   while (low < high) {

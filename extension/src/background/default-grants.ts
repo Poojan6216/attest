@@ -3,7 +3,8 @@
  * editable): every action type allowed, no counterparty allowlist (an empty one restricts nothing, core
  * conditions-scope.ts), no spending ceiling and no declared scopes. A grading batch needs one in force for every
  * agent it grades (`BatchError('missing_grant')` otherwise, docs/grading.md §3), so the service worker writes the
- * missing ones on install and update, and before it stores an import. A grant the user wrote is never replaced.
+ * missing ones before it stores an import (./claims-import.ts), the only path to a batch with claims. A grant the user
+ * wrote is never replaced.
  */
 import { ActionType, AgentId, type Grant, type IsoTs } from '../core/schema';
 import type { LedgerDb } from '../ledger/db';

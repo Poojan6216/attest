@@ -3,7 +3,9 @@
  *  - equal to an independent oracle that reads §7 literally with linear scans (no index, no binary search):
  *    windows anchored on the earliest observedAt for calendar observations and on occurredAt otherwise, only
  *    assignable claims (decided by hand from §4.3 for the generated claims) suppressing activityLogAdjacent,
- *    and nothing from after evaluatedAt read (idle intervals cut at it);
+ *    a ping at the instant of an entry that fires activityLogAdjacent being that entry (v1.17: with no other ping
+ *    in reach only the heavier of the two fires, adjacency on a tie), and nothing from after evaluatedAt read (idle
+ *    intervals cut at it);
  *  - independent of the input order of every activity list;
  *  - the result always parses with the strict Attribution schema, carries an agent-specific signal, and its
  *    score is exactly min(Σ fired weights, BASIS_POINTS) in integer basis points;
@@ -132,8 +134,20 @@ function oracleSignals(
     const distance = t < unit.startMs ? unit.startMs - t : t > unit.endMs ? t - unit.endMs : 0;
     return distance <= W.adjacentMin * MS_PER_MINUTE;
   });
-  if (!explained && activity.entries.some((e) => e.agent === agent && within(ms(e.at), W.adjacentMin))) {
-    fired.add('activityLogAdjacent');
+  const firing = explained
+    ? []
+    : activity.entries
+        .filter((e) => e.agent === agent && within(ms(e.at), W.adjacentMin))
+        .map((e) => ms(e.at));
+  if (firing.length > 0) fired.add('activityLogAdjacent');
+  const ownPing = activity.sessions.some(
+    (s) => s.agent === agent && within(ms(s.at), W.sessionMin) && !firing.includes(ms(s.at)),
+  );
+  if (fired.has('agentSessionActive') && firing.length > 0 && !ownPing) {
+    const weights = POLICY.bp.unasked.signals;
+    const lighter =
+      weights.agentSessionActive > weights.activityLogAdjacent ? 'activityLogAdjacent' : 'agentSessionActive';
+    fired.delete(lighter);
   }
   if (fired.size === 0) return [];
   const covers = (i: { from: string; to: string }) =>

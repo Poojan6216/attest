@@ -8,7 +8,10 @@
  * seen, `firstSeenAt`; the caller passes the representative, as gradeBatch does), for every other type its
  * `occurredAt`. Each agent is scored on its own:
  *
- *  - `agentSessionActive`: a session ping of the agent within ±`unasked.windows.sessionMin` of the anchor;
+ *  - `agentSessionActive`: a session ping of the agent within ±`unasked.windows.sessionMin` of the anchor. A ping at
+ *    the instant of one of the agent's entries is that entry (one fact, v1.17): when `activityLogAdjacent` fires and
+ *    every ping in reach sits at the instant of an entry that fires it, only the heavier of the two signals fires
+ *    (`activityLogAdjacent` on a tie), so one pasted entry never sums two weights (./attribution-activity.ts);
  *  - `userIdle` (agent-independent): ONE recorded idle interval covers `[anchor − idleMin, anchor]` (inclusive;
  *    intervals are never merged). Positive evidence only: no recorded interval means "not idle", never "idle";
  *  - `agentSignature`: the subject hint contains one of `unasked.signatures[agent]`, with ASCII-only case
@@ -40,10 +43,20 @@ import {
   point,
   untilLimit,
 } from './attribution-index';
-import { type FeatureClaim, type FeaturePolicy, isAssignable } from './features';
+import {
+  type AgentAt,
+  type AttributionActivity,
+  type AttributionPolicy,
+  instantsBy,
+  latestSyncs,
+  ownPing,
+  suppressingClaims,
+  type WindowsMs,
+  windowsMs,
+} from './attribution-activity';
 import { asciiLower, instantMs } from './normalize';
 import { anchorAt } from './order';
-import { assertLoadedPolicy, type Policy } from './policy';
+import { assertLoadedPolicy } from './policy';
 import {
   type ActionType,
   AgentId,
@@ -53,10 +66,11 @@ import {
   type ReasonCode,
   UnaskedSignal,
 } from './schema';
-import { BASIS_POINTS, MS_PER_MINUTE } from './units';
+import { BASIS_POINTS } from './units';
 import { type Interval, precisionBounds } from './window';
 
 export { AttributionError, type AttributionErrorCode } from './attribution-index';
+export type { AttributionActivity, AttributionClaim, AttributionPolicy } from './attribution-activity';
 
 /**
  * The observation fields attribution reads. A parsed `Observation` satisfies it. Its first sighting (`sightedAt`,
@@ -69,40 +83,6 @@ export interface AttributionOrphan {
   readonly sightedAt?: string | undefined;
   readonly subjectHint?: string | undefined;
 }
-
-/**
- * The claim fields attribution reads (adjacency suppression): what `isAssignable` reads, the agent, and when the
- * claim was first read (`observedAt`, filtered by `evaluatedAt`). A parsed `Claim` satisfies it.
- */
-export interface AttributionClaim extends FeatureClaim {
-  readonly agent: AgentId;
-  readonly observedAt: string;
-}
-
-interface AgentAt {
-  readonly agent: AgentId;
-  readonly at: string;
-}
-
-/**
- * An activity-log entry. Its optional `type` is informational and not read: §7 fires `activityLogAdjacent` on
- * any entry of the agent and asks only whether an assignable CLAIM of the observation's type is near.
- */
-interface ActivityEntry extends AgentAt {
-  readonly type?: ActionType | undefined;
-}
-
-/** The activity attribution reads (§7 `Activity`). A parsed `Activity` satisfies it. */
-export interface AttributionActivity {
-  readonly sessions: readonly AgentAt[];
-  readonly idle: readonly { readonly from: string; readonly to: string }[];
-  readonly entries: readonly ActivityEntry[];
-  readonly adapterSyncs: readonly { readonly agent: AgentId; readonly lastSyncAt: IsoTs }[];
-  readonly claims: readonly AttributionClaim[];
-}
-
-/** The policy fields attribution reads (`isAssignable` reads the feature fields). A loaded `Policy` satisfies it. */
-export type AttributionPolicy = FeaturePolicy & Pick<Policy, 'unasked'>;
 
 /**
  * Attributes one orphan observation; built once per activity by `attributor`. `occurredMs`, when the caller
@@ -130,6 +110,9 @@ interface AgentIndex {
   readonly agent: AgentId;
   readonly sessions: IntervalIndex | undefined;
   readonly entries: IntervalIndex | undefined;
+  /** The instants of its session pings, ascending, and of its entries: the one-fact rule's (v1.17). */
+  readonly sessionMs: readonly number[];
+  readonly entryMs: ReadonlySet<number>;
   /** The agent's suppressing claims (`suppressingClaims`) by type, each as its precision unit (§4.1). */
   readonly claims: ReadonlyMap<ActionType, IntervalIndex>;
   /** The agent's signatures, ASCII-lowercased. */
@@ -142,13 +125,6 @@ interface ActivityIndex {
   readonly agents: readonly AgentIndex[];
   readonly idle: IntervalIndex;
   readonly anySignature: boolean;
-}
-
-/** The signal windows in ms, each a safe integer (the policy loader caps them; checked again here). */
-interface WindowsMs {
-  readonly session: number;
-  readonly idle: number;
-  readonly adjacent: number;
 }
 
 /**
@@ -170,51 +146,6 @@ function limitOf(evaluatedAt: string | undefined): number {
   return evaluatedAt === undefined ? Number.POSITIVE_INFINITY : instantMs(evaluatedAt);
 }
 
-/**
- * Each agent's latest adapter sync at or before `limitMs`, by instant; equal instants written differently resolve
- * to the smallest string, so the result does not depend on input order.
- */
-function latestSyncs(syncs: AttributionActivity['adapterSyncs'], limitMs: number): Map<AgentId, IsoTs> {
-  const latest = new Map<AgentId, { readonly ms: number; readonly at: IsoTs }>();
-  for (const sync of syncs) {
-    const ms = instantMs(sync.lastSyncAt);
-    if (ms > limitMs) continue;
-    const held = latest.get(sync.agent);
-    if (held === undefined || ms > held.ms || (ms === held.ms && sync.lastSyncAt < held.at)) {
-      latest.set(sync.agent, { ms, at: sync.lastSyncAt });
-    }
-  }
-  return new Map([...latest].map(([agent, { at }]) => [agent, at]));
-}
-
-/**
- * Per agent, the claims that can suppress its `activityLogAdjacent` (§7): ASSIGNABLE (§4.3) and first read at or
- * before `limitMs`. Only a claim whose precision unit lies within 2 × `adjacentMin` of one of the agent's
- * entries can ever matter (the entry and the claim are each within `adjacentMin` of the anchor), so no other
- * claim is planned: the result is the same, and a batch plans a handful of claims instead of every one.
- */
-function suppressingClaims(
-  claims: readonly AttributionClaim[],
-  entries: ReadonlyMap<AgentId, IntervalIndex>,
-  policy: AttributionPolicy,
-  limitMs: number,
-): Map<AgentId, AttributionClaim[]> {
-  const { adjacent } = windowsMs(policy);
-  const reach = checkedSafe(adjacent + adjacent);
-  const claimsOf = new Map<AgentId, AttributionClaim[]>();
-  for (const claim of claims) {
-    const agentEntries = entries.get(claim.agent);
-    if (agentEntries === undefined || instantMs(claim.observedAt) > limitMs) continue;
-    const unit = precisionBounds(claim);
-    if (!agentEntries.exists(checkedSafe(unit.endMs + reach), checkedSafe(unit.startMs - reach))) continue;
-    if (!isAssignable(claim, policy)) continue;
-    const held = claimsOf.get(claim.agent);
-    if (held === undefined) claimsOf.set(claim.agent, [claim]);
-    else held.push(claim);
-  }
-  return claimsOf;
-}
-
 function indexActivity(
   activity: AttributionActivity,
   policy: AttributionPolicy,
@@ -225,12 +156,16 @@ function indexActivity(
   const agentOf = (item: AgentAt) => item.agent;
   const sessions = indexBy(activity.sessions, agentOf, at, limitMs);
   const entries = indexBy(activity.entries, agentOf, at, limitMs);
+  const sessionMs = instantsBy(activity.sessions, limitMs);
+  const entryMs = instantsBy(activity.entries, limitMs);
   const lastSync = latestSyncs(activity.adapterSyncs, limitMs);
   const claimsOf = suppressingClaims(activity.claims, entries, policy, limitMs);
   const agents = AgentId.options.map((agent): AgentIndex => ({
     agent,
     sessions: sessions.get(agent),
     entries: entries.get(agent),
+    sessionMs: sessionMs.get(agent) ?? [],
+    entryMs: new Set(entryMs.get(agent)),
     claims: indexBy(claimsOf.get(agent) ?? [], (claim) => claim.type, precisionBounds),
     signatures: policy.unasked.signatures[agent].map(asciiLower),
     lastSync: lastSync.get(agent),
@@ -247,15 +182,6 @@ function indexActivity(
     agents: active,
     idle: intervalIndex(idle),
     anySignature: active.some((agent) => agent.signatures.length > 0),
-  };
-}
-
-function windowsMs(policy: AttributionPolicy): WindowsMs {
-  const { sessionMin, idleMin, adjacentMin } = policy.unasked.windows;
-  return {
-    session: checkedSafe(sessionMin * MS_PER_MINUTE),
-    idle: checkedSafe(idleMin * MS_PER_MINUTE),
-    adjacent: checkedSafe(adjacentMin * MS_PER_MINUTE),
   };
 }
 
@@ -296,13 +222,18 @@ interface Weighing {
  */
 function weigh(agent: AgentIndex, w: Weighing, held: AgentIndex | null): AgentIndex | null {
   const { windows, best, anchorMs, idle } = w;
-  const session = near(agent.sessions, anchorMs, windows.session);
+  const weights = w.policy.bp.unasked.signals;
+  let session = near(agent.sessions, anchorMs, windows.session);
   const signature = signed(agent.signatures, w.subject);
-  const adjacent =
+  let adjacent =
     near(agent.entries, anchorMs, windows.adjacent) &&
     !near(agent.claims.get(w.type), anchorMs, windows.adjacent);
+  // One fact (v1.17): pings only at the instants of the entries that fire adjacency are those entries.
+  if (session && adjacent && !ownPing(agent.sessionMs, agent.entryMs, anchorMs, windows)) {
+    if (weights.agentSessionActive > weights.activityLogAdjacent) adjacent = false;
+    else session = false;
+  }
   if (!session && !signature && !adjacent) return held;
-  const weights = w.policy.bp.unasked.signals;
   const total =
     (session ? weights.agentSessionActive : 0) +
     (idle ? weights.userIdle : 0) +

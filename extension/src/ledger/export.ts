@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import { PolicyDocument } from '../core/policy-document';
+import { Coverage } from '../core/schema';
 import { CalendarRecord } from './calendar-snapshots';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
@@ -31,7 +32,7 @@ import {
   Observation,
   ObserverCoverage,
   Receipt,
-  ReceiptInputs,
+  ReceiptInputsRef,
   Request,
   Sha256,
 } from './types';
@@ -58,10 +59,12 @@ export const LedgerExport = z.strictObject({
   }),
   /**
    * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
-   * and the policy documents receipts name, by `policyHash`: the two maps `pnpm attest replay` reads. Empty in an
-   * export taken before 3.13.
+   * naming its batch's coverage by `coverageHash`; each batch coverage once, by that hash (schema v7, TECH-1); and the
+   * policy documents receipts name, by `policyHash`: the three maps `pnpm attest replay` reads. Empty in an export
+   * taken before 3.13.
    */
-  receiptInputs: z.record(Sha256, ReceiptInputs).default({}),
+  receiptInputs: z.record(Sha256, ReceiptInputsRef).default({}),
+  batchCoverages: z.record(Sha256, Coverage).default({}),
   policies: z.record(Sha256, PolicyDocument).default({}),
 });
 

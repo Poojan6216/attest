@@ -24,6 +24,7 @@ import {
 } from '../../../entrypoints/sidepanel/use-paste-flow';
 import { MAX_PASTE_CHARS } from '../../../src/adapters/paste';
 import { IsoTs, SCHEMA_LIMITS } from '../../../src/core/schema';
+import { setLogSink } from '../../../src/log';
 
 const CLOCK: PasteClock = { now: () => IsoTs.parse('2026-10-08T17:00:00-04:00'), offsetAt: () => -240 };
 const SECRET = 'zq-7781-private-note';
@@ -296,12 +297,17 @@ describe('Add agent activity: a failed import, and the text', () => {
     ];
     mount(vi.fn<ImportClaims>(() => outcomes.shift()?.() ?? Promise.resolve<ImportOutcome>({ ok: false })));
     await previewOf(LOG);
+    const logged: string[] = [];
+    const restore = setLogSink((record) => logged.push(record.event));
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       await click('Import 2 claims');
       await settle();
       expect(alerts()).toEqual(['Could not import the claims. Try again.']);
       expect(root.querySelector('#paste-preview-heading')).not.toBeNull();
     }
+    restore();
+    // The rejection is logged, never silent (SEC-6); a failure the worker answered was logged where it happened.
+    expect(logged).toEqual(['sidepanel.import_failed']);
     await click('Import 2 claims');
     await settle();
     expect(status()).toBe('Attest already had all 2 claims.');

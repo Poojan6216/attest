@@ -1,6 +1,6 @@
 # Attest privacy policy
 
-Version 0.2. Effective 8 October 2026 (version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
+Version 0.3. Effective 9 October 2026 (version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
@@ -79,7 +79,7 @@ Attest deletes stored facts once they are 90 days old; the purge runs once a day
 
 ## Deleting your data
 
-Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. Turning away detection off deletes every time away it kept. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
+Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. Turning away detection off deletes every time away it kept. Receipts already made keep their reasons: an UNASKED receipt that counted a time away of yours still says so until that receipt is deleted with the rest of your history after 90 days. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
 
 ## Permissions
 

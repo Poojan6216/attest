@@ -12,14 +12,14 @@ All notable changes to this project are documented here. The format follows [Kee
 - `src/log.ts`, the only logger: prints identifiers and shapes, never free-form strings.
 - Test rails: Vitest + fast-check, Playwright loading the real build in Chromium, a localhost fixture server, and `pnpm bench` generating `RESULTS.md`.
 - Two `@mandatory` E2E tests: nothing leaves the browser (5-minute session, NetLog attribution, negative controls) and no seeded secret leaks into export, IndexedDB, storage, console or network.
-- Ledger: Dexie schema v4 (ten tables, the Calendar snapshots and the coverage intervals among them), typed repositories, idempotent upserts, migrations and a deterministic export.
+- Ledger: Dexie schema v7 (fourteen tables: the Calendar snapshots, the coverage intervals, the activity and the three replay stores among them), typed repositories, idempotent upserts, migrations and a deterministic export.
 - Typed message bus with Zod validation on both ends.
 - `policy/default.json` and a pure, frozen policy loader.
 - `pnpm capture`: a read-only fixture capture tool with a PII sanitiser.
 - Options page shell with a resettable install id; `PRIVACY.md` v0.
 - Service worker wiring: bus, install handler, and a daily purge of facts older than 90 days.
 - Readers for your own Gmail and Google Calendar tabs (`src/observers`): the Gmail Sent folder, receipt emails you open (seven platform parsers and a generic one), and the Calendar views you open. Attest asks Chrome to read `mail.google.com` and `calendar.google.com`, and reads them only in tabs you open; it does not run in incognito windows.
-- The options page exports the whole ledger as one JSON file, in the ledger's export format. `pnpm attest replay` reads such a file once Sprint 3.6 adds each receipt's inputs and policy to the export; until then it refuses it.
+- The options page exports the whole ledger as one JSON file, in the ledger's export format, with each receipt's inputs and policy, so `pnpm attest replay` can prove every receipt from it.
 - CI on GitHub Actions.
 - The grading core (`src/core`): pure functions that compare an agent's claims with what your Gmail and Calendar tabs showed and issue one receipt per claim: VERIFIED, PARTIAL, NOT FOUND, UNASKED, OVER SCOPE or UNVERIFIABLE. Scores are exact fractions, so no rounding ever decides a grade, and every number comes from `policy/default.json`. Attest says NOT FOUND only after every relevant tab was seen over the whole claim window and the grace period passed; with less to go on, the receipt says UNVERIFIABLE.
 - Normalisation of addresses, names, subjects, amounts and vendor-relative times ("2:03 PM", "Yesterday"). A look-alike address (a dotless `ı`, a `xn--` domain) is flagged, never treated as the real one.
@@ -28,9 +28,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - Receipt states: PENDING (shown as "checking"), FINAL and USER_OVERRIDDEN. An override to VERIFIED or NOT FOUND sits beside the computed grade, never replaces it, and can be undone; the screens that set one arrive in Sprint 4.
 - UNASKED receipts for actions no claim explains, when attribution signals (an agent session, you being idle, an agent's signature, its activity log) point to an agent. They always say "likely".
 - Scope checks: an action type outside the grant, a counterparty outside the allowlist, one purchase or the rolling total over the spend ceiling, and permissions an agent holds beyond the ones you declared.
-- Replay: `pnpm attest replay <export.json>` re-derives every stored receipt from its stored inputs and lists each mismatch ([docs/grading.md §9](docs/grading.md#replay-procedure)). The extension's own export carries those inputs from Sprint 2.6/3.6; until then replay runs on synthetic ledgers.
+- Replay: `pnpm attest replay <export.json>` re-derives every stored receipt from its stored inputs and lists each mismatch ([docs/grading.md §9](docs/grading.md#replay-procedure)). The extension's own export carries those inputs.
 - [docs/grading.md](docs/grading.md): the grading contract, with every grade, rule, feature and window, the receipt state diagram, the replay procedure and worked examples.
-- 114 golden scenarios ([extension/tests/golden/](extension/tests/golden/)) with hand-computed expectations, property tests for determinism, redaction and replay, a test that runs `src/core` with every clock, randomness, time-zone, locale, timer and network global poisoned, and perf gates for candidate lookup and batch grading (5,000 claims against 50,000 observations; measured numbers in [RESULTS.md](RESULTS.md)).
+- 115 golden scenarios ([extension/tests/golden/](extension/tests/golden/)) with hand-computed expectations, property tests for determinism, redaction and replay, a test that runs `src/core` with every clock, randomness, time-zone, locale, timer and network global poisoned, and perf gates for candidate lookup and batch grading (5,000 claims against 50,000 observations; measured numbers in [RESULTS.md](RESULTS.md)).
 - `pnpm check-docs`, run by `pnpm lint`: every relative link, anchor, quoted `pnpm` script and policy rule id in the docs must exist (a `cd` inside a subshell `( … )` ends with it); docs/grading.md §15 must document every key of the golden file format; no Markdown file may hold an absolute path from one machine; and Decisions.md entries from the Sprint 1 close on say what was decided, not how the work was organised.
 - `pnpm test:coverage`: `src/core` coverage, failing below 95% of lines. CI runs it.
 - `pnpm test:coverage:observers`: `src/observers` coverage over the suites that run the observers, failing below 85% of lines. CI runs it.
@@ -107,6 +107,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Attest's readers for Muse, ChatGPT and Claude are off: Meta's, OpenAI's and Anthropic's terms do not allow collecting data from their sites by automated means. The options page lists each reader, on or off, and why, and Attest asks for access to Gmail and Google Calendar only (PRIVACY.md version 0.1).
 - Grading ranks a batch's candidate ids by number rather than as text, halving that step (37 → 18 ms per 5,000-claim bench batch) with every receipt unchanged.
 - `docs/grading.md` v1.16: when the computer's clock was wrong and is set right, a calendar event an agent said it created is never NOT FOUND because of it. Attest now keeps the span of time the wrong clock may have stamped, and a claim stamped in it is UNVERIFIABLE (`coverage.clock_repaired`) when its event was first seen only after the fix. Before, the event's sighting could read as older than the claim and be ruled out, so a true claim was NOT FOUND (golden 114).
+- Each receipt's replay record names its grading batch's coverage instead of copying it (schema v7): a batch's coverage is stored once, so the records no longer grow by tens of kilobytes per receipt with every Calendar event in view, and the export stays small enough to save and replay.
+- `docs/grading.md` v1.17: one line of a pasted activity log counts once as evidence that the agent was working. Its time was counted twice, as the agent's session and as its activity, so one pasted calendar action could make a send of your own, two minutes later, UNASKED "likely the agent" (golden 115).
 
 ### Removed
 

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { MAX_PASTE_CHARS, type PastedLog, type PasteRefusal, readPastedLog } from '../../src/adapters/paste';
 import type { OffsetAt } from '../../src/core/normalize';
 import { type AgentId, type Claim, type IsoTs, SCHEMA_LIMITS } from '../../src/core/schema';
+import { log } from '../../src/log';
 import { count } from '../../src/ui/paste-labels';
 
 /** The paste instant and the person's zone: the side panel's own clock (src/clock.ts, src/observers/time-zone.ts). */
@@ -57,6 +58,7 @@ export const REFUSALS: Readonly<Record<PasteRefusal, string>> = Object.freeze({
   empty: 'Paste the activity log first.',
   too_long: `This log is longer than ${MAX_PASTE_CHARS.toLocaleString('en')} characters. Paste a shorter part.`,
   too_many_claims: `This log has more than ${String(SCHEMA_LIMITS.BATCH)} claims. Paste a shorter part.`,
+  too_many_times: `This log has more than ${SCHEMA_LIMITS.GRADING_INPUT.toLocaleString('en')} timed entries. Paste a shorter part.`,
 });
 
 /** The form after Preview: the preview of the parsed log, or the form saying why it was refused. */
@@ -109,6 +111,16 @@ export interface PasteFlow {
   readonly send: () => void;
 }
 
+/** The import of `current`, a failure logged and read as a failed outcome, never silent (Hard Rule 6). */
+function importLogged(onImport: ImportClaims, current: PreviewStep): Promise<ImportOutcome> {
+  return onImport(current.agent, current.log.claims, current.log.activeAt).catch(
+    (error: unknown): ImportOutcome => {
+      log.warn('sidepanel.import_failed', { error });
+      return { ok: false };
+    },
+  );
+}
+
 /** The flow's state, its transitions, and where focus goes after each (one request, taken once). */
 export function usePasteFlow(clock: PasteClock, onImport: ImportClaims): PasteFlow {
   const [step, setStep] = useState<Step>(CLOSED);
@@ -134,9 +146,7 @@ export function usePasteFlow(clock: PasteClock, onImport: ImportClaims): PasteFl
   };
   const importNow = async (current: PreviewStep): Promise<void> => {
     go({ ...current, importing: true, failed: false }, null);
-    const outcome = await onImport(current.agent, current.log.claims, current.log.activeAt).catch(
-      (): ImportOutcome => ({ ok: false }),
-    );
+    const outcome = await importLogged(onImport, current);
     if (outcome.ok) {
       setNotice(importedNotice(outcome.received, outcome.added));
       go(CLOSED, 'add');

@@ -232,11 +232,11 @@ describe('purgeExpired removes exactly the old rows', () => {
       coverageCut: 2,
       coveragePings: 1,
       calendarSnapshots: 0,
-      // No batch stored replay records for these receipts (tests/unit/ledger/replay-records.spec.ts purges some).
-      receiptInputs: 0,
+      receiptInputs: 0, // No batch stored replay records here (replay-records.spec.ts purges some).
       policies: 0,
       activity: 0,
       clockRepairs: 0,
+      batchCoverages: 0,
     });
   });
 

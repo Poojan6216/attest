@@ -87,9 +87,10 @@ export interface PurgeReport {
   readonly calendarSnapshots: number;
   /** Activity rows deleted: session pings and idle intervals that ended before the cutoff (./activity.ts). */
   readonly activity: number;
-  /** Replay records deleted: the purged receipts' inputs, and the policy documents no input names any more. */
+  /** Replay records deleted: the purged receipts' inputs, and the batch coverages and policy documents no input names. */
   readonly receiptInputs: number;
   readonly policies: number;
+  readonly batchCoverages: number;
   /** Clock repair spans deleted: those that ended before the cutoff (./clock-repairs.ts). */
   readonly clockRepairs: number;
 }
@@ -309,6 +310,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.activity,
     db.receiptInputs,
     db.policies,
+    db.batchCoverages,
     db.meta,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
@@ -340,6 +342,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       activity: await purgeActivity(db, cutoffMs),
       receiptInputs: replay.receiptInputs,
       policies: replay.policies,
+      batchCoverages: replay.batchCoverages,
       clockRepairs: await purgeClockRepairs(db, cutoffMs),
     };
   });

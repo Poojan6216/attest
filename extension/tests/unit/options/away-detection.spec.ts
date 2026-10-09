@@ -2,7 +2,8 @@
 /**
  * The options page's away detection (sprint_3 3.14; entrypoints/options/components/AwayDetection.tsx; Hard Rule 8):
  * off until the person turns it on, which asks Chrome for the optional `idle` permission inside the click; a refusal
- * keeps it off and says so; turning it off gives the permission back. Anything that cannot be told reads as off.
+ * keeps it off and says so; turning it off gives the permission back. Anything that cannot be told is said, never
+ * read as on (security review SEC-6).
  */
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -52,12 +53,15 @@ async function mount(held: boolean | 'throws'): Promise<void> {
 }
 
 describe('away detection', () => {
-  it('is off on a fresh install, and says so; anything it cannot tell reads as off', async () => {
+  it('is off on a fresh install, and says so; what it cannot tell it says, never reading it as on', async () => {
     await mount(false);
     expect([status(), button()?.textContent]).toEqual(['Away detection is off.', 'Turn on']);
     render(null, root);
     await mount('throws');
-    expect(status()).toBe('Away detection is off.');
+    expect([status(), button()?.textContent]).toEqual([
+      'Attest could not tell whether away detection is on.',
+      'Turn on',
+    ]);
   });
 
   it('turning it on asks Chrome for the idle permission, and shows it on once granted', async () => {

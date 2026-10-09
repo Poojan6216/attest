@@ -90,7 +90,7 @@ describe('upcomingIn: any weekday and hour (property)', () => {
           expect(Date.parse(found) - Date.parse(referenceIso)).toBeLessThan(7 * 86_400_000);
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 1_000 },
     );
   });
 });

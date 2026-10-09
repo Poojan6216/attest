@@ -13,17 +13,23 @@
  */
 import { type Transaction } from 'dexie';
 
+import { coverageHash } from '../core/receipt';
+import { Coverage } from '../core/schema';
+
 import { DB_NAME } from '../config';
 import { log } from '../log';
 import {
+  BATCH_COVERAGES,
   COVERAGE_INTERVALS,
   LedgerDb,
+  RECEIPT_INPUTS,
   STORES_V1,
   STORES_V2,
   STORES_V3,
   STORES_V4,
   STORES_V5,
   STORES_V6,
+  STORES_V7,
 } from './db';
 import { LedgerError } from './errors';
 import { LEDGER_TABLE_NAMES, REPLAY_TABLE_NAMES } from './index-fields';
@@ -62,6 +68,25 @@ async function upgradeToV4(tx: Transaction): Promise<void> {
 }
 
 /**
+ * v7's data upgrade (db.ts STORES_V7; tech review TECH-1): every stored `receiptInputs` row gives its copy of the
+ * coverage to `batchCoverages`, keyed by the coverage's hash, and names it by that hash instead. A row whose coverage
+ * does not parse is left alone: the strict read skips it, as it did before.
+ */
+async function upgradeToV7(tx: Transaction): Promise<void> {
+  const rows: unknown[] = await tx.table(RECEIPT_INPUTS).toArray();
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null || !('coverage' in row)) continue;
+    const coverage = Coverage.safeParse(row.coverage);
+    if (!coverage.success) continue;
+    const hash = coverageHash(coverage.data);
+    await tx.table(BATCH_COVERAGES).put({ coverageHash: hash, coverage: coverage.data });
+    const moved: Record<string, unknown> = { ...row, coverageHash: hash };
+    Reflect.deleteProperty(moved, 'coverage');
+    await tx.table(RECEIPT_INPUTS).put(moved);
+  }
+}
+
+/**
  * v1: the eight ledger tables (Sprint 0.6). v2 (Sprint 2.6): receipt indexes for the retention purge and the
  * coverage interval store (db.ts STORES_V2); IndexedDB builds the new receipt indexes over existing rows, and
  * the new table starts empty (no observer wrote coverage before Sprint 2), so v2 needs no data upgrade. v3 (Sprint
@@ -69,7 +94,8 @@ async function upgradeToV4(tx: Transaction): Promise<void> {
  * TECH-1, TECH-13): the coverage intervals' kind and length indexes, derived over every stored interval, and no
  * counterparty-token index on observations, whose derived field leaves every stored row (db.ts STORES_V4). v5 (sprint_3
  * 3.13): the replay records, receipt inputs and policy documents (db.ts STORES_V5), new and empty, so no data upgrade.
- * v6 (sprint_3 3.14): the activity store (db.ts STORES_V6), new and empty too.
+ * v6 (sprint_3 3.14): the activity store (db.ts STORES_V6), new and empty too. v7 (Sprint 3 close, TECH-1): each batch's
+ * coverage stored once (db.ts STORES_V7), every stored copy moved there by `upgradeToV7`.
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, stores: STORES_V1 },
@@ -78,6 +104,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 4, stores: STORES_V4, upgrade: upgradeToV4 },
   { version: 5, stores: STORES_V5 },
   { version: 6, stores: STORES_V6 },
+  { version: 7, stores: STORES_V7, upgrade: upgradeToV7 },
 ];
 
 /** Throws `invalid_migrations` unless versions ascend and every ledger table survives to the last one. */

@@ -1,8 +1,9 @@
 /**
  * The grading batch (sprint_3 3.13; docs/grading.md §3 Background obligations, §7, §8, §9; Hard Rules 4, 5, 7): the
- * one path from the ledger's claims and observations to stored receipts. The service worker runs one after an import,
- * after an observer pass, and on the grace alarm (./alarms.ts). Batches never run at once (`runGradingBatch` queues
- * them), and each is stamped strictly after the last (`recordBatchInstant`).
+ * one path from the ledger's claims and observations to stored receipts. The service worker runs one after an import
+ * and on the grace alarm (./alarms.ts), never after an observer pass: the alarm regrades within its period (Decisions
+ * [3.13]). Batches never run at once (`runGradingBatch` queues them), and each is stamped strictly after the last
+ * (`recordBatchInstant`).
  *
  * One batch:
  *  1. `guardClock` repairs the ledger if the clock went back (src/ledger/clock-guard.ts); `evaluatedAt` is stamped
@@ -188,7 +189,7 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
     await putReceipt(db, receipt);
     stored.set(receipt.id, receipt);
   }
-  for (const [inputsHash, inputs] of result.inputs) await putReceiptInputs(db, inputsHash, inputs);
+  await putReceiptInputs(db, result.inputs);
   await deleteReceiptInputs(db, result.released);
   if (result.put.length > 0) await putPolicyDocument(db, deps.policy, deps.policyDocument);
   const superseded = supersede(stored);
@@ -217,6 +218,7 @@ async function gradeOnce(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary 
     db.activity,
     db.receiptInputs,
     db.policies,
+    db.batchCoverages,
   ];
   try {
     const summary = await db.transaction('rw', tables, async () => {

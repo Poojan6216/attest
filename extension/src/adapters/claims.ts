@@ -21,7 +21,8 @@
  *    cents and no currency, which the grant's `spendCurrency` reads, §6.1). A calendar claim's `targetAt` (its event's
  *    start) is read from its own words when they name a day and a time ("Thu 2pm", "Friday at noon"), forward from the
  *    claim's time (core `upcomingIn`, sprint_3 3.15); words that name none, or none unambiguously, give none, and the
- *    claim grades `no_target` (Hard Rule 5).
+ *    claim grades `no_target` (Hard Rule 5). A move's start is read after its last "to", the start it moved to, never
+ *    the one it left (`startWords`; Sprint 3 QA review GAP 7).
  *
  * A Request's or a Claim's text never leaves whole (Hard Rule 2): a Request keeps its hash and hint, a Claim its fields.
  */
@@ -31,6 +32,7 @@ import { amount, instantMs, isoWithOffset, type OffsetAt, resolveRelative } from
 import { trailingOffsetMinutes } from '../core/normalize-time';
 import { upcomingIn } from '../core/normalize-relative';
 import {
+  type ActionType,
   type AgentId,
   Claim,
   type ClaimPrecision,
@@ -176,6 +178,18 @@ function moneyOf(read: Classified): { amountCents?: number; currency?: string } 
   return dollars === null ? {} : { amountCents: dollars.minor };
 }
 
+/**
+ * The words a calendar claim's event start is read from: for a move (`calendar.updated`), those after its last "to",
+ * the start it moved to ("from Friday at 9am to Tuesday at 10am" is Tuesday), and none when it names none there, so
+ * the start it left is never read as its start (QA review GAP 7: a true move of more than three days could never
+ * verify); the whole sentence for every other claim.
+ */
+function startWords(type: ActionType, sentence: string): string {
+  if (type !== 'calendar.updated') return sentence;
+  const last = [...sentence.matchAll(/\bto\b/giu)].at(-1);
+  return last === undefined ? sentence : sentence.slice(last.index + last[0].length);
+}
+
 /** A Claim's fields for one sentence (`Claim` parses them). */
 function claimFields(
   sentence: string,
@@ -197,7 +211,7 @@ function claimFields(
   const counterparty = counterpartyOf(read, sentence);
   const subjectHint = subjectOf(read);
   const targetAt = isCalendarType(read.type)
-    ? upcomingIn(sentence, { referenceIso: stated.at, offsetAt: ctx.offsetAt })
+    ? upcomingIn(startWords(read.type, sentence), { referenceIso: stated.at, offsetAt: ctx.offsetAt })
     : null;
   return {
     id: idFromHash(rawHash),

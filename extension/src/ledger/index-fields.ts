@@ -42,7 +42,7 @@ export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
  * (`policies`, keyed by `policyHash`). Stored beside the ledger tables and written only by a grading batch, never
  * announced on the bus, and exported as the two maps `pnpm attest replay` reads (./export.ts).
  */
-export const REPLAY_TABLE_NAMES = ['receiptInputs', 'policies'] as const;
+export const REPLAY_TABLE_NAMES = ['receiptInputs', 'policies', 'batchCoverages'] as const;
 
 export type ReplayTableName = (typeof REPLAY_TABLE_NAMES)[number];
 
@@ -69,6 +69,7 @@ export const INDEX_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> 
   activity: ['startMs', 'endMs'],
   receiptInputs: [],
   policies: [],
+  batchCoverages: [],
 };
 
 export type RequestRow = Request & { readonly date: string };

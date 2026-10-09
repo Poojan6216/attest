@@ -73,8 +73,24 @@ export const ReceiptInputs = z.strictObject({
   policyHash: Sha256,
 });
 
-/** A `receiptInputs` row: the inputs keyed by the receipt's `inputsHash`. */
-export const ReceiptInputsRecord = ReceiptInputs.extend({ inputsHash: Sha256 });
+/**
+ * A `receiptInputs` row (schema v7; tech review TECH-1): the inputs keyed by the receipt's `inputsHash`, naming the
+ * batch's coverage by its `coverageHash` (a `batchCoverages` row) instead of holding a copy of it: every receipt of
+ * a batch was graded with the same coverage, which is stored once.
+ */
+export const ReceiptInputsRecord = z.strictObject({
+  inputsHash: Sha256,
+  coverageHash: Sha256,
+  grant: Grant,
+  context: GradeContext,
+  policyHash: Sha256,
+});
+
+/** A `receiptInputs` row as the export writes it: keyed by its `inputsHash`, so without it. */
+export const ReceiptInputsRef = ReceiptInputsRecord.omit({ inputsHash: true });
+
+/** A `batchCoverages` row (schema v7): one batch's coverage, keyed by its `coverageHash` (src/core/receipt.ts). */
+export const BatchCoverageRecord = z.strictObject({ coverageHash: Sha256, coverage: Coverage });
 
 /**
  * An `activity` row (sprint_3 3.14, ./activity.ts): a moment an agent's own log says it worked (`session`: a pasted
@@ -99,6 +115,8 @@ export type CoveragePing = z.infer<typeof CoveragePing>;
 export type CoveragePingInput = z.input<typeof CoveragePing>;
 export type MetaEntry = z.infer<typeof MetaEntry>;
 export type ReceiptInputs = z.infer<typeof ReceiptInputs>;
+export type ReceiptInputsRef = z.infer<typeof ReceiptInputsRef>;
+export type BatchCoverageRecord = z.infer<typeof BatchCoverageRecord>;
 export type ActivityRecord = z.infer<typeof ActivityRecord>;
 export type ActivityRecordInput = z.input<typeof ActivityRecord>;
 export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;

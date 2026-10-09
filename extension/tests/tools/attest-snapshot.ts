@@ -1,6 +1,6 @@
 /**
  * The `attest replay` input format: a ledger export (src/ledger/export.ts `LedgerExport`, the Sprint 0 shape) plus
- * the two things replay needs that the Sprint 0 tables do not hold (docs/grading.md §9):
+ * the three things replay needs that the Sprint 0 tables do not hold (docs/grading.md §9):
  *
  *   {
  *     "format": "attest-ledger",
@@ -11,15 +11,18 @@
  *       "receipts": [Receipt], "adapterHealth": [HealthReport], "coverage": [CoveragePing], "meta": [MetaEntry]
  *     },
  *     "receiptInputs": {
- *       "<inputsHash>": { "coverage": Coverage, "grant": Grant, "context": GradeContext, "policyHash": "<sha256>" }
+ *       "<inputsHash>": { "coverageHash": "<sha256>", "grant": Grant, "context": GradeContext, "policyHash": "<sha256>" }
  *     },
+ *     "batchCoverages": { "<coverageHash>": Coverage },
  *     "policies": { "<policyHash>": <the policy document, written as policy/default.json is> }
  *   }
  *
  * Every object is validated by its strict schema (src/core/schema.ts; unknown keys are rejected, Hard Rule 2).
  * `receiptInputs` is keyed by the receipt's `inputsHash` and holds what that receipt was graded with besides its
- * subject and candidates: derived data only, no content. Each policy document is loaded with `loadPolicy` and must
- * hash to its own key. Replay reads `tables.claims`, `tables.observations`, `tables.receipts`, `receiptInputs` and
+ * subject and candidates, naming its batch's coverage by hash (schema v7: one coverage per batch, stored once):
+ * derived data only, no content. Each coverage must hash to its own key, every input's coverage must be there, and
+ * each policy document is loaded with `loadPolicy` and must hash to its own key. Replay reads `tables.claims`,
+ * `tables.observations`, `tables.receipts`, `receiptInputs` (each joined with its coverage), `batchCoverages` and
  * `policies`; the other tables are validated and carried as exported.
  *
  * Node-side tooling (runs under tsx): not part of the extension.
@@ -28,25 +31,27 @@ import { z } from 'zod';
 
 import { loadPolicy, type Policy, PolicyError } from '../../src/core/policy';
 import { formatPath } from '../../src/core/policy-errors';
+import { coverageHash } from '../../src/core/receipt';
 import type { LedgerSnapshot, ReceiptInputs } from '../../src/core/replay';
-import { type Grant, Sha256 } from '../../src/core/schema';
+import { Coverage, type Grant, Sha256 } from '../../src/core/schema';
 import { LEDGER_EXPORT_FORMAT, LedgerExport } from '../../src/ledger/export';
-import { ReceiptInputs as LedgerReceiptInputs } from '../../src/ledger/types';
+import { ReceiptInputsRef } from '../../src/ledger/types';
 
 import { printable } from './printable';
 
 /** One `receiptInputs` row (§9): the ledger's own schema (src/ledger/types.ts), so the two never drift apart. */
-export const ReceiptInputsRow = LedgerReceiptInputs;
+export const ReceiptInputsRow = ReceiptInputsRef;
 
-/** The replay export: the Sprint 0 ledger export plus `receiptInputs` and `policies`. Strict at every level. */
+/** The replay export: the Sprint 0 ledger export plus the three replay maps. Strict at every level. */
 export const ReplayExport = LedgerExport.extend({
   receiptInputs: z.record(Sha256, ReceiptInputsRow),
+  batchCoverages: z.record(Sha256, Coverage),
   policies: z.record(Sha256, z.unknown()),
 });
 
 export type ReplayExport = z.infer<typeof ReplayExport>;
 
-export type SnapshotErrorCode = 'invalid_snapshot' | 'policy_hash';
+export type SnapshotErrorCode = 'invalid_snapshot' | 'policy_hash' | 'coverage_hash';
 
 /**
  * An export replay cannot read. The message names paths and problems, never values (Hard Rule 10): a key from the
@@ -106,6 +111,33 @@ function loadPolicies(documents: Readonly<Record<string, unknown>>): Map<string,
   return policies;
 }
 
+/**
+ * Each receipt's inputs joined with its batch's coverage, after checking every coverage hashes to its key (one shared
+ * object per coverage, as grading had it) and every input names one that is there.
+ */
+function joinInputs(
+  inputs: Readonly<Record<string, ReceiptInputsRef>>,
+  coverages: Readonly<Record<string, Coverage>>,
+): Map<string, ReceiptInputs> {
+  for (const [key, coverage] of Object.entries(coverages)) {
+    const hash = coverageHash(coverage);
+    if (hash !== key)
+      throw new SnapshotError('coverage_hash', `batchCoverages.${key}: the coverage hashes to ${hash}`);
+  }
+  const joined = new Map<string, ReceiptInputs>();
+  for (const [key, { coverageHash: hash, ...rest }] of Object.entries(inputs)) {
+    const coverage = coverages[hash];
+    if (coverage === undefined) {
+      throw new SnapshotError(
+        'invalid_snapshot',
+        `receiptInputs.${key}.coverageHash names no batch coverage`,
+      );
+    }
+    joined.set(key, { coverage, ...rest });
+  }
+  return joined;
+}
+
 /** Reads a parsed JSON value as a replay snapshot; throws SnapshotError when it is not one. */
 export function readSnapshot(json: unknown): LedgerSnapshot {
   const parsed = ReplayExport.safeParse(json);
@@ -115,12 +147,12 @@ export function readSnapshot(json: unknown): LedgerSnapshot {
       `not an attest replay export:\n${describeIssues(parsed.error)}`,
     );
   }
-  const { tables, receiptInputs, policies } = parsed.data;
+  const { tables, receiptInputs, batchCoverages, policies } = parsed.data;
   return {
     claims: tables.claims,
     observations: tables.observations,
     receipts: tables.receipts,
-    receiptInputs: new Map<string, ReceiptInputs>(Object.entries(receiptInputs)),
+    receiptInputs: joinInputs(receiptInputs, batchCoverages),
     policies: loadPolicies(policies),
   };
 }
@@ -149,7 +181,22 @@ export function toReplayExport(snapshot: LedgerSnapshot, extras: ExportExtras): 
       coverage: [],
       meta: [],
     },
-    receiptInputs: Object.fromEntries(snapshot.receiptInputs),
+    ...splitInputs(snapshot.receiptInputs),
     policies: Object.fromEntries(extras.documents),
   };
+}
+
+/** Each receipt's inputs with its coverage named by hash, and each coverage once (the export's v7 form). */
+function splitInputs(inputs: ReadonlyMap<string, ReceiptInputs>): {
+  receiptInputs: Record<string, ReceiptInputsRef>;
+  batchCoverages: Record<string, Coverage>;
+} {
+  const receiptInputs: Record<string, ReceiptInputsRef> = {};
+  const batchCoverages: Record<string, Coverage> = {};
+  for (const [key, { coverage, ...rest }] of inputs) {
+    const hash = coverageHash(coverage);
+    batchCoverages[hash] = coverage;
+    receiptInputs[key] = { coverageHash: hash, ...rest };
+  }
+  return { receiptInputs, batchCoverages };
 }

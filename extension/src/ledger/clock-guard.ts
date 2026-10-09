@@ -19,7 +19,7 @@
  *    counted: a batch reads, it is not evidence.
  *  - `clockFloorAt`: written by a repair, never lowered: the latest instant stamped before the clock went back. No
  *    Calendar chain vouches for changes before it (src/background/calendar-pass.ts lifts `changesSince` to it).
- * and one per repair, `clockRepair.<ms>`: the span it repaired (step 6), which grading reads (./clock-repairs.ts).
+ * and one per repair, `clockRepair.<ms>`: the span it repaired (step 7), which grading reads (./clock-repairs.ts).
  *
  * `guardClock(db, nowMs)` runs before anything of an observer message is stored (the service worker's clock), and
  * must run before a grading batch records its instant (Sprint 3.6). When now is below the high water (or below a
@@ -38,11 +38,14 @@
  *     worker set could not be cleared, until real time caught up. The observer's own report is deleted (its next
  *     report, the message being stored included, takes its place); a DEGRADED the service worker set is re-stamped
  *     at now, its reasons kept, so it still stands until a later clean pass is accepted (Hard Rule 6);
- *  6. the span from now to the high water is kept for grading (./clock-repairs.ts; docs/grading.md §3 v1.16): a
+ *  6. every session ping and time away stamped after now goes, and a time away that reaches past now is cut at now
+ *     (./activity.ts `repairActivity`; security review SEC-3): either would count as UNASKED evidence once real time
+ *     reached it; logged as `ledger.clock_activity_repaired` with a count, when there was any;
+ *  7. the span from now to the high water is kept for grading (./clock-repairs.ts; docs/grading.md §3 v1.16): a
  *     `calendar.created` claim whose first-seen bound lies in it is never NOT_FOUND, since its event, first seen
  *     after the repair, can read as earlier than the claim (S2-SIM2-1);
- *  7. the floor becomes the high water (or stays, if higher) and the high water is cleared;
- *  8. it logs `ledger.clock_regressed` once, with counts only (the re-stamped health reports only when there were any).
+ *  8. the floor becomes the high water (or stays, if higher) and the high water is cleared;
+ *  9. it logs `ledger.clock_regressed` once, with counts only (the re-stamped health reports only when there were any).
  * Claims and other rows stay as stored: a batch may have graded with them.
  *
  * Known limit: a jump that comes back before anything is stored and before any batch runs leaves instants that are
@@ -52,6 +55,7 @@ import { isoWithLocalOffset } from '../clock';
 import { firstSeenAt } from '../core/order';
 import { log } from '../log';
 import { lastBatchMs } from './batch-instant';
+import { repairActivity } from './activity';
 import { CalendarRecord } from './calendar-snapshots';
 import { CLOCK_HIGH_WATER, readInstant } from './clock-high-water';
 import { keepRepairSpan } from './clock-repairs';
@@ -77,10 +81,11 @@ export function guardTables(db: LedgerDb) {
     db.coverage,
     db.calendarSnapshots,
     db.adapterHealth,
+    db.activity,
   ];
 }
 
-/** What a repair removed or re-stamped (step 8 of the header). */
+/** What a repair removed or re-stamped (step 9 of the header). */
 interface ClockRepair {
   readonly intervals: number;
   readonly pings: number;
@@ -154,14 +159,17 @@ async function repairFutureHealth(db: LedgerDb, nowMs: number): Promise<number> 
   return future.length;
 }
 
-/** Steps 1 to 8 of the header, for a clock at `nowMs` below the stored high water `high`. */
+/** Steps 1 to 9 of the header, for a clock at `nowMs` below the stored high water `high`. */
 async function repair(db: LedgerDb, nowMs: number, high: IsoTs): Promise<ClockRepair> {
   const floor = later(await readInstant(db, CLOCK_FLOOR_AT), high) ?? high;
   const coverage = await dropFutureCoverage(db, nowMs);
   const records = await db.calendarSnapshots.where('readMs').above(nowMs).delete();
   const rows = await dropUnreadFutureRows(db, nowMs);
   const health = await repairFutureHealth(db, nowMs);
-  await keepRepairSpan(db, IsoTs.parse(isoWithLocalOffset(new Date(nowMs))), high);
+  const now = IsoTs.parse(isoWithLocalOffset(new Date(nowMs)));
+  const activity = await repairActivity(db, nowMs, now);
+  if (activity > 0) log.warn('ledger.clock_activity_repaired', { rowCount: activity });
+  await keepRepairSpan(db, now, high);
   await db.meta.put({ key: CLOCK_FLOOR_AT, value: floor });
   await db.meta.delete(CLOCK_HIGH_WATER);
   const { intervals, pings } = coverage;

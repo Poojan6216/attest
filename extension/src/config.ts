@@ -18,6 +18,15 @@ export const STORAGE_KEYS = {
 } as const;
 
 /**
+ * Keys in `chrome.storage.session`, which Chrome empties when the browser closes. `IDLE_SESSION`: true once this
+ * browser session started watching for times away, so a time away an earlier session left open is closed as it
+ * stands, never stretched over the next day (src/background/idle.ts; security review SEC-1).
+ */
+export const SESSION_KEYS = {
+  IDLE_SESSION: 'attest.idleSession',
+} as const;
+
+/**
  * Hard Rule 1: hosts the extension may contact. Empty: nothing leaves the browser.
  * Sprint 5 adds exactly one telemetry host here, and only when the user opts in.
  */
