@@ -67,4 +67,11 @@
 
 **Gate:** five host permissions exactly → claim-type accuracy ≥ 90% on labelled corpus (in `RESULTS.md`) → Muse and Claude adapters pass fixtures; Dots flagged + DEGRADED(not guessing) → §2 demo E2E produces VERIFIED / NOT_FOUND / UNASKED through real content scripts → OVER_SCOPE on a new permission → replay over the E2E ledger reproduces every receipt → both mandatory tests green → vendor terms logged → `closed.md` says VERIFIED CLEAN.
 
+**Gate run 2026-10-09** (`reviews/sprint_3/closed.md`): red on the three items that need a vendor's permission to read its site:
+- five host permissions;
+- the Claude and ChatGPT/Dots adapters;
+- OVER_SCOPE on a new permission.
+
+Every other item is green. Sprint 3 stays open; an amended gate waits for the founder (MANUAL.md, "Sprint 3 close").
+
 📝 Out of scope (deferred): UI beyond the export (Sprint 4); the model (Sprint 5); Instinct and Perplexity Computer adapters (v2); reading agents' Slack/Teams notifications (v2).
