@@ -21,6 +21,7 @@ import {
   type ObservationRow,
   type ReceiptRow,
   type RequestRow,
+  type StoredTableName,
 } from './index-fields';
 import type { CalendarRecordRow } from './calendar-snapshots';
 import {
@@ -30,6 +31,9 @@ import {
   type Grant,
   type MetaEntry,
   type ObserverCoverage,
+  type PolicyRecord,
+  type ReceiptInputsRecord,
+  Sha256,
 } from './types';
 
 /**
@@ -105,6 +109,24 @@ export const STORES_V4 = {
     '++, [source+endMs], [source+accountKey], [source+accountKey+syncMs], [source+kind+endMs], [source+kind+lenMs]',
 } as const;
 
+/** The receipt inputs store (./replay-records.ts). */
+export const RECEIPT_INPUTS = 'receiptInputs';
+
+/** The policy document store (./replay-records.ts). */
+export const POLICIES = 'policies';
+
+/**
+ * Schema v5 (sprint_3 3.13; Decisions [3.13]): the replay records (docs/grading.md §9, ./index-fields.ts
+ * REPLAY_TABLE_NAMES). `receiptInputs` holds what each stored receipt was graded with besides its subject and
+ * candidates, keyed by its `inputsHash`, with a `policyHash` index so the purge finds the documents no input names any
+ * more; `policies` holds each policy document a receipt names, keyed by its `policyHash`. Both are new and empty on
+ * upgrade (no batch ran before 3.13), so v5 needs no data upgrade.
+ */
+export const STORES_V5 = {
+  [RECEIPT_INPUTS]: 'inputsHash, policyHash',
+  [POLICIES]: 'policyHash',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -126,7 +148,7 @@ const PLAIN_KEY = z.string().min(1);
  * value must pass to be logged. A corrupt row's id field can hold anything, content included, so a value
  * that is not a well-formed id is logged as `null`, never echoed (Hard Rule 10).
  */
-const ROW_ID: Readonly<Record<LedgerTableName, { readonly field: string; readonly schema: z.ZodType }>> = {
+const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonly schema: z.ZodType }>> = {
   requests: { field: 'id', schema: Ulid },
   claims: { field: 'id', schema: Ulid },
   observations: { field: 'id', schema: Ulid },
@@ -138,6 +160,8 @@ const ROW_ID: Readonly<Record<LedgerTableName, { readonly field: string; readonl
   // Outbound auto-increment key: the observer names the row in logs.
   coverageIntervals: { field: 'observerId', schema: PLAIN_KEY },
   calendarSnapshots: { field: 'observerId', schema: PLAIN_KEY },
+  receiptInputs: { field: 'inputsHash', schema: Sha256 },
+  policies: { field: 'policyHash', schema: Sha256 },
 };
 
 export class LedgerDb extends Dexie {
@@ -182,23 +206,33 @@ export class LedgerDb extends Dexie {
   get calendarSnapshots(): Table<CalendarRecordRow, CalendarKey> {
     return this.table<CalendarRecordRow, CalendarKey>(CALENDAR_SNAPSHOTS);
   }
+
+  /** Schema v5. Read and written only through ./replay-records.ts. */
+  get receiptInputs(): Table<ReceiptInputsRecord, string> {
+    return this.table<ReceiptInputsRecord, string>(RECEIPT_INPUTS);
+  }
+
+  /** Schema v5. Read and written only through ./replay-records.ts. */
+  get policies(): Table<PolicyRecord, string> {
+    return this.table<PolicyRecord, string>(POLICIES);
+  }
 }
 
 /**
  * The table name as the logger prints it: snake_case, the form listed in the logger's vocabulary
  * (src/log-vocabulary.ts), so `adapterHealth` logs as `adapter_health`.
  */
-export function logTableId(table: LedgerTableName): string {
+export function logTableId(table: StoredTableName): string {
   return table.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
 /** A well-formed id for the table's log lines, or `null` when the value is not one. */
-export function loggableId(table: LedgerTableName, value: unknown): string | null {
+export function loggableId(table: StoredTableName, value: unknown): string | null {
   const { schema } = ROW_ID[table];
   return typeof value === 'string' && schema.safeParse(value).success ? value : null;
 }
 
-function rowId(table: LedgerTableName, row: unknown): string | null {
+function rowId(table: StoredTableName, row: unknown): string | null {
   if (typeof row !== 'object' || row === null) return null;
   return loggableId(table, Reflect.get(row, ROW_ID[table].field));
 }
@@ -208,7 +242,7 @@ function rowId(table: LedgerTableName, row: unknown): string | null {
  * An invalid row is logged as `ledger.row_invalid` with its table and id only (never its content).
  */
 export function readRow<S extends z.ZodType>(
-  table: LedgerTableName,
+  table: StoredTableName,
   schema: S,
   row: unknown,
 ): z.output<S> | undefined {
@@ -225,7 +259,7 @@ export function readRow<S extends z.ZodType>(
 
 /** Many rows → the valid domain objects among them, in the same order. */
 export function readRows<S extends z.ZodType>(
-  table: LedgerTableName,
+  table: StoredTableName,
   schema: S,
   rows: readonly unknown[],
 ): z.output<S>[] {

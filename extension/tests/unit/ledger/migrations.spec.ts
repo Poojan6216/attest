@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { COVERAGE_INTERVALS, type LedgerDb } from '../../../src/ledger/db';
-import { LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
+import { LEDGER_TABLE_NAMES, REPLAY_TABLE_NAMES } from '../../../src/ledger/index-fields';
 import {
   MIGRATIONS,
   assertValidMigrations,
@@ -68,12 +68,14 @@ afterEach(() => {
 });
 
 describe('the shipped schema', () => {
-  it('opens at the shipped version with every ledger table (the coverage intervals and Calendar snapshots included)', async () => {
+  it('opens at the shipped version with every ledger table and the replay records (sprint_3 3.13)', async () => {
     const db = await open(uniqueDbName('v1'));
     expect(db.verno).toBe(SHIPPED);
-    expect(SHIPPED).toBe(4);
+    expect(SHIPPED).toBe(5);
     expect(LEDGER_TABLE_NAMES).toContain(COVERAGE_INTERVALS);
-    expect(db.tables.map((table) => table.name).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
+    expect(db.tables.map((table) => table.name).sort()).toEqual(
+      [...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES].sort(),
+    );
   });
 
   it('declares the tech_reviewer indexes (unique hashes, compound, multiEntry)', async () => {

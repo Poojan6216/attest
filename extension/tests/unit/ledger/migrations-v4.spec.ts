@@ -53,8 +53,8 @@ function v3Row(input: ObserverCoverageInput) {
 }
 
 describe('v3 → v4', () => {
-  it('declares v4 as the shipped version: the kind and length of every interval, indexed', async () => {
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2, 3, 4]);
+  it('declares v4 after v3: the kind and length of every interval, indexed', async () => {
+    expect(MIGRATIONS.map((migration) => migration.version).slice(0, 4)).toEqual([1, 2, 3, 4]);
     expect(MIGRATIONS[3]?.stores).toBe(STORES_V4);
     expect(INDEX_FIELDS.coverageIntervals).toEqual([
       'accountKey',
@@ -81,7 +81,8 @@ describe('v3 → v4: the intervals', () => {
     old.close();
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(4);
+    // Upgraded through v4 to the shipped version (v5 adds the replay records, which no interval reads).
+    expect(db.verno).toBe(MIGRATIONS.at(-1)?.version);
     const rows = await db.coverageIntervals.toArray();
     expect(rows.map((row) => [row.kind, row.lenMs])).toEqual([
       ['span', 7 * 86_400_000],

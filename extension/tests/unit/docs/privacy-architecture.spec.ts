@@ -13,17 +13,27 @@ import { describe, expect, it } from 'vitest';
 import { splitBlocks } from '../../../../scripts/check-docs-blocks';
 import { segments } from '../../../../scripts/check-docs-markdown';
 import { CalendarRecord, PendingAbsence, UpdateWindow } from '../../../src/ledger/calendar-snapshots';
-import { INDEX_FIELDS, LEDGER_TABLE_NAMES, type LedgerTableName } from '../../../src/ledger/index-fields';
+import {
+  INDEX_FIELDS,
+  LEDGER_TABLE_NAMES,
+  REPLAY_TABLE_NAMES,
+  type StoredTableName,
+} from '../../../src/ledger/index-fields';
 import {
   AdapterHealth,
+  Attribution,
   Claim,
+  Coverage,
   CoveragePing,
   Grant,
+  GradeContext,
   MetaEntry,
   Observation,
   ObserverCoverage,
+  PolicyRecord,
   Reason,
   Receipt,
+  ReceiptInputsRecord,
   ReceiptOverride,
   Request,
 } from '../../../src/ledger/types';
@@ -42,7 +52,7 @@ const ATX = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$/;
 const keys = (schema: { readonly shape: object }): string[] => Object.keys(schema.shape);
 
 /** Every field a table's rows hold: the schema's keys (nested ones too), then its derived index fields. */
-const TABLE_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> = {
+const TABLE_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
   requests: keys(Request),
   claims: [...keys(Claim), ...keys(Claim.shape.extractor)],
   observations: keys(Observation),
@@ -61,7 +71,20 @@ const TABLE_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> = {
     ...keys(PendingAbsence),
     ...keys(UpdateWindow),
   ],
+  receiptInputs: [
+    ...keys(ReceiptInputsRecord),
+    ...keys(Coverage),
+    ...keys(ObserverCoverage),
+    ...keys(Grant),
+    ...keys(GradeContext),
+    ...keys(Attribution),
+    ...keys(GradeContext.shape.scope.unwrap()),
+  ],
+  policies: keys(PolicyRecord),
 };
+
+/** Every table the ledger database holds: the ledger tables and the replay records (sprint_3 3.13). */
+const STORED_TABLES: readonly StoredTableName[] = [...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES];
 
 /**
  * The inline code spans of the section whose heading's only code span is `table`, up to the next heading of the same
@@ -91,7 +114,7 @@ function sectionSpans(doc: string, table: string): Set<string> | null {
 /** Every table without a section, and every field its section does not name. */
 function problemsIn(doc: string): string[] {
   const problems: string[] = [];
-  for (const table of LEDGER_TABLE_NAMES) {
+  for (const table of STORED_TABLES) {
     const spans = sectionSpans(doc, table);
     if (spans === null) {
       problems.push(`${table}: no section headed \`${table}\``);
@@ -111,7 +134,7 @@ describe('docs/privacy-architecture.md lists every ledger table and field', () =
   });
 
   it('lists exactly the tables of the ledger', () => {
-    expect(Object.keys(TABLE_FIELDS).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
+    expect(Object.keys(TABLE_FIELDS).sort()).toEqual([...STORED_TABLES].sort());
   });
 
   it('fails on a missing table section, and on a field its section does not name', () => {

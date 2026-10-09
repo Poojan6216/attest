@@ -183,6 +183,8 @@ export const LOG_VALUES = [
   'meta',
   'coverage_intervals',
   'calendar_snapshots',
+  'receipt_inputs',
+  'policies',
   // Alarm names (src/config.ts ALARM_NAMES).
   'attest.purge',
   // Agents and observers: our own adapter and observer ids.

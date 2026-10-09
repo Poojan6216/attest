@@ -93,7 +93,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 ## 5. Every ledger table and field
 
-The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 3 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
+The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 5 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
 
 Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). The only other key Attest may use there is `attest.flags` ([`src/config.ts`](../extension/src/config.ts) `STORAGE_KEYS`), for the feature flags you turn on; nothing writes it yet, and every flag is off by default.
 
@@ -256,6 +256,29 @@ Empty until Sprint 3.6: the grade for each claim, each unclaimed action, each un
 | `computedAt`, `finalAt` | When it was last graded, and when it became FINAL. |
 
 Index field: `date`.
+
+### 5.11 `receiptInputs`
+
+Since Sprint 3.13 (schema version 5): what each receipt was graded with besides its claim and evidence, so `pnpm attest replay` can grade it again from an export and prove it ([`replay-records.ts`](../extension/src/ledger/replay-records.ts); [`docs/grading.md` §9](grading.md#9-replay-replayts)). Written only by a grading batch, beside the receipt; deleted when the receipt is graded again, deleted or purged. Key `inputsHash`. Derived data only: the fields below are copies of what other tables already hold, and none is content.
+
+| Field | Meaning |
+|---|---|
+| `inputsHash` | The receipt's own `inputsHash`. |
+| `coverage` | The coverage the batch graded with: its `evaluatedAt` and its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`). |
+| `grant` | The agent's grant in force then, as `grants` holds it (`agent`, `allowedTypes`, `counterpartyAllowlist`, `spendCeilingCents`, `spendCurrency`, `declaredScopes`, `observedScopes`, `accounts`, `updatedAt`). |
+| `context` | `priorSpendCents` (the agent's spending before this claim, in cents), `attribution` on an UNASKED receipt (the likely `agent`, its `scoreBp`, the `signals` that fired, and `adapterLastSyncAt`), and `scope` on a permission receipt (the `observed` permission). |
+| `policyHash` | The policy it was graded under. |
+
+Index field: none (`policyHash` is indexed as stored, so the purge finds the policies no input names any more).
+
+### 5.12 `policies`
+
+Since Sprint 3.13: each policy document a receipt was graded under, as [`policy/default.json`](../policy/default.json) writes it, so replay grades with exactly that policy. Thresholds, windows, weights and rules; no data of yours. Key `policyHash`; deleted once no stored input names it.
+
+| Field | Meaning |
+|---|---|
+| `policyHash` | SHA-256 of the document's canonical JSON. |
+| `document` | The policy document. |
 
 ## 6. What is hashed
 

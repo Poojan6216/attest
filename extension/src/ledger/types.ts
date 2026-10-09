@@ -7,7 +7,17 @@
  */
 import { z } from 'zod';
 
-import { ComponentId, IsoTs, ObservationSource, SCHEMA_LIMITS, Sha256 } from '../core/schema';
+import { PolicyDocument } from '../core/policy';
+import {
+  ComponentId,
+  Coverage,
+  GradeContext,
+  Grant,
+  IsoTs,
+  ObservationSource,
+  SCHEMA_LIMITS,
+  Sha256,
+} from '../core/schema';
 import { coverageProblems, refineWith } from '../core/schema-checks';
 
 export * from '../core/schema';
@@ -49,6 +59,27 @@ export const MetaEntry = z.strictObject({
   value: z.union([z.string().max(L.META_VALUE), z.number(), z.boolean()]),
 });
 
+/**
+ * What one receipt was graded with besides its subject and candidates (docs/grading.md §9): the batch's coverage, the
+ * agent's grant in force, the grading context and the policy's hash. Derived data only: the same fields the receipt's
+ * `inputsHash` binds, no content (Hard Rule 2). The `pnpm attest replay` export holds one per receipt.
+ */
+export const ReceiptInputs = z.strictObject({
+  coverage: Coverage,
+  grant: Grant,
+  context: GradeContext,
+  policyHash: Sha256,
+});
+
+/** A `receiptInputs` row: the inputs keyed by the receipt's `inputsHash`. */
+export const ReceiptInputsRecord = ReceiptInputs.extend({ inputsHash: Sha256 });
+
+/** A `policies` row: a policy document as policy/default.json writes one, keyed by its `policyHash`. */
+export const PolicyRecord = z.strictObject({ policyHash: Sha256, document: PolicyDocument });
+
 export type CoveragePing = z.infer<typeof CoveragePing>;
 export type CoveragePingInput = z.input<typeof CoveragePing>;
 export type MetaEntry = z.infer<typeof MetaEntry>;
+export type ReceiptInputs = z.infer<typeof ReceiptInputs>;
+export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;
+export type PolicyRecord = z.infer<typeof PolicyRecord>;

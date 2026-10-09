@@ -29,8 +29,9 @@
  *     (./calendar-snapshots.ts): a range not looked at since is compared with nothing next time, so its events are
  *     first sightings again, never changes (Hard Rule 5). An interval's `changesSince` is an instant of looking,
  *     not of the window, and is kept as it is.
- *  7. `receiptInputs` (Sprint 3.6) go with their receipts: that table does not exist yet; when it does, the purge
- *     deletes the rows keyed by the purged receipts' `inputsHash` in this same transaction.
+ *  7. The replay records go with their receipts (sprint_3 3.13, ./replay-records.ts): the `receiptInputs` rows keyed
+ *     by the purged receipts' `inputsHash`, then every policy document no stored input names any more, in this
+ *     same transaction.
  * Grants, adapter health and meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
@@ -54,6 +55,7 @@ import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { bucketOfMs } from './index';
 import { purgeCalendarRecords } from './calendar-snapshots';
+import { purgeReplayRecords } from './replay-records';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
 import { ActionType, AgentId, Claim, IsoTs, Observation, Receipt, Request } from './types';
 import { RETENTION_DAYS } from '../config';
@@ -78,6 +80,9 @@ export interface PurgeReport {
   readonly coveragePings: number;
   /** Calendar snapshot records deleted. */
   readonly calendarSnapshots: number;
+  /** Replay records deleted: the purged receipts' inputs, and the policy documents no input names any more. */
+  readonly receiptInputs: number;
+  readonly policies: number;
 }
 
 /** What goes, decided before anything is deleted. */
@@ -292,6 +297,8 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.coverage,
     db.coverageIntervals,
     db.calendarSnapshots,
+    db.receiptInputs,
+    db.policies,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
@@ -305,6 +312,10 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     await db.observations.bulkDelete(observations.map(({ id }) => id));
     await db.requests.bulkDelete(requests);
     const coverage = await forgetCoverage(db, cutoffMs);
+    const replay = await purgeReplayRecords(
+      db,
+      [...doomed.receipts.values()].map(({ inputsHash }) => inputsHash),
+    );
     return {
       cutoff: IsoTs.parse(new Date(cutoffMs).toISOString()),
       claims,
@@ -315,6 +326,8 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       coverageCut: coverage.cut,
       coveragePings: await purgeCoveragePings(db, cutoffMs),
       calendarSnapshots: await purgeCalendarRecords(db, cutoffMs),
+      receiptInputs: replay.receiptInputs,
+      policies: replay.policies,
     };
   });
 }

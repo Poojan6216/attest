@@ -9,13 +9,17 @@
  *
  * Every ledger table is exported (LEDGER_TABLE_NAMES), the coverage intervals and Calendar snapshots included
  * (Sprint 2.7): the user's data is everything the ledger holds. Those two default to empty when an export from
- * before Sprint 2.7 is read, so older exports still parse for `attest replay`, which never reads them.
+ * before Sprint 2.7 is read, so older exports still parse for `attest replay`, which never reads them. The replay
+ * records (sprint_3 3.13) follow the tables as the two maps the replay input holds (tests/tools/attest-snapshot.ts),
+ * so an export is what `pnpm attest replay` reads; they default to empty for an export from before 3.13.
  */
 import { z } from 'zod';
 
+import { PolicyDocument } from '../core/policy';
 import { CalendarRecord } from './calendar-snapshots';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
+import { replayRecords } from './replay-records';
 import {
   AdapterHealth,
   Claim,
@@ -26,7 +30,9 @@ import {
   Observation,
   ObserverCoverage,
   Receipt,
+  ReceiptInputs,
   Request,
+  Sha256,
 } from './types';
 
 export const LEDGER_EXPORT_FORMAT = 'attest-ledger';
@@ -48,6 +54,13 @@ export const LedgerExport = z.strictObject({
     coverageIntervals: z.array(ObserverCoverage).default([]),
     calendarSnapshots: z.array(CalendarRecord).default([]),
   }),
+  /**
+   * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
+   * and the policy documents receipts name, by `policyHash`: the two maps `pnpm attest replay` reads. Empty in an
+   * export taken before 3.13.
+   */
+  receiptInputs: z.record(Sha256, ReceiptInputs).default({}),
+  policies: z.record(Sha256, PolicyDocument).default({}),
 });
 
 export type LedgerExport = z.infer<typeof LedgerExport>;
@@ -112,5 +125,6 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       ),
       calendarSnapshots: readRows('calendarSnapshots', CalendarRecord, await db.calendarSnapshots.toArray()),
     },
+    ...(await replayRecords(db)),
   }));
 }

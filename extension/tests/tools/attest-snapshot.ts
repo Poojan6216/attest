@@ -29,18 +29,14 @@ import { z } from 'zod';
 import { loadPolicy, type Policy, PolicyError } from '../../src/core/policy';
 import { formatPath } from '../../src/core/policy-errors';
 import type { LedgerSnapshot, ReceiptInputs } from '../../src/core/replay';
-import { Coverage, GradeContext, Grant, Sha256 } from '../../src/core/schema';
+import { type Grant, Sha256 } from '../../src/core/schema';
 import { LEDGER_EXPORT_FORMAT, LedgerExport } from '../../src/ledger/export';
+import { ReceiptInputs as LedgerReceiptInputs } from '../../src/ledger/types';
 
 import { printable } from './printable';
 
-/** One `receiptInputs` row (§9). */
-export const ReceiptInputsRow = z.strictObject({
-  coverage: Coverage,
-  grant: Grant,
-  context: GradeContext,
-  policyHash: Sha256,
-});
+/** One `receiptInputs` row (§9): the ledger's own schema (src/ledger/types.ts), so the two never drift apart. */
+export const ReceiptInputsRow = LedgerReceiptInputs;
 
 /** The replay export: the Sprint 0 ledger export plus `receiptInputs` and `policies`. Strict at every level. */
 export const ReplayExport = LedgerExport.extend({

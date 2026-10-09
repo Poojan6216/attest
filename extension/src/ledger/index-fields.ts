@@ -35,8 +35,21 @@ export const LEDGER_TABLE_NAMES = [
 
 export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
 
+/**
+ * The replay records (sprint_3 3.13; docs/grading.md §9): what each receipt was graded with besides its subject and
+ * candidates (`receiptInputs`, keyed by the receipt's `inputsHash`), and the policy documents receipts name
+ * (`policies`, keyed by `policyHash`). Stored beside the ledger tables and written only by a grading batch, never
+ * announced on the bus, and exported as the two maps `pnpm attest replay` reads (./export.ts).
+ */
+export const REPLAY_TABLE_NAMES = ['receiptInputs', 'policies'] as const;
+
+export type ReplayTableName = (typeof REPLAY_TABLE_NAMES)[number];
+
+/** Every table the ledger database holds: the ledger tables and the replay records. */
+export type StoredTableName = LedgerTableName | ReplayTableName;
+
 /** The derived keys each table adds to its rows. Everything else in a row is the domain object. */
-export const INDEX_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> = {
+export const INDEX_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
   requests: ['date'],
   claims: ['date'],
   observations: ['timeBucket'],
@@ -51,6 +64,8 @@ export const INDEX_FIELDS: Readonly<Record<LedgerTableName, readonly string[]>> 
   coverageIntervals: ['accountKey', 'startMs', 'endMs', 'syncMs', 'kind', 'lenMs'],
   // The snapshot's `readAt` in epoch ms, for the retention purge (./calendar-snapshots.ts).
   calendarSnapshots: ['readMs'],
+  receiptInputs: [],
+  policies: [],
 };
 
 export type RequestRow = Request & { readonly date: string };
@@ -121,7 +136,7 @@ export function toCoverageRow(ping: CoveragePing): CoverageRow {
  * Removes a table's derived keys from a stored row. Input is untrusted (it came off disk), so it is
  * `unknown` in and `unknown` out: the caller Zod-parses the result with the strict domain schema.
  */
-export function stripIndexFields(table: LedgerTableName, row: unknown): unknown {
+export function stripIndexFields(table: StoredTableName, row: unknown): unknown {
   if (typeof row !== 'object' || row === null || Array.isArray(row)) return row;
   const derived = INDEX_FIELDS[table];
   const kept: [string, unknown][] = Object.entries(row).filter(([key]) => !derived.includes(key));

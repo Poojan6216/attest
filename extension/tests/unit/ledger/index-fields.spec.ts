@@ -8,6 +8,7 @@ import { LedgerError } from '../../../src/ledger/errors';
 import {
   INDEX_FIELDS,
   LEDGER_TABLE_NAMES,
+  REPLAY_TABLE_NAMES,
   accountKeyOf,
   dateKey,
   stripIndexFields,
@@ -90,7 +91,7 @@ describe('stripIndexFields', () => {
   it('passes non-objects through unchanged and declares fields for every table', () => {
     expect(stripIndexFields('meta', 'text')).toBe('text');
     expect(stripIndexFields('meta', null)).toBeNull();
-    expect(Object.keys(INDEX_FIELDS).sort()).toEqual([...LEDGER_TABLE_NAMES].sort());
+    expect(Object.keys(INDEX_FIELDS).sort()).toEqual([...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES].sort());
   });
 });
 

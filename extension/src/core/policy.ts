@@ -187,3 +187,6 @@ export function isLoadedRules(rules: object): boolean {
  * startup instead of grading with a half-valid policy (Hard Rule 6).
  */
 export const DEFAULT_POLICY: Policy = loadPolicy(defaultPolicyJson);
+
+/** The shipped policy document as written (policy/default.json): what the ledger stores beside DEFAULT_POLICY's receipts. */
+export const DEFAULT_POLICY_DOCUMENT: unknown = defaultPolicyJson;
