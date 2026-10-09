@@ -92,31 +92,28 @@ export async function seedReceipts(extension: LaunchedExtension): Promise<void> 
  * come after the rows are in the page.
  */
 async function paintsOf(page: Page): Promise<{ readonly first: number; readonly day: number }> {
+  // No named function inside: the evaluated code runs in the page, where a bundler's name helper does not exist.
   return page.evaluate(
     () =>
       new Promise<{ first: number; day: number }>((resolve, reject) => {
-        let first: number | null = null;
-        let day: number | null = null;
-        const settle = () => {
-          if (first !== null && day !== null) resolve({ first, day });
-        };
+        const seen: { first: number | null; day: number | null } = { first: null, day: null };
         new PerformanceObserver((list) => {
           const entry = list.getEntriesByName('first-contentful-paint')[0];
-          if (entry !== undefined) first = entry.startTime;
-          settle();
+          if (entry !== undefined) seen.first = entry.startTime;
+          if (seen.first !== null && seen.day !== null) resolve({ first: seen.first, day: seen.day });
         }).observe({ type: 'paint', buffered: true });
         new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
             if ('identifier' in entry && entry.identifier === 'today' && 'renderTime' in entry) {
-              day = Number(entry.renderTime) || entry.startTime;
+              seen.day = Number(entry.renderTime) || entry.startTime;
             }
           }
-          settle();
+          if (seen.first !== null && seen.day !== null) resolve({ first: seen.first, day: seen.day });
         }).observe({ type: 'element', buffered: true });
         setTimeout(() => {
           reject(
             new Error(
-              `Chrome reported no ${first === null ? 'first paint' : 'paint of the day'} of the popup`,
+              `Chrome reported no ${seen.first === null ? 'first paint' : 'paint of the day'} of the popup`,
             ),
           );
         }, 5_000);

@@ -69,7 +69,7 @@ export async function runPopupBench(): Promise<Readonly<Record<string, MetricVal
       popupCpuMedianMs: cpu.median,
       popupCpuMinMs: cpu.min,
       popupCpuMaxMs: cpu.max,
-      popupChromeMajor: /\bChrome\/(\d+)/u.exec(agent)?.[1] ?? 'unknown',
+      popupChromeMajor: /Chrome\/(\d+)/u.exec(agent)?.[1] ?? 'unknown',
       popupTrace: POPUP_TRACE,
       popupPaintGateMs: POPUP_PAINT_GATE_MS,
       popupPaintGateMetric: 'popupFirstPaintMedianMs',

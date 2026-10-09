@@ -92,7 +92,7 @@ export const degradedLine = (health: AdapterHealth): string =>
 
 /** The Chrome major version in a user agent string, or null without one. */
 export function chromeMajor(userAgent: string): string | null {
-  return /\bChrome\/(\d+)/u.exec(userAgent)?.[1] ?? null;
+  return /Chrome\/(\d+)/u.exec(userAgent)?.[1] ?? null;
 }
 
 /**
