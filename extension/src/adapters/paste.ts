@@ -18,8 +18,8 @@
  * "no day", and an entry with no time at all, or one right above a day heading (which could be its own time or the
  * next section's), is "no time". Neither is imported, and the preview says why.
  * Each entry is held to the claim builder an agent adapter uses (./claims.ts `buildFacts`, ./patterns.ts): one claim
- * per action of an ActionType it reports, at most one `other` when it reports none, the §10 ids, so pasting the same
- * log twice gives the same claims. A time that cannot be read, or one after the paste, gives no claim either. The text
+ * per ActionType it reports (a title and its summary are one action: the one naming most facts is kept), at most one
+ * `other` when it reports none, the §10 ids, so pasting the same log twice gives the same claims. A time that cannot be read, or one after the paste, gives no claim either. The text
  * never leaves the side panel: only the claims are sent on (Hard Rule 2).
  */
 import { instantMs, type OffsetAt, resolveRelative } from '../core/normalize';
@@ -173,6 +173,26 @@ function draftsOf(text: string, ctx: PasteContext): Draft[] {
   return drafts;
 }
 
+/** How many facts a claim names that grading matches on: who, what, how much, and when the event starts. */
+const factsOf = (claim: Claim): number =>
+  [claim.counterparty, claim.subjectHint, claim.amountCents, claim.targetAt].filter(
+    (fact) => fact !== undefined,
+  ).length;
+
+/**
+ * One claim per action type in an entry (sprint_3 3.15): a title and the sentence under it report one action, and two
+ * claims of it would leave one NOT_FOUND once the other took its evidence (Hard Rule 5). The one naming the most facts
+ * is kept, the later sentence on a tie (the summary comes after the title).
+ */
+function onePerType(claims: readonly Claim[]): Claim[] {
+  const kept = new Map<string, Claim>();
+  for (const claim of claims) {
+    const held = kept.get(claim.type);
+    if (held === undefined || factsOf(claim) >= factsOf(held)) kept.set(claim.type, claim);
+  }
+  return claims.filter((claim) => kept.get(claim.type) === claim);
+}
+
 /** One entry held to the claim builder: its claims, or why it gives none. */
 function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
   const facts = buildFacts(
@@ -193,7 +213,7 @@ function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
         : facts.invalid > 0
           ? 'invalid'
           : 'no_claim';
-  return { text: draft.text, time: draft.shown, outcome, claims: facts.claims };
+  return { text: draft.text, time: draft.shown, outcome, claims: onePerType(facts.claims) };
 }
 
 /** The minutes `drafts` name at minute precision (`PastedLog.activeAt`), each once, in time order. */

@@ -27,13 +27,14 @@
  *  - Text that reads differently from how it displays (a bidi override: "\u202E00:21" shows as "12:00"; a
  *    superscript digit: "5² min ago" is not "52 min ago") is not read.
  */
+import { indexOfName, MONTH_NAMES, parseClock, WEEKDAY_NAMES } from './normalize-names';
+import { upcomingInClean } from './normalize-upcoming';
 import { readsDifferently, stripInvisible } from './normalize-text';
 import {
   addDays,
   type CivilDate,
   civilDateAt,
   compareDates,
-  HOURS_PER_DAY,
   instantMs,
   isoWithOffset,
   NormalizeError,
@@ -44,7 +45,7 @@ import {
   weekdayOf,
 } from './normalize-time';
 import { asBaseline, BASELINE_CLASS, lowerBaseline, trimBaseline } from './unicode-baseline';
-import { DAYS_PER_WEEK, HOURS_PER_HALF_DAY, MINUTES_PER_HOUR, MS_PER_HOUR, MS_PER_MINUTE } from './units';
+import { DAYS_PER_WEEK, MS_PER_HOUR, MS_PER_MINUTE } from './units';
 
 /** Same values as schema `ClaimPrecision`. */
 export type TimePrecision = 'minute' | 'hour' | 'day';
@@ -90,29 +91,6 @@ const UNIT_MS: Readonly<Record<ClockPrecision, number>> = { minute: MS_PER_MINUT
 /** A clock shown to the minute may be up to one displayed minute ahead of the reference (vendor/reader skew). */
 const DISPLAY_SKEW_MS = MS_PER_MINUTE;
 
-const WEEKDAY_NAMES: readonly (readonly string[])[] = [
-  ['sun', 'sunday'],
-  ['mon', 'monday'],
-  ['tue', 'tues', 'tuesday'],
-  ['wed', 'weds', 'wednesday'],
-  ['thu', 'thur', 'thurs', 'thursday'],
-  ['fri', 'friday'],
-  ['sat', 'saturday'],
-];
-const MONTH_NAMES: readonly (readonly string[])[] = [
-  ['jan', 'january'],
-  ['feb', 'february'],
-  ['mar', 'march'],
-  ['apr', 'april'],
-  ['may'],
-  ['jun', 'june'],
-  ['jul', 'july'],
-  ['aug', 'august'],
-  ['sep', 'sept', 'september'],
-  ['oct', 'october'],
-  ['nov', 'november'],
-  ['dec', 'december'],
-];
 const AGO_UNITS: ReadonlyMap<string, TimePrecision> = new Map([
   ...['m', 'min', 'mins', 'minute', 'minutes'].map((unit): [string, TimePrecision] => [unit, 'minute']),
   ...['h', 'hr', 'hrs', 'hour', 'hours'].map((unit): [string, TimePrecision] => [unit, 'hour']),
@@ -184,21 +162,6 @@ function clockOnly(minuteOfDay: number, frame: Frame): Span | null {
   if (todayWall === null || yesterday === null) return null;
   const today = wallToInstant(todayWall, frame.offsetAt).epochMs;
   return atClock(today <= frame.referenceMs + DISPLAY_SKEW_MS ? frame.today : yesterday, minuteOfDay, frame);
-}
-
-/** Minutes since local midnight, or null for an impossible clock ("13:03 PM", "0:30 AM", "24:00", "2:60"). */
-function parseClock(hourText: string, minuteText: string, meridiem: string | undefined): number | null {
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  if (minute >= MINUTES_PER_HOUR) return null;
-  if (meridiem === undefined) return hour < HOURS_PER_DAY ? hour * MINUTES_PER_HOUR + minute : null;
-  if (hour < 1 || hour > HOURS_PER_HALF_DAY) return null;
-  const afternoon = meridiem === 'pm' ? HOURS_PER_HALF_DAY : 0;
-  return ((hour % HOURS_PER_HALF_DAY) + afternoon) * MINUTES_PER_HOUR + minute;
-}
-
-function indexOfName(table: readonly (readonly string[])[], word: string): number {
-  return table.findIndex((names) => names.includes(word));
 }
 
 function previousWeekday(weekday: number, today: CivilDate): CivilDate | null {
@@ -321,4 +284,15 @@ export function resolveRelative(text: string, context: RelativeContext): Resolve
     if (error instanceof NormalizeError && error.code === 'invalid_instant') return null;
     throw error;
   }
+}
+
+/**
+ * The start of the event a claim's own words name ("Thu 2pm", "Friday at noon", "Oct 8 at 2:00 pm"), read forward
+ * from `context.referenceIso`, the claim's time (sprint_3 3.15; ./normalize-upcoming.ts has the rules): ISO 8601 in
+ * the offset in force then, or null when the words name no day and time, or none unambiguously (Hard Rule 5). The
+ * sentence is read as `resolveRelative` reads a page's time, through `cleanText`.
+ */
+export function upcomingIn(sentence: string, context: RelativeContext): string | null {
+  if (readsDifferently(sentence)) return null;
+  return upcomingInClean(cleanText(sentence), context);
 }

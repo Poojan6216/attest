@@ -32,6 +32,7 @@ import {
 } from '../../src/core/normalize';
 import * as normalizeAmount from '../../src/core/normalize-amount';
 import * as normalizeRelative from '../../src/core/normalize-relative';
+import { upcomingIn } from '../../src/core/normalize-relative';
 import * as normalizeText from '../../src/core/normalize-text';
 import { readsDifferently, stripInvisible } from '../../src/core/normalize-text';
 import { ASSIGNED, RESERVED_IGNORABLE } from '../../src/core/unicode-table-assigned';
@@ -174,6 +175,8 @@ const READERS: readonly (readonly [
   [amount, (text) => amount(text, { defaultDollar: 'USD' })],
   [isCurrencyCode, (text) => isCurrencyCode(text)],
   [resolveRelative, (text) => resolveRelative(text, CONTEXT)],
+  // A claim's event start (sprint_3 3.15), read from its words as resolveRelative reads a page's time.
+  [upcomingIn, (text) => upcomingIn(text, CONTEXT)],
   [readsDifferently, (text) => readsDifferently(text)],
   [stripInvisible, (text) => stripInvisible(text)],
   [stopWordSet, (text, stop) => stopWordSet([...stop, text])],

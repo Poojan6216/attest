@@ -18,8 +18,10 @@
  *    pass says so (Hard Rule 6).
  *  - A claim's fields come from what its pattern captured: a counterparty (an address, else the capitalised words of a
  *    name), a subject hint (one line, at most SUBJECT_HINT code units), an amount (core `amount`; a bare `$` keeps its
- *    cents and no currency, which the grant's `spendCurrency` reads, §6.1). A calendar claim gets no `targetAt` here:
- *    the event's own time is read by each vendor's adapter (3.2 to 3.4); until then such a claim grades `no_target`.
+ *    cents and no currency, which the grant's `spendCurrency` reads, §6.1). A calendar claim's `targetAt` (its event's
+ *    start) is read from its own words when they name a day and a time ("Thu 2pm", "Friday at noon"), forward from the
+ *    claim's time (core `upcomingIn`, sprint_3 3.15); words that name none, or none unambiguously, give none, and the
+ *    claim grades `no_target` (Hard Rule 5).
  *
  * A Request's or a Claim's text never leaves whole (Hard Rule 2): a Request keeps its hash and hint, a Claim its fields.
  */
@@ -27,6 +29,7 @@ import { idFromHash } from '../core/base32';
 import { hashCanonical, sha256Hex } from '../core/hash';
 import { amount, instantMs, isoWithOffset, type OffsetAt, resolveRelative } from '../core/normalize';
 import { trailingOffsetMinutes } from '../core/normalize-time';
+import { upcomingIn } from '../core/normalize-relative';
 import {
   type AgentId,
   Claim,
@@ -37,6 +40,7 @@ import {
   type SourceKind,
 } from '../core/schema';
 import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../core/units';
+import { isCalendarType } from '../core/window';
 import { oneLine } from '../observers/text';
 import { type Classified, classify } from './patterns';
 import type { AgentRead } from './types';
@@ -192,6 +196,9 @@ function claimFields(
   });
   const counterparty = counterpartyOf(read, sentence);
   const subjectHint = subjectOf(read);
+  const targetAt = isCalendarType(read.type)
+    ? upcomingIn(sentence, { referenceIso: stated.at, offsetAt: ctx.offsetAt })
+    : null;
   return {
     id: idFromHash(rawHash),
     agent: ctx.agent,
@@ -203,6 +210,7 @@ function claimFields(
     claimedAt: stated.at,
     claimedAtPrecision: stated.precision,
     ...(stated.end === undefined ? {} : { claimedAtEnd: stated.end }),
+    ...(targetAt === null ? {} : { targetAt }),
     observedAt: ctx.observedAt,
     sourceKind: kind,
     extractor: { ...ctx.extractor, confidence: read.confidence },
