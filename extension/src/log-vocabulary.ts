@@ -27,6 +27,8 @@ export const LOG_EVENTS = [
   'bus.refused',
   'bus.respond_failed',
   'bus.send_failed',
+  'grading.batch',
+  'grading.batch_out_of_order',
   'install.details_invalid',
   'install.failed',
   'install.handled',

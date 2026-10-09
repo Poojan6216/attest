@@ -20,9 +20,9 @@
  * including overrides and reverts stamped at a batch's very instant or just after it but read by it (`simulate`).
  */
 import { gradeBatch, gradedAt, preAssignments } from '../../src/core/batch';
+import { storeBatch, supersede } from '../../src/core/batch-store';
 import { createMemoryIndex, type ObservationIndex } from '../../src/core/candidates';
 import type { Policy } from '../../src/core/policy';
-import { receiptId } from '../../src/core/receipt';
 import type { LedgerSnapshot, ReceiptInputs } from '../../src/core/replay';
 import { Claim, Coverage, type OverrideGrade, type Receipt, type Ulid } from '../../src/core/schema';
 import { transition } from '../../src/core/state';
@@ -85,19 +85,11 @@ export class LedgerSim {
       fixed,
     );
     this.#policies.set(policy.policyHash, policy);
-    const produced = new Set<Ulid>();
-    for (const { receipt, inputs } of graded) {
-      produced.add(receipt.id);
-      const held = this.receipts.get(receipt.id);
-      if (held !== undefined && (held.state !== 'PENDING' || held.supersededBy !== undefined)) continue;
-      const next = held === undefined ? receipt : transition(held, { event: 'regrade', next: receipt });
-      this.receipts.set(receipt.id, next);
-      this.#inputs.set(receipt.inputsHash, { coverage, ...inputs });
-    }
-    for (const [id, receipt] of this.receipts) {
-      if (receipt.claimId !== undefined || receipt.state !== 'PENDING' || produced.has(id)) continue;
-      if (receipt.reverted === undefined) this.receipts.delete(id);
-    }
+    // The background's own rule (src/core/batch-store.ts), so replay is tested against the ledger it stores.
+    const stored = storeBatch(this.receipts, graded, coverage);
+    for (const id of stored.deleted) this.receipts.delete(id);
+    for (const receipt of stored.put) this.receipts.set(receipt.id, receipt);
+    for (const [hash, inputs] of stored.inputs) this.#inputs.set(hash, inputs);
   }
 
   /** The user overrides one stored receipt (§8). */
@@ -116,14 +108,7 @@ export class LedgerSim {
 
   /** Every FINAL claim receipt supersedes the UNASKED receipt of the observation it holds (§7, §8). */
   supersede(): void {
-    for (const receipt of [...this.receipts.values()]) {
-      const [held] = receipt.observationIds;
-      if (receipt.claimId === undefined || receipt.state !== 'FINAL' || held === undefined) continue;
-      const unaskedId = receiptId({ k: 'unasked', observationId: held });
-      const unasked = this.receipts.get(unaskedId);
-      if (unasked === undefined || unasked.supersededBy === receipt.claimId) continue;
-      this.receipts.set(unaskedId, transition(unasked, { event: 'supersede', claimId: receipt.claimId }));
-    }
+    for (const receipt of supersede(this.receipts)) this.receipts.set(receipt.id, receipt);
   }
 
   /** What an export holds: every claim and observation, the stored receipts and the inputs they reference. */

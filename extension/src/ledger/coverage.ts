@@ -97,7 +97,7 @@ function checkWindow(window: CoverageWindow | null): void {
  * latest interval per account and longest span. Shared by every query of a batch (`coverageForMany`), so none of it
  * is read once per claim.
  */
-type ReadCache = Map<string, Promise<unknown>>;
+export type ReadCache = Map<string, Promise<unknown>>;
 
 function cached<T>(cache: ReadCache, key: string, read: () => Promise<T>): Promise<T> {
   const held = cache.get(key) as Promise<T> | undefined;
@@ -305,28 +305,36 @@ async function closeOverlaps(
 }
 
 /** A query checked before any read (`LedgerError('invalid_input')` otherwise): its type, window and instant. */
-interface CheckedQuery {
+export interface CheckedQuery {
   readonly type: ActionType;
   readonly window: CoverageWindow | null;
   readonly evaluatedAt: IsoTs;
   readonly evaluatedMs: number;
 }
 
-function checkQuery(query: CoverageQuery): CheckedQuery {
+export function checkQuery(query: CoverageQuery): CheckedQuery {
   const evaluatedAt = parseCoverageInput(IsoTs, query.evaluatedAt, 'evaluatedAt');
   const type = parseCoverageInput(ActionType, query.type, 'type');
   checkWindow(query.window);
   return { type, window: query.window, evaluatedAt, evaluatedMs: instantMs(evaluatedAt) };
 }
 
-/** One query's coverage, inside the caller's read transaction, sharing what it already read (`cache`). */
-async function coverageIn(
+/** A coverage of its entries: each once, in the fixed order (`compareEntries`). */
+export function coverageOf(evaluatedAt: IsoTs, found: ReadonlyMap<string, PlacedEntry>): Coverage {
+  return Coverage.parse({
+    evaluatedAt,
+    observers: [...found.values()].sort(compareEntries).map(({ entry }) => entry),
+  });
+}
+
+/** One query's entries by their canonical JSON, in the caller's read transaction, sharing what it read (`cache`). */
+export async function entriesIn(
   db: LedgerDb,
   query: CheckedQuery,
   policy: Pick<Policy, 'sourcesByType'>,
   cache: ReadCache,
-): Promise<Coverage> {
-  const { type, window, evaluatedAt, evaluatedMs } = query;
+): Promise<Map<string, PlacedEntry>> {
+  const { type, window, evaluatedMs } = query;
   const found = new Map<string, PlacedEntry>();
   for (const source of policy.sourcesByType[type]) {
     const seen = window === null ? [] : await overlapping(db, source, window, evaluatedMs, cache);
@@ -338,8 +346,7 @@ async function coverageIn(
   if (policy.sourcesByType[type].includes(CLOSED_SOURCE)) {
     await closeOverlaps(db, CLOSED_SOURCE, found, evaluatedMs, cache);
   }
-  const observers = [...found.values()].sort(compareEntries).map(({ entry }) => entry);
-  return Coverage.parse({ evaluatedAt, observers });
+  return found;
 }
 
 /**
@@ -356,7 +363,7 @@ export async function coverageFor(
   const checked = checkQuery(query);
   // An `async` scope: Dexie keeps its transaction across native awaits only inside one.
   return db.transaction('r', db.coverageIntervals, async (): Promise<Coverage> =>
-    coverageIn(db, checked, policy, new Map()),
+    coverageOf(checked.evaluatedAt, await entriesIn(db, checked, policy, new Map())),
   );
 }
 
@@ -375,7 +382,8 @@ export async function coverageForMany(
   return db.transaction('r', db.coverageIntervals, async (): Promise<Coverage[]> => {
     const cache: ReadCache = new Map();
     const out: Coverage[] = [];
-    for (const query of checked) out.push(await coverageIn(db, query, policy, cache));
+    for (const query of checked)
+      out.push(coverageOf(query.evaluatedAt, await entriesIn(db, query, policy, cache)));
     return out;
   });
 }

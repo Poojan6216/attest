@@ -1,0 +1,174 @@
+import 'fake-indexeddb/auto';
+/**
+ * The grading batch (sprint_3 3.13; src/background/grading.ts; docs/grading.md §3 Background obligations) over a real
+ * ledger, with the §2 demo stored as the service worker stores it, each write at its own instant (the clock only moves
+ * forward, so the clock guard repairs nothing):
+ *  - a batch before grace stores both claim receipts PENDING, with their inputs and the policy document;
+ *  - a batch after grace finalises them (VERIFIED, NOT_FOUND), and releases the replaced inputs;
+ *  - the export is the replay input, and replay reproduces every receipt (Hard Rule 4);
+ *  - a batch stamped at or before the last one runs nothing; batches queue, never overlap;
+ *  - the default grants: written for every agent that has none, never over the user's.
+ * The vendor row is an orphan with no UNASKED receipt here: its only signals were Muse's session ping and the user's
+ * idle time, which the paste path does not record yet (Decisions [3.13]).
+ */
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { defaultGrant, ensureDefaultGrants } from '../../../src/background/default-grants';
+import { runGradingBatch } from '../../../src/background/grading';
+import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
+import { replay } from '../../../src/core/replay';
+import { IsoTs, Receipt } from '../../../src/core/schema';
+import { recordCoverage } from '../../../src/ledger/coverage';
+import { readRows, type LedgerDb } from '../../../src/ledger/db';
+import { exportLedger } from '../../../src/ledger/export';
+import { openLedger } from '../../../src/ledger/migrations';
+import { replayRecords } from '../../../src/ledger/replay-records';
+import { listGrants, putGrant, upsertClaim, upsertObservation } from '../../../src/ledger/repo';
+import { readSnapshot } from '../../tools/attest-snapshot';
+import { AT, buildDemo } from '../core/demo-ledger';
+import { pinClock, releaseClock, uniqueDbName } from '../ledger/fixtures';
+
+const DEPS = { policy: DEFAULT_POLICY, policyDocument: DEFAULT_POLICY_DOCUMENT, nowMs: () => Date.now() };
+const opened: LedgerDb[] = [];
+
+beforeEach(() => {
+  pinClock('2026-10-06T08:00:00-04:00');
+});
+
+afterEach(() => {
+  for (const db of opened.splice(0)) db.close();
+  releaseClock();
+});
+
+async function open(prefix: string): Promise<LedgerDb> {
+  const db = await openLedger(uniqueDbName(prefix));
+  opened.push(db);
+  return db;
+}
+
+/**
+ * The §2 demo's writes after `from` and up to `upTo`, as the service worker makes them, each with the clock at its
+ * instant. Tests write and grade in time order: a clock moved back below what was stored would have the clock guard
+ * delete the coverage synced "in the future" (src/ledger/clock-guard.ts), as it must.
+ */
+async function storeDemo(db: LedgerDb, upTo: string, from = ''): Promise<ReturnType<typeof buildDemo>> {
+  const demo = buildDemo();
+  if (from === '') await ensureDefaultGrants(db, IsoTs.parse('2026-10-06T08:00:00-04:00'));
+  const steps: [string, () => Promise<unknown>][] = [
+    [AT.museRead, () => upsertClaim(db, demo.emailClaim).then(() => upsertClaim(db, demo.calendarClaim))],
+    [AT.firstLook, () => upsertObservation(db, demo.priyaRow, DEFAULT_POLICY)],
+    [AT.firstLook, () => upsertObservation(db, demo.vendorRow, DEFAULT_POLICY)],
+    ...demo.observers.map((entry): [string, () => Promise<unknown>] => [
+      entry.lastSyncAt,
+      () => recordCoverage(db, entry),
+    ]),
+  ];
+  const due = steps.filter(
+    ([at]) => (from === '' || Date.parse(at) > Date.parse(from)) && Date.parse(at) <= Date.parse(upTo),
+  );
+  due.sort(([a], [b]) => Date.parse(a) - Date.parse(b));
+  for (const [at, write] of due) {
+    pinClock(at);
+    await write();
+  }
+  return demo;
+}
+
+async function batchAt(db: LedgerDb, at: string) {
+  pinClock(at);
+  return runGradingBatch(db, DEPS);
+}
+
+const receiptsOf = async (db: LedgerDb): Promise<Receipt[]> =>
+  readRows('receipts', Receipt, await db.receipts.toArray());
+
+describe('the grading batch over the §2 demo', () => {
+  it('stores both claim receipts PENDING before grace, with their inputs and the policy', async () => {
+    const db = await open('grading-pending');
+    const demo = await storeDemo(db, AT.beforeGrace);
+    const summary = await batchAt(db, AT.beforeGrace);
+    expect(summary).toMatchObject({ claims: 2, written: 2, deleted: 0, superseded: 0 });
+    const receipts = await receiptsOf(db);
+    expect(receipts.map((r) => [r.claimId, r.state]).sort()).toEqual(
+      [
+        [demo.emailClaim.id, 'PENDING'],
+        [demo.calendarClaim.id, 'PENDING'],
+      ].sort(),
+    );
+    const records = await replayRecords(db);
+    expect(Object.keys(records.receiptInputs).sort()).toEqual(receipts.map((r) => r.inputsHash).sort());
+    expect(Object.keys(records.policies)).toEqual([DEFAULT_POLICY.policyHash]);
+  });
+
+  it('finalises them after grace, releases the replaced inputs, and replay reproduces every receipt', async () => {
+    const db = await open('grading-final');
+    await storeDemo(db, AT.beforeGrace);
+    await batchAt(db, AT.beforeGrace);
+    const early = await receiptsOf(db);
+    const demo = await storeDemo(db, AT.evaluated, AT.beforeGrace);
+    await batchAt(db, AT.evaluated);
+    const receipts = await receiptsOf(db);
+    const byClaim = new Map(receipts.map((r) => [r.claimId, r]));
+    expect([byClaim.get(demo.emailClaim.id)?.grade, byClaim.get(demo.emailClaim.id)?.state]).toEqual([
+      'VERIFIED',
+      'FINAL',
+    ]);
+    expect([byClaim.get(demo.calendarClaim.id)?.grade, byClaim.get(demo.calendarClaim.id)?.state]).toEqual([
+      'NOT_FOUND',
+      'FINAL',
+    ]);
+    const records = await replayRecords(db);
+    expect(Object.keys(records.receiptInputs).sort()).toEqual(receipts.map((r) => r.inputsHash).sort());
+    for (const { inputsHash } of early) expect(records.receiptInputs[inputsHash]).toBeUndefined();
+    const exported = await exportLedger(db, { exportedAt: '2026-10-06T16:00:00-04:00' });
+    const report = await replay(readSnapshot(JSON.parse(JSON.stringify(exported))));
+    expect(report).toMatchObject({ receipts: 2, reproduced: 2, mismatched: 0 });
+  });
+
+  it('a later batch with nothing new keeps every FINAL receipt as stored', async () => {
+    const db = await open('grading-final-kept');
+    await storeDemo(db, AT.evaluated);
+    await batchAt(db, AT.evaluated);
+    const before = await receiptsOf(db);
+    expect(await batchAt(db, AT.nextDay)).toMatchObject({ claims: 0, written: 0, deleted: 0 });
+    expect(await receiptsOf(db)).toEqual(before);
+  });
+});
+
+describe('batch order', () => {
+  it('runs nothing for a batch stamped at or before the last one, and logs it', async () => {
+    const db = await open('grading-order');
+    await storeDemo(db, AT.beforeGrace);
+    expect(await batchAt(db, AT.beforeGrace)).not.toBeNull();
+    const before = await receiptsOf(db);
+    expect(await batchAt(db, AT.beforeGrace)).toBeNull();
+    expect(await receiptsOf(db)).toEqual(before);
+  });
+
+  it('queues batches: the second starts after the first has written, so it grades nothing again', async () => {
+    const db = await open('grading-queue');
+    await storeDemo(db, AT.evaluated);
+    const instants = [AT.evaluated, AT.nextDay].map((at) => Date.parse(at));
+    const deps = { ...DEPS, nowMs: () => instants.shift() ?? Number.NaN };
+    const [first, second] = await Promise.all([runGradingBatch(db, deps), runGradingBatch(db, deps)]);
+    expect([first?.claims, first?.written]).toEqual([2, 2]);
+    expect([second?.claims, second?.written]).toEqual([0, 0]);
+    expect((await receiptsOf(db)).every((r) => r.state === 'FINAL')).toBe(true);
+  });
+});
+
+describe('default grants', () => {
+  it('writes one for every agent without one, and never replaces the user’s', async () => {
+    const db = await open('grading-grants');
+    const mine = {
+      ...defaultGrant('muse', IsoTs.parse('2026-10-01T09:00:00-04:00')),
+      counterpartyAllowlist: ['a.example'],
+    };
+    await putGrant(db, mine);
+    expect(await ensureDefaultGrants(db, IsoTs.parse('2026-10-06T08:00:00-04:00'))).toBe(3);
+    expect(await ensureDefaultGrants(db, IsoTs.parse('2026-10-06T09:00:00-04:00'))).toBe(0);
+    const grants = new Map((await listGrants(db)).map((grant) => [grant.agent, grant]));
+    expect(grants.get('muse')).toEqual(mine);
+    expect(grants.get('claude')).toEqual(defaultGrant('claude', IsoTs.parse('2026-10-06T08:00:00-04:00')));
+  });
+});
