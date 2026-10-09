@@ -240,6 +240,7 @@ export const LOG_VALUES = [
   'popup',
   'sidepanel',
   'options',
+  'dev',
 ] as const;
 
 /**

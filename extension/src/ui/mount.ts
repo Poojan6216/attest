@@ -6,7 +6,7 @@ import { type ComponentType, h, render } from 'preact';
 
 import { log } from '../log';
 
-export type Surface = 'popup' | 'sidepanel' | 'options';
+export type Surface = 'popup' | 'sidepanel' | 'options' | 'dev';
 
 export const ROOT_ELEMENT_ID = 'app';
 

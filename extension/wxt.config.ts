@@ -96,10 +96,24 @@ export function zodWithoutJsonSchema(): Plugin {
   };
 }
 
+/**
+ * The pages built for development and the tests, never for the store: the components page (entrypoints/dev, sprint_4
+ * 4.1). `pnpm build:release` sets ATTEST_RELEASE=1, and the store zip then holds none of them; every other build has
+ * them, so the end-to-end tests can open the page.
+ */
+export const DEV_ENTRYPOINTS: readonly string[] = ['dev'];
+
+/** `infos` without the development pages when `release` is set: what a release build makes. */
+export function releaseEntrypoints<T extends { readonly name: string }>(infos: T[], release: boolean): T[] {
+  return release ? infos.filter((info) => !DEV_ENTRYPOINTS.includes(info.name)) : infos;
+}
+
 export default defineConfig({
   hooks: {
     'entrypoints:found': (_wxt, infos) => {
       infos.push(...contentScripts());
+      const kept = releaseEntrypoints([...infos], process.env.ATTEST_RELEASE === '1');
+      infos.splice(0, infos.length, ...kept);
     },
   },
   // Explicit imports everywhere; no magic globals in reviewed code.

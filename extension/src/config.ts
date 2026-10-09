@@ -253,3 +253,17 @@ export const POPUP_RECEIPT_LIMIT = 50;
 
 /** The receipts one page of the side panel's timeline reads (sprint_4 4.0, 4.3). */
 export const TIMELINE_PAGE_SIZE = 50;
+
+/**
+ * How recent an observer's last check must be for the coverage header to say "checked" rather than "not checked since"
+ * (sprint_4 4.1; agents/ux_engineer.md rule 2). An open Gmail or Calendar tab reports at least every 5 minutes even
+ * hidden (PAGE_RESYNC_HIDDEN_MS), so a check older than this means the tab was closed or asleep.
+ */
+export const COVERAGE_FRESH_MINUTES = 10;
+
+/**
+ * Where the degraded banner's "Report on GitHub" link opens a new issue (agents/ux_engineer.md rule 3): the project's
+ * own repository (build_spec §5). The link carries the adapter's id and version and the Chrome major version only,
+ * and nothing is sent unless the person follows it.
+ */
+export const ISSUES_URL = 'https://github.com/Poojan6216/attest/issues/new';

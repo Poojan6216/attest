@@ -27,7 +27,7 @@ afterEach(() => {
 const Hello = () => h('p', null, 'hello');
 
 describe('mount', () => {
-  it.each<Surface>(['popup', 'sidepanel', 'options'])('%s renders into #app', (surface) => {
+  it.each<Surface>(['popup', 'sidepanel', 'options', 'dev'])('%s renders into #app', (surface) => {
     const root = document.createElement('div');
     root.id = ROOT_ELEMENT_ID;
     document.body.append(root);
@@ -38,9 +38,12 @@ describe('mount', () => {
     expect(records).toEqual([]);
   });
 
-  it.each<Surface>(['popup', 'sidepanel', 'options'])('%s without #app logs ui.root_missing', (surface) => {
-    expect(mount(Hello, surface)).toBe(false);
+  it.each<Surface>(['popup', 'sidepanel', 'options', 'dev'])(
+    '%s without #app logs ui.root_missing',
+    (surface) => {
+      expect(mount(Hello, surface)).toBe(false);
 
-    expect(records).toEqual([{ level: 'error', event: 'ui.root_missing', fields: { surface } }]);
-  });
+      expect(records).toEqual([{ level: 'error', event: 'ui.root_missing', fields: { surface } }]);
+    },
+  );
 });

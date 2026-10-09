@@ -6,7 +6,8 @@
  */
 import type { EntryOutcome } from '../adapters/paste';
 import type { ActionType, AgentId, Claim } from '../core/schema';
-import { CURRENCY_MINOR_UNITS, HOURS_PER_HALF_DAY } from '../core/units';
+import { HOURS_PER_HALF_DAY } from '../core/units';
+import { formatMoney } from './format';
 
 export const AGENT_NAMES: Readonly<Record<AgentId, string>> = Object.freeze({
   muse: 'Muse',
@@ -35,25 +36,12 @@ export const claimTypeLabel = (type: ActionType): string => TYPE_LABELS[type];
 /** "1 claim", "3 claims". */
 export const count = (n: number, one: string, many: string): string => `${String(n)} ${n === 1 ? one : many}`;
 
-function money(minor: number, currency: string): string {
-  const digits = Object.hasOwn(CURRENCY_MINOR_UNITS, currency)
-    ? CURRENCY_MINOR_UNITS[currency as keyof typeof CURRENCY_MINOR_UNITS]
-    : 2;
-  const format = new Intl.NumberFormat('en', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-  return format.format(minor / 10 ** digits);
-}
-
 /** Who or what a claim names: its counterparty or subject hint, then its amount; null when it names none. */
 export function claimWhat(claim: Claim): string | null {
   const named = claim.counterparty ?? claim.subjectHint ?? null;
   const amount =
     claim.amountCents !== undefined && claim.currency !== undefined
-      ? money(claim.amountCents, claim.currency)
+      ? formatMoney(claim.amountCents, claim.currency)
       : null;
   if (named !== null && amount !== null) return `${named}, ${amount}`;
   return named ?? amount;
