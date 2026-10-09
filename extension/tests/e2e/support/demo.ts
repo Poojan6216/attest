@@ -72,10 +72,12 @@ export function demoSentPage(head: string, rows: readonly SentRow[] = DEMO_SENT)
 
 /**
  * The Calendar week the person opens: tests/fixtures/pages/gcal/2026-10-03/synthetic-gcal-week-two-calendars.html
- * (Sunday 4 to Saturday 10 October, every calendar shown) with every event chip removed, so no event lies anywhere near
- * the one Muse said it created. Any event within about 15 hours of it would rightly make that claim PARTIAL (a time
- * match without a title match, docs/grading.md §5), and the demo's Calendar holds none. Each chip is cut whole by
- * counting its divs, and the week must be left with no event id, so a markup change fails here, loudly.
+ * (Sunday 4 to Saturday 10 October, every calendar shown) with every event chip removed. Its "Design review with
+ * Priya" (Thursday 3 pm) shares a title word with the "Q3 review" Muse said it created on Wednesday at 2 pm, and that
+ * word with a start 25 hours away rightly makes the claim PARTIAL (subject overlap 0.25, time 0.65, score 0.50 with
+ * the shipped policy, docs/grading.md §5); an event near it in time alone would not (v1.11: no evidence on time
+ * alone). The demo's Calendar holds neither. Each chip is cut whole by counting its divs, and the week must be left
+ * with no event id, so a markup change fails here, loudly.
  */
 export function emptyWeek(week: string): string {
   let page = week;
