@@ -119,6 +119,22 @@ export async function putPolicyDocument(
   await db.policies.put(PolicyRecord.parse({ policyHash: policy.policyHash, document: parsed.data }));
 }
 
+/**
+ * What one receipt was graded with (`inputsHash`), its coverage joined from `batchCoverages`, or undefined when the
+ * ledger holds none (a receipt older than the replay records, or one whose record was purged). For the receipt detail
+ * (src/ui/data.ts): what grading saw, never recomputed. Reads in the caller's transaction when there is one.
+ */
+export async function receiptInputsOf(db: LedgerDb, inputsHash: string): Promise<ReceiptInputs | undefined> {
+  const [row] = readRows('receiptInputs', ReceiptInputsRecord, [await db.receiptInputs.get(inputsHash)]);
+  if (row === undefined) return undefined;
+  const [held] = readRows('batchCoverages', BatchCoverageRecord, [
+    await db.batchCoverages.get(row.coverageHash),
+  ]);
+  if (held === undefined) return undefined;
+  const { grant, context, policyHash } = row;
+  return { coverage: held.coverage, grant, context, policyHash };
+}
+
 /** What the replay input holds besides the ledger tables (tests/tools/attest-snapshot.ts): three maps, keys sorted. */
 export interface ReplayRecords {
   readonly receiptInputs: Record<string, ReceiptInputsRef>;

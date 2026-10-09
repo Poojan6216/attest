@@ -230,7 +230,8 @@ describe('v6 → v7', () => {
     old.close();
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(7);
+    // v7, then v8's receipt page indexes (sprint_4 4.0).
+    expect(db.verno).toBe(8);
     const hash = coverageHash(coverage);
     const records = await replayRecords(db);
     expect(Object.keys(records.receiptInputs)).toEqual([sha(41), sha(42)]);

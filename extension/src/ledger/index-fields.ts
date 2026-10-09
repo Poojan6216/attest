@@ -55,8 +55,9 @@ export const INDEX_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> 
   claims: ['date'],
   observations: ['timeBucket'],
   grants: [],
-  // `agent` is a Receipt field (docs/grading.md §14.3), so the [agent+date] index reads it from the domain.
-  receipts: ['date'],
+  // `agent` is a Receipt field (docs/grading.md §14.3), so the [agent+date] and [agent+computedMs] indexes read it from
+  // the domain. `computedMs` is `computedAt` in epoch ms: the newest-first pages of ./views.ts (schema v8).
+  receipts: ['date', 'computedMs'],
   adapterHealth: [],
   coverage: ['accountKey'],
   meta: [],
@@ -77,7 +78,7 @@ export type ClaimRow = Claim & { readonly date: string };
 export type ObservationRow = Observation & {
   readonly timeBucket: number;
 };
-export type ReceiptRow = Receipt & { readonly date: string };
+export type ReceiptRow = Receipt & { readonly date: string; readonly computedMs: number };
 export type CoverageRow = CoveragePing & { readonly accountKey: string };
 
 const TIME_BUCKET_MS = LEDGER_TIME_BUCKET_MINUTES * 60_000;
@@ -129,7 +130,7 @@ export function toObservationRow(observation: Observation): ObservationRow {
 }
 
 export function toReceiptRow(receipt: Receipt): ReceiptRow {
-  return { ...receipt, date: dateKey(receipt.computedAt) };
+  return { ...receipt, date: dateKey(receipt.computedAt), computedMs: epochMs(receipt.computedAt) };
 }
 
 export function toCoverageRow(ping: CoveragePing): CoverageRow {

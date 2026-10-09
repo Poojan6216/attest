@@ -244,3 +244,12 @@ export const PURGE_STARTUP_DELAY_MINUTES = 1;
  * tab is read again when it becomes visible, never on a beat.
  */
 export const OBSERVER_HEARTBEAT_MS = 60_000;
+
+/**
+ * The receipts the popup lists: the newest graded since local midnight (sprint_4 4.0, 4.2). The side panel's timeline
+ * shows the rest, a page at a time.
+ */
+export const POPUP_RECEIPT_LIMIT = 50;
+
+/** The receipts one page of the side panel's timeline reads (sprint_4 4.0, 4.3). */
+export const TIMELINE_PAGE_SIZE = 50;

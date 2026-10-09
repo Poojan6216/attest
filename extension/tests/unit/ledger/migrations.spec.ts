@@ -71,7 +71,7 @@ describe('the shipped schema', () => {
   it('opens at the shipped version with every ledger table and the replay records (sprint_3 3.13)', async () => {
     const db = await open(uniqueDbName('v1'));
     expect(db.verno).toBe(SHIPPED);
-    expect(SHIPPED).toBe(7);
+    expect(SHIPPED).toBe(8);
     expect(LEDGER_TABLE_NAMES).toContain(COVERAGE_INTERVALS);
     expect(db.tables.map((table) => table.name).sort()).toEqual(
       [...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES].sort(),

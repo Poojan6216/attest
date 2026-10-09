@@ -156,6 +156,19 @@ export const STORES_V7 = {
   [BATCH_COVERAGES]: 'coverageHash',
 } as const;
 
+/**
+ * Schema v8 (sprint_4 4.0; Decisions [4.0]): receipts gain `[agent+computedMs]` and `[agent+grade+computedMs]`
+ * (`computedMs`: `computedAt` in epoch ms, a derived index field), so the popup and the side panel's timeline read the
+ * newest receipts of a range, of every grade or of the grades a filter asks, a page at a time, through an index, in the
+ * order they show them (./views.ts). `[agent+date]` gives a day's receipts in id order, and an id is a hash, so showing
+ * a day newest first meant reading all of it; and a filter for a rare grade would read every receipt of the range. The
+ * upgrade derives `computedMs` over every stored receipt (./migrations.ts).
+ */
+export const STORES_V8 = {
+  receipts:
+    'id, claimId, [agent+date], state, grade, *observationIds, supersededBy, [agent+computedMs], [agent+grade+computedMs]',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 

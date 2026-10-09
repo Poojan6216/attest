@@ -97,7 +97,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 ## 5. Every ledger table and field
 
-The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 7 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
+The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 8 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
 
 Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). The only other key Attest may use there is `attest.flags` ([`src/config.ts`](../extension/src/config.ts) `STORAGE_KEYS`), for the feature flags you turn on; nothing writes it yet, and every flag is off by default. While away detection is on, `chrome.storage.session` (memory Chrome empties when the browser closes) holds one flag, `attest.idleSession`: `true` once this browser session has started watching, so a time away that the previous session left open is closed at what was confirmed, never stretched over the next day ([`src/background/idle.ts`](../extension/src/background/idle.ts)).
 
@@ -259,7 +259,7 @@ Written by the grading batch since Sprint 3.13: the grade for each claim, each u
 | `supersededBy` | The claim that later explained an UNASKED receipt. |
 | `computedAt`, `finalAt` | When it was last graded, and when it became FINAL. |
 
-Index field: `date`.
+Index fields: `date` (the local date of `computedAt`) and `computedMs` (`computedAt` in epoch milliseconds, schema v8), so the popup and the side panel read the newest receipts a page at a time ([`src/ledger/views.ts`](../extension/src/ledger/views.ts)). They hold nothing the stored fields do not.
 
 ### 5.11 `activity`
 

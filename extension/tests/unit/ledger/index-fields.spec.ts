@@ -84,7 +84,7 @@ describe('stripIndexFields', () => {
 
   it("keeps a receipt's agent: it is a domain field, not a derived one", () => {
     const row = toReceiptRow(Receipt.parse(makeReceipt({ agent: 'claude' })));
-    expect(INDEX_FIELDS.receipts).toEqual(['date']);
+    expect(INDEX_FIELDS.receipts).toEqual(['date', 'computedMs']);
     expect(stripIndexFields('receipts', row)).toEqual(makeReceipt({ agent: 'claude' }));
   });
 

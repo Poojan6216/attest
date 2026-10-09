@@ -22,6 +22,7 @@ import { runCoreBench } from './core';
 import { runGcalBench } from './observers/gcal';
 import { runGmailBench } from './observers/gmail';
 import { runReceiptsBench } from './observers/receipts';
+import { runUiBench } from './ui';
 import { gitIn, type Provenance, provenance } from './provenance';
 import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
 
@@ -53,6 +54,7 @@ export const BENCHES: readonly Bench[] = [
   { name: 'gcal', run: runGcalBench },
   { name: 'patterns', run: runPatternsBench },
   { name: 'paste', run: runPasteBench },
+  { name: 'ui', run: runUiBench },
 ];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
