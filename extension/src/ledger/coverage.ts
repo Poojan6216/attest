@@ -28,8 +28,8 @@
  * and `graceElapsed` reads the latest eligible sync whatever window it saw, so the result decides every condition
  * exactly as every stored interval would, at a bounded size. The `gcal.event` entries it returns are closed under
  * overlap (v1.9): with any it holds, every other one synced by `evaluatedAt` whose window overlaps it, whatever its
- * account (`closeOverlaps`). `coverageForMany` answers every claim of a batch in one read transaction, reading each
- * Calendar run and each source's latest per account once for all of them. Every read is bounded (TECH-1, schema v4):
+ * account (`closeOverlaps`). `coverageForBatch` (./coverage-batch.ts) answers every claim of a batch in one read
+ * transaction, reading each Calendar run and each source's latest per account once for all of them. Every read is bounded (TECH-1, schema v4):
  * windows only where they can overlap the claim's window (they end within it plus the source's longest stored
  * window), first-look markers only inside it, and a Calendar run widened from its seeds, never the whole source, so
  * no read grows with the markers of future events. A window that no interval overlaps gets level `none` (Hard Rule
@@ -94,7 +94,7 @@ function checkWindow(window: CoverageWindow | null): void {
 
 /**
  * What one read transaction has already read, per source and instant: the closed source's runs, each source's
- * latest interval per account and longest span. Shared by every query of a batch (`coverageForMany`), so none of it
+ * latest interval per account and longest span. Shared by every query of a batch (./coverage-batch.ts), so none of it
  * is read once per claim.
  */
 export type ReadCache = Map<string, Promise<unknown>>;
@@ -365,27 +365,6 @@ export async function coverageFor(
   return db.transaction('r', db.coverageIntervals, async (): Promise<Coverage> =>
     coverageOf(checked.evaluatedAt, await entriesIn(db, checked, policy, new Map())),
   );
-}
-
-/**
- * `coverageFor` of every query, in order, in one read transaction (the caller's when there is one): what one query
- * read (the closed source's runs, each source's latest per account) is not read again for another at the same
- * instant. A batch passes all of its claims here, so it reads the Calendar source once, not once per claim. Each
- * result is exactly what `coverageFor` returns for its query. Every query is checked before anything is read.
- */
-export async function coverageForMany(
-  db: LedgerDb,
-  queries: readonly CoverageQuery[],
-  policy: Pick<Policy, 'sourcesByType'>,
-): Promise<Coverage[]> {
-  const checked = queries.map(checkQuery);
-  return db.transaction('r', db.coverageIntervals, async (): Promise<Coverage[]> => {
-    const cache: ReadCache = new Map();
-    const out: Coverage[] = [];
-    for (const query of checked)
-      out.push(coverageOf(query.evaluatedAt, await entriesIn(db, query, policy, cache)));
-    return out;
-  });
 }
 
 /** `coverageFor` over a claim's own §4.1 window (null for a calendar claim without `targetAt`). */

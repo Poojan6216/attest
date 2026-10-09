@@ -22,11 +22,12 @@ import { DEFAULT_POLICY } from '../../src/core/policy';
 import { MS_PER_DAY } from '../../src/core/units';
 import {
   type CoverageQuery,
-  coverageForMany,
+  coverageFor,
   placeEntry,
   recordCoverage,
   toIntervalRow,
 } from '../../src/ledger/coverage';
+import { coverageForBatch } from '../../src/ledger/coverage-batch';
 import type { LedgerDb } from '../../src/ledger/db';
 import { openLedger } from '../../src/ledger/migrations';
 import { ObserverCoverage, type ObserverCoverageInput } from '../../src/ledger/types';
@@ -180,19 +181,23 @@ describe('coverage store reads stay bounded as the calendar fills (TECH-1)', () 
 
   it('a batch of 100 claims reads each claim’s own span, and the Calendar closure once, not once per claim', async () => {
     const queries = batchQueries();
-    let answers: Awaited<ReturnType<typeof coverageForMany>> = [];
+    let observers: readonly ObserverCoverage[] = [];
     const rows = await rowsReadBy(async () => {
-      answers = await coverageForMany(db, queries, DEFAULT_POLICY);
+      observers = (await coverageForBatch(db, iso(NOW), queries, DEFAULT_POLICY)).observers;
     });
     console.info(
-      `[perf] coverageForMany(100 claims): ${String(rows)} rows read (gate ${String(GATES.batchOf100Claims)})`,
+      `[perf] coverageForBatch(100 claims): ${String(rows)} rows read (gate ${String(GATES.batchOf100Claims)})`,
     );
     expect(rows).toBeLessThanOrEqual(GATES.batchOf100Claims);
-    // Not a fast wrong answer: every calendar claim sees its week's windows, every Gmail claim its day's window.
-    expect(answers).toHaveLength(100);
-    for (const [index, coverage] of answers.entries()) {
-      const source = index % 2 === 0 ? 'gcal.event' : 'gmail.sent';
-      expect(coverage.observers.some((entry) => entry.source === source)).toBe(true);
+    // Not a fast wrong answer: the batch holds every entry each claim's own read gives, and every calendar claim's
+    // read has its week's windows, every Gmail claim's its day's window (read after the count, never counted).
+    expect(queries).toHaveLength(100);
+    const held = new Set(observers.map((entry) => JSON.stringify(entry)));
+    for (const query of queries) {
+      const source = query.type === 'calendar.created' ? 'gcal.event' : 'gmail.sent';
+      const alone = (await coverageFor(db, query, DEFAULT_POLICY)).observers;
+      expect(alone.some((entry) => entry.source === source)).toBe(true);
+      expect(alone.every((entry) => held.has(JSON.stringify(entry)))).toBe(true);
     }
-  });
+  }, 60_000);
 });

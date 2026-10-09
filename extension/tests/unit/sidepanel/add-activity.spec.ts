@@ -213,12 +213,14 @@ describe('Add agent activity: the preview', () => {
     await previewOf(LOG);
     expect(root.querySelector('#paste-preview-heading')).toBe(document.activeElement);
     expect(root.textContent).toContain('2 claims to import from Muse.');
+    // The minutes of the timed entries are kept too, a claim or not, and the preview says so (SEC-4).
+    expect(root.textContent).toContain('It also keeps the times of 3 entries, as times Muse was working.');
     expect(items('Claims to import')).toEqual([
       'Email sent: dana@example.comThu 8 Oct, 4:33 pm',
       expect.stringMatching(/^Purchase: .*€24\.50Thu 8 Oct, 3:10 pm$/u),
     ]);
     expect(items('paste-skipped-heading')).toEqual([
-      'Look up flights · Searched for flights to DenverToday, 2:05 pm. Nothing Attest checks.',
+      'Look up flights · Searched for flights to DenverToday, 2:05 pm. Nothing Attest checks. Its time is kept as a time Muse was working.',
       'Unsubscribed you from the newsletterToday, 5:30 pm. Not imported: no time Attest can use.',
       'Created event "Standup" for MondayEarlier, 9:15 am. Not imported: no day. Copy the day heading, such as “Today”, with the entries.',
     ]);
@@ -230,6 +232,8 @@ describe('Add agent activity: the preview', () => {
     mount();
     await previewOf(['Today', 'Searched for flights to Denver', '2:05 pm'].join('\n'), 'ChatGPT');
     expect(root.textContent).toContain('Nothing to import from ChatGPT.');
+    // Nothing is sent, so no time is kept, and the preview never says one is.
+    expect(root.textContent).not.toContain('kept');
     expect(root.querySelector('ul[aria-label="Claims to import"]')).toBeNull();
     expect([hasButton('Edit the paste'), hasButton('Cancel')]).toEqual([true, true]);
     expect([...root.querySelectorAll('button')].some((b) => b.textContent.startsWith('Import'))).toBe(false);
@@ -240,7 +244,10 @@ describe('Add agent activity: the preview', () => {
       h(
         'ul',
         null,
-        h(SkippedItem, { entry: { text: 'An entry', time: null, outcome: 'invalid', claims: [] } }),
+        h(SkippedItem, {
+          entry: { text: 'An entry', time: null, minute: null, outcome: 'invalid', claims: [] },
+          keptBy: 'muse',
+        }),
       ),
       root,
     );

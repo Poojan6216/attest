@@ -16,6 +16,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { runPasteBench } from './adapters/paste';
 import { runPatternsBench } from './adapters/patterns';
 import { runCoreBench } from './core';
 import { runGcalBench } from './observers/gcal';
@@ -51,6 +52,7 @@ export const BENCHES: readonly Bench[] = [
   { name: 'receipts', run: runReceiptsBench },
   { name: 'gcal', run: runGcalBench },
   { name: 'patterns', run: runPatternsBench },
+  { name: 'paste', run: runPasteBench },
 ];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */

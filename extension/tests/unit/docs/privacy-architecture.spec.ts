@@ -19,6 +19,7 @@ import {
   REPLAY_TABLE_NAMES,
   type StoredTableName,
 } from '../../../src/ledger/index-fields';
+import { META_KEYS } from '../../../src/ledger/meta-keys';
 import {
   ActivityRecord,
   AdapterHealth,
@@ -153,5 +154,14 @@ describe('docs/privacy-architecture.md lists every ledger table and field', () =
   it('reads a field named in a code block or another table section as not named', () => {
     const fenced = DOC.replace('| `userActive` |', '```\n`userActive`\n```\n| user activity |');
     expect(problemsIn(fenced)).toEqual(['coverage: field `userActive` is not named in its section']);
+  });
+});
+
+describe('§5.6 names every meta key the ledger writes (tech review TECH-4)', () => {
+  it('names each key src/ledger/meta-keys.ts lists, and each family of keys by its prefix', () => {
+    const start = DOC.indexOf('### 5.6 `meta`');
+    const section = DOC.slice(start, DOC.indexOf('\n### ', start + 1));
+    expect(start).toBeGreaterThanOrEqual(0);
+    for (const key of META_KEYS) expect(section, key).toContain(`\`${key}`);
   });
 });

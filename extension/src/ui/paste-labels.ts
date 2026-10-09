@@ -6,7 +6,7 @@
  */
 import type { EntryOutcome } from '../adapters/paste';
 import type { ActionType, AgentId, Claim } from '../core/schema';
-import { CURRENCY_MINOR_UNITS } from '../core/units';
+import { CURRENCY_MINOR_UNITS, HOURS_PER_HALF_DAY } from '../core/units';
 
 export const AGENT_NAMES: Readonly<Record<AgentId, string>> = Object.freeze({
   muse: 'Muse',
@@ -63,8 +63,10 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const WALL_CLOCK = /^(?<y>\d{4})-(?<mo>\d{2})-(?<d>\d{2})T(?<h>\d{2}):(?<mi>\d{2})/u;
 
-const clock12 = (hour: number, minute: number): string =>
-  `${String(hour % 12 === 0 ? 12 : hour % 12)}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'am' : 'pm'}`;
+const clock12 = (hour: number, minute: number): string => {
+  const twelve = hour % HOURS_PER_HALF_DAY === 0 ? HOURS_PER_HALF_DAY : hour % HOURS_PER_HALF_DAY;
+  return `${String(twelve)}:${String(minute).padStart(2, '0')} ${hour < HOURS_PER_HALF_DAY ? 'am' : 'pm'}`;
+};
 
 /** When a claim says it happened, on the person's clock: "Thu 8 Oct, 4:33 pm"; a whole day or hour says so. */
 export function claimWhen(claim: Claim): string {
@@ -90,6 +92,14 @@ const SKIPPED_REASONS: Readonly<Record<Exclude<EntryOutcome, 'claim'>, string>> 
   no_claim: 'Nothing Attest checks.',
   invalid: 'Not imported: Attest could not read this entry.',
 });
+
+/** What the preview says of the entry times a log keeps (security review SEC-4): the minutes, never the text. */
+export const keptTimes = (minutes: number, agent: AgentId): string =>
+  `It also keeps the times of ${count(minutes, 'entry', 'entries')}, as times ${AGENT_NAMES[agent]} was working.`;
+
+/** What the preview says of one entry that is no claim but whose time is kept. */
+export const keptTime = (agent: AgentId): string =>
+  `Its time is kept as a time ${AGENT_NAMES[agent]} was working.`;
 
 /** Why an entry gives no claim, in the preview's words. */
 export const skippedReason = (outcome: Exclude<EntryOutcome, 'claim'>): string => SKIPPED_REASONS[outcome];

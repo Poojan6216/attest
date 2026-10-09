@@ -1,0 +1,166 @@
+{
+  "note": "Invented activity logs in each vendor's shape, pasted on Thursday 8 October 2026 at 17:00 in New York (sprint_3 QA review GAP 11). Every sentence comes from the pattern corpora (tests/fixtures/patterns), whose types are labelled there; these labels add what the paste parser decides: the entries, each one's outcome, and each claim's time, precision, counterparty, amount and event start. Every value is invented.",
+  "pastedAt": "2026-10-08T17:00:00-04:00",
+  "offsetMinutes": -240,
+  "logs": [
+    {
+      "file": "muse-activity.txt",
+      "agent": "muse",
+      "entries": [
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "email.sent",
+              "claimedAt": "2026-10-08T09:12:00-04:00",
+              "precision": "minute",
+              "counterparty": "dana@example.com"
+            }
+          ]
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "purchase.made",
+              "claimedAt": "2026-10-08T10:40:00-04:00",
+              "precision": "minute",
+              "amountCents": 2450,
+              "currency": "EUR"
+            }
+          ]
+        },
+        {
+          "outcome": "no_claim",
+          "claims": []
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "calendar.created",
+              "claimedAt": "2026-10-07T15:30:00-04:00",
+              "precision": "minute",
+              "targetAt": "2026-10-13T09:00:00-04:00"
+            }
+          ]
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "other",
+              "claimedAt": "2026-10-07T16:05:00-04:00",
+              "precision": "minute"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "chatgpt-agent.txt",
+      "agent": "chatgpt",
+      "entries": [
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "email.sent",
+              "claimedAt": "2026-10-06T14:02:00-04:00",
+              "precision": "minute",
+              "counterparty": "sam@example.org"
+            }
+          ]
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "calendar.created",
+              "claimedAt": "2026-10-06T14:15:00-04:00",
+              "precision": "minute",
+              "targetAt": "2026-10-15T14:00:00-04:00"
+            }
+          ]
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "purchase.made",
+              "claimedAt": "2026-10-06T15:40:00-04:00",
+              "precision": "minute",
+              "amountCents": 8999
+            }
+          ]
+        },
+        {
+          "outcome": "no_claim",
+          "claims": []
+        }
+      ]
+    },
+    {
+      "file": "claude-thread.txt",
+      "agent": "claude",
+      "entries": [
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "email.sent",
+              "claimedAt": "2026-10-07T11:02:00-04:00",
+              "precision": "minute",
+              "counterparty": "dana@example.com"
+            }
+          ]
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "calendar.created",
+              "claimedAt": "2026-10-07T11:05:00-04:00",
+              "precision": "minute",
+              "targetAt": "2026-10-08T14:00:00-04:00"
+            }
+          ]
+        },
+        {
+          "outcome": "no_claim",
+          "claims": []
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "calendar.updated",
+              "claimedAt": "2026-10-07T11:30:00-04:00",
+              "precision": "minute"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "muse-undated.txt",
+      "agent": "muse",
+      "entries": [
+        {
+          "outcome": "no_day",
+          "claims": []
+        },
+        {
+          "outcome": "claim",
+          "claims": [
+            {
+              "type": "subscription.changed",
+              "claimedAt": "2026-10-08T00:00:00-04:00",
+              "precision": "day"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

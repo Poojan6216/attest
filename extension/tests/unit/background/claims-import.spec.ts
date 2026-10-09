@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readPastedLog } from '../../../src/adapters/paste';
 import { type ImportContext, onClaimsImport } from '../../../src/background/claims-import';
-import { lastImportKey } from '../../../src/background/grading';
+import { lastImportKey } from '../../../src/ledger/meta-keys';
 import { ClaimsImportMessage } from '../../../src/bus/messages';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { type Claim, IsoTs, Receipt } from '../../../src/core/schema';

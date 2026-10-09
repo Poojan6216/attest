@@ -30,6 +30,7 @@ import { idFromHash } from '../core/base32';
 import { hashCanonical, sha256Hex } from '../core/hash';
 import { amount, instantMs, isoWithOffset, type OffsetAt, resolveRelative } from '../core/normalize';
 import { trailingOffsetMinutes } from '../core/normalize-time';
+import { MONTH_NAMES, WEEKDAY_NAMES } from '../core/normalize-names';
 import { upcomingIn } from '../core/normalize-relative';
 import {
   type ActionType,
@@ -45,6 +46,7 @@ import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../core/units';
 import { isCalendarType } from '../core/window';
 import { oneLine } from '../observers/text';
 import { type Classified, classify } from './patterns';
+import { ADDRESS } from './pattern-tables';
 import type { AgentRead } from './types';
 
 /** What one read of an agent page gives. */
@@ -135,24 +137,22 @@ function cut(text: string, max: number): string {
   return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
 }
 
-/** An email address inside a capture or a sentence (patterns.ts reads the same shape). */
-const ADDRESS = /[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]{1,190}\.[a-z]{2,24}/iu;
+/** An email address inside a capture or a sentence: the one shape the pattern tables read (./pattern-tables.ts). */
+const AN_ADDRESS = new RegExp(ADDRESS, 'iu');
 /** A word of a name: a capital, then letters, marks, apostrophes, dots or hyphens (O'Neil, Jean-Luc). */
 const NAME_WORD = /^\p{Lu}[\p{L}\p{M}'.-]*$/u;
-/** Capitalised words that are no one's name: days, months, and words a sentence starts with. */
-const NOT_A_NAME: ReadonlySet<string> = new Set(
-  [
-    'monday tuesday wednesday thursday friday saturday sunday today tomorrow tonight yesterday',
-    'january february march april may june july august september october november december',
-    'i the a an your my our their this that everyone',
-  ].flatMap((words) => words.split(' ')),
-);
+/** Capitalised words that are no one's name: days and months (core's tables, full names), and sentence starts. */
+const NOT_A_NAME: ReadonlySet<string> = new Set([
+  ...[...WEEKDAY_NAMES, ...MONTH_NAMES].map((names) => names.at(-1) ?? ''),
+  ...'today tomorrow tonight yesterday i the a an your my our their this that everyone'.split(' '),
+]);
 
 /** The address a claim names, else the capitalised words its capture starts with (a name), else nothing. */
 function counterpartyOf(read: Classified, sentence: string): string | undefined {
   const capture = read.counterparty ?? '';
   const address =
-    ADDRESS.exec(capture)?.[0] ?? (read.type === 'email.sent' ? ADDRESS.exec(sentence)?.[0] : undefined);
+    AN_ADDRESS.exec(capture)?.[0] ??
+    (read.type === 'email.sent' ? AN_ADDRESS.exec(sentence)?.[0] : undefined);
   if (address !== undefined) return address;
   const name: string[] = [];
   for (const word of capture.split(' ')) {

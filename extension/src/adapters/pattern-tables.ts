@@ -24,8 +24,8 @@ export interface ClaimPattern {
 
 // ── Fragments ───────────────────────────────────────────────────────────────────────────────────────
 
-/** An email address: what a counterparty capture keeps whole. */
-const ADDRESS = String.raw`[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]{1,190}\.[a-z]{2,24}`;
+/** An email address: what a counterparty capture keeps whole, and what ./claims.ts finds in a sentence. */
+export const ADDRESS = String.raw`[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]{1,190}\.[a-z]{2,24}`;
 /** A counterparty: an address, or up to three words (claims.ts keeps the capitalised ones as a name). */
 const PARTY = String.raw`(?<counterparty>${ADDRESS}|[^\s,;:!?()"]{1,60}(?: [^\s,;:!?()"]{1,60}){0,2})`;
 /** A number as an amount writes it: digits and separators, ending on a digit (a sentence's full stop is not one). */
@@ -325,6 +325,14 @@ const CHATGPT: readonly ClaimPattern[] = [
     type: 'calendar.created',
     pattern: re(String.raw`^\W{0,3}created (?:calendar )?event\b`),
     confidence: LEVEL.plain,
+  },
+  {
+    // "Completed checkout for a pair of running shoes at $89.99": what and how much (Sprint 3 QA review GAP 11).
+    type: 'purchase.made',
+    pattern: re(
+      String.raw`^\W{0,3}completed (?:the )?(?:purchase|checkout) (?:for|of) (?<subject>.{1,80}?) (?:for|at|totall?ing|costing) ${AMOUNT}`,
+    ),
+    confidence: LEVEL.exact,
   },
   {
     type: 'purchase.made',

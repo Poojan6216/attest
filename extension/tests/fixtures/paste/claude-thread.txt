@@ -1,0 +1,8 @@
+I've sent the email to dana@example.com using the Gmail connector.
+Yesterday, 11:02 am
+Created event "Design review" via Google Calendar for Thursday 2pm.
+Yesterday, 11:05 am
+I don't have access to your Gmail account.
+Yesterday, 11:06 am
+I moved your dentist appointment from 9am to 10am.
+Yesterday, 11:30 am

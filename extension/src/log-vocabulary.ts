@@ -31,7 +31,9 @@ export const LOG_EVENTS = [
   'bus.send_failed',
   'grading.batch',
   'grading.batch_out_of_order',
+  'grading.batch_skipped',
   'grading.failed',
+  'grading.input_capped',
   'idle.forgotten',
   'idle.record_failed',
   'idle.stale_closed',
@@ -202,6 +204,11 @@ export const LOG_VALUES = [
   'activity',
   'receipt_inputs',
   'policies',
+  'batch_coverages',
+  // The Activity lists a grading batch reads (src/background/grading.ts `latest`).
+  'sessions',
+  'idle_intervals',
+  'activity_entries',
   // Alarm names (src/config.ts ALARM_NAMES).
   'attest.purge',
   'attest.grade',

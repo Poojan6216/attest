@@ -18,6 +18,7 @@ import { runGradingBatch } from '../../../src/background/grading';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { replay } from '../../../src/core/replay';
 import { IsoTs, Receipt } from '../../../src/core/schema';
+import { putSessions } from '../../../src/ledger/activity';
 import { readRows, type LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
@@ -104,6 +105,22 @@ describe('the grading batch over the §2 demo', () => {
     const before = await receiptsOf(db);
     expect(await batchAt(db, AT.nextDay)).toMatchObject({ claims: 0, written: 0, deleted: 0 });
     expect(await receiptsOf(db)).toEqual(before);
+  });
+});
+
+describe('a batch with nothing to grade (tech review TECH-2)', () => {
+  it('skips while nothing is PENDING and nothing was stored since the last graded batch; a stored fact ends it', async () => {
+    const db = await open('grading-skip');
+    await storeDemo(db, AT.evaluated);
+    expect(await batchAt(db, AT.evaluated)).toMatchObject({ skipped: false, claims: 2, written: 2 });
+    const before = await receiptsOf(db);
+    expect(await batchAt(db, AT.nextDay)).toMatchObject({ skipped: true, claims: 0, written: 0 });
+    expect(await receiptsOf(db)).toEqual(before);
+    const later = new Date(Date.parse(AT.nextDay) + 5 * 60_000).toISOString();
+    pinClock(later);
+    await putSessions(db, 'muse', [IsoTs.parse(later)]);
+    const after = new Date(Date.parse(later) + 60_000).toISOString();
+    expect(await batchAt(db, after)).toMatchObject({ skipped: false });
   });
 });
 

@@ -2,7 +2,7 @@ import type { RefObject } from 'preact';
 
 import type { PastedEntry } from '../../../src/adapters/paste';
 import { Button } from '../../../src/ui/Button';
-import { AGENT_NAMES, count } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES, count, keptTimes } from '../../../src/ui/paste-labels';
 import type { PreviewStep } from '../use-paste-flow';
 import { ClaimItem } from './ClaimItem';
 import { SkippedItem, type SkippedItemProps } from './SkippedItem';
@@ -33,6 +33,7 @@ export function PastePreview({ preview, onImport, onEdit, onCancel, headingRef }
           ? `Nothing to import from ${AGENT_NAMES[agent]}.`
           : `${claims} to import from ${AGENT_NAMES[agent]}.`}
       </p>
+      {log.claims.length > 0 && log.activeAt.length > 0 && <p>{keptTimes(log.activeAt.length, agent)}</p>}
       {log.claims.length > 0 && (
         <ul aria-label="Claims to import" class="space-y-2">
           {log.claims.map((claim) => (
@@ -47,7 +48,7 @@ export function PastePreview({ preview, onImport, onEdit, onCancel, headingRef }
           </h3>
           <ul aria-labelledby="paste-skipped-heading" class="mt-1 space-y-2">
             {skipped.map((entry, index) => (
-              <SkippedItem key={index} entry={entry} />
+              <SkippedItem key={index} entry={entry} keptBy={log.claims.length > 0 ? agent : null} />
             ))}
           </ul>
         </div>

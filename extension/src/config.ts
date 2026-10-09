@@ -27,6 +27,12 @@ export const SESSION_KEYS = {
 } as const;
 
 /**
+ * The extractor id of every claim read from a log `agent`'s person pasted (sprint_3 3.11): the parser writes it
+ * (src/adapters/paste.ts) and `claims.import` holds every claim to it (src/bus/messages.ts).
+ */
+export const importExtractorId = (agent: string): string => `import.${agent}`;
+
+/**
  * Hard Rule 1: hosts the extension may contact. Empty: nothing leaves the browser.
  * Sprint 5 adds exactly one telemetry host here, and only when the user opts in.
  */

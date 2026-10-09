@@ -26,7 +26,8 @@ import { putSessions } from '../ledger/activity';
 import { getMeta, setMeta, upsertClaim } from '../ledger/repo';
 import { log } from '../log';
 import { ensureDefaultGrants } from './default-grants';
-import { type GradingDeps, lastImportKey, runGradingBatch } from './grading';
+import { lastImportKey } from '../ledger/meta-keys';
+import { changedReceipts, type GradingDeps, runGradingBatch } from './grading';
 
 export interface ImportContext {
   readonly db: () => Promise<LedgerDb>;
@@ -74,8 +75,7 @@ export async function onClaimsImport(
   ctx.notify(granted > 0 ? ['claims', 'activity', 'grants', 'meta'] : ['claims', 'activity', 'meta']);
   log.info('import.stored', { agent: message.agent, claimCount: message.claims.length, addedCount: added });
   try {
-    await runGradingBatch(db, ctx.grading);
-    ctx.notify(['receipts']);
+    if (changedReceipts(await runGradingBatch(db, ctx.grading))) ctx.notify(['receipts']);
   } catch (error) {
     log.error('grading.failed', { error });
   }

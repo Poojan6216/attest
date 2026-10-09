@@ -13,10 +13,11 @@
  * Not detectable here, and left to the `attest/no-act` lint rule: `.value =` writes and `.focus()`
  * (Playwright's own focus emulation produces focus events, so they are not counted).
  */
-import type { BrowserContext, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { type LaunchedExtension, launchExtension } from './support/extension';
+import { installRecorder, recorded } from './support/input-recorder';
 import { installRouteGuard } from './support/network-guard';
 import { expect, test } from './support/test';
 import {
@@ -34,6 +35,8 @@ const VENDOR_PAGES = [
   vendorFixture('gmail', 'synthetic-receipt-stripe.html'),
   vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
   vendorFixture('gcal', 'synthetic-gcal-month-november.html'),
+  // The §2 demo's week, every calendar shown (Sprint 3 QA review GAP 9).
+  vendorFixture('gcal', 'synthetic-gcal-week-two-calendars.html'),
   // Real captures (2026-10-06), read as Chrome draws them (QA-R5).
   vendorFixture('gmail', 'sent-list-1.html'),
   vendorFixture('gcal', 'week-after.html'),
@@ -44,72 +47,6 @@ const VENDOR_PAGES = [
 const OBSERVERS = ['gmail.sent', 'gmail.receipt', 'gcal.event'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
 const SETTLE_MS = 3_000;
-
-/** Every event a script could use to act on a page: pointer, mouse, keyboard, text, form, clipboard, drag. */
-const INPUT_EVENTS = [
-  'click',
-  'dblclick',
-  'auxclick',
-  'contextmenu',
-  'mousedown',
-  'mouseup',
-  'pointerdown',
-  'pointerup',
-  'touchstart',
-  'touchend',
-  'keydown',
-  'keyup',
-  'keypress',
-  'beforeinput',
-  'input',
-  'change',
-  'select',
-  'submit',
-  'reset',
-  'paste',
-  'cut',
-  'copy',
-  'dragstart',
-  'drop',
-] as const;
-
-interface Recorded {
-  readonly type: string;
-  readonly trusted: boolean;
-}
-
-async function installRecorder(context: BrowserContext): Promise<void> {
-  await context.addInitScript((types: readonly string[]) => {
-    const seen: { type: string; trusted: boolean }[] = [];
-    Object.defineProperty(window, '__attestInputEvents', { value: seen });
-    for (const type of types) {
-      window.addEventListener(
-        type,
-        (event) => {
-          seen.push({ type: event.type, trusted: event.isTrusted });
-        },
-        { capture: true },
-      );
-    }
-  }, INPUT_EVENTS);
-}
-
-async function recorded(page: Page): Promise<Recorded[]> {
-  const seen: unknown = await page.evaluate(() => {
-    const value: unknown = Reflect.get(window, '__attestInputEvents');
-    if (!Array.isArray(value)) throw new Error('input recorder not installed');
-    return Array.from(value as readonly unknown[]);
-  });
-  if (!Array.isArray(seen)) throw new Error('input recorder returned no list');
-  return seen.map((entry: unknown) => {
-    const type: unknown =
-      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'type') : undefined;
-    const trusted: unknown =
-      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'trusted') : undefined;
-    if (typeof type !== 'string' || typeof trusted !== 'boolean') throw new Error('malformed input record');
-    return { type, trusted };
-  });
-}
 
 interface Session {
   readonly server: FixtureServer;

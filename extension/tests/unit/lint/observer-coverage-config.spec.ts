@@ -26,15 +26,17 @@ const REPO = path.resolve(EXTENSION, '..');
 const readJson = (file: string) =>
   JSON.parse(readFileSync(file, 'utf8')) as { readonly scripts: Readonly<Record<string, string>> };
 
-describe('observer coverage (qa_tester rule 8: observers >= 85% of lines; QA-8)', () => {
-  it('measures src/observers over the suites that run them, and fails below 85% lines', () => {
+describe('observer and adapter coverage (qa_tester rule 8: >= 85% of lines; QA-8, Sprint 3 QA GAP 10)', () => {
+  it('measures src/observers and src/adapters over the suites that run them, and fails below 85% lines', () => {
     expect(OBSERVER_COVERAGE_LINES).toBe(85);
     expect(observerConfig.test?.include).toEqual(OBSERVER_COVERAGE_SUITES);
-    expect(OBSERVER_COVERAGE_SUITES).toEqual(expect.arrayContaining(['tests/unit/observers/**/*.spec.ts']));
+    expect(OBSERVER_COVERAGE_SUITES).toEqual(
+      expect.arrayContaining(['tests/unit/observers/**/*.spec.ts', 'tests/unit/adapters/**/*.spec.ts']),
+    );
     expect(observerConfig.test?.coverage).toMatchObject({
       provider: 'v8',
       enabled: true,
-      include: ['src/observers/**/*.ts'],
+      include: ['src/observers/**/*.ts', 'src/adapters/**/*.ts'],
       thresholds: { lines: OBSERVER_COVERAGE_LINES },
       reportOnFailure: true,
     });

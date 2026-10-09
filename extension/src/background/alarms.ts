@@ -20,7 +20,9 @@ import {
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../config';
 import { getLedger } from '../ledger/repo';
-import { runGradingBatch, SHIPPED_GRADING } from './grading';
+import type { LedgerTable } from '../bus/messages';
+import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
+import { announce } from './router';
 import { purgeAtTrustedClock } from '../ledger/retention-clock';
 import { log } from '../log';
 
@@ -40,10 +42,13 @@ export async function runRetentionPurge(): Promise<void> {
 /**
  * The grace alarm (sprint_3 3.13; docs/grading.md §3, §8): one grading batch (./grading.ts), which finalises every
  * PENDING receipt whose grace has elapsed and grades whatever arrived since the last batch. Everything it needs is in
- * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts.
+ * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts. When it wrote,
+ * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8).
  */
-export async function runGraceBatch(): Promise<void> {
-  await runGradingBatch(await getLedger(), SHIPPED_GRADING);
+export async function runGraceBatch(
+  notify: (tables: readonly LedgerTable[]) => void = announce(nowIso),
+): Promise<void> {
+  if (changedReceipts(await runGradingBatch(await getLedger(), SHIPPED_GRADING))) notify(['receipts']);
 }
 
 /** One handler per alarm name; later sprints add theirs (4.7 digest). */

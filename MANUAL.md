@@ -36,6 +36,28 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 - [x] **Done 2026-10-08:** the test's USB-C cable order in Muse was left unpaid (nothing charged), and the test events ("Attest test reminder", Claude's "Attest test") were deleted.
 - [ ] On hold until a vendor permits reading: agent captures. Then use a test conversation with invented details, and save each page by hand in normal Chrome (File → Save Page As → Webpage, Complete), never the capture tool, which drives the browser. Give the agent the saved files: Muse (a conversation with actions, its activity panel, connected apps, an approval prompt), ChatGPT agent mode (with Pro for Dots), Claude (a conversation with connector tool use, the connectors settings page).
 - [ ] On hold until a reader may run: the live smoke on each agent (3.9).
+- [ ] **Sprint 3 close (2026-10-09): decide its gate.** The gate as written cannot pass while every agent reader is off under the vendors' terms. It asks for:
+  - five host permissions, and there are two (Gmail and Calendar);
+  - Muse and Claude readers passing their fixtures, and Claude's has no pages;
+  - OVER_SCOPE on a new permission, which needs an agent's settings page read.
+
+  Everything the paste path can show passed (`reviews/sprint_3/closed.md`). Choose one:
+  - **(a)** approve the amended gate below; Sprint 3 closes, and 3.0, 3.1 and 3.3 to 3.9 carry forward until a vendor permits reading;
+  - **(b)** keep the gate; Sprint 3 stays open until then.
+
+  The amended gate:
+  1. Two host permissions exactly: Gmail and Calendar (Decisions `[3.10]`).
+  2. Claim-type accuracy ≥ 90% on the labelled corpus, and paste field accuracy ≥ 95%, both in `RESULTS.md` (`patterns`, `paste`).
+  3. The Muse adapter passes its synthetic fixtures; the Claude and ChatGPT/Dots readers are off, with a note in the options page.
+  4. The §2 demo E2E produces VERIFIED, NOT_FOUND and UNASKED through the real Gmail and Calendar content scripts and a pasted Muse log.
+  5. OVER_SCOPE on a new permission is carried forward with 3.7.
+  6. Replay over the E2E ledger reproduces every receipt.
+  7. Both mandatory tests are green.
+  8. Vendor terms are logged.
+  9. `closed.md` says VERIFIED CLEAN.
+
+  Tell the agent "approve the amended gate" or "keep the gate".
+- [ ] **Push the Sprint 3 commits:** `git push` from the repository root. The pre-push hook runs the tests on the commit it pushes.
 
 ## During Sprint 5 (telemetry)
 - [ ] Create a Railway project + MongoDB, set `MONGO_URL` and `ALLOWED_EXT_IDS` env vars; give the agent the public URL for `config.TELEMETRY_HOST`. Unblocks 5.8 deploy (docker-compose proves it locally meanwhile).

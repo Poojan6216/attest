@@ -35,7 +35,6 @@ import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT, type Policy } from '../core/po
 import {
   ActionType,
   type Activity,
-  type AgentId,
   Claim,
   type Coverage,
   Grant,
@@ -44,7 +43,7 @@ import {
   SCHEMA_LIMITS,
   type Ulid,
 } from '../core/schema';
-import { MS_PER_HOUR, MS_PER_MINUTE } from '../core/units';
+import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../core/units';
 import { claimWindow } from '../core/window';
 import { isoWithLocalOffset } from '../clock';
 import { activityIn } from '../ledger/activity';
@@ -55,6 +54,9 @@ import { readRows, type LedgerDb } from '../ledger/db';
 import { LedgerError } from '../ledger/errors';
 import { createLedgerIndex } from '../ledger/index';
 import { deleteReceiptInputs, putPolicyDocument, putReceiptInputs } from '../ledger/replay-records';
+import { gradedWrites, noteGradedWrites } from '../ledger/batch-instant';
+import { readCount, STORED_WRITES } from '../ledger/clock-high-water';
+import { lastImportKey } from '../ledger/meta-keys';
 import { getMeta, putReceipt, recordBatchInstant } from '../ledger/repo';
 import { log } from '../log';
 
@@ -80,10 +82,14 @@ export interface BatchSummary {
   readonly written: number;
   readonly deleted: number;
   readonly superseded: number;
+  /** It had nothing to grade and read nothing (`nothingToGrade`; tech review TECH-2). */
+  readonly skipped: boolean;
 }
 
-/** The meta key of an agent's last import instant (src/background/claims-import.ts writes it). */
-export const lastImportKey = (agent: AgentId): string => `lastImportAt.${agent}`;
+/** Whether a batch wrote, deleted or superseded a receipt: what open pages are told (tech review TECH-8). */
+export function changedReceipts(summary: BatchSummary | null): boolean {
+  return summary !== null && summary.written + summary.deleted + summary.superseded > 0;
+}
 
 /**
  * How far back a batch looks for orphans: as long as an orphan's PENDING UNASKED receipt can still change, the
@@ -126,18 +132,29 @@ async function batchCoverage(
 }
 
 /** The latest `SCHEMA_LIMITS.GRADING_INPUT` of `items`, by `at`. */
-function latest<T>(items: readonly T[], at: (item: T) => string): T[] {
+function latest<T>(list: ActivityList, items: readonly T[], at: (item: T) => string): T[] {
+  if (items.length > SCHEMA_LIMITS.GRADING_INPUT) {
+    // Never cut silently (tech review TECH-9): the batch grades with the newest, and says how many it left out.
+    log.warn('grading.input_capped', {
+      list,
+      itemCount: items.length,
+      keptCount: SCHEMA_LIMITS.GRADING_INPUT,
+    });
+  }
   return [...items].sort((a, b) => instantMs(at(b)) - instantMs(at(a))).slice(0, SCHEMA_LIMITS.GRADING_INPUT);
 }
+
+/** The Activity lists a batch can cut to GRADING_INPUT, as its log names them. */
+type ActivityList = 'claims' | 'sessions' | 'idle_intervals' | 'activity_entries';
 
 /** The batch's activity (header, step 5). */
 async function batchActivity(
   db: LedgerDb,
   claims: readonly Claim[],
+  pending: readonly Claim[],
   coverage: Coverage,
   policy: Policy,
 ): Promise<Activity> {
-  const logged = claims.filter((c) => c.sourceKind === 'activity_view' && c.claimedAtPrecision !== 'day');
   const adapterSyncs: Activity['adapterSyncs'] = [];
   for (const agent of new Set(claims.map((claim) => claim.agent))) {
     const at = IsoTs.safeParse(await getMeta(db, lastImportKey(agent)));
@@ -150,17 +167,26 @@ async function batchActivity(
     evaluatedMs - orphanHorizonMs(policy),
     ...coverage.observers.map((entry) => instantMs(entry.windowStart)),
   );
+  // Only a claim made within the spend window before a claim this batch grades, or near an orphan it can find, can
+  // change a grade (§6.3 cumulative spend, §7 adjacency); a day more holds a claim whose precision unit is a day.
+  const spendMs = policy.windows.spendWindowDays * MS_PER_DAY;
+  const graded = pending.map((claim) => instantMs(claim.claimedAt) - spendMs);
+  const fromMs = Math.min(reached - reachMs, ...graded) - MS_PER_DAY;
+  const inRange = claims.filter((claim) => instantMs(claim.claimedAt) >= fromMs);
+  const logged = inRange.filter((c) => c.sourceKind === 'activity_view' && c.claimedAtPrecision !== 'day');
   const held = await activityIn(db, reached - reachMs, evaluatedMs + reachMs);
   return {
-    sessions: latest(held.sessions, (session) => session.at),
-    idle: latest(held.idle, (interval) => interval.to),
-    entries: latest(logged, (claim) => claim.claimedAt).map(({ agent, claimedAt, type }) => ({
-      agent,
-      at: claimedAt,
-      type,
-    })),
+    sessions: latest('sessions', held.sessions, (session) => session.at),
+    idle: latest('idle_intervals', held.idle, (interval) => interval.to),
+    entries: latest('activity_entries', logged, (claim) => claim.claimedAt).map(
+      ({ agent, claimedAt, type }) => ({
+        agent,
+        at: claimedAt,
+        type,
+      }),
+    ),
     adapterSyncs,
-    claims: latest(claims, (claim) => claim.claimedAt),
+    claims: latest('claims', inRange, (claim) => claim.claimedAt),
   };
 }
 
@@ -171,7 +197,7 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
   const pending = claimsToGrade(claims, receipts, instantMs(evaluatedAt));
   const coverage = await batchCoverage(db, pending, evaluatedAt, deps.policy);
   const grants = readRows('grants', Grant, await db.grants.toArray());
-  const activity = await batchActivity(db, claims, coverage, deps.policy);
+  const activity = await batchActivity(db, claims, pending, coverage, deps.policy);
   const graded = await gradeBatch(
     pending,
     createLedgerIndex(db),
@@ -200,7 +226,19 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
     written: result.put.length,
     deleted: result.deleted.length,
     superseded: superseded.length,
+    skipped: false,
   };
+}
+
+/**
+ * Whether a batch has nothing to grade (tech review TECH-2): no receipt is PENDING (its finality reads the clock, so
+ * it is always regraded) and no fact was stored since the last batch that graded (`writes`, the ledger's stored-fact
+ * count, is where that batch left it; a ledger that never recorded one always grades). Such a batch would read and
+ * parse every claim and receipt, every five minutes, and write nothing.
+ */
+async function nothingToGrade(db: LedgerDb, writes: number): Promise<boolean> {
+  if ((await gradedWrites(db)) !== writes) return false;
+  return (await db.receipts.where('state').equals('PENDING').count()) === 0;
 }
 
 /** One batch now (header); null when it ran nothing because its instant was not after the last batch's. */
@@ -221,10 +259,20 @@ async function gradeOnce(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary 
     db.batchCoverages,
   ];
   try {
-    const summary = await db.transaction('rw', tables, async () => {
+    const summary = await db.transaction('rw', tables, async (): Promise<BatchSummary> => {
       await recordBatchInstant(db, evaluatedAt);
-      return gradeInside(db, evaluatedAt, deps);
+      const writes = await readCount(db, STORED_WRITES);
+      if (await nothingToGrade(db, writes)) {
+        return { evaluatedAt, claims: 0, written: 0, deleted: 0, superseded: 0, skipped: true };
+      }
+      const graded = await gradeInside(db, evaluatedAt, deps);
+      await noteGradedWrites(db, writes);
+      return graded;
     });
+    if (summary.skipped) {
+      log.debug('grading.batch_skipped', { evaluatedAt });
+      return summary;
+    }
     log.info('grading.batch', {
       evaluatedAt: summary.evaluatedAt,
       claimCount: summary.claims,

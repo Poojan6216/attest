@@ -28,6 +28,24 @@ import { IsoTs, type Receipt } from './types';
 /** The meta key holding the last batch's `evaluatedAt`. Written only by `recordBatchInstant`. */
 export const LAST_EVALUATED_AT = 'lastEvaluatedAt';
 
+/**
+ * The meta key holding the ledger's stored-fact count (./clock-high-water.ts `STORED_WRITES`) as the last batch that
+ * graded found it (tech review TECH-2). Written only by `noteGradedWrites`.
+ */
+export const GRADED_WRITES = 'gradedWrites';
+
+const GradedWrites = z.strictObject({ key: z.literal(GRADED_WRITES), value: z.number().int().nonnegative() });
+
+/** The stored-fact count the last batch that graded found, or undefined when none has been recorded. */
+export async function gradedWrites(db: LedgerDb): Promise<number | undefined> {
+  return readRow('meta', GradedWrites, await db.meta.get(GRADED_WRITES))?.value;
+}
+
+/** Records `writes`, the stored-fact count a batch graded with (call it in the batch's transaction). */
+export async function noteGradedWrites(db: LedgerDb, writes: number): Promise<void> {
+  await db.meta.put({ key: GRADED_WRITES, value: writes });
+}
+
 const LastEvaluatedAt = z.strictObject({ key: z.literal(LAST_EVALUATED_AT), value: IsoTs });
 
 /**

@@ -28,7 +28,7 @@ export function ActivityForm({ form, onChange, onPreview, onCancel, agentRef, te
       </h2>
       <p>
         Copy what the agent says it did, such as Muse’s activity log, and paste it here. Attest reads it in
-        this panel and keeps only the claims it finds, never the text.
+        this panel and keeps the actions it finds and the times of the log’s entries, never the text.
       </p>
       <AgentPicker
         value={form.agent}

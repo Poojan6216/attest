@@ -23,6 +23,7 @@
  * `other` when it reports none, the §10 ids, so pasting the same log twice gives the same claims. A time that cannot be read, or one after the paste, gives no claim either. The text
  * never leaves the side panel: only the claims are sent on (Hard Rule 2).
  */
+import { importExtractorId } from '../config';
 import { asciiLower, instantMs, type OffsetAt, resolveRelative } from '../core/normalize';
 import { MONTH_NAMES, WEEKDAY_NAMES } from '../core/normalize-names';
 import { type AgentId, type Claim, type IsoTs, SCHEMA_LIMITS } from '../core/schema';
@@ -63,6 +64,11 @@ export interface PastedEntry {
   readonly text: string;
   /** Its time as the log gives it, after its heading's day when it has one ("Today, 4:33 pm"), or null. */
   readonly time: string | null;
+  /**
+   * The minute it names at minute precision, a claim or not: kept as a time the agent was working (`activeAt`, a
+   * session ping), which the preview says (security review SEC-4); null when it names none.
+   */
+  readonly minute: IsoTs | null;
   readonly outcome: EntryOutcome;
   readonly claims: readonly Claim[];
 }
@@ -259,17 +265,19 @@ function onePerType(claims: readonly Claim[]): Claim[] {
   return claims.filter((claim) => kept.get(claim.type) === claim);
 }
 
-/** One entry held to the claim builder: its claims, or why it gives none. */
+/** One entry held to the claim builder: its claims, or why it gives none, and the minute it names. */
 function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
+  const read = {
+    agent: ctx.agent,
+    extractor: { id: importExtractorId(ctx.agent), version: PASTE_VERSION },
+    observedAt: ctx.pastedAt,
+    offsetAt: ctx.offsetAt,
+  };
   const facts = buildFacts(
     { conversationId: null, turns: [], activity: [{ text: draft.text, time: draft.time }], scopes: null },
-    {
-      agent: ctx.agent,
-      extractor: { id: `import.${ctx.agent}`, version: PASTE_VERSION },
-      observedAt: ctx.pastedAt,
-      offsetAt: ctx.offsetAt,
-    },
+    read,
   );
+  const stated = statedTime(draft.time, read);
   const untimed: EntryOutcome = draft.shown !== null && draft.time === null ? 'no_day' : 'no_time';
   const outcome: EntryOutcome =
     facts.claims.length > 0
@@ -279,22 +287,14 @@ function readEntry(draft: Draft, ctx: PasteContext): PastedEntry {
         : facts.invalid > 0
           ? 'invalid'
           : 'no_claim';
-  return { text: draft.text, time: draft.shown, outcome, claims: onePerType(facts.claims) };
+  const minute = stated?.precision === 'minute' ? stated.at : null;
+  return { text: draft.text, time: draft.shown, minute, outcome, claims: onePerType(facts.claims) };
 }
 
-/** The minutes `drafts` name at minute precision (`PastedLog.activeAt`), each once, in time order. */
-function activeAtOf(drafts: readonly Draft[], ctx: PasteContext): IsoTs[] {
-  const facts = {
-    agent: ctx.agent,
-    extractor: { id: `import.${ctx.agent}`, version: PASTE_VERSION },
-    observedAt: ctx.pastedAt,
-    offsetAt: ctx.offsetAt,
-  };
+/** The minutes the entries name at minute precision (`PastedLog.activeAt`), each once, in time order. */
+function activeAtOf(entries: readonly PastedEntry[]): IsoTs[] {
   const minutes = new Map<number, IsoTs>();
-  for (const draft of drafts) {
-    const stated = statedTime(draft.time, facts);
-    if (stated?.precision === 'minute') minutes.set(instantMs(stated.at), stated.at);
-  }
+  for (const { minute } of entries) if (minute !== null) minutes.set(instantMs(minute), minute);
   return [...minutes].sort(([a], [b]) => a - b).map(([, at]) => at);
 }
 
@@ -313,7 +313,7 @@ export function readPastedLog(pasted: string, ctx: PasteContext): PasteResult {
   const claims = new Map<string, Claim>();
   for (const entry of entries) for (const claim of entry.claims) claims.set(claim.id, claim);
   if (claims.size > SCHEMA_LIMITS.BATCH) return { ok: false, refusal: 'too_many_claims' };
-  const activeAt = activeAtOf(drafts, ctx);
+  const activeAt = activeAtOf(entries);
   if (activeAt.length > SCHEMA_LIMITS.GRADING_INPUT) return { ok: false, refusal: 'too_many_times' };
   return { ok: true, log: { entries, claims: [...claims.values()], activeAt } };
 }

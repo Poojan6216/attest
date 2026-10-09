@@ -8,6 +8,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { runPasteBench } from '../../../../bench/adapters/paste';
 import { PATTERNS_ACCURACY_GATE, runPatternsBench, scoreTable } from '../../../../bench/adapters/patterns';
 import { failedGates } from '../../../../bench/results';
 import { BENCHES } from '../../../../bench/run_bench';
@@ -53,5 +54,16 @@ describe('the patterns bench', () => {
     expect(scoreTable('muse', [{ text: sent, type: null }])).toEqual({ right: 0, wrongActions: 1 });
     const none = museSentence(null);
     expect(scoreTable('muse', [{ text: none, type: 'email.sent' }])).toEqual({ right: 0, wrongActions: 0 });
+  });
+});
+
+describe('the paste bench (QA review GAP 11)', () => {
+  it('is registered, and reads every labelled field of the invented corpus, the corpus marked invented', async () => {
+    expect(BENCHES.map((bench) => bench.name)).toContain('paste');
+    const metrics = await runPasteBench();
+    expect(metrics.pasteFieldAccuracy).toBe(1);
+    expect(metrics.pasteCorpusInvented).toBe(true);
+    const result = { bench: 'paste', date: '2026-10-09', command: 'pnpm bench', metrics };
+    expect(failedGates(result)).toEqual([]);
   });
 });

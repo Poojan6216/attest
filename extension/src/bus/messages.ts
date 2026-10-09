@@ -25,6 +25,8 @@
  */
 import { z } from 'zod';
 
+import { importExtractorId } from '../config';
+
 import {
   Claim,
   ComponentId,
@@ -234,7 +236,7 @@ export const ClaimsImportMessage = z
     message.claims.forEach((claim, index) => {
       const imported =
         claim.agent === message.agent &&
-        claim.extractor.id === `import.${message.agent}` &&
+        claim.extractor.id === importExtractorId(message.agent) &&
         claim.sourceKind === 'activity_view' &&
         claim.requestId === undefined;
       if (!imported)

@@ -9,19 +9,23 @@
  *    detection recorded the person away from 14:00 to 14:09;
  * all FINAL. Grace is simulated by time itself: the story is three days old, so every view synced after its grace.
  * The away interval is the one input written by the test (./support/demo.ts DEMO_AWAY): Chrome reports idle only live.
+ * The export then replays exactly through `pnpm attest replay` (the Sprint 3 Gate; QA review GAP 4), and the Gmail and
+ * Calendar pages saw no input event while Attest read them, imported and graded (Hard Rule 3; QA review GAP 9).
  */
 import { readFileSync } from 'node:fs';
 
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import type { LedgerExport } from '../../src/ledger/export';
 
 import { DEMO_AWAY, DEMO_LOG, DEMO_SENT, demoSentPage, emptyWeek } from './support/demo';
+import { installRecorder, recorded } from './support/input-recorder';
 import { pasteActivity } from './support/paste';
+import { replayExport } from './support/replay';
 import { type VendorSession, withVendorSession } from './support/session';
 import { fixtureUrl, readLedger, requestUrl, vendorFixture, waitForLedger } from './support/vendor-pages';
 
 /** Opens the demo's Gmail Sent head and Calendar week, and waits until each pass is stored with its coverage. */
-async function openDemoPages(session: VendorSession): Promise<void> {
+async function openDemoPages(session: VendorSession): Promise<readonly Page[]> {
   const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
   session.routes.set(requestUrl(fixtureUrl(sent)), demoSentPage(readFileSync(sent.htmlPath, 'utf8')));
   const gmail = await session.extension.context.newPage();
@@ -41,6 +45,7 @@ async function openDemoPages(session: VendorSession): Promise<void> {
       (entry) => entry.source === 'gcal.event' && entry.allCalendars === true,
     ),
   );
+  return [gmail, calendar];
 }
 
 /** Stores the away interval of 6 October in the extension's own IndexedDB, from its service worker (DEMO_AWAY). */
@@ -86,7 +91,8 @@ function receiptsOf(ledger: LedgerExport) {
 test('the §2 demo, pasted: exactly VERIFIED, NOT_FOUND and UNASKED (likely Muse), all final', async () => {
   test.setTimeout(3 * 60_000);
   await withVendorSession(async (session) => {
-    await openDemoPages(session);
+    await installRecorder(session.extension.context);
+    const vendorPages = await openDemoPages(session);
     await writeAway(session);
     const panel = await session.extension.openExtensionPage('sidepanel.html');
     expect(await pasteActivity(panel, 'Muse', DEMO_LOG)).toBe('Imported 2 claims.');
@@ -111,9 +117,14 @@ test('the §2 demo, pasted: exactly VERIFIED, NOT_FOUND and UNASKED (likely Muse
         attribution: null,
       },
     ]);
-    // The replay records ride with the export: every receipt can be proven again from it.
+    // The replay records ride with the export, and every receipt is proven again from it (exit 0 means none differ).
     expect(Object.keys(ledger.receiptInputs).sort()).toEqual(
       ledger.tables.receipts.map((r) => r.inputsHash).sort(),
     );
+    const summary = replayExport(ledger);
+    expect(summary).toMatch(/^ {2}reproduced {2}3$/mu);
+    expect(summary).toMatch(/^ {2}mismatched {2}0$/mu);
+    // Attest read, imported and graded, and never acted on the pages it read (Hard Rule 3).
+    for (const page of vendorPages) expect(await recorded(page)).toEqual([]);
   });
 });

@@ -8,7 +8,9 @@ import 'fake-indexeddb/auto';
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ALARM_NAMES } from '../../../src/config';
+import { Dexie } from 'dexie';
+
+import { ALARM_NAMES, DB_NAME } from '../../../src/config';
 import { Receipt } from '../../../src/core/schema';
 import { readRows } from '../../../src/ledger/db';
 import { closeLedger, getLedger } from '../../../src/ledger/repo';
@@ -56,5 +58,19 @@ describe('the grace alarm', () => {
         ['VERIFIED', 'FINAL'],
       ].sort(),
     );
+  });
+  it('tells open pages when it changed a receipt, and nothing when it had nothing to grade (TECH-8)', async () => {
+    // The shared ledger an earlier case graded is deleted: this one starts empty.
+    await closeLedger();
+    await Dexie.delete(DB_NAME);
+    await storeDemo(await getLedger(), AT.evaluated);
+    pinClock(AT.evaluated);
+    const { runGraceBatch } = await import('../../../src/background/alarms');
+    const notify = vi.fn<(tables: readonly string[]) => void>();
+    await runGraceBatch(notify);
+    expect(notify.mock.calls).toEqual([[['receipts']]]);
+    pinClock(AT.nextDay);
+    await runGraceBatch(notify);
+    expect(notify).toHaveBeenCalledTimes(1);
   });
 });

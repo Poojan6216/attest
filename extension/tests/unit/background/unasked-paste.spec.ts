@@ -8,7 +8,8 @@ import 'fake-indexeddb/auto';
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runGradingBatch, lastImportKey } from '../../../src/background/grading';
+import { runGradingBatch } from '../../../src/background/grading';
+import { lastImportKey } from '../../../src/ledger/meta-keys';
 import { recordIdleState } from '../../../src/background/idle';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { replay } from '../../../src/core/replay';

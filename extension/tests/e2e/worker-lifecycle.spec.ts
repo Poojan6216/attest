@@ -16,9 +16,10 @@
  * Not covered: console output of the very first start (install). It runs before any test can attach;
  * the install test checks its effects instead.
  *
- * The receipt-finalises-after-a-kill-mid-grace test needs receipts and the grace alarm: Sprint 3.6.
+ *  - Mid-grace (qa_tester rule 6; Sprint 3 QA review GAP 3): a receipt still PENDING when Chrome stops the worker
+ *    is FINAL after the next grace alarm, from the ledger alone, and replays exactly.
  */
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -33,7 +34,18 @@ import {
 } from '../../src/config';
 import { plantIndexedDbProbe } from './support/channels';
 import { launchExtension, type LaunchedExtension } from './support/extension';
+import { datedClock, pasteActivity } from './support/paste';
+import { replayExport } from './support/replay';
+import { withVendorSession } from './support/session';
 import { expect, test } from './support/test';
+import {
+  FIXTURE_TIME_ZONE,
+  fixtureUrl,
+  readLedger,
+  requestUrl,
+  vendorFixture,
+  waitForLedger,
+} from './support/vendor-pages';
 
 declare const chrome: WxtBrowser;
 
@@ -206,5 +218,51 @@ test.describe('service worker lifecycle: the browser restarts', () => {
     } finally {
       rmSync(profile, { recursive: true, force: true });
     }
+  });
+});
+
+test.describe('service worker lifecycle: Chrome stops the worker mid-grace (rule 6; QA review GAP 3)', () => {
+  test('a receipt still PENDING when the worker stops is FINAL after the next grace alarm, and replays', async () => {
+    test.setTimeout(3 * 60_000);
+    await withVendorSession(async (session) => {
+      // A send claimed 74 minutes ago, past its grace, to an address no Sent list holds. No Gmail tab is open yet, so
+      // the import's batch has no coverage for it: UNVERIFIABLE, PENDING.
+      const panel = await session.extension.openExtensionPage('sidepanel.html');
+      const log = ['Sent an email to nobody@example.net', datedClock(74, FIXTURE_TIME_ZONE)].join('\n');
+      expect(await pasteActivity(panel, 'Muse', log)).toBe('Imported 1 claim.');
+      const stateOf = async () =>
+        (await readLedger(session.ledgerPage)).tables.receipts.map((r) => [r.grade, r.state]);
+      expect(await stateOf()).toEqual([['UNVERIFIABLE', 'PENDING']]);
+
+      // Chrome stops the worker, as it stops an idle MV3 worker at any time.
+      const cdp = await session.extension.context.newCDPSession(session.ledgerPage);
+      const statuses: string[] = [];
+      cdp.on('ServiceWorker.workerVersionUpdated', ({ versions }) => {
+        for (const version of versions) statuses.push(version.runningStatus);
+      });
+      await cdp.send('ServiceWorker.enable');
+      await cdp.send('ServiceWorker.stopAllWorkers');
+      await expect.poll(() => statuses.at(-1)).toBe('stopped');
+
+      // The person opens Gmail's Sent list: its pass wakes the worker and is stored with the head's coverage. No batch
+      // runs after a pass; the next grace alarm's does, from what the ledger holds, and finalises the receipt.
+      const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
+      session.routes.set(requestUrl(fixtureUrl(sent)), readFileSync(sent.htmlPath, 'utf8'));
+      const gmail = await session.extension.context.newPage();
+      await gmail.goto(fixtureUrl(sent));
+      await waitForLedger(session.ledgerPage, (ledger) =>
+        ledger.tables.coverageIntervals.some((entry) => entry.source === 'gmail.sent'),
+      );
+      expect(statuses.slice(statuses.lastIndexOf('stopped'))).toEqual(
+        expect.arrayContaining(['stopped', 'starting', 'running']),
+      );
+      expect(await stateOf()).toEqual([['UNVERIFIABLE', 'PENDING']]);
+      await session.ledgerPage.evaluate(
+        ({ name, period }) => chrome.alarms.create(name, { when: Date.now() + 500, periodInMinutes: period }),
+        { name: ALARM_NAMES.GRADE, period: GRADE_ALARM_PERIOD_MINUTES },
+      );
+      await expect.poll(stateOf, { timeout: 60_000 }).toEqual([['NOT_FOUND', 'FINAL']]);
+      expect(replayExport(await readLedger(session.ledgerPage))).toMatch(/^ {2}reproduced {2}1$/mu);
+    });
   });
 });
