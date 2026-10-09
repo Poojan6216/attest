@@ -25,7 +25,12 @@ import path from 'node:path';
 import type { CDPSession, Page, Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { ALARM_NAMES, PURGE_ALARM_PERIOD_MINUTES, STORAGE_KEYS } from '../../src/config';
+import {
+  ALARM_NAMES,
+  GRADE_ALARM_PERIOD_MINUTES,
+  PURGE_ALARM_PERIOD_MINUTES,
+  STORAGE_KEYS,
+} from '../../src/config';
 import { plantIndexedDbProbe } from './support/channels';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { expect, test } from './support/test';
@@ -89,14 +94,22 @@ async function watchWorker(
 }
 
 test.describe('service worker lifecycle', () => {
-  test('install creates the install id and schedules the purge alarm with its period', async ({ attest }) => {
+  test('install creates the install id and schedules the purge and grace alarms with their periods', async ({
+    attest,
+  }) => {
     const worker = await attest.serviceWorker();
     await expect.poll(() => storedInstallId(worker)).toMatch(UUID_V4);
     await expect
       .poll(() => purgeAlarm(worker))
       .toMatchObject({ name: ALARM_NAMES.PURGE, periodInMinutes: PURGE_ALARM_PERIOD_MINUTES });
     const alarms = await worker.evaluate(() => chrome.alarms.getAll());
-    expect(alarms.map((alarm) => alarm.name)).toEqual([ALARM_NAMES.PURGE]);
+    // The grace alarm runs a grading batch every few minutes (sprint_3 3.13).
+    expect(alarms.map((alarm) => [alarm.name, alarm.periodInMinutes]).sort()).toEqual(
+      [
+        [ALARM_NAMES.PURGE, PURGE_ALARM_PERIOD_MINUTES],
+        [ALARM_NAMES.GRADE, GRADE_ALARM_PERIOD_MINUTES],
+      ].sort(),
+    );
   });
 
   test('popup, options and side panel open with zero console errors, warnings or exceptions', async ({
