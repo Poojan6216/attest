@@ -1,0 +1,16 @@
+{
+  "bench": "paste",
+  "date": "2026-10-09",
+  "command": "pnpm bench",
+  "metrics": {
+    "pasteLogs": 4,
+    "pasteFields": 111,
+    "pasteFieldAccuracy": 1,
+    "pasteAccuracyThreshold": 0.95,
+    "pasteCorpusInvented": true,
+    "pasteGatePassed": true,
+    "commit": "20303f6a77afbf401d44ae482e17801c03e8aded",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}

@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-08 with `pnpm bench`.
+Measured 2026-10-09 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,20 +12,20 @@ Measured 2026-10-08 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 374.8 |
-| lookupMinMs | 328.6 |
-| lookupMaxMs | 446.7 |
-| lookupCpuMedianMs | 403.2 |
-| indexBuildMedianMs | 155.5 |
-| buildPlusLookupMedianMs | 524.6 |
+| lookupMedianMs | 372.6 |
+| lookupMinMs | 332.4 |
+| lookupMaxMs | 444.5 |
+| lookupCpuMedianMs | 402 |
+| indexBuildMedianMs | 146.8 |
+| buildPlusLookupMedianMs | 531.4 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1116.3 |
-| gradingMinMs | 1011.4 |
-| gradingMaxMs | 1298.1 |
-| gradingCpuMedianMs | 1390.2 |
+| gradingMedianMs | 1113.9 |
+| gradingMinMs | 992 |
+| gradingMaxMs | 1295 |
+| gradingCpuMedianMs | 1396.6 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,13 +33,13 @@ Measured 2026-10-08 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gcal
 
-Measured 2026-10-08 with `pnpm bench`.
+Measured 2026-10-09 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -66,13 +66,13 @@ Measured 2026-10-08 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gmail-sent
 
-Measured 2026-10-08 with `pnpm bench`.
+Measured 2026-10-09 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -98,13 +98,54 @@ Measured 2026-10-08 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## paste
+
+Measured 2026-10-09 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| pasteLogs | 4 |
+| pasteFields | 111 |
+| pasteFieldAccuracy | 1 |
+| pasteAccuracyThreshold | 0.95 |
+| pasteCorpusInvented | true |
+| pasteGatePassed | true |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
+| commitDirty | false |
+| node | v22.14.0 |
+
+## patterns
+
+Measured 2026-10-09 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| museSentences | 68 |
+| museTypeAccuracy | 0.9559 |
+| museWrongActions | 0 |
+| chatgptSentences | 67 |
+| chatgptTypeAccuracy | 0.9552 |
+| chatgptWrongActions | 0 |
+| dotsSentences | 67 |
+| dotsTypeAccuracy | 0.9552 |
+| dotsWrongActions | 0 |
+| claudeSentences | 67 |
+| claudeTypeAccuracy | 0.9552 |
+| claudeWrongActions | 0 |
+| patternsAccuracyThreshold | 0.9 |
+| patternsCorpusInvented | true |
+| patternsGatePassed | true |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## receipts
 
-Measured 2026-10-08 with `pnpm bench`.
+Measured 2026-10-09 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -145,6 +186,6 @@ Measured 2026-10-08 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | aa922c5a7275bd971ac7440b6f52a25066052343 |
+| commit | 20303f6a77afbf401d44ae482e17801c03e8aded |
 | commitDirty | false |
 | node | v22.14.0 |

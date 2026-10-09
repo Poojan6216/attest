@@ -1,0 +1,25 @@
+{
+  "bench": "patterns",
+  "date": "2026-10-09",
+  "command": "pnpm bench",
+  "metrics": {
+    "museSentences": 68,
+    "museTypeAccuracy": 0.9559,
+    "museWrongActions": 0,
+    "chatgptSentences": 67,
+    "chatgptTypeAccuracy": 0.9552,
+    "chatgptWrongActions": 0,
+    "dotsSentences": 67,
+    "dotsTypeAccuracy": 0.9552,
+    "dotsWrongActions": 0,
+    "claudeSentences": 67,
+    "claudeTypeAccuracy": 0.9552,
+    "claudeWrongActions": 0,
+    "patternsAccuracyThreshold": 0.9,
+    "patternsCorpusInvented": true,
+    "patternsGatePassed": true,
+    "commit": "20303f6a77afbf401d44ae482e17801c03e8aded",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}
