@@ -16,7 +16,9 @@
  *     an orphan's PENDING UNASKED receipt can still change (`orphanHorizonMs`), as one `Coverage`.
  *  5. Its activity (§7): every claim (spend and adjacency), the activity-log entries the claims of an activity view
  *     are, each agent's last import as its adapter sync, and the session pings and idle intervals the ledger holds
- *     over the orphan horizon and the widest attribution window before it (src/ledger/activity.ts, sprint_3 3.14).
+ *     from the earliest instant the batch's coverage reaches, less the widest attribution window (src/ledger/
+ *     activity.ts, sprint_3 3.14): an orphan is looked for in every window that coverage holds, which can reach
+ *     further back than the orphan horizon (a Gmail interval spans days), so its signals are read wherever it is.
  *  6. `gradeBatch`, then core's `storeBatch` and `supersede` (src/core/batch-store.ts, the rule the replay simulator
  *     plays): receipts written, rows deleted, each written receipt's inputs stored and the replaced ones' released,
  *     and the policy document stored once.
@@ -127,7 +129,7 @@ function latest<T>(items: readonly T[], at: (item: T) => string): T[] {
 async function batchActivity(
   db: LedgerDb,
   claims: readonly Claim[],
-  evaluatedAt: IsoTs,
+  coverage: Coverage,
   policy: Policy,
 ): Promise<Activity> {
   const logged = claims.filter((c) => c.sourceKind === 'activity_view' && c.claimedAtPrecision !== 'day');
@@ -138,8 +140,12 @@ async function batchActivity(
   }
   const { sessionMin, idleMin, adjacentMin } = policy.unasked.windows;
   const reachMs = Math.max(sessionMin, idleMin, adjacentMin) * MS_PER_MINUTE;
-  const evaluatedMs = instantMs(evaluatedAt);
-  const held = await activityIn(db, evaluatedMs - orphanHorizonMs(policy) - reachMs, evaluatedMs + reachMs);
+  const evaluatedMs = instantMs(coverage.evaluatedAt);
+  const reached = Math.min(
+    evaluatedMs - orphanHorizonMs(policy),
+    ...coverage.observers.map((entry) => instantMs(entry.windowStart)),
+  );
+  const held = await activityIn(db, reached - reachMs, evaluatedMs + reachMs);
   return {
     sessions: latest(held.sessions, (session) => session.at),
     idle: latest(held.idle, (interval) => interval.to),
@@ -160,7 +166,7 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
   const pending = claimsToGrade(claims, receipts, instantMs(evaluatedAt));
   const coverage = await batchCoverage(db, pending, evaluatedAt, deps.policy);
   const grants = readRows('grants', Grant, await db.grants.toArray());
-  const activity = await batchActivity(db, claims, evaluatedAt, deps.policy);
+  const activity = await batchActivity(db, claims, coverage, deps.policy);
   const graded = await gradeBatch(
     pending,
     createLedgerIndex(db),

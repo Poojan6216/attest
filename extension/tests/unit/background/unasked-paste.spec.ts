@@ -47,7 +47,7 @@ async function paste(at: string, minutes: readonly string[]): Promise<void> {
   await setMeta(db, lastImportKey('muse'), at);
 }
 
-async function story(away: boolean): Promise<Receipt[]> {
+async function story(away: boolean, gradedAt: string = AT.evaluated): Promise<Receipt[]> {
   await storeDemo(db, '2026-10-06T14:01:00-04:00');
   if (away) await recordIdleState(db, 'idle', Date.parse('2026-10-06T14:01:00-04:00'));
   await storeDemo(db, AT.museRead, '2026-10-06T14:01:00-04:00');
@@ -56,7 +56,7 @@ async function story(away: boolean): Promise<Receipt[]> {
   await storeDemo(db, AT.museResync, AT.museRead);
   await paste(AT.museResync, [AT.claimed]);
   await storeDemo(db, AT.evaluated, AT.museResync);
-  pinClock(AT.evaluated);
+  pinClock(gradedAt);
   await runGradingBatch(db, DEPS);
   return readRows('receipts', Receipt, await db.receipts.toArray());
 }
@@ -76,6 +76,11 @@ describe('UNASKED on the paste path', () => {
     const exported = await exportLedger(db, { exportedAt: '2026-10-06T16:00:00-04:00' });
     const report = await replay(readSnapshot(JSON.parse(JSON.stringify(exported))));
     expect(report).toMatchObject({ receipts: 3, reproduced: 3, mismatched: 0 });
+  });
+
+  it('graded days later, past the orphan horizon, the vendor row is still UNASKED: its signals are read where it is', async () => {
+    const receipts = await story(true, '2026-10-09T09:00:00-04:00');
+    expect(receipts.map((r) => r.grade).sort()).toEqual(['NOT_FOUND', 'UNASKED', 'VERIFIED']);
   });
 
   it('without the person’s idle time (away detection off), the session alone accuses no one', async () => {
