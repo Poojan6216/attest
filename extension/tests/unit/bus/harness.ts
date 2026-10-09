@@ -17,15 +17,17 @@ import {
   type BusMessageOf,
   type BusMessageType,
   CalendarSnapshotMessage,
+  ClaimsImportMessage,
   CoveragePingMessage,
   LedgerChangedMessage,
   ObserverObservationsMessage,
   UiQueryMessage,
   UiResultMessage,
 } from '../../../src/bus/messages';
+import { readPastedLog } from '../../../src/adapters/paste';
 import type { MessageSender } from '../../../src/bus/listen';
 import { idFromHash } from '../../../src/core/hash';
-import { Claim, Observation, Request } from '../../../src/core/schema';
+import { Claim, IsoTs, Observation, Request } from '../../../src/core/schema';
 import { type LogLevel, type LogRecord, setLogLevel, setLogSink } from '../../../src/log';
 
 /** A value a test seeds into a payload; it must never reach a log record (Hard Rule 10). */
@@ -185,7 +187,19 @@ export const SNAPSHOT = CalendarSnapshotMessage.shape.snapshot.parse({
   ],
 });
 
-/** One valid message per type. The mapped type makes the compiler demand all nine. */
+/** A claim the paste parser read from an invented log (sprint_3 3.11): what a `claims.import` carries. */
+export const IMPORTED_CLAIM: Claim = (() => {
+  const read = readPastedLog('Today\nSent an email to sam@example.com\n4:33 pm', {
+    agent: 'muse',
+    pastedAt: IsoTs.parse('2026-10-08T17:00:00-04:00'),
+    offsetAt: () => -240,
+  });
+  const [claim] = read.ok ? read.log.claims : [];
+  if (claim === undefined) throw new Error('the invented log gave no claim');
+  return claim;
+})();
+
+/** One valid message per type. The mapped type makes the compiler demand all ten. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'adapter.health': AdapterHealthMessage.parse({
     type: 'adapter.health',
@@ -246,6 +260,11 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     tables: ['claims', 'receipts'],
     at: TS_OFFSET,
   }),
+  'claims.import': ClaimsImportMessage.parse({
+    type: 'claims.import',
+    agent: 'muse',
+    claims: [IMPORTED_CLAIM],
+  }),
 };
 
 /**
@@ -274,4 +293,5 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'ui.query': { type: 'ui.query', query: { kind: 'ledger.wipe' } },
   'ui.result': { type: 'ui.result', kind: 'health.list', ok: false, error: SECRET },
   'ledger.changed': { type: 'ledger.changed', tables: ['claims'], at: '2026-10-01T09:30:00' },
+  'claims.import': { ...VALID['claims.import'], text: SECRET },
 };

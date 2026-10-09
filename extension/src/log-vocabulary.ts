@@ -29,6 +29,9 @@ export const LOG_EVENTS = [
   'bus.send_failed',
   'grading.batch',
   'grading.batch_out_of_order',
+  'grading.failed',
+  'import.refused',
+  'import.stored',
   'install.details_invalid',
   'install.failed',
   'install.handled',
@@ -69,6 +72,7 @@ export const LOG_VALUES = [
   'ui.query',
   'ui.result',
   'ledger.changed',
+  'claims.import',
   // Bus drop reasons (src/bus/listen.ts DROP_REASONS) and query failures (src/bus/send.ts).
   'foreign_sender',
   'malformed',
@@ -189,6 +193,7 @@ export const LOG_VALUES = [
   'policies',
   // Alarm names (src/config.ts ALARM_NAMES).
   'attest.purge',
+  'attest.grade',
   // Agents and observers: our own adapter and observer ids.
   'muse',
   'chatgpt',

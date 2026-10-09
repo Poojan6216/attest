@@ -14,16 +14,18 @@ import {
   type AckedType,
   type BusAck,
   type BusMessageType,
+  type ClaimsImportResult,
   type UiQueryMessage,
   type UiResult,
 } from '../../../src/bus/messages';
-import { postAcked, query, send, sendChecked } from '../../../src/bus/send';
+import { importClaims, postAcked, query, send, sendChecked } from '../../../src/bus/send';
 import {
   captureLogs,
   connectAs,
   contentScript,
   eventsAt,
   extensionPage,
+  IMPORTED_CLAIM,
   MALFORMED,
   SECRET,
   sendRaw,
@@ -48,6 +50,7 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'ui.query': () => extensionPage('/sidepanel.html'),
   'ui.result': serviceWorker,
   'ledger.changed': serviceWorker,
+  'claims.import': () => extensionPage('/sidepanel.html'),
 };
 
 function sendFailures(): number {
@@ -199,5 +202,62 @@ describe('ui.query', () => {
       event: 'bus.dropped',
       fields: { reason: 'malformed', type: 'ui.query' },
     });
+  });
+});
+
+describe('claims.import (sprint_3 3.13)', () => {
+  it('valid: importClaims() round-trips from the side panel and resolves the handler’s counts', async () => {
+    const sender = SENDER_OF['claims.import']();
+    connectAs(sender);
+    const result: ClaimsImportResult = { ok: true, received: 1, added: 1 };
+    const handler = vi.fn<BusHandler<'claims.import'>>(() => Promise.resolve(result));
+    listen({ 'claims.import': handler });
+    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual(result);
+    expect(handler.mock.calls[0]?.[0]).toEqual(VALID['claims.import']);
+    expect(eventsAt(records, 'warn')).toEqual([]);
+  });
+
+  it('from a content script: dropped as untrusted, never handled (only an extension page may import)', async () => {
+    connectAs(contentScript());
+    const handler = vi.fn<BusHandler<'claims.import'>>(() =>
+      Promise.resolve({ ok: true, received: 1, added: 1 }),
+    );
+    listen({ 'claims.import': handler });
+    await expect(sendRaw(VALID['claims.import'])).resolves.toBeUndefined();
+    expect(handler).not.toHaveBeenCalled();
+    expect(records).toContainEqual({
+      level: 'warn',
+      event: 'bus.dropped',
+      fields: { reason: 'untrusted_context', type: 'claims.import' },
+    });
+  });
+
+  it('malformed: a field the schema does not name is dropped, and nothing of it is logged', async () => {
+    connectAs(SENDER_OF['claims.import']());
+    const handler = vi.fn<BusHandler<'claims.import'>>(() =>
+      Promise.resolve({ ok: true, received: 1, added: 1 }),
+    );
+    listen({ 'claims.import': handler });
+    await expect(sendRaw(MALFORMED['claims.import'])).resolves.toBeUndefined();
+    expect(handler).not.toHaveBeenCalled();
+    expect(JSON.stringify(records)).not.toContain(SECRET);
+  });
+
+  it('a handler that answers badly or throws is answered failed, and importClaims() says so', async () => {
+    connectAs(SENDER_OF['claims.import']());
+    const answers = [
+      () => Promise.resolve({ ok: true }),
+      () => Promise.reject(new Error('the ledger did not open')),
+    ];
+    listen({
+      'claims.import': () =>
+        (answers.shift() ?? (() => Promise.resolve({})))() as Promise<ClaimsImportResult>,
+    });
+    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual({ ok: false, code: 'failed' });
+    await expect(importClaims('muse', [IMPORTED_CLAIM])).resolves.toEqual({ ok: false, code: 'failed' });
+    expect(eventsAt(records, 'error').map((record) => record.event)).toEqual([
+      'bus.handler_failed',
+      'bus.handler_failed',
+    ]);
   });
 });

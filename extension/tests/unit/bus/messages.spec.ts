@@ -24,13 +24,14 @@ import { Claim, ComponentId, HealthReport, Observation, Request } from '../../..
 import { CLAIM, HASH, MALFORMED, OBSERVATION, REQUEST, SECRET, TS, VALID } from './harness';
 
 describe('BusMessage', () => {
-  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7 and the scope snapshot of 3.0', () => {
+  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0 and the import of 3.13', () => {
     expect([...BUS_MESSAGE_TYPES].sort()).toEqual(
       [
         'adapter.claims',
         'adapter.health',
         'adapter.scope',
         'calendar.snapshot',
+        'claims.import',
         'coverage.ping',
         'ledger.changed',
         'observer.observations',
@@ -45,7 +46,7 @@ describe('BusMessage', () => {
   it('BUS_MESSAGE_TYPES is frozen, so no consumer can reorder or extend it', () => {
     expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
     expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.wipe'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(9);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(10);
   });
 
   it.each(BUS_MESSAGE_TYPES)('accepts a valid %s', (type) => {

@@ -19,12 +19,11 @@ import { z } from 'zod';
 
 import defaultPolicyJson from '../../../policy/default.json';
 import { canonicalJson, sha256Hex } from './hash';
-import { policyIssues } from './policy-checks';
 import { describeIssue, formatIssues, PolicyError } from './policy-errors';
+import { PolicyDocument } from './policy-document';
 import {
   FeatureName,
   type PolicyDocument as PolicyDocumentType,
-  PolicyShape,
   SignalName,
   type ThresholdName,
 } from './policy-schema';
@@ -46,12 +45,7 @@ export {
   ThresholdName,
 } from './policy-schema';
 
-/** The whole policy document: every field's schema plus the cross-field checks. Strict at every level. */
-export const PolicyDocument = PolicyShape.superRefine((doc, ctx) => {
-  for (const issue of policyIssues(doc)) {
-    ctx.addIssue({ code: 'custom', path: [...issue.path], message: issue.message });
-  }
-});
+export { PolicyDocument } from './policy-document';
 
 /** An integer in [0, BASIS_POINTS]: 8500 means 0.85. Grade-relevant comparisons use only these (§5.3). */
 export const BasisPoints = z.number().int().min(0).max(BASIS_POINTS).brand<'BasisPoints'>();
@@ -87,7 +81,6 @@ export type Policy = DeepReadonly<PolicyDocumentType> & {
   readonly policyHash: Sha256;
 };
 
-export type PolicyDocument = PolicyDocumentType;
 export type PolicyRule = Policy['rules'][number];
 export type BasisPoints = z.infer<typeof BasisPoints>;
 

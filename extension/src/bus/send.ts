@@ -16,6 +16,7 @@
  */
 import { browser } from 'wxt/browser';
 
+import type { AgentId, Claim } from '../core/schema';
 import { log } from '../log';
 import { BusError, transportErrorCode } from './errors';
 import {
@@ -27,6 +28,7 @@ import {
   type UiResult,
   UiResultMessage,
   uiFailure,
+  ClaimsImportResult,
 } from './messages';
 
 /**
@@ -93,6 +95,22 @@ export async function query(query: UiQuery): Promise<UiResult> {
   if (!parsed.success) return unavailable(query, response, 'malformed_result');
   if (parsed.data.kind !== query.kind) return unavailable(query, response, 'kind_mismatch');
   return parsed.data;
+}
+
+/**
+ * Sends claims the person pasted to the service worker (sprint_3 3.13) and resolves its `ClaimsImportResult`: for a
+ * valid message it always resolves, an absent or malformed answer becoming `{ ok: false, code: 'failed' }` (logged
+ * as `bus.query_unavailable`). An invalid message is never sent: it rejects with `BusError('invalid_outgoing')`.
+ */
+export async function importClaims(agent: AgentId, claims: readonly Claim[]): Promise<ClaimsImportResult> {
+  const response = await send({ type: 'claims.import', agent, claims: [...claims] });
+  const parsed = ClaimsImportResult.safeParse(response);
+  if (parsed.success) return parsed.data;
+  log.warn('bus.query_unavailable', {
+    kind: 'claims.import',
+    reason: response === undefined ? 'no_response' : 'malformed_result',
+  });
+  return { ok: false, code: 'failed' };
 }
 
 /**

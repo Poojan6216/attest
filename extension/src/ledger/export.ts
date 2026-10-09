@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 
-import { PolicyDocument } from '../core/policy';
+import { PolicyDocument } from '../core/policy-document';
 import { CalendarRecord } from './calendar-snapshots';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';

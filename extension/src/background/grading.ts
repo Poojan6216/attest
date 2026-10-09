@@ -26,7 +26,7 @@ import { gradeBatch, gradedAt, preAssignments } from '../core/batch';
 import { storeBatch, supersede } from '../core/batch-store';
 import { latestClaimReceipts } from '../core/batch-fixed';
 import { instantMs } from '../core/normalize';
-import type { Policy } from '../core/policy';
+import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT, type Policy } from '../core/policy';
 import {
   ActionType,
   type Activity,
@@ -58,6 +58,13 @@ export interface GradingDeps {
   /** The clock at the edge (src/clock.ts): epoch ms. */
   readonly nowMs: () => number;
 }
+
+/** The service worker's batches: the shipped policy and the wall clock (the one src/clock.ts reads). */
+export const SHIPPED_GRADING: GradingDeps = Object.freeze({
+  policy: DEFAULT_POLICY,
+  policyDocument: DEFAULT_POLICY_DOCUMENT,
+  nowMs: () => Date.now(),
+});
 
 /** What one batch did: counts only. */
 export interface BatchSummary {

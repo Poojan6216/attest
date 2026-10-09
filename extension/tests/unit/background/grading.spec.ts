@@ -18,15 +18,15 @@ import { runGradingBatch } from '../../../src/background/grading';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { replay } from '../../../src/core/replay';
 import { IsoTs, Receipt } from '../../../src/core/schema';
-import { recordCoverage } from '../../../src/ledger/coverage';
 import { readRows, type LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
 import { replayRecords } from '../../../src/ledger/replay-records';
-import { listGrants, putGrant, upsertClaim, upsertObservation } from '../../../src/ledger/repo';
+import { listGrants, putGrant } from '../../../src/ledger/repo';
 import { readSnapshot } from '../../tools/attest-snapshot';
-import { AT, buildDemo } from '../core/demo-ledger';
+import { AT } from '../core/demo-ledger';
 import { pinClock, releaseClock, uniqueDbName } from '../ledger/fixtures';
+import { storeDemo } from './demo-store';
 
 const DEPS = { policy: DEFAULT_POLICY, policyDocument: DEFAULT_POLICY_DOCUMENT, nowMs: () => Date.now() };
 const opened: LedgerDb[] = [];
@@ -44,34 +44,6 @@ async function open(prefix: string): Promise<LedgerDb> {
   const db = await openLedger(uniqueDbName(prefix));
   opened.push(db);
   return db;
-}
-
-/**
- * The §2 demo's writes after `from` and up to `upTo`, as the service worker makes them, each with the clock at its
- * instant. Tests write and grade in time order: a clock moved back below what was stored would have the clock guard
- * delete the coverage synced "in the future" (src/ledger/clock-guard.ts), as it must.
- */
-async function storeDemo(db: LedgerDb, upTo: string, from = ''): Promise<ReturnType<typeof buildDemo>> {
-  const demo = buildDemo();
-  if (from === '') await ensureDefaultGrants(db, IsoTs.parse('2026-10-06T08:00:00-04:00'));
-  const steps: [string, () => Promise<unknown>][] = [
-    [AT.museRead, () => upsertClaim(db, demo.emailClaim).then(() => upsertClaim(db, demo.calendarClaim))],
-    [AT.firstLook, () => upsertObservation(db, demo.priyaRow, DEFAULT_POLICY)],
-    [AT.firstLook, () => upsertObservation(db, demo.vendorRow, DEFAULT_POLICY)],
-    ...demo.observers.map((entry): [string, () => Promise<unknown>] => [
-      entry.lastSyncAt,
-      () => recordCoverage(db, entry),
-    ]),
-  ];
-  const due = steps.filter(
-    ([at]) => (from === '' || Date.parse(at) > Date.parse(from)) && Date.parse(at) <= Date.parse(upTo),
-  );
-  due.sort(([a], [b]) => Date.parse(a) - Date.parse(b));
-  for (const [at, write] of due) {
-    pinClock(at);
-    await write();
-  }
-  return demo;
 }
 
 async function batchAt(db: LedgerDb, at: string) {

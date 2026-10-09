@@ -67,10 +67,11 @@ export const BusMessageType = z.enum([
   'ui.query',
   'ui.result',
   'ledger.changed',
+  'claims.import',
 ]);
 
 /**
- * The nine type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The ten type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -214,6 +215,40 @@ export const UiResultMessage = z.discriminatedUnion('ok', [
   }),
 ]);
 
+/**
+ * Claims the person pasted in the side panel (sprint_3 3.13; docs/claims-import.md §4): sent by an extension page only
+ * (listen.ts), the claims only, never the text. Each is one the paste parser read for this agent (extractor
+ * `import.<agent>`, an activity view, no request). The service worker stores them, grades, and answers with a
+ * `ClaimsImportResult`.
+ */
+export const ClaimsImportMessage = z
+  .strictObject({
+    type: z.literal('claims.import'),
+    agent: AgentId,
+    claims: z.array(Claim).min(1).max(SCHEMA_LIMITS.BATCH),
+  })
+  .superRefine((message, ctx) => {
+    message.claims.forEach((claim, index) => {
+      const imported =
+        claim.agent === message.agent &&
+        claim.extractor.id === `import.${message.agent}` &&
+        claim.sourceKind === 'activity_view' &&
+        claim.requestId === undefined;
+      if (!imported)
+        ctx.addIssue({ code: 'custom', path: ['claims', index], message: 'not an imported claim' });
+    });
+  });
+
+/** The answer to a `claims.import`: how many claims it carried and how many were new, or why it was refused. */
+export const ClaimsImportResult = z.discriminatedUnion('ok', [
+  z.strictObject({
+    ok: z.literal(true),
+    received: z.number().int().min(1).max(SCHEMA_LIMITS.BATCH),
+    added: z.number().int().min(0).max(SCHEMA_LIMITS.BATCH),
+  }),
+  z.strictObject({ ok: z.literal(false), code: AckCode }),
+]);
+
 /** The service worker wrote to the ledger; open UI pages re-query the tables they show. */
 export const LedgerChangedMessage = z.strictObject({
   type: z.literal('ledger.changed'),
@@ -231,6 +266,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   UiQueryMessage,
   UiResultMessage,
   LedgerChangedMessage,
+  ClaimsImportMessage,
 ]);
 
 export type LedgerTable = z.infer<typeof LedgerTable>;
@@ -250,6 +286,8 @@ export type UiQueryMessage = z.infer<typeof UiQueryMessage>;
 export type UiResultError = z.infer<typeof UiResultError>;
 export type UiResult = z.infer<typeof UiResultMessage>;
 export type LedgerChangedMessage = z.infer<typeof LedgerChangedMessage>;
+export type ClaimsImportMessage = z.infer<typeof ClaimsImportMessage>;
+export type ClaimsImportResult = z.infer<typeof ClaimsImportResult>;
 export type BusMessage = z.infer<typeof BusMessage>;
 
 /** The member of the union with a given `type` (both `ui.result` shapes for `'ui.result'`). */

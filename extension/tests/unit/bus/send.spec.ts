@@ -11,6 +11,7 @@ import { type BusMessage, BUS_MESSAGE_TYPES, type BusMessageType } from '../../.
 import { extensionContextAlive, postAcked, query, send, sendChecked } from '../../../src/bus/send';
 import type { IsoTs, Sha256 } from '../../../src/core/schema';
 import {
+  IMPORTED_CLAIM,
   CLAIM,
   captureLogs,
   connectAs,
@@ -58,6 +59,11 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     'ui.query': { type: 'ui.query', query: { kind: 'health.list' }, ...{ extra: SECRET } },
     'ui.result': { type: 'ui.result', kind: 'health.list', ok: true, data: undefined },
     'ledger.changed': { type: 'ledger.changed', tables: [], at: TS as IsoTs },
+    // A claim no paste read (another extractor): only the parser's claims may be imported.
+    'claims.import': {
+      ...VALID['claims.import'],
+      claims: [{ ...IMPORTED_CLAIM, extractor: { ...IMPORTED_CLAIM.extractor, id: 'muse.activity' } }],
+    },
   };
 }
 

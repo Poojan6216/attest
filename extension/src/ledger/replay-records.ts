@@ -8,7 +8,9 @@
  */
 import type { z } from 'zod';
 
-import { loadPolicy, type Policy, type PolicyDocument } from '../core/policy';
+import { canonicalJson, sha256Hex } from '../core/hash';
+import type { Policy } from '../core/policy';
+import { PolicyDocument } from '../core/policy-document';
 import { compareText } from '../core/order';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
@@ -35,17 +37,24 @@ export async function deleteReceiptInputs(db: LedgerDb, inputsHashes: Iterable<s
 }
 
 /**
- * Stores the document of `policy` once: refused (`invalid_input`) unless it loads to a policy with the same
- * `policyHash`, so an export's documents always reproduce the hashes its receipts name.
+ * Stores the document of `policy` once: refused (`invalid_input`) unless it is a valid policy document whose canonical
+ * JSON hashes to the policy's own `policyHash` (how ../core/policy.ts `loadPolicy` names a policy), so an export's
+ * documents always reproduce the hashes its receipts name. Checked by hash, never by loading it, so the ledger never
+ * imports the shipped policy file (../core/policy-document.ts).
  */
-export async function putPolicyDocument(db: LedgerDb, policy: Policy, document: unknown): Promise<void> {
+export async function putPolicyDocument(
+  db: LedgerDb,
+  policy: Pick<Policy, 'policyHash'>,
+  document: unknown,
+): Promise<void> {
   if ((await db.policies.get(policy.policyHash)) !== undefined) return;
-  if (loadPolicy(document).policyHash !== policy.policyHash) {
+  const parsed = PolicyDocument.safeParse(document, { jitless: true });
+  if (!parsed.success || sha256Hex(canonicalJson(parsed.data)) !== policy.policyHash) {
     throw new LedgerError('invalid_input', 'The policy document does not hash to the policy', {
       field: 'document',
     });
   }
-  await db.policies.put(PolicyRecord.parse({ policyHash: policy.policyHash, document }));
+  await db.policies.put(PolicyRecord.parse({ policyHash: policy.policyHash, document: parsed.data }));
 }
 
 /** What the replay input holds besides the ledger tables (tests/tools/attest-snapshot.ts): both maps, keys sorted. */

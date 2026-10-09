@@ -263,17 +263,26 @@ describe('ResetInstallIdControl', () => {
 });
 
 describe('popup and side panel shells', () => {
-  it.each([
-    ['popup', PopupApp, 'Attest'],
-    ['side panel', SidePanelApp, 'Attest timeline'],
-  ] as const)('%s states the privacy line and that it reads nothing yet', async (_name, App, title) => {
+  it('the popup states the privacy line and that there are no receipts yet', async () => {
     await act(() => {
-      render(h(App, null), root);
+      render(h(PopupApp, null), root);
     });
-    expect(root.querySelector('h1')?.textContent).toBe(title);
+    expect(root.querySelector('h1')?.textContent).toBe('Attest');
     expect(root.textContent).toContain('Nothing leaves your browser.');
-    expect(statusText()).toBe('No receipts yet. Attest does not read any page in this version.');
+    expect(statusText()).toBe('No receipts yet.');
     expect(root.querySelectorAll('button, a, input')).toHaveLength(0);
+  });
+
+  it('the side panel states the privacy line and offers Add agent activity (sprint_3 3.12, 3.13)', async () => {
+    await act(() => {
+      render(h(SidePanelApp, null), root);
+    });
+    expect(root.querySelector('h1')?.textContent).toBe('Attest timeline');
+    expect(root.textContent).toContain('Nothing leaves your browser.');
+    expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
+      'Add agent activity',
+    ]);
+    expect(root.querySelectorAll('a, input, textarea')).toHaveLength(0);
   });
 });
 

@@ -56,7 +56,10 @@ describe('background main()', () => {
     expect(await browser.alarms.getAll()).toEqual([]);
     await fakeBrowser.runtime.onStartup.trigger();
     await vi.waitFor(async () => {
-      expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([ALARM_NAMES.PURGE]);
+      expect((await browser.alarms.getAll()).map((a) => a.name)).toEqual([
+        ALARM_NAMES.PURGE,
+        ALARM_NAMES.GRADE,
+      ]);
     });
   });
 

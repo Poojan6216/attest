@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { PolicyDocument } from '../core/policy';
+import { PolicyDocument } from '../core/policy-document';
 import {
   ComponentId,
   Coverage,

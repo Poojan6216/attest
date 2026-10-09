@@ -14,10 +14,13 @@ import { nowIso } from '../clock';
 import {
   ALARM_NAMES,
   type AlarmName,
+  GRADE_ALARM_PERIOD_MINUTES,
+  GRADE_STARTUP_DELAY_MINUTES,
   PURGE_ALARM_PERIOD_MINUTES,
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../config';
 import { getLedger } from '../ledger/repo';
+import { runGradingBatch, SHIPPED_GRADING } from './grading';
 import { purgeAtTrustedClock } from '../ledger/retention-clock';
 import { log } from '../log';
 
@@ -34,18 +37,30 @@ export async function runRetentionPurge(): Promise<void> {
   await purgeAtTrustedClock(await getLedger(), { now: nowIso() });
 }
 
-/** One handler per alarm name; later sprints add theirs (3.6 grace, 4.7 digest). */
+/**
+ * The grace alarm (sprint_3 3.13; docs/grading.md §3, §8): one grading batch (./grading.ts), which finalises every
+ * PENDING receipt whose grace has elapsed and grades whatever arrived since the last batch. Everything it needs is in
+ * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts.
+ */
+export async function runGraceBatch(): Promise<void> {
+  await runGradingBatch(await getLedger(), SHIPPED_GRADING);
+}
+
+/** One handler per alarm name; later sprints add theirs (4.7 digest). */
 const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
   [ALARM_NAMES.PURGE]: runRetentionPurge,
+  [ALARM_NAMES.GRADE]: runGraceBatch,
 };
 
 const PERIODS: Readonly<Record<AlarmName, number>> = {
   [ALARM_NAMES.PURGE]: PURGE_ALARM_PERIOD_MINUTES,
+  [ALARM_NAMES.GRADE]: GRADE_ALARM_PERIOD_MINUTES,
 };
 
 /** How soon a recreated alarm first fires after a browser start (the period follows). */
 const STARTUP_DELAYS: Readonly<Record<AlarmName, number>> = {
   [ALARM_NAMES.PURGE]: PURGE_STARTUP_DELAY_MINUTES,
+  [ALARM_NAMES.GRADE]: GRADE_STARTUP_DELAY_MINUTES,
 };
 
 export function isAttestAlarm(name: string): name is AlarmName {

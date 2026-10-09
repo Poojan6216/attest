@@ -19,6 +19,8 @@ import { IsoTs } from '../core/schema';
 import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
+import { type ImportContext, onClaimsImport } from './claims-import';
+import { type GradingDeps, SHIPPED_GRADING } from './grading';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
 import { createPassState } from './observer-state';
 import { wrongSite } from './sender-site';
@@ -64,12 +66,21 @@ export function observerContext(clock: Clock = systemClock): ObserverContext {
   };
 }
 
+export function importContext(
+  clock: Clock = systemClock,
+  grading: GradingDeps = SHIPPED_GRADING,
+): ImportContext {
+  return { db: getLedger, grading, notify: announce(clock) };
+}
+
 export function createHandlers(
   clock: Clock = systemClock,
   ctx: ObserverContext = observerContext(clock),
+  imports: ImportContext = importContext(clock),
 ): BusHandlers {
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
+    'claims.import': (message) => onClaimsImport(imports, message),
     'adapter.health': (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ?? onHealth(ctx, message, sender),
     'observer.observations': (message, sender) =>

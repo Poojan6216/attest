@@ -88,16 +88,26 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
 
 /**
  * Service-worker alarm names (extension_engineer: alarm names are constants; duplicates are cleared on
- * install/update). Sprint 0 schedules only the retention purge; Sprint 2.6 implements its body.
+ * install/update): the retention purge (Sprint 2.6) and the grace alarm that runs a grading batch (sprint_3 3.13).
  */
 export const ALARM_NAMES = Object.freeze({
   PURGE: 'attest.purge',
+  GRADE: 'attest.grade',
 } as const);
 
 export type AlarmName = (typeof ALARM_NAMES)[keyof typeof ALARM_NAMES];
 
 /** How often the retention purge alarm fires (once a day). */
 export const PURGE_ALARM_PERIOD_MINUTES = 24 * 60;
+
+/**
+ * How often the grace alarm runs a grading batch (sprint_3 3.13; docs/grading.md §3): a PENDING receipt is finalised
+ * at most this long after its grace has elapsed, whether or not the service worker was stopped meanwhile.
+ */
+export const GRADE_ALARM_PERIOD_MINUTES = 5;
+
+/** How soon a recreated grace alarm first fires after a browser start. */
+export const GRADE_STARTUP_DELAY_MINUTES = 1;
 
 /**
  * The observer skeleton's pass scheduling (sprint_2 2.0, src/observers/batch.ts). A burst of DOM mutations on a
