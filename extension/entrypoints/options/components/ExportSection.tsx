@@ -1,7 +1,7 @@
 import { useRef, useState } from 'preact/hooks';
 
 import { exportLedgerFile, type SaveFile, saveJsonFile } from '../export-ledger';
-import { Button } from './Button';
+import { Button } from '../../../src/ui/Button';
 import { Section } from './Section';
 
 export interface ExportSectionProps {

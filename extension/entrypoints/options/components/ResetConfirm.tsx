@@ -1,6 +1,6 @@
 import type { Ref } from 'preact';
 
-import { Button } from './Button';
+import { Button } from '../../../src/ui/Button';
 
 export interface ResetConfirmProps {
   readonly onConfirm: () => void;

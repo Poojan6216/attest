@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import { log } from '../../../src/log';
-import { Button } from './Button';
+import { Button } from '../../../src/ui/Button';
 import { ResetConfirm } from './ResetConfirm';
 
 export interface ResetInstallIdControlProps {
