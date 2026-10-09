@@ -334,13 +334,13 @@ function batchClaimsOf(scenario: Scenario, built: Built): Claim[] {
 
 /** The scenario's coverage as of another instant (a `regrade` event, §8): the same entries, a new evaluatedAt. */
 export function coverageAt(loaded: LoadedScenario, evaluatedAt: IsoTs): Coverage {
-  return buildCoverage(loaded.scenario.input.coverage, evaluatedAt);
+  return buildCoverage(loaded.scenario.input.coverage, evaluatedAt, loaded.scenario.input.repairs);
 }
 
 export function buildScenario(file: string, scenario: Scenario): LoadedScenario {
   const policyJson = mergePatch(defaultPolicyJson, scenario.policyPatch ?? {});
   const policy = PolicyView.parse(policyJson);
-  const { evaluatedAt, coverage, fixed = [] } = scenario.input;
+  const { evaluatedAt, coverage, repairs, fixed = [] } = scenario.input;
   const built = buildRefs(scenario, policy);
   const gradeCall = buildGradeCall(scenario, built);
   return {
@@ -354,7 +354,7 @@ export function buildScenario(file: string, scenario: Scenario): LoadedScenario 
     batchClaims: batchClaimsOf(scenario, built),
     grants: scenario.input.grants.map((grant) => buildGrant(grant, evaluatedAt)),
     grantRefs: built.grants,
-    coverage: buildCoverage(coverage, evaluatedAt),
+    coverage: buildCoverage(coverage, evaluatedAt, repairs),
     activity: buildActivity(scenario, built),
     fixed: fixed.map((pair) => ({
       observationId: observationId(built, pair.observation),

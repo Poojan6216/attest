@@ -1,9 +1,9 @@
 /**
  * What `grade()` sees and the best candidate (docs/grading.md §3, §5, §8). Internal to grade.ts.
  *
- *  - `visibleInputs`: coverage entries with `lastSyncAt > evaluatedAt` and candidates with `observedAt >
- *    evaluatedAt` are dropped (replay at an earlier instant sees exactly what grading saw); candidates are then
- *    one per id and ordered by (`occurredAt` instant, id).
+ *  - `visibleInputs`: coverage entries with `lastSyncAt > evaluatedAt`, clock repairs found after it (`from >
+ *    evaluatedAt`, v1.16) and candidates with `observedAt > evaluatedAt` are dropped (replay at an earlier instant
+ *    sees exactly what grading saw); candidates are then one per id and ordered by (`occurredAt` instant, id).
  *  - `bestCandidate`: only an assignable claim is scored (features.ts throws for a claim with no weighted
  *    feature; §4.3 never scores an underspecified, target-less or source-less claim). The best candidate is the
  *    highest exact score, ties broken by the lower observation id, the same tie-break §4.3 assignment uses, so
@@ -42,6 +42,8 @@ export interface BestCandidate {
 /** The one code-unit order (order.ts), bound once: the test transform turns an imported call into a getter. */
 const compareText = compareTextShared;
 
+type Repair = NonNullable<Coverage['repairs']>[number];
+
 /** The coverage `grade()` sees, remembered per input coverage with what it was filtered from. */
 interface VisibleCoverage {
   readonly evaluatedAt: string;
@@ -49,6 +51,10 @@ interface VisibleCoverage {
   /** Each input entry and the `lastSyncAt` it had, in input order. */
   readonly entries: readonly ObserverCoverage[];
   readonly syncs: readonly string[];
+  /** The input's repairs list, each repair and the `from` it had, in input order (v1.16). */
+  readonly repairList: Coverage['repairs'];
+  readonly repairs: readonly Repair[];
+  readonly founds: readonly string[];
   readonly visible: Coverage;
 }
 
@@ -62,24 +68,38 @@ interface VisibleCoverage {
 const VISIBLE_COVERAGE = new WeakMap<Coverage, VisibleCoverage>();
 
 function sameFilterInputs(coverage: Coverage, held: VisibleCoverage): boolean {
-  const { observers } = coverage;
+  const { observers, repairs = [] } = coverage;
   if (coverage.evaluatedAt !== held.evaluatedAt || observers !== held.observers) return false;
+  if (coverage.repairs !== held.repairList || repairs.length !== held.repairs.length) return false;
+  if (!repairs.every((repair, i) => repair === held.repairs[i] && repair.from === held.founds[i]))
+    return false;
   if (observers.length !== held.entries.length) return false;
   return observers.every((entry, i) => entry === held.entries[i] && entry.lastSyncAt === held.syncs[i]);
 }
 
-/** §3: the coverage entries synced by `evaluatedAt`, as one object per input coverage (see above). */
+/**
+ * §3: the coverage entries synced by `evaluatedAt` and the clock repairs found by then, as one object per input
+ * coverage (see above). No repair found leaves `repairs` out, as a coverage with none has it.
+ */
 export function visibleCoverage(coverage: Coverage): Coverage {
   const held = VISIBLE_COVERAGE.get(coverage);
   if (held !== undefined && sameFilterInputs(coverage, held)) return held.visible;
   const evaluatedMs = instantMs(coverage.evaluatedAt);
   const observers = coverage.observers.filter((entry) => entryInstants(entry).syncMs <= evaluatedMs);
-  const visible: Coverage = { evaluatedAt: coverage.evaluatedAt, observers };
+  const inputRepairs = coverage.repairs ?? [];
+  const repairs = inputRepairs.filter((repair) => instantMs(repair.from) <= evaluatedMs);
+  const visible: Coverage =
+    repairs.length === 0
+      ? { evaluatedAt: coverage.evaluatedAt, observers }
+      : { evaluatedAt: coverage.evaluatedAt, observers, repairs };
   VISIBLE_COVERAGE.set(coverage, {
     evaluatedAt: coverage.evaluatedAt,
     observers: coverage.observers,
     entries: [...coverage.observers],
     syncs: coverage.observers.map((entry) => entry.lastSyncAt),
+    repairList: coverage.repairs,
+    repairs: [...inputRepairs],
+    founds: inputRepairs.map((repair) => repair.from),
     visible,
   });
   return visible;

@@ -190,7 +190,7 @@ Small facts about the ledger itself. Key `key`.
 
 | Field | Meaning |
 |---|---|
-| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync, a snapshot read at or a health check since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)); `purgeTrustedAt`, the instant the last retention purge trusted ([§7](#7-retention-and-purge)). Instants only, never content. |
+| `key` | A developer-chosen token. Today: `lastEvaluatedAt`, the instant of the last grading batch, written from Sprint 3.6; `clockHighWater`, the latest instant the ledger stored a sighting, a sync, a snapshot read at or a health check since the clock last went back; `clockFloorAt`, written when the clock went back: the instant before which no Calendar view is recorded as following changes ([`src/ledger/clock-guard.ts`](../extension/src/ledger/clock-guard.ts)); `clockRepair.<ms>`, one per time the clock went back, from Sprint 3.17: the span of instants that may have been stamped while it ran ahead, `<from>/<to>`, which grading reads ([`src/ledger/clock-repairs.ts`](../extension/src/ledger/clock-repairs.ts); [`docs/grading.md` §3](grading.md#3-inputs)); `purgeTrustedAt`, the instant the last retention purge trusted ([§7](#7-retention-and-purge)). Instants only, never content. |
 | `value` | A string of at most 256 characters, a number or a boolean. |
 
 ### 5.7 `requests`
@@ -281,7 +281,7 @@ Since Sprint 3.13 (schema version 5): what each receipt was graded with besides 
 | Field | Meaning |
 |---|---|
 | `inputsHash` | The receipt's own `inputsHash`. |
-| `coverage` | The coverage the batch graded with: its `evaluatedAt` and its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`). |
+| `coverage` | The coverage the batch graded with: its `evaluatedAt`, its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`), and its `repairs` when the clock ever went back: each repair's span (`from`, `to`), as `meta` holds it ([§5.6](#56-meta)). |
 | `grant` | The agent's grant in force then, as `grants` holds it (`agent`, `allowedTypes`, `counterpartyAllowlist`, `spendCeilingCents`, `spendCurrency`, `declaredScopes`, `observedScopes`, `accounts`, `updatedAt`). |
 | `context` | `priorSpendCents` (the agent's spending before this claim, in cents), `attribution` on an UNASKED receipt (the likely `agent`, its `scoreBp`, the `signals` that fired, and `adapterLastSyncAt`), and `scope` on a permission receipt (the `observed` permission). |
 | `policyHash` | The policy it was graded under. |
@@ -323,7 +323,8 @@ Dated history is kept `RETENTION_DAYS` (90 days, [`src/config.ts`](../extension/
 - **Requests** go 90 days after they were sent, once no kept claim names them.
 - **Coverage intervals** are cut at the cutoff: nothing before it is kept. **Latest pings** go once their last sync is older than the cutoff.
 - **Calendar snapshots** go when they were read before the cutoff. A range not looked at since is compared with nothing next time, so its events come back as first sightings, never as changes.
-- **Kept:** `grants`, `adapterHealth` and `meta` are not dated history.
+- **Clock repair spans** (`meta` `clockRepair.*`) go once they ended before the cutoff.
+- **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
 
 The retention setting (30, 90 or 180 days) arrives in the options page in Sprint 4.5. Removing the extension removes its IndexedDB database and `chrome.storage.local` with it; Attest keeps nothing anywhere else.
 

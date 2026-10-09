@@ -47,6 +47,7 @@ const COVERAGE_GROUP: readonly ReasonCode[] = [
   'coverage.calendars_hidden',
   'coverage.changes_unfollowed',
   'coverage.change_unprovable',
+  'coverage.clock_repaired',
   'coverage.list_unsettled',
   'coverage.account_partial',
   'coverage.multiple_accounts',

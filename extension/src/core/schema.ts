@@ -51,10 +51,8 @@ export const SCHEMA_LIMITS = Object.freeze({
   TEXT_HINT: 200,
   /** Hard Rule 2: a subject hint is at most 80 characters. */
   SUBJECT_HINT: 80,
-  /**
-   * Characters in one timestamp: `YYYY-MM-DDThh:mm:ss.fffffffff+hh:mm`, nanoseconds with a numeric offset
-   * (a `Z` timestamp of the same length can carry up to 14 fraction digits). Bounds storage, not precision.
-   */
+  /** Characters in one timestamp: `YYYY-MM-DDThh:mm:ss.fffffffff+hh:mm` (nanoseconds, numeric offset; a `Z` one of
+   *  that length carries up to 14 fraction digits). Bounds storage, not precision. */
   ISO_TS: 35,
   /** docs/grading.md §13: every amountCents is an integer in [0, 10^12]. */
   AMOUNT_CENTS: 1_000_000_000_000,
@@ -205,9 +203,13 @@ export const ObserverCoverage = z
   })
   .superRefine(refineWith(coverageProblems));
 
+/** A span, `from` ≤ `to`: an idle interval (§7), or what a clock repair found stamped ahead (`repairs`, §3 v1.16). */
+const Interval = z.strictObject({ from: IsoTs, to: IsoTs }).superRefine(refineWith(intervalProblems));
+
 export const Coverage = z.strictObject({
   evaluatedAt: IsoTs,
   observers: z.array(ObserverCoverage).max(L.GRADING_INPUT),
+  repairs: z.array(Interval).max(L.LIST).optional(),
 });
 
 /** The latest health of an adapter or observer (Hard Rule 6). IDLE: a page it does not read (sprint_2 2.11). */
@@ -340,14 +342,13 @@ export const GradeContext = z.strictObject({
 });
 
 const AgentAt = z.strictObject({ agent: AgentId, at: IsoTs });
-const IdleInterval = z.strictObject({ from: IsoTs, to: IsoTs }).superRefine(refineWith(intervalProblems));
 const ActivityEntry = z.strictObject({ agent: AgentId, at: IsoTs, type: ActionType.optional() });
 const AdapterSync = z.strictObject({ agent: AgentId, lastSyncAt: IsoTs });
 
 /** Allowlisted activity for attribution (§7). Missing data never counts as idle. */
 export const Activity = z.strictObject({
   sessions: z.array(AgentAt).max(L.GRADING_INPUT),
-  idle: z.array(IdleInterval).max(L.GRADING_INPUT),
+  idle: z.array(Interval).max(L.GRADING_INPUT),
   entries: z.array(ActivityEntry).max(L.GRADING_INPUT),
   adapterSyncs: z.array(AdapterSync).max(L.GRADING_INPUT),
   claims: z.array(Claim).max(L.GRADING_INPUT),
@@ -390,7 +391,6 @@ export type RequestInput = z.input<typeof Request>;
 export type ClaimInput = z.input<typeof Claim>;
 export type ObservationInput = z.input<typeof Observation>;
 export type ObserverCoverageInput = z.input<typeof ObserverCoverage>;
-export type CoverageInput = z.input<typeof Coverage>;
 export type HealthReportInput = z.input<typeof HealthReport>;
 export type GrantInput = z.input<typeof Grant>;
 export type ReasonInput = z.input<typeof Reason>;

@@ -38,6 +38,8 @@ import {
   graceSyncMs,
   type SourceCoverage,
 } from './conditions-coverage';
+import { instantMs } from './normalize';
+import { firstSeenFromMs } from './order';
 import type { CoverageLevel } from './policy';
 import type { Claim, Coverage, Grant, ObservationSource } from './schema';
 import { claimWindow, type ClaimWindow, isCalendarType } from './window';
@@ -46,6 +48,8 @@ import { claimWindow, type ClaimWindow, isCalendarType } from './window';
 const UNFOLLOWED: CoverageCap = 'coverage.changes_unfollowed';
 /** Every `gcal.event` entry of a calendar change claim (§6.1 v1.11). */
 const UNPROVABLE: CoverageCap = 'coverage.change_unprovable';
+/** Every `gcal.event` entry of a `calendar.created` claim whose first-seen bound a clock repair spans (§6.1 v1.16). */
+const REPAIRED: CoverageCap = 'coverage.clock_repaired';
 /** A `gmail.sent` entry synced before the claim's grace sync (§6.1 v1.14). */
 const UNSETTLED: CoverageCap = 'coverage.list_unsettled';
 /** A window only several bound accounts' views together contain (§6.1 v1.11). */
@@ -56,6 +60,7 @@ const CAP_ORDER: readonly CoverageCap[] = [
   'coverage.calendars_hidden',
   UNFOLLOWED,
   UNPROVABLE,
+  REPAIRED,
   UNSETTLED,
   ACCOUNT_PARTIAL,
   'coverage.multiple_accounts',
@@ -103,6 +108,12 @@ function covers(intervals: readonly EligibleEntry[], fromMs: number, toMs: numbe
 export interface CalendarBound {
   readonly syncMs: number;
   readonly change: boolean;
+  /**
+   * `repaired`: the claim is a `calendar.created` whose first-seen bound (§4.1) lies in a clock repair's span (v1.16):
+   * either side of the comparison may have been stamped by a clock that ran ahead, so a row first seen after the
+   * repair can read as earlier than the claim, and no entry covers it in full (S2-SIM2-1).
+   */
+  readonly repaired: boolean;
 }
 
 /**
@@ -110,16 +121,25 @@ export interface CalendarBound {
  * view last synced before `end(p,t) + graceMin` cannot say the claimed event was never created, and no snapshot
  * reader can say a change was never made, so neither makes a calendar claim's coverage full (Hard Rule 5).
  */
-export function calendarBound(claim: Claim, policy: CoveragePolicy): CalendarBound | null {
+export function calendarBound(
+  claim: Claim,
+  policy: CoveragePolicy,
+  repairs: Coverage['repairs'] = [],
+): CalendarBound | null {
   if (!isCalendarType(claim.type)) return null;
   const change = claim.type === 'calendar.updated' || claim.type === 'calendar.deleted';
-  return { syncMs: graceSyncMs(claim, policy), change };
+  const boundMs = firstSeenFromMs(claim, policy);
+  const repaired =
+    boundMs !== null &&
+    repairs.some((repair) => instantMs(repair.from) <= boundMs && boundMs <= instantMs(repair.to));
+  return { syncMs: graceSyncMs(claim, policy), change, repaired };
 }
 
 /** The cap `bound` puts on `entry`: `UNPROVABLE` for a change claim, `UNFOLLOWED` for a stale view, else null. */
 function calendarCap(entry: EligibleEntry, bound: CalendarBound | null): CoverageCap | null {
   if (bound === null || entry.source !== 'gcal.event') return null;
   if (bound.change) return UNPROVABLE;
+  if (bound.repaired) return REPAIRED;
   return entry.syncMs < bound.syncMs ? UNFOLLOWED : null;
 }
 
@@ -166,7 +186,7 @@ function sourceCoverage(
     overlapping += 1;
     for (const cap of entry.caps) present.add(cap);
     const cap = calendarCap(entry, bound) ?? sentCap(entry, sentSyncMs);
-    if (cap === UNPROVABLE) present.add(cap);
+    if (cap === UNPROVABLE || cap === REPAIRED) present.add(cap);
     else if (cap !== null) stale.push([entry, cap]);
     else {
       fresh.push(entry);
@@ -234,7 +254,7 @@ export function coverageLevel(
   return coverageFrom(
     eligible,
     claimWindow(claim, policy),
-    calendarBound(claim, policy),
+    calendarBound(claim, policy, coverage.repairs),
     graceSyncMs(claim, policy),
   );
 }

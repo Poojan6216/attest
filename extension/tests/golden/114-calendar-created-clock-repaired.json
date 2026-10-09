@@ -1,0 +1,91 @@
+{
+  "name": "a creation claim stamped while the clock ran ahead is never NOT_FOUND; one from before the jump still is",
+  "covers": ["edge:clock_repaired_creation", "edge:clock_repair_before_claim"],
+  "mode": "batch",
+  "notes": [
+    "§3 v1.16, §6.1 v1.16 (S2-SIM2-1, Decisions [2.7-E], [3.17]): each clock repair appends its span, from the instant the clock read when it was found to have gone back to the latest instant stored before, and the batch's coverage carries it (`repairs`). A calendar.created claim whose first-seen bound start(p,t) − beforeClaimMin lies in a repair's span is capped on every gcal.event entry, coverage.clock_repaired: the claim may have been stamped by the clock that ran ahead, so its event, first seen after the repair, can read as earlier than the claim and fail §4.1's first-seen rule. No view can then say the event was never created.",
+    "Story. The computer's clock ran three hours ahead for part of the morning: muse's claim c1 was read at 11:05 by that clock. At 09:10 the clock was set back, and the repair found 12:05 stored: span [09:10, 12:05]. The Calendar week [10-04 00:00, 10-11 00:00] is followed since 08:00, every calendar shown, account acct-a bound, last synced 11:50. The event c1 names, 'Design review' on Wed 10-07 14:00, was first seen at 09:20 (o1), after the repair, by the right clock.",
+    "c1 (calendar.created, 'Design review', claimed 11:05, minute, targetAt 10-07 14:00): first-seen bound 11:05 − beforeClaimMin 2 = 11:03, inside [09:10, 12:05] → repaired. o1 is first seen at 09:20 < 11:03, so it fails §4.1's first-seen rule: no candidate, match.none, score null. Coverage: the week contains the window [10-04 14:00, 10-10 14:00], fresh (11:50 ≥ end(11:06) + graceMin 30 = 11:36), every calendar, the bound account; v1.15 counted it full → not_found → NOT_FOUND, FINAL, false: the event was created. v1.16 caps it (coverage.clock_repaired) → partial → partial_coverage, UNVERIFIABLE, PENDING (it finalises at end + finalizeUnverifiableHours = 10-07 11:06 > evaluatedAt 12:00). Reasons: coverage.partial {gcal.event}, coverage.clock_repaired {gcal.event}, match.none.",
+    "c2 (calendar.created, 'Team sync', claimed 08:00, targetAt Wed 10-14 10:00): first-seen bound 07:58, before the span: no cap. Its window [10-11 10:00, 10-17 10:00] lies in the next week [10-11 00:00, 10-18 00:00], followed and synced the same, and holds no row (o1, 10-07, is outside it) → match.none; full, fresh (11:50 ≥ end(08:01) + 30 = 08:31) → not_found, NOT_FOUND, FINAL; the grant binds gcal.event → no coverage.account_unbound. Reasons: match.none.",
+    "Orphans: o1 is a change the first week followed (changesSince 08:00 < 09:20 ≤ 11:50; no entry began comparing at 09:20), assigned to no claim; no activity → no attribution → no receipt."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T12:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Design review",
+        "claimedAt": "2026-10-06T11:05:00-04:00",
+        "targetAt": "2026-10-07T14:00:00-04:00"
+      },
+      {
+        "ref": "c2",
+        "agent": "muse",
+        "type": "calendar.created",
+        "subjectHint": "Team sync",
+        "claimedAt": "2026-10-06T08:00:00-04:00",
+        "targetAt": "2026-10-14T10:00:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gcal.event",
+        "type": "calendar.created",
+        "subjectHint": "Design review",
+        "occurredAt": "2026-10-07T14:00:00-04:00",
+        "observedAt": "2026-10-06T09:20:00-04:00",
+        "rowKey": "evt-design-review"
+      }
+    ],
+    "grants": [{ "agent": "muse", "accounts": { "gcal.event": ["acct-a"] } }],
+    "coverage": [
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T11:50:00-04:00",
+        "windowStart": "2026-10-04T00:00:00-04:00",
+        "windowEnd": "2026-10-11T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:00:00-04:00"
+      },
+      {
+        "source": "gcal.event",
+        "lastSyncAt": "2026-10-06T11:50:00-04:00",
+        "windowStart": "2026-10-11T00:00:00-04:00",
+        "windowEnd": "2026-10-18T00:00:00-04:00",
+        "accountHash": "acct-a",
+        "allCalendars": true,
+        "changesSince": "2026-10-06T08:00:00-04:00"
+      }
+    ],
+    "repairs": [{ "from": "2026-10-06T09:10:00-04:00", "to": "2026-10-06T12:05:00-04:00" }]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "UNVERIFIABLE",
+      "ruleId": "partial_coverage",
+      "state": "PENDING",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["coverage.partial", "coverage.clock_repaired", "match.none"],
+      "reasonParams": {
+        "coverage.partial": { "source": "gcal.event" },
+        "coverage.clock_repaired": { "source": "gcal.event" },
+        "match.none": {}
+      }
+    },
+    {
+      "ref": "c2",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": null,
+      "reasonCodes": ["match.none"]
+    }
+  ]
+}

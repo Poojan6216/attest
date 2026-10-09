@@ -238,7 +238,7 @@ class ClaimConditions implements Conditions {
       this.#coverage = coverageFrom(
         this.eligible(),
         claimWindow(this.claim, policy),
-        calendarBound(this.claim, policy),
+        calendarBound(this.claim, policy, this.facts.coverage.repairs),
         graceSyncMs(this.claim, policy),
       );
     }

@@ -13,7 +13,8 @@
  *  3. The claims it grades: those with no stored receipt, or a PENDING one `gradedAt` admits (a claim whose reverted
  *     override is still in force is left out like an overridden one); `fixed` is `preAssignments` of every receipt.
  *  4. Its coverage (src/ledger/coverage-batch.ts): every graded claim's window, and for every type the span in which
- *     an orphan's PENDING UNASKED receipt can still change (`orphanHorizonMs`), as one `Coverage`.
+ *     an orphan's PENDING UNASKED receipt can still change (`orphanHorizonMs`), as one `Coverage`, with every clock
+ *     repair the ledger keeps (`repairs`, src/ledger/clock-repairs.ts; docs/grading.md §3 v1.16, S2-SIM2-1).
  *  5. Its activity (§7): every claim (spend and adjacency), the activity-log entries the claims of an activity view
  *     are, each agent's last import as its adapter sync, and the session pings and idle intervals the ledger holds
  *     from the earliest instant the batch's coverage reaches, less the widest attribution window (src/ledger/
@@ -47,6 +48,7 @@ import { claimWindow } from '../core/window';
 import { isoWithLocalOffset } from '../clock';
 import { activityIn } from '../ledger/activity';
 import { guardClock } from '../ledger/clock-guard';
+import { batchRepairs, clockRepairs } from '../ledger/clock-repairs';
 import { coverageForBatch } from '../ledger/coverage-batch';
 import { readRows, type LedgerDb } from '../ledger/db';
 import { LedgerError } from '../ledger/errors';
@@ -104,7 +106,7 @@ export function claimsToGrade(
   });
 }
 
-/** The batch's coverage: each graded claim's window, and the orphan horizon for every type (header, step 4). */
+/** The batch's coverage: each graded claim's window, the orphan horizon for every type, the repairs (header, step 4). */
 async function batchCoverage(
   db: LedgerDb,
   pending: readonly Claim[],
@@ -117,7 +119,9 @@ async function batchCoverage(
     ...pending.map((claim) => ({ type: claim.type, window: claimWindow(claim, policy), evaluatedAt })),
     ...ActionType.options.map((type) => ({ type, window: horizon, evaluatedAt })),
   ];
-  return coverageForBatch(db, evaluatedAt, queries, policy);
+  const coverage = await coverageForBatch(db, evaluatedAt, queries, policy);
+  const repairs = batchRepairs(await clockRepairs(db));
+  return repairs.length === 0 ? coverage : { ...coverage, repairs };
 }
 
 /** The latest `SCHEMA_LIMITS.GRADING_INPUT` of `items`, by `at`. */

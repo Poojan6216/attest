@@ -216,6 +216,14 @@ function coverageEntry(entry: ScenarioCoverage): Record<string, unknown> {
   };
 }
 
-export function buildCoverage(entries: readonly ScenarioCoverage[], evaluatedAt: string): Coverage {
-  return Coverage.parse({ evaluatedAt, observers: entries.map(coverageEntry) });
+export function buildCoverage(
+  entries: readonly ScenarioCoverage[],
+  evaluatedAt: string,
+  repairs: readonly { readonly from: string; readonly to: string }[] = [],
+): Coverage {
+  return Coverage.parse({
+    evaluatedAt,
+    observers: entries.map(coverageEntry),
+    ...(repairs.length === 0 ? {} : { repairs }),
+  });
 }

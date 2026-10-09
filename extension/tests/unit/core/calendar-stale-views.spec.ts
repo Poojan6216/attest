@@ -79,12 +79,21 @@ describe('calendarBound (§6.1 v1.10, v1.11)', () => {
     expect(calendarBound(claimOf('calendar.created'), DEFAULT_POLICY)).toEqual({
       syncMs: ms(at('14:33')),
       change: false,
+      repaired: false,
     });
     for (const type of ['calendar.updated', 'calendar.deleted']) {
-      expect(calendarBound(claimOf(type), DEFAULT_POLICY)).toEqual({ syncMs: ms(at('14:33')), change: true });
+      expect(calendarBound(claimOf(type), DEFAULT_POLICY)).toEqual({
+        syncMs: ms(at('14:33')),
+        change: true,
+        repaired: false,
+      });
     }
     const hour = claimOf('calendar.created', { claimedAt: at('14:00'), claimedAtPrecision: 'hour' });
-    expect(calendarBound(hour, DEFAULT_POLICY)).toEqual({ syncMs: ms(at('15:30')), change: false });
+    expect(calendarBound(hour, DEFAULT_POLICY)).toEqual({
+      syncMs: ms(at('15:30')),
+      change: false,
+      repaired: false,
+    });
     expect(calendarBound(claimOf('email.sent', { counterparty: 'p@x.example' }), DEFAULT_POLICY)).toBeNull();
   });
 });

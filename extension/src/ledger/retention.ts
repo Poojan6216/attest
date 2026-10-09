@@ -33,7 +33,9 @@
  *  8. The replay records go with their receipts (sprint_3 3.13, ./replay-records.ts): the `receiptInputs` rows keyed
  *     by the purged receipts' `inputsHash`, then every policy document no stored input names any more, in this
  *     same transaction.
- * Grants, adapter health and meta are not dated history and are kept.
+ *  9. A clock repair's span (`meta` `clockRepair.*`, ./clock-repairs.ts) goes once it ended before C: no claim it
+ *     bears on is still graded by then.
+ * Grants, adapter health and the rest of meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
  * batch (§3: a batch's own readwrite transaction covers claims, observations and receipts) and a crash leaves either
@@ -56,6 +58,7 @@ import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { bucketOfMs } from './index';
 import { purgeActivity } from './activity';
+import { purgeClockRepairs } from './clock-repairs';
 import { purgeCalendarRecords } from './calendar-snapshots';
 import { purgeReplayRecords } from './replay-records';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
@@ -87,6 +90,8 @@ export interface PurgeReport {
   /** Replay records deleted: the purged receipts' inputs, and the policy documents no input names any more. */
   readonly receiptInputs: number;
   readonly policies: number;
+  /** Clock repair spans deleted: those that ended before the cutoff (./clock-repairs.ts). */
+  readonly clockRepairs: number;
 }
 
 /** What goes, decided before anything is deleted. */
@@ -304,6 +309,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.activity,
     db.receiptInputs,
     db.policies,
+    db.meta,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
@@ -334,6 +340,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       activity: await purgeActivity(db, cutoffMs),
       receiptInputs: replay.receiptInputs,
       policies: replay.policies,
+      clockRepairs: await purgeClockRepairs(db, cutoffMs),
     };
   });
 }

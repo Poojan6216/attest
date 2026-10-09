@@ -236,6 +236,7 @@ describe('purgeExpired removes exactly the old rows', () => {
       receiptInputs: 0,
       policies: 0,
       activity: 0,
+      clockRepairs: 0,
     });
   });
 

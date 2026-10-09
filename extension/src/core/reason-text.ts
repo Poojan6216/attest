@@ -221,6 +221,11 @@ const TEXT: Readonly<Record<ReasonCode, Render>> = Object.freeze({
       `Attest reads ${source} as snapshots, so it can see a change that was made but cannot show one never was.`,
     'Attest reads snapshots, so it can see a change that was made but cannot show one never was.',
   ),
+  'coverage.clock_repaired': bySource(
+    (source) =>
+      `The clock was set back after running ahead, so ${source} cannot show the event came after the claim.`,
+    'The clock was set back after running ahead, so Attest cannot show the event came after the claim.',
+  ),
   'coverage.account_partial': bySource(
     (service) =>
       `Attest did not see this claim's whole time window in every ${service} account set for this agent.`,

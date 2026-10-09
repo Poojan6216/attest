@@ -130,9 +130,21 @@ function canonicalGrant(grant: Grant): Record<string, unknown> {
   };
 }
 
-/** The coverage with its observer entries as a set (§3). */
+/** Clock repairs once each, in (from, to) order: a set, like the observers. */
+function canonicalRepairs(repairs: NonNullable<Coverage['repairs']>): NonNullable<Coverage['repairs']> {
+  const key = (repair: { readonly from: string; readonly to: string }) => `${repair.from}/${repair.to}`;
+  const sorted = [...repairs].sort((a, b) => compareText(key(a), key(b)));
+  return sorted.filter((repair, i) => i === 0 || key(sorted[i - 1] ?? repair) !== key(repair));
+}
+
+/** The coverage with its observer entries and clock repairs as sets (§3); no repair hashes as none (v1.16). */
 function canonicalCoverage(coverage: Coverage): Record<string, unknown> {
-  return { ...coverage, observers: canonicalObservers(coverage.observers) };
+  const { repairs } = coverage;
+  return {
+    ...coverage,
+    observers: canonicalObservers(coverage.observers),
+    repairs: repairs === undefined || repairs.length === 0 ? undefined : canonicalRepairs(repairs),
+  };
 }
 
 function canonicalContext(context: GradeContext): Record<string, unknown> {
