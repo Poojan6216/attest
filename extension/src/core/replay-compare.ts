@@ -42,6 +42,7 @@ export const COMPARED_FIELDS = [
   'attribution',
   'computedAt',
   'finalAt',
+  'finalFrom',
 ] as const;
 export type ComparedField = (typeof COMPARED_FIELDS)[number];
 
@@ -74,6 +75,7 @@ function computedPart(receipt: Receipt): Record<ComparedField, unknown> {
     attribution: receipt.attribution,
     computedAt: receipt.computedAt,
     finalAt: receipt.finalAt,
+    finalFrom: receipt.finalFrom,
   };
 }
 

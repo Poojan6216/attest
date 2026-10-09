@@ -15,7 +15,8 @@ import {
   TIMELINE_QUERY,
   UI_RECEIPTS,
 } from '../extension/tests/perf/ui-ledger';
-import { popupView, receiptDetail, receiptPage } from '../extension/src/ledger/views';
+import { receiptDetail } from '../extension/src/ledger/detail';
+import { popupView, receiptPage } from '../extension/src/ledger/views';
 import { fullScans, recordReads, resetRecorder } from '../extension/tests/unit/ledger/read-recorder';
 import type { MetricValue } from './results';
 import { summarize, timed, type Timed } from './timing';

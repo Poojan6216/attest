@@ -23,7 +23,7 @@ import {
   localDayStartMs,
   onLedgerChanged,
 } from '../../../src/ui/data';
-import { listenerOf, serviceWorker } from '../bus/harness';
+import { serviceWorker } from '../bus/harness';
 import { claimId, makeGrant, makeHealth, makeReceipt, omit, sha, ulid } from '../ledger/fixtures';
 
 const HOUR = 3_600_000;
@@ -176,23 +176,42 @@ describe('the detail and the small tables', () => {
 });
 
 describe('onLedgerChanged', () => {
-  it('passes on a change to the tables a page shows, and stops when asked', () => {
+  /** Lets the listener's module load and register (it loads after the page's start). */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('reads once when it starts listening, then passes on each change to the tables a page shows', async () => {
     const onChange = vi.fn();
-    let stop: () => void = () => undefined;
-    const listener = listenerOf(() => {
-      stop = onLedgerChanged(['receipts', 'coverage'], onChange);
+    const addListener = vi.spyOn(fakeBrowser.runtime.onMessage, 'addListener');
+    const stop = onLedgerChanged(['receipts', 'coverage'], onChange);
+    await vi.waitFor(() => {
+      expect(addListener).toHaveBeenCalledTimes(1);
     });
-    const announce = (tables: readonly string[]) =>
+    const listener = addListener.mock.calls[0]?.[0];
+    if (listener === undefined) throw new Error('no listener registered');
+    // Once listening, one catch-up call with every table watched: a change announced before it listened is read too.
+    expect(onChange.mock.calls).toEqual([[['receipts', 'coverage']]]);
+    const announce = (tables: readonly string[]) => {
       listener(
         { type: 'ledger.changed', tables, at: '2026-10-01T12:00:00Z' },
         serviceWorker(),
         () => undefined,
       );
+    };
     announce(['receipts', 'meta']);
     announce(['claims']);
-    expect(onChange.mock.calls).toEqual([[['receipts']]]);
-    expect(fakeBrowser.runtime.onMessage.hasListener(listener)).toBe(true);
+    expect(onChange.mock.calls.slice(1)).toEqual([[['receipts']]]);
     stop();
     expect(fakeBrowser.runtime.onMessage.hasListener(listener)).toBe(false);
+  });
+
+  it('never listens when stopped before its listener loaded', async () => {
+    const onChange = vi.fn();
+    const addListener = vi.spyOn(fakeBrowser.runtime.onMessage, 'addListener');
+    const stop = onLedgerChanged(['receipts'], onChange);
+    stop();
+    await settle();
+    await settle();
+    expect(addListener).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

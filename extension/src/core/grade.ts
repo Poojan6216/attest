@@ -12,7 +12,7 @@
  *     ties by observation id. It is ASSIGNED (named in `observationIds`) iff its score ≥ `thresholds.partial`.
  *  3. Rules (§6): `policy.rules`, first match wins; nothing matches → terminal `default_unverifiable`
  *     (UNVERIFIABLE). A PENDING outcome is stored as grade UNVERIFIABLE (the placeholder, §2), rule `pending`.
- *  4. Finality (§8): `isFinalizable` in conditions.ts sets `state` and `finalAt`.
+ *  4. Finality (§8): `isFinalizable` in conditions.ts sets `state` and `finalAt`, or `finalFrom` (v1.18).
  *  5. Receipt (§3, §6.4, §8, §15): id from the subject, reasons in §15 order, confidence, signals, `computedAt =
  *     coverage.evaluatedAt`, `attribution: 'likely'` on UNASKED.
  *
@@ -206,7 +206,7 @@ function judge(
   const { orphan } = evidence.subject;
   const decision = decide(claim, evidence, grant, policy, context);
   const { rule, outcome, conditions } = decision;
-  const { final } = isFinalizable({
+  const { final, finalFrom } = isFinalizable({
     outcome,
     rule,
     claim,
@@ -241,6 +241,7 @@ function judge(
     }),
     signals: best?.signals ?? {},
     final,
+    ...(finalFrom === undefined ? {} : { finalFrom }),
     policyHash: policy.policyHash,
     inputsHash: inputsHashOf({
       claim,

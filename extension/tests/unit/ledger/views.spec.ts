@@ -37,10 +37,10 @@ import {
   coverageSummary,
   popupView,
   type ReceiptPage,
-  receiptDetail,
   receiptPage,
   type ReceiptQuery,
 } from '../../../src/ledger/views';
+import { receiptDetail } from '../../../src/ledger/detail';
 import {
   captureLogs,
   claimId,
@@ -191,6 +191,22 @@ describe('receiptPage: joins and refusals', () => {
     const page = await receiptPage(db, query());
     expect(page.items.map(({ claim }) => claim?.id ?? null)).toEqual([null, null, claimId(1)]);
     expect(page.items.map(({ receipt: { grade } }) => grade)).toEqual(['VERIFIED', 'UNASKED', 'VERIFIED']);
+  });
+
+  it('joins a receipt with no claim with the observation it is about, read by key', async () => {
+    await upsertObservation(db, makeObservation({ rowKeyHash: sha(1) }), DEFAULT_POLICY);
+    const unasked = (n: number, evidence: string[]) => ({
+      ...receipt(n, 'muse', n, 'UNASKED'),
+      observationIds: evidence,
+    });
+    // Receipt 3's observation is gone (the retention purge); receipt 1 is a claim receipt naming the same one.
+    await store([receipt(1, 'muse', 1), unasked(2, [observationId(1)]), unasked(3, [observationId(3)])]);
+    const page = await receiptPage(db, query());
+    expect(page.items.map(({ receipt: { id }, orphan }) => [id, orphan?.id ?? null])).toEqual([
+      [ulid(3), null],
+      [ulid(2), observationId(1)],
+      [ulid(1), null],
+    ]);
   });
 
   it('skips a row that fails its strict read, logged by id only, and the next page starts after it', async () => {

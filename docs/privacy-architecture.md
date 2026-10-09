@@ -258,6 +258,7 @@ Written by the grading batch since Sprint 3.13: the grade for each claim, each u
 | `reverted` | Overrides you undid, each with its grade, instants and evidence ids. |
 | `supersededBy` | The claim that later explained an UNASKED receipt. |
 | `computedAt`, `finalAt` | When it was last graded, and when it became FINAL. |
+| `finalFrom` | While it is still being checked: the time from which it can become FINAL (the popup's "final from"). |
 
 Index fields: `date` (the local date of `computedAt`) and `computedMs` (`computedAt` in epoch milliseconds, schema v8), so the popup and the side panel read the newest receipts a page at a time ([`src/ledger/views.ts`](../extension/src/ledger/views.ts)). They hold nothing the stored fields do not.
 

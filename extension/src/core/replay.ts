@@ -355,6 +355,7 @@ function emptyCounts(): Record<ReplayField, number> {
     attribution: 0,
     computedAt: 0,
     finalAt: 0,
+    finalFrom: 0,
   };
 }
 

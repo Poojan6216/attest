@@ -5,7 +5,7 @@
  * `revertedOverrides` from its own primitives. PURE (Hard Rule 4).
  *
  *  - `override` iff USER_OVERRIDDEN, and `override.at ≥ computedAt`;
- *  - `finalAt` iff the state before any override is FINAL;
+ *  - `finalAt` iff the state before any override is FINAL, and `finalFrom` (v1.18) only while it is PENDING;
  *  - grade UNASKED iff `attribution: 'likely'` and no `claimId`; `attribution` and `supersededBy` on UNASKED only;
  *  - the lifecycle reasons: `override.user {grade: override.grade}` iff `override`, `superseded {claimId:
  *    supersededBy}` iff `supersededBy`, each once, after every graded reason, in §15 order;
@@ -38,6 +38,7 @@ export interface ReceiptFacts {
   readonly reasons: readonly unknown[];
   readonly computedAt: string;
   readonly finalAt?: string | undefined;
+  readonly finalFrom?: string | undefined;
   readonly observationIds: readonly string[];
 }
 
@@ -82,7 +83,10 @@ export function revertedOverrides<G extends z.ZodType, T extends z.ZodType, I ex
   return z.array(entry).min(1).max(limits.REASONS);
 }
 
-/** `override` iff USER_OVERRIDDEN; `finalAt` iff the state before any override is FINAL (§3, §8). */
+/**
+ * `override` iff USER_OVERRIDDEN; `finalAt` iff the state before any override is FINAL, and `finalFrom` never then
+ * (§3, §8, v1.18).
+ */
 function stateProblems(receipt: ReceiptFacts): Problem[] {
   const problems: Problem[] = [];
   const overridden = receipt.state === 'USER_OVERRIDDEN';
@@ -98,6 +102,9 @@ function stateProblems(receipt: ReceiptFacts): Problem[] {
   }
   if (underlying === 'PENDING' && receipt.finalAt !== undefined) {
     problems.push(['finalAt', 'a PENDING receipt has no finalAt']);
+  }
+  if (underlying === 'FINAL' && receipt.finalFrom !== undefined) {
+    problems.push(['finalFrom', 'a FINAL receipt has no finalFrom']);
   }
   return problems;
 }

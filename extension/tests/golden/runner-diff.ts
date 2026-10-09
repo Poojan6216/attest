@@ -92,6 +92,7 @@ function diffExpected(context: Context, entry: ResolvedExpect): void {
   diff.check(s, 'grade', expected.grade, receipt.grade);
   diff.check(s, 'ruleId', expected.ruleId, receipt.ruleId);
   diff.check(s, 'state', expected.state, receipt.state);
+  if (expected.finalFrom !== undefined) diff.check(s, 'finalFrom', expected.finalFrom, receipt.finalFrom);
   diff.check(s, 'observationIds', entry.observationIds.map(names.ref), receipt.observationIds.map(names.ref));
   diff.check(s, 'score', expected.score, scoreOf(loaded, receipt, run.policy));
   diff.check(
@@ -111,7 +112,7 @@ function diffExpected(context: Context, entry: ResolvedExpect): void {
 
 /**
  * Generic checks on every receipt (runner contract): schema, computedAt and finalAt (the instant of the grading
- * that produced it: the scenario's, or its last regrade's), the claim's agent; and the receipt's own subject (§3:
+ * that produced it: the scenario's, or its last regrade's), finalFrom on every PENDING one (v1.18), the claim's agent; and the receipt's own subject (§3:
  * a claim receipt names its claim, a claim-less one none) and policy (§3 policyHash).
  */
 function diffGeneric(context: Context, receipt: Receipt): void {
@@ -126,6 +127,12 @@ function diffGeneric(context: Context, receipt: Receipt): void {
   diff.check(s, 'computedAt', at, receipt.computedAt);
   const before = receipt.state === 'USER_OVERRIDDEN' ? receipt.override?.previousState : receipt.state;
   diff.check(s, 'finalAt', before === 'FINAL' ? at : undefined, receipt.finalAt);
+  diff.check(
+    s,
+    'finalFrom (present iff PENDING, v1.18)',
+    before === 'PENDING',
+    receipt.finalFrom !== undefined,
+  );
   const claim = [...loaded.claims.values()].find((candidate) => candidate.id === receipt.claimId);
   if (claim !== undefined) diff.check(s, "agent (the claim's)", claim.agent, receipt.agent);
 }

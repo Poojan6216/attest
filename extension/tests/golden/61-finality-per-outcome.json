@@ -80,6 +80,7 @@
       "grade": "VERIFIED",
       "ruleId": "verified",
       "state": "PENDING",
+      "finalFrom": "2026-10-06T14:33:00-04:00",
       "observationRefs": ["o1"],
       "score": "1/1",
       "reasonCodes": ["match.best"]
@@ -98,6 +99,7 @@
       "grade": "PARTIAL",
       "ruleId": "partial",
       "state": "PENDING",
+      "finalFrom": "2026-10-06T14:41:00-04:00",
       "observationRefs": ["o3"],
       "score": "1/2",
       "reasonCodes": ["match.best"]

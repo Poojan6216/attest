@@ -6,7 +6,6 @@
  * allowlist and scope text is one line (SEC-3); component ids, versions, health reasons and a vendor's conversation
  * id are tokens (OBS-1; all in ./schema-text). Cross-field invariants live in ./schema-checks. src/ledger/types.ts
  * re-exports all of this. PURE: no I/O, no clock, no locale (Hard Rule 4).
- *
  * This file is exempt from the core no-literal rule for SCHEMA_LIMITS only: a length cap is schema, not policy.
  */
 import { z } from 'zod';
@@ -291,7 +290,7 @@ export const ReceiptOverride = z.strictObject({
   previousState: z.enum(['PENDING', 'FINAL']),
 });
 
-/** Invariants (schema-receipt.ts, §8): override, finalAt, UNASKED, override.at ≥ computedAt, lifecycle reasons. */
+/** Invariants (schema-receipt.ts, §8): override, finalAt, finalFrom, UNASKED, override.at ≥ computedAt, lifecycle reasons. */
 export const Receipt = z
   .strictObject({
     id: Ulid,
@@ -317,6 +316,7 @@ export const Receipt = z
     supersededBy: Ulid.optional(),
     computedAt: IsoTs,
     finalAt: IsoTs.optional(),
+    finalFrom: IsoTs.optional(), // §8 v1.18: while PENDING, the earliest instant a grading can make it FINAL
   })
   .superRefine(refineWith(receiptProblems));
 

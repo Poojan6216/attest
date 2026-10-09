@@ -1,11 +1,10 @@
 /**
- * The golden scenario file format (docs/grading.md §15), as a strict Zod schema. Every scenario file in
- * tests/golden/NN-slug.json must parse with `Scenario`; unknown keys are rejected at every level, so a
- * typo in a hand-written file fails loudly instead of silently testing nothing.
+ * The golden scenario file format (docs/grading.md §15), as a strict Zod schema. Every scenario file in tests/golden/
+ * NN-slug.json must parse with `Scenario`; unknown keys are rejected at every level, so a typo in a hand-written file
+ * fails loudly instead of silently testing nothing.
  *
- * These enums are written from the contract (§2, §7, §12, §15), not imported from src/core: the golden
- * suite is the independent statement of what the core must do. scenarios.spec.ts checks that they agree
- * with src/core/schema.ts once it exists.
+ * These enums are written from the contract (§2, §7, §12, §15), not imported from src/core: the golden suite is the
+ * independent statement of what the core must do. scenarios.spec.ts checks that they agree with src/core/schema.ts.
  */
 import { z } from 'zod';
 
@@ -343,6 +342,7 @@ export const ExpectedReceipt = z
     override: OverrideGrade.optional(),
     previousState: z.enum(['PENDING', 'FINAL']).optional(),
     supersededBy: ClaimRef.optional(),
+    finalFrom: IsoTs.optional(), // §8 v1.18: exactly as written; every PENDING receipt has one (runner check)
     /** Batch mode only: the inputs gradeBatch returned with this receipt (§3 v1.4). */
     inputs: ExpectedInputs.optional(),
   })

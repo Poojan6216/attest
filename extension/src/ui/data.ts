@@ -1,36 +1,34 @@
 /**
  * What the pages read from the ledger (sprint_4 4.0): the popup, the side panel, the options page and the digest read
- * through these. Each call reads the page's own connection to the ledger (src/ledger/repo.ts `getLedger`, opened once
+ * through these. Each call reads the page's own connection to the ledger (src/ledger/shared.ts `getLedger`, opened once
  * per page) through src/ledger/views.ts: indexed reads, a page at a time, nothing computed beyond joins and sorting.
  * Reading in the page, not through the service worker, keeps the popup from waiting for a stopped worker to start. A
  * page never writes the ledger: what a person changes goes to the service worker over the bus, and `onLedgerChanged`
  * says when the service worker changed a table the page shows, so the page reads it again.
+ *
+ * The popup must paint in under 100 ms (sprint_4 4.2), so what it loads at its start is only what it reads: a
+ * receipt's detail (src/ledger/detail.ts) and the bus listener load when first used, never at the start.
  */
-import { listen } from '../bus/listen';
 import type { LedgerTable } from '../bus/messages';
 import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../config';
-import { getLedger, listAdapterHealth, listGrants } from '../ledger/repo';
+import type { ReceiptDetail } from '../ledger/detail';
+import { getLedger } from '../ledger/shared';
+import { log } from '../log';
 import { AgentId, type AdapterHealth, type Grade, type Grant } from '../ledger/types';
 import {
   coverageSummary,
   type CoverageSummary,
+  grantList,
+  healthReports,
   popupView,
   type PopupView,
-  receiptDetail,
   type ReceiptCursor,
-  type ReceiptDetail,
   receiptPage,
   type ReceiptPage,
 } from '../ledger/views';
 
-export type {
-  CoverageSummary,
-  PopupView,
-  ReceiptCursor,
-  ReceiptDetail,
-  ReceiptItem,
-  ReceiptPage,
-} from '../ledger/views';
+export type { ReceiptDetail } from '../ledger/detail';
+export type { CoverageSummary, PopupView, ReceiptCursor, ReceiptItem, ReceiptPage } from '../ledger/views';
 
 /** Every agent, in the order the schema lists them. */
 const EVERY_AGENT: readonly AgentId[] = AgentId.options;
@@ -91,7 +89,8 @@ export async function loadTimelinePage(
 
 /** One receipt with its claim, request, evidence and grading inputs, or undefined when there is no such receipt. */
 export async function loadReceipt(id: string): Promise<ReceiptDetail | undefined> {
-  return receiptDetail(await getLedger(), id);
+  const [{ receiptDetail }, db] = await Promise.all([import('../ledger/detail'), getLedger()]);
+  return receiptDetail(db, id);
 }
 
 /** The coverage summary: the latest ping of each observer and account, and each agent's last pasted import. */
@@ -101,27 +100,43 @@ export async function loadCoverage(): Promise<CoverageSummary> {
 
 /** The latest health report of every adapter and observer. */
 export async function loadHealth(): Promise<AdapterHealth[]> {
-  return listAdapterHealth(await getLedger());
+  return healthReports(await getLedger());
 }
 
 /** Every agent's grant. */
 export async function loadGrants(): Promise<Grant[]> {
-  return listGrants(await getLedger());
+  return grantList(await getLedger());
 }
 
 /**
  * Calls `onChange` with the tables that changed whenever the service worker announces a change (`ledger.changed`) to
- * any of `tables`; returns the function that stops it. Register it while the page shows the data.
+ * any of `tables`; returns the function that stops it. The listener loads after the page's start (header); once it
+ * listens it calls `onChange` once with every table watched, so a change announced before it listened is read too.
  */
 export function onLedgerChanged(
   tables: readonly LedgerTable[],
   onChange: (changed: readonly LedgerTable[]) => void,
 ): () => void {
   const watched = new Set(tables);
-  return listen({
-    'ledger.changed': (message) => {
-      const changed = message.tables.filter((table) => watched.has(table));
-      if (changed.length > 0) onChange(changed);
+  let stopped = false;
+  let stop: () => void = () => undefined;
+  void import('../bus/listen').then(
+    ({ listen }) => {
+      if (stopped) return;
+      stop = listen({
+        'ledger.changed': (message) => {
+          const changed = message.tables.filter((table) => watched.has(table));
+          if (changed.length > 0) onChange(changed);
+        },
+      });
+      onChange([...watched]);
     },
-  });
+    (error: unknown) => {
+      log.error('ui.listen_failed', { error });
+    },
+  );
+  return () => {
+    stopped = true;
+    stop();
+  };
 }

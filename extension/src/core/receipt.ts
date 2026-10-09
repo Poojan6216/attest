@@ -8,7 +8,7 @@
  *    sub-hashes and `candidatesHash` its Merkle-style hash of the candidates' per-observation `refHash` (§3 v1.5).
  *  - `buildReceipt(parts)`: assembles a Receipt whose §8 invariants hold by construction: `state` is FINAL iff
  *    the parts say final, and then `finalAt = computedAt` (the evaluatedAt of the grading that met the FINAL
- *    condition); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no `override` and no
+ *    condition), else the parts' `finalFrom` (v1.18); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no `override` and no
  *    `supersededBy` (state.ts adds those). Reasons are ordered per §15.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
@@ -112,6 +112,8 @@ export interface ReceiptParts {
   readonly reasons: ReasonGroups;
   readonly signals: Readonly<Record<string, number>>;
   readonly final: boolean;
+  /** When not final: the earliest instant from which a later grading can make it FINAL (§8 v1.18). */
+  readonly finalFrom?: IsoTs;
   readonly policyHash: Sha256;
   readonly inputsHash: Sha256;
   /** `coverage.evaluatedAt` (§3). */
@@ -139,5 +141,6 @@ export function buildReceipt(parts: ReceiptParts): Receipt {
     ...(parts.grade === 'UNASKED' ? { attribution: 'likely' as const } : {}),
     computedAt: parts.computedAt,
     ...(final ? { finalAt: parts.computedAt } : {}),
+    ...(final || parts.finalFrom === undefined ? {} : { finalFrom: parts.finalFrom }),
   };
 }

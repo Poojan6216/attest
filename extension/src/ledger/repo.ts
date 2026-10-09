@@ -30,7 +30,6 @@ import { z } from 'zod';
 
 import { assertLoadedPolicy, type Policy } from '../core/policy';
 import { observationIntegrityProblems } from '../core/redact';
-import { log } from '../log';
 import { LAST_EVALUATED_AT } from './batch-instant';
 import { noteStoredInstant } from './clock-high-water';
 import { readRow, readRows, type LedgerDb } from './db';
@@ -42,7 +41,6 @@ import {
   toRequestRow,
   type LedgerTableName,
 } from './index-fields';
-import { openLedger } from './migrations';
 import {
   ActionType,
   AdapterHealth,
@@ -321,31 +319,5 @@ export async function setMeta(db: LedgerDb, key: string, value: MetaEntry['value
 
 // ── Shared runtime instance ─────────────────────────────────────────────────────────────────────
 
-let shared: Promise<LedgerDb> | undefined;
-
-/**
- * The extension's ledger (`DB_NAME`, latest migrations), opened once per context on first use.
- * A failed open is not cached: the next call retries.
- */
-export function getLedger(): Promise<LedgerDb> {
-  if (shared !== undefined) return shared;
-  const opening = openLedger();
-  shared = opening;
-  opening.catch((error: unknown) => {
-    if (shared === opening) shared = undefined;
-    log.warn('ledger.shared_open_reset', { error });
-  });
-  return opening;
-}
-
-/** Closes the shared instance (if any) and forgets it; the next `getLedger()` reopens. */
-export async function closeLedger(): Promise<void> {
-  const current = shared;
-  shared = undefined;
-  if (current === undefined) return;
-  try {
-    (await current).close();
-  } catch (error) {
-    log.warn('ledger.close_skipped', { error });
-  }
-}
+/** The shared instance lives in ./shared.ts, which the pages import without the rest of this module (sprint_4 4.2). */
+export { closeLedger, getLedger } from './shared';

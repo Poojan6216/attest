@@ -76,6 +76,7 @@
       "grade": "UNVERIFIABLE",
       "ruleId": "no_coverage",
       "state": "PENDING",
+      "finalFrom": "2026-10-07T14:03:00-04:00",
       "observationRefs": [],
       "score": null,
       "reasonCodes": ["coverage.none", "match.none"]

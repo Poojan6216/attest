@@ -3,7 +3,8 @@
  *
  * The claim is an email at 14:02 (unit end 14:03): VERIFIED needs a sync ≥ 14:33 (end + graceMin), PARTIAL and
  * NOT_FOUND need ≥ 14:48 (end + afterClaimMin), the coverage-based UNVERIFIABLE and PENDING outcomes need
- * evaluatedAt ≥ 10-07 14:03 (end + finalizeUnverifiableHours).
+ * evaluatedAt ≥ 10-07 14:03 (end + finalizeUnverifiableHours). A receipt that is not final says from when it can be
+ * (`finalFrom`, v1.18): those instants, a PENDING one the end of its grace (14:48), in the offset of evaluatedAt.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -75,7 +76,10 @@ const final = (over: Partial<FinalityInput>): boolean => isFinalizable(input(ove
 describe('isFinalizable (§8)', () => {
   it('reports finalAt = evaluatedAt exactly when final', () => {
     expect(isFinalizable(input({}))).toEqual({ final: true, finalAt: at('15:00') });
-    expect(isFinalizable(input({ coverage: coverageAt(at('14:20')) }))).toEqual({ final: false });
+    expect(isFinalizable(input({ coverage: coverageAt(at('14:20')) }))).toEqual({
+      final: false,
+      finalFrom: at('14:33'),
+    });
   });
 
   it('VERIFIED: every relevant source synced at end + graceMin (14:33), inclusive', () => {
@@ -241,5 +245,53 @@ describe('isFinalizable: the anchor and the coverage a wait reads (§7, §8)', (
     expect(final({ grant: bound })).toBe(false);
     const claim: Claim = CLAIM;
     expect(final({ claim })).toBe(true);
+  });
+});
+
+describe('isFinalizable: finalFrom, from when a receipt not yet final can be (v1.18)', () => {
+  const from = (over: Partial<FinalityInput>): string | undefined => isFinalizable(input(over)).finalFrom;
+  const early = coverageAt(at('14:10'));
+
+  it("is each outcome's own instant: its sources' sync, or its deadline", () => {
+    expect(from({ coverage: early })).toBe(at('14:33'));
+    expect(from({ outcome: 'PARTIAL', coverage: early })).toBe(at('14:48'));
+    expect(from({ outcome: 'NOT_FOUND', coverage: early })).toBe(at('14:48'));
+    const scope = rule('over_allowlist', { counterpartyNotAllowed: true }, 'OVER_SCOPE');
+    expect(from({ outcome: 'OVER_SCOPE', rule: scope, coverage: early, candidateDependent: true })).toBe(
+      at('14:48'),
+    );
+    const none = rule('no_coverage', { coverage: 'none' }, 'UNVERIFIABLE');
+    expect(from({ outcome: 'UNVERIFIABLE', rule: none, coverage: early })).toBe(at('14:03', '07'));
+    // PENDING waits for its grace to end, when a grading decides its final grade; its own deadline is the backstop.
+    const pending = rule('pending', { graceElapsed: false }, 'PENDING');
+    expect(from({ outcome: 'PENDING', rule: pending, coverage: early })).toBe(at('14:48'));
+    const context: GradeContext = {
+      priorSpendCents: 0,
+      attribution: Attribution.parse({
+        agent: 'muse',
+        scoreBp: 7000,
+        signals: ['agentSessionActive', 'userIdle'],
+      }),
+    };
+    expect(from({ outcome: 'UNASKED', claim: null, orphan: ORPHAN, context, coverage: early })).toBe(
+      at('14:32'),
+    );
+  });
+
+  it('is the first instant the same outcome is final at, and is absent once it is', () => {
+    expect(final({ coverage: coverageAt(at('14:33')) })).toBe(true);
+    expect(isFinalizable(input({ coverage: coverageAt(at('14:33')) })).finalFrom).toBeUndefined();
+    const none = rule('no_coverage', { coverage: 'none' }, 'UNVERIFIABLE');
+    const deadline = from({ outcome: 'UNVERIFIABLE', rule: none, coverage: early }) ?? '';
+    expect(final({ outcome: 'UNVERIFIABLE', rule: none, coverage: coverageAt(at('14:10'), deadline) })).toBe(
+      true,
+    );
+  });
+
+  it('is written in the offset of evaluatedAt, whatever the claim was written in', () => {
+    const kolkata = '2026-10-06T23:40:00+05:30';
+    expect(from({ coverage: coverageAt(kolkata) })).toBe('2026-10-07T00:03:00+05:30');
+    // The core writes every offset as numbers, UTC included.
+    expect(from({ coverage: coverageAt('2026-10-06T18:10:00Z') })).toBe('2026-10-06T18:33:00+00:00');
   });
 });

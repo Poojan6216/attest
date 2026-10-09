@@ -9,16 +9,10 @@ import { CLOCK_FLOOR_AT } from './clock-guard';
 import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
 import { CLOCK_REPAIR_PREFIX } from './clock-repairs';
 import { PURGE_TRUSTED_AT } from './retention-clock';
-import type { AgentId } from './types';
 
-/** The prefix of each agent's last-import key (src/background/claims-import.ts writes them). */
-export const LAST_IMPORT_PREFIX = 'lastImportAt.';
+import { LAST_IMPORT_PREFIX } from './import-keys';
 
-/**
- * The meta key of `agent`'s last pasted import: the instant the service worker stored it, which counts as the
- * agent's adapter sync for UNASKED finality (docs/grading.md §7).
- */
-export const lastImportKey = (agent: AgentId): string => `${LAST_IMPORT_PREFIX}${agent}`;
+export { LAST_IMPORT_PREFIX, lastImportKey } from './import-keys';
 
 /** Every meta key, a prefix for each family of them. */
 export const META_KEYS: readonly string[] = Object.freeze([

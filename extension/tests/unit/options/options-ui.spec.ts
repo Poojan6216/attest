@@ -265,14 +265,19 @@ describe('ResetInstallIdControl', () => {
 });
 
 describe('popup and side panel shells', () => {
-  it('the popup states the privacy line and that there are no receipts yet', async () => {
+  it('the popup states the privacy line, offers the timeline and the settings, and loads the day (sprint_4 4.2)', async () => {
     await act(() => {
       render(h(PopupApp, null), root);
     });
     expect(root.querySelector('h1')?.textContent).toBe('Attest');
     expect(root.textContent).toContain('Nothing leaves your browser.');
-    expect(statusText()).toBe('No receipts yet.');
-    expect(root.querySelectorAll('button, a, input')).toHaveLength(0);
+    // Skeleton rows while the ledger is read (tests/unit/popup/popup.spec.ts covers the day itself).
+    expect(statusText()).toBe("Loading today's receipts");
+    expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
+      'Open timeline',
+      'Open settings',
+    ]);
+    expect(root.querySelectorAll('a, input')).toHaveLength(0);
   });
 
   it('the side panel states the privacy line and offers Add agent activity (sprint_3 3.12, 3.13)', async () => {

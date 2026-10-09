@@ -14,7 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { AgentId } from '../../src/core/schema';
 import type { LedgerDb } from '../../src/ledger/db';
-import { popupView, receiptDetail, receiptPage } from '../../src/ledger/views';
+import { receiptDetail } from '../../src/ledger/detail';
+import { popupView, receiptPage } from '../../src/ledger/views';
 import { fullScans, type Recorder, recordReads, resetRecorder } from '../unit/ledger/read-recorder';
 import { describeRuns, measure } from './measure';
 import {

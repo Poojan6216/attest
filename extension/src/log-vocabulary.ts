@@ -67,7 +67,12 @@ export const LOG_EVENTS = [
   'options.install_id_read_failed',
   'options.install_id_reset_failed',
   'options.install_id_reset_rejected',
+  'popup.options_failed',
+  'popup.read_failed',
+  'popup.side_panel_failed',
+  'popup.window_unknown',
   'sidepanel.import_failed',
+  'ui.listen_failed',
   'ui.root_missing',
 ] as const;
 

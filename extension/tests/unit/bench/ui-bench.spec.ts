@@ -10,6 +10,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { BENCHES } from '../../../../bench/run_bench';
+import { POPUP_PAINT_GATE_MS, POPUP_TRACE } from '../../../../bench/popup';
 import { runUiBench, UI_READ_GATE_MS } from '../../../../bench/ui';
 import { POPUP_RECEIPT_LIMIT } from '../../../src/config';
 import { AgentId } from '../../../src/core/schema';
@@ -47,5 +48,21 @@ describe('the UI reads bench', () => {
       ['uiTimelineGatePassed', 'timeline.passed && filtered.passed && detail.passed'],
     ]);
     expect(source).toContain('summarize(await runs(() => popupView(db, POPUP_QUERY)), UI_READ_GATE_MS)');
+  });
+});
+
+describe('the popup paint bench', () => {
+  it('is registered, records both paints and the trace, and gates the median first paint at 100 ms', () => {
+    expect(BENCHES.map((bench) => bench.name)).toContain('popup');
+    // Running it here would launch Chromium; its source is read instead (as bench-gates.spec.ts reads bench/core.ts).
+    const source = readFileSync(path.resolve(import.meta.dirname, '../../../../bench/popup.ts'), 'utf8');
+    const gates = [...source.matchAll(/^\s*(\w*GatePassed):\s*(.+),$/gm)].map((match) => [
+      match[1],
+      match[2],
+    ]);
+    expect(gates).toEqual([['popupPaintGatePassed', "medianOf(runs, 'firstPaintMs') < POPUP_PAINT_GATE_MS"]]);
+    expect(POPUP_PAINT_GATE_MS).toBe(100);
+    expect(source).toContain('popupTrace: POPUP_TRACE,');
+    expect(POPUP_TRACE).toBe('bench/traces/popup-paint.zip');
   });
 });

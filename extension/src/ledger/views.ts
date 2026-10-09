@@ -4,38 +4,36 @@
  * beyond joins and sorting: the UI is a view of the ledger (sprint_4 header).
  *
  *  - `receiptPage`: the receipts graded in a range of instants, newest first (`computedAt`, then id), of the agents and
- *    grades asked, `limit` at a time, each with its claim. One read per agent through `[agent+computedMs]` (per agent
+ *    grades asked, `limit` at a time, each with its claim (or, with none, the observation it is about). One read per agent through `[agent+computedMs]` (per agent
  *    and grade through `[agent+grade+computedMs]` when grades are asked), newest first, stops at `limit + 1` receipts,
  *    so a page reads as many rows however many the range holds; the next page resumes after the last receipt shown.
  *    The popup's range starts at local midnight; the timeline's spans its days. A grade is the computed one: an
  *    overridden receipt is found under the grade Attest gave it, and shows the override beside it.
- *  - `receiptDetail`: a receipt, its claim and request, its evidence in the receipt's order, and what grading saw (its
- *    replay inputs, the batch's coverage joined), each read by key.
  *  - `coverageSummary`: the latest coverage ping of each observer and account, and each agent's last import.
  *  - `popupView`: the popup's reads in one transaction: today's page, the coverage summary, the health reports and the
  *    last batch instant.
  *  - The small tables, read whole: the latest coverage ping of each observer and account, the health reports and the
  *    grants (one row per observer and account, adapter, agent). The last imports are meta rows read by key.
+ * A receipt's detail is ./detail.ts. Neither imports the repo's writers: the popup loads this module at its start, and
+ * must paint in under 100 ms (sprint_4 4.2).
  */
 import { compareText } from '../core/order';
 import { lastBatchMs } from './batch-instant';
-import { readRows, type LedgerDb } from './db';
+import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
+import { lastImportKey } from './import-keys';
 import { epochMs, type ReceiptRow } from './index-fields';
-import { lastImportKey } from './meta-keys';
-import { receiptInputsOf } from './replay-records';
-import { getClaim, getMeta, getReceipt, getRequest, listAdapterHealth } from './repo';
 import {
-  type AdapterHealth,
+  AdapterHealth,
   AgentId,
   Claim,
   CoveragePing,
   type Grade,
+  Grant,
   IsoTs,
+  MetaEntry,
   Observation,
   Receipt,
-  type ReceiptInputs,
-  type Request,
 } from './types';
 
 /** Where a page ended: the last receipt shown, so the next page starts after it. */
@@ -59,10 +57,15 @@ export interface ReceiptQuery {
   readonly after?: ReceiptCursor;
 }
 
-/** A receipt as a list shows it, with its claim: none for UNASKED and scope receipts, or a claim the purge removed. */
+/**
+ * A receipt as a list shows it: with its claim (none for UNASKED and scope receipts, or a claim the purge removed),
+ * and for a receipt with no claim, the observation it is about (an UNASKED receipt's orphan; none for a scope
+ * receipt, or one the purge removed).
+ */
 export interface ReceiptItem {
   readonly receipt: Receipt;
   readonly claim: Claim | undefined;
+  readonly orphan: Observation | undefined;
 }
 
 export interface ReceiptPage {
@@ -131,6 +134,15 @@ async function claimsOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<Map
   return new Map(claims.map((claim) => [claim.id, claim]));
 }
 
+/** The first observation of each receipt with no claim (an UNASKED receipt's orphan), by id, read by key. */
+async function orphansOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<Map<string, Observation>> {
+  const ids = receipts.flatMap(({ claimId, observationIds: [first] }) =>
+    claimId === undefined && first !== undefined ? [first] : [],
+  );
+  const rows = readRows('observations', Observation, await db.observations.bulkGet([...new Set(ids)]));
+  return new Map(rows.map((observation) => [observation.id, observation]));
+}
+
 /**
  * One page of receipts (header): newest first, at most `limit`, each with its claim. A row that fails its strict read
  * is skipped (logged by id, `ledger.row_invalid`) and still counts toward the page, so the page after it starts where
@@ -138,7 +150,7 @@ async function claimsOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<Map
  */
 export async function receiptPage(db: LedgerDb, query: ReceiptQuery): Promise<ReceiptPage> {
   assertLimit(query.limit);
-  return db.transaction('r', [db.receipts, db.claims], async () => {
+  return db.transaction('r', [db.receipts, db.claims, db.observations], async () => {
     const reads = prefixesOf(query).map((prefix) => newestUnder(db, prefix, query, query.limit + 1));
     const lists = await Promise.all(reads);
     const ranked = lists.flat().sort(newestFirst);
@@ -147,40 +159,16 @@ export async function receiptPage(db: LedgerDb, query: ReceiptQuery): Promise<Re
     const next =
       ranked.length > query.limit && last !== undefined ? { computedMs: last.computedMs, id: last.id } : null;
     const receipts = readRows('receipts', Receipt, shown);
-    const claims = await claimsOf(db, receipts);
-    const items = receipts.map((receipt) => ({
-      receipt,
-      claim: receipt.claimId === undefined ? undefined : claims.get(receipt.claimId),
-    }));
+    const [claims, orphans] = await Promise.all([claimsOf(db, receipts), orphansOf(db, receipts)]);
+    const items = receipts.map((receipt): ReceiptItem => {
+      const [first] = receipt.observationIds;
+      return {
+        receipt,
+        claim: receipt.claimId === undefined ? undefined : claims.get(receipt.claimId),
+        orphan: receipt.claimId === undefined && first !== undefined ? orphans.get(first) : undefined,
+      };
+    });
     return { items, next };
-  });
-}
-
-/** A receipt and everything that explains it, as stored: never recomputed. */
-export interface ReceiptDetail {
-  readonly receipt: Receipt;
-  readonly claim: Claim | undefined;
-  readonly request: Request | undefined;
-  /** The evidence the receipt names, in its order; one the purge removed is missing. */
-  readonly observations: readonly Observation[];
-  /** What grading saw (the batch's coverage, the grant, the context, the policy's hash), when the ledger holds it. */
-  readonly inputs: ReceiptInputs | undefined;
-}
-
-/** One receipt's detail (header), or undefined when the ledger holds no such receipt. */
-export async function receiptDetail(db: LedgerDb, id: string): Promise<ReceiptDetail | undefined> {
-  const tables = [db.receipts, db.claims, db.requests, db.observations, db.receiptInputs, db.batchCoverages];
-  return db.transaction('r', tables, async () => {
-    const receipt = await getReceipt(db, id);
-    if (receipt === undefined) return undefined;
-    const evidence = await db.observations.bulkGet([...receipt.observationIds]);
-    return {
-      receipt,
-      claim: receipt.claimId === undefined ? undefined : await getClaim(db, receipt.claimId),
-      request: receipt.requestId === undefined ? undefined : await getRequest(db, receipt.requestId),
-      observations: readRows('observations', Observation, evidence),
-      inputs: await receiptInputsOf(db, receipt.inputsHash),
-    };
   });
 }
 
@@ -195,14 +183,25 @@ export async function latestCoverage(db: LedgerDb): Promise<CoveragePing[]> {
   );
 }
 
-/** Each agent's last pasted import, when it has one: the instant the service worker stored it. */
+/** Each agent's last pasted import, when it has one: the instant the service worker stored it. One read, by key. */
 export async function lastImports(db: LedgerDb): Promise<Partial<Record<AgentId, IsoTs>>> {
+  const rows = await db.meta.bulkGet(AgentId.options.map(lastImportKey));
   const out: Partial<Record<AgentId, IsoTs>> = {};
-  for (const agent of AgentId.options) {
-    const at = IsoTs.safeParse(await getMeta(db, lastImportKey(agent)));
-    if (at.success) out[agent] = at.data;
-  }
+  AgentId.options.forEach((agent, at) => {
+    const value = IsoTs.safeParse(readRow('meta', MetaEntry, rows[at])?.value);
+    if (value.success) out[agent] = value.data;
+  });
   return out;
+}
+
+/** The latest health report of every adapter and observer, by id (the primary key's order). */
+export async function healthReports(db: LedgerDb): Promise<AdapterHealth[]> {
+  return readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray());
+}
+
+/** Every agent's grant, by agent (the primary key's order). */
+export async function grantList(db: LedgerDb): Promise<Grant[]> {
+  return readRows('grants', Grant, await db.grants.toArray());
 }
 
 /** The coverage summary (the popup's header, sprint_4 4.2): what each observer last saw, and each agent's last import. */
@@ -213,10 +212,10 @@ export interface CoverageSummary {
 
 /** The coverage summary in one read transaction. */
 export async function coverageSummary(db: LedgerDb): Promise<CoverageSummary> {
-  return db.transaction('r', [db.coverage, db.meta], async () => ({
-    coverage: await latestCoverage(db),
-    imports: await lastImports(db),
-  }));
+  return db.transaction('r', [db.coverage, db.meta], async () => {
+    const [coverage, imports] = await Promise.all([latestCoverage(db), lastImports(db)]);
+    return { coverage, imports };
+  });
 }
 
 /** What the popup shows (sprint_4 4.2), read at one instant of the ledger. */
@@ -235,11 +234,15 @@ export interface PopupView {
 /** The popup's reads (header) in one read transaction, so every part is of the same instant of the ledger. */
 export async function popupView(db: LedgerDb, query: ReceiptQuery): Promise<PopupView> {
   assertLimit(query.limit);
-  const tables = [db.receipts, db.claims, db.coverage, db.adapterHealth, db.meta];
-  return db.transaction('r', tables, async () => ({
-    today: await receiptPage(db, query),
-    coverage: await coverageSummary(db),
-    health: await listAdapterHealth(db),
-    lastBatchMs: (await lastBatchMs(db)) ?? null,
-  }));
+  const tables = [db.receipts, db.claims, db.observations, db.coverage, db.adapterHealth, db.meta];
+  return db.transaction('r', tables, async () => {
+    // Every read at once: each is a round trip to IndexedDB, and the popup has 100 ms (sprint_4 4.2).
+    const [today, coverage, health, last] = await Promise.all([
+      receiptPage(db, query),
+      coverageSummary(db),
+      healthReports(db),
+      lastBatchMs(db),
+    ]);
+    return { today, coverage, health, lastBatchMs: last ?? null };
+  });
 }
