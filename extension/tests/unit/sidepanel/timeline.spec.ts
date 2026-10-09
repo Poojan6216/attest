@@ -248,6 +248,7 @@ describe('a receipt’s detail', () => {
       'How it was graded',
       'What the grading read',
       'Mark it yourself',
+      'Share',
     ]);
     const terms = [...root.querySelectorAll('dt')].map((term) => term.textContent);
     expect(terms).toEqual(

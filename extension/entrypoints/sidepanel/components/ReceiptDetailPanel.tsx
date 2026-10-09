@@ -11,6 +11,7 @@ import { DetailGrading } from './DetailGrading';
 import { DetailRead } from './DetailRead';
 import { DetailSection } from './DetailSection';
 import { OverrideControl } from './OverrideControl';
+import { ShareReceipt } from './ShareReceipt';
 
 export interface ReceiptDetailPanelProps {
   readonly detail: ReceiptDetail;
@@ -79,6 +80,7 @@ export function ReceiptDetailPanel({
       <DetailRead inputs={inputs} nowMs={nowMs} />
       {/* Keyed by receipt: what came of a mark on one receipt is never said under another. */}
       <OverrideControl key={receipt.id} receipt={receipt} onEvent={onEvent} />
+      <ShareReceipt key={`share-${receipt.id}`} detail={detail} />
     </section>
   );
 }

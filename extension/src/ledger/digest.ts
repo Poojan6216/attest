@@ -17,6 +17,7 @@
 import { isoWithLocalOffset } from '../clock';
 import { compareText } from '../core/order';
 import { spansEndingIn, readInterval } from './coverage-store';
+import { domainOf } from './domain';
 import { readRow, readRows, type LedgerDb } from './db';
 import { type DigestWeek, weekDays } from './digest-week';
 import {
@@ -40,16 +41,6 @@ const GAP_SOURCES: readonly ObservationSource[] = ['gmail.sent', 'gcal.event'];
 
 /** The grades a claim receipt Attest could check ends with. */
 const CHECKED: ReadonlySet<Grade> = new Set(['VERIFIED', 'PARTIAL', 'NOT_FOUND', 'OVER_SCOPE']);
-
-/** The domain of `counterparty`: an address's, or the counterparty itself when it is a domain; a name gives none. */
-export function domainOf(counterparty: string | undefined): string | undefined {
-  if (counterparty === undefined) return undefined;
-  const host = counterparty
-    .slice(counterparty.lastIndexOf('@') + 1)
-    .trim()
-    .toLowerCase();
-  return /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/u.test(host) ? host : undefined;
-}
 
 const zeroGrades = (): Record<Grade, number> =>
   Object.fromEntries(Grade.options.map((grade) => [grade, 0])) as Record<Grade, number>;
@@ -175,3 +166,5 @@ export async function digestWeeks(db: LedgerDb): Promise<string[]> {
 export async function getDigest(db: LedgerDb, week: string): Promise<DigestRecord | undefined> {
   return readRow('digests', DigestRecord, await db.digests.get(week));
 }
+
+export { domainOf } from './domain';

@@ -94,7 +94,11 @@ async function settle(): Promise<void> {
 async function show(page: DigestSources = sources): Promise<void> {
   await act(() => {
     render(
-      h(DigestPage, { sources: page, nowMs: () => Date.parse('2026-10-12T10:00:00-04:00'), copy }),
+      h(DigestPage, {
+        sources: page,
+        nowMs: () => Date.parse('2026-10-12T10:00:00-04:00'),
+        share: { copy, makeImage: () => Promise.resolve(new Blob(['png'], { type: 'image/png' })) },
+      }),
       root,
     );
   });
@@ -137,12 +141,15 @@ describe('the digest page', () => {
       button('Share this week')?.click();
     });
     expect(root.querySelector('pre')?.textContent).toBe(digestMarkdown(LATEST));
+    await settle();
+    expect(root.querySelector('img')?.getAttribute('alt')).toBe('This week as an image');
     await act(() => {
-      button('Copy')?.click();
+      button('Copy text')?.click();
     });
     await settle();
     expect(copy).toHaveBeenCalledWith(digestMarkdown(LATEST));
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('Copied.');
+    const statuses = [...root.querySelectorAll('[role="status"]')].map((status) => status.textContent);
+    expect(statuses).toContain('Text copied.');
   });
 
   it('says what will come before the first Monday', async () => {

@@ -2,27 +2,22 @@ import { EmptyState } from '../../../src/ui/EmptyState';
 import { Skeleton } from '../../../src/ui/Skeleton';
 import { type DigestSources, LIVE_DIGESTS, useDigests } from '../use-digests';
 import { DigestView } from './DigestView';
+import type { ShareTools } from './ShareDigest';
 import { WeekPicker } from './WeekPicker';
 
 export interface DigestPageProps {
   /** Where the page reads; the ledger when absent. */
   readonly sources?: DigestSources;
   readonly nowMs?: () => number;
-  /** Puts the shared text on the clipboard; the page's own when absent. */
-  readonly copy?: (text: string) => Promise<void>;
+  /** The share's clipboard and image drawing: the page's own when absent (src/ui/SharePreview.tsx). */
+  readonly share?: ShareTools;
 }
-
-const writeClipboard = (text: string): Promise<void> => navigator.clipboard.writeText(text);
 
 /**
  * The weekly digest page (sprint_4 4.7): the privacy line, the chosen week (the newest by default; every kept week can
  * be read again), or, before the first Monday, what will come and when.
  */
-export function DigestPage({
-  sources = LIVE_DIGESTS,
-  nowMs = Date.now,
-  copy = writeClipboard,
-}: DigestPageProps) {
+export function DigestPage({ sources = LIVE_DIGESTS, nowMs = Date.now, share = {} }: DigestPageProps) {
   const { state, choose } = useDigests(sources);
   return (
     <main class="mx-auto max-w-3xl space-y-6 p-gutter text-sm">
@@ -45,7 +40,7 @@ export function DigestPage({
         <WeekPicker weeks={state.weeks} week={state.week} onChoose={choose} />
       ) : null}
       {state.status === 'ready' && state.digest !== undefined ? (
-        <DigestView digest={state.digest} nowMs={nowMs()} copy={copy} />
+        <DigestView digest={state.digest} nowMs={nowMs()} share={share} />
       ) : null}
     </main>
   );

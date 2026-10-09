@@ -4,20 +4,20 @@ import { clockTime } from '../../../src/ui/format';
 import { adapterName } from '../../../src/ui/receipt-labels';
 import { AgentWeekCard } from './AgentWeekCard';
 import { NotableItem } from './NotableItem';
-import { ShareDigest } from './ShareDigest';
+import { ShareDigest, type ShareTools } from './ShareDigest';
 
 export interface DigestViewProps {
   readonly digest: DigestRecord;
   /** The instant "made" is written against. */
   readonly nowMs: number;
-  readonly copy: (text: string) => Promise<void>;
+  readonly share: ShareTools;
 }
 
 /**
  * One week's digest (sprint_4 4.7): each agent's week, the receipts to look at, the days a source was not checked, the
  * readers' health, and the share. A view of the stored digest: it computes nothing.
  */
-export function DigestView({ digest, nowMs, copy }: DigestViewProps) {
+export function DigestView({ digest, nowMs, share }: DigestViewProps) {
   const more = digest.notableCount - digest.notable.length;
   return (
     <article aria-labelledby="digest-heading" class="space-y-6">
@@ -72,7 +72,7 @@ export function DigestView({ digest, nowMs, copy }: DigestViewProps) {
           ))}
         </ul>
       </section>
-      <ShareDigest digest={digest} copy={copy} />
+      <ShareDigest digest={digest} {...share} />
     </article>
   );
 }
