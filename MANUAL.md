@@ -30,34 +30,14 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 ## During Sprint 3 (agent adapters)
 - [x] **Done 2026-10-08:** Muse's web app is `https://muse.ai` (given by the founder from Muse's new-thread page). Its reader is off under Meta's terms (next item), so no Muse host or content script ships.
 - [x] **Done 2026-10-08:** the agent read the four vendors' terms (Decisions `[3.10]`, with dates and sections). Meta (which runs muse.ai), OpenAI and Anthropic forbid collecting data from their sites by automated means; Google's terms do not reach what Attest does. You chose: the Muse, ChatGPT and Claude readers off, with a note in the options page; Gmail and Calendar on; agent pages saved by hand from now on.
-- [ ] **Parked (2026-10-08, by your choice): the three permission letters, for later.** They are not needed for the paste path, which works without any vendor's permission. When you want automatic reading back for an agent, send its letter from your private Artifact "Attest permission letters" (https://claude.ai/artifact/3rWGGXVMqC1mWoxrKoE1Xb): fill in your name and email, send it, and forward any reply to the agent. If you send only one, send Meta's, since Muse is the agent in Attest's main demo. A written yes switches that vendor's reader on (tasks 3.3 to 3.9).
+- [ ] **Parked (2026-10-08, and again 2026-10-09, by your choice): the three permission letters, for later.** They are not needed for the paste path, which works without any vendor's permission. When you want automatic reading back for an agent, send its letter from your private Artifact "Attest permission letters" (https://claude.ai/artifact/3rWGGXVMqC1mWoxrKoE1Xb): fill in your name and email, send it, and forward any reply to the agent. If you send only one, send Meta's, since Muse is the agent in Attest's main demo. A written yes switches that vendor's reader on (tasks 3.3 to 3.9).
 - [x] **Done 2026-10-08:** you chose both: claims by paste or import now (docs/claims-import.md, tasks 3.11 to 3.14), and the permission letters in parallel.
-- [ ] **The two pages captured on 2026-10-08** (a Muse chat and a Claude chat, checked: none of your addresses, names or usernames in them) are in `~/.attest-private-captures/2026-10-08/`, outside the project and never committed. Keep them for later readers or delete them: `rm -r ~/.attest-private-captures`.
+- [x] **Done 2026-10-09: the two pages captured on 2026-10-08 are deleted** (you said: delete them if they are not useful later). They were not: the agent readers stay off, and if a vendor permits reading, fresh pages are saved by hand with invented details (the item below). `~/.attest-private-captures` no longer exists.
 - [x] **Done 2026-10-08:** the test's USB-C cable order in Muse was left unpaid (nothing charged), and the test events ("Attest test reminder", Claude's "Attest test") were deleted.
 - [ ] On hold until a vendor permits reading: agent captures. Then use a test conversation with invented details, and save each page by hand in normal Chrome (File → Save Page As → Webpage, Complete), never the capture tool, which drives the browser. Give the agent the saved files: Muse (a conversation with actions, its activity panel, connected apps, an approval prompt), ChatGPT agent mode (with Pro for Dots), Claude (a conversation with connector tool use, the connectors settings page).
 - [ ] On hold until a reader may run: the live smoke on each agent (3.9).
-- [ ] **Sprint 3 close (2026-10-09): decide its gate.** The gate as written cannot pass while every agent reader is off under the vendors' terms. It asks for:
-  - five host permissions, and there are two (Gmail and Calendar);
-  - Muse and Claude readers passing their fixtures, and Claude's has no pages;
-  - OVER_SCOPE on a new permission, which needs an agent's settings page read.
-
-  Everything the paste path can show passed (`reviews/sprint_3/closed.md`). Choose one:
-  - **(a)** approve the amended gate below; Sprint 3 closes, and 3.0, 3.1 and 3.3 to 3.9 carry forward until a vendor permits reading;
-  - **(b)** keep the gate; Sprint 3 stays open until then.
-
-  The amended gate:
-  1. Two host permissions exactly: Gmail and Calendar (Decisions `[3.10]`).
-  2. Claim-type accuracy ≥ 90% on the labelled corpus, and paste field accuracy ≥ 95%, both in `RESULTS.md` (`patterns`, `paste`).
-  3. The Muse adapter passes its synthetic fixtures; the Claude and ChatGPT/Dots readers are off, with a note in the options page.
-  4. The §2 demo E2E produces VERIFIED, NOT_FOUND and UNASKED through the real Gmail and Calendar content scripts and a pasted Muse log.
-  5. OVER_SCOPE on a new permission is carried forward with 3.7.
-  6. Replay over the E2E ledger reproduces every receipt.
-  7. Both mandatory tests are green.
-  8. Vendor terms are logged.
-  9. `closed.md` says VERIFIED CLEAN.
-
-  Tell the agent "approve the amended gate" or "keep the gate".
-- [ ] **Push the Sprint 3 commits:** `git push` from the repository root. The pre-push hook runs the tests on the commit it pushes.
+- [x] **Done 2026-10-09: the Sprint 3 gate is kept as written** (your choice). Sprint 3 stays open, with 3.0, 3.1 and 3.3 to 3.9 waiting on the vendors' permission, and the project goes on as if they never give it: everything after Sprint 3 is built on pasted logs and your own Gmail and Calendar tabs (Decisions `[3.gate]`). If a vendor says yes later, its reader tasks come back.
+- [x] **Done 2026-10-09:** you pushed the Sprint 3 commits.
 
 ## During Sprint 5 (telemetry)
 - [ ] Create a Railway project + MongoDB, set `MONGO_URL` and `ALLOWED_EXT_IDS` env vars; give the agent the public URL for `config.TELEMETRY_HOST`. Unblocks 5.8 deploy (docker-compose proves it locally meanwhile).
