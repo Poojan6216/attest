@@ -23,6 +23,7 @@ import { type FileWriter, fileWriter } from './file-writer';
 import {
   ActivityRecord,
   AdapterHealth,
+  AlertRecord,
   BatchCoverageRecord,
   Claim,
   CoveragePing,
@@ -123,6 +124,7 @@ function tablePlans(db: LedgerDb): readonly Plan[] {
       readRows('calendarSnapshots', CalendarRecord, rows),
     ),
     plan('activity', db.activity, (rows) => readRows('activity', ActivityRecord, rows)),
+    plan('alerts', db.alerts, (rows) => readRows('alerts', AlertRecord, rows)),
   ];
 }
 

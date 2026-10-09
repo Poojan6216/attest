@@ -104,6 +104,22 @@ function detailOf(id: string, overrides: Partial<ReceiptInput> = {}): ReceiptDet
   return { receipt, claim: found.claim, request: undefined, observations: [], inputs };
 }
 
+/** The detail of receipt `id` once the person marked it Not found ("I sent it myself"). */
+const markedDetail = (id: string): ReceiptDetail =>
+  detailOf(id, {
+    state: 'USER_OVERRIDDEN',
+    override: {
+      grade: 'NOT_FOUND',
+      reason: 'I sent it myself',
+      at: iso(NOW.getTime()),
+      previousState: 'FINAL',
+    },
+    reasons: [
+      ...(LEDGER[0]?.receipt.reasons ?? []),
+      { code: 'override.user', params: { grade: 'NOT_FOUND' } },
+    ],
+  });
+
 let root: HTMLElement;
 let announce: () => void;
 /** The detail the stand-in reads for a receipt (a test may change it). */
@@ -268,23 +284,20 @@ describe('a person’s mark on a receipt', () => {
     expect(root.querySelector('[role="status"]')?.textContent).toBe(
       'Saved. Attest’s own grade stays beside your mark.',
     );
+    // The ledger then reads the mark back: the form gives way to it, and "Saved." stays (sprint_4 4.6 e2e find).
+    detailFor = markedDetail;
+    await act(() => {
+      announce();
+    });
+    await settle();
+    expect(root.textContent).toContain('You marked it Not found: “I sent it myself”.');
+    expect(root.querySelector('[role="status"]')?.textContent).toBe(
+      'Saved. Attest’s own grade stays beside your mark.',
+    );
   });
 
   it('undoes a mark, and says when its evidence now belongs to another claim', async () => {
-    detailFor = (id) =>
-      detailOf(id, {
-        state: 'USER_OVERRIDDEN',
-        override: {
-          grade: 'NOT_FOUND',
-          reason: 'I sent it myself',
-          at: iso(NOW.getTime()),
-          previousState: 'FINAL',
-        },
-        reasons: [
-          ...(LEDGER[0]?.receipt.reasons ?? []),
-          { code: 'override.user', params: { grade: 'NOT_FOUND' } },
-        ],
-      });
+    detailFor = markedDetail;
     sources.sendEvent.mockResolvedValue({ ok: false, code: 'evidence_taken' });
     await show();
     await click(rows()[0]?.querySelector('button'));

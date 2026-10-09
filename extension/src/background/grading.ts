@@ -58,7 +58,9 @@ import { gradedWrites, noteGradedWrites } from '../ledger/batch-instant';
 import { readCount, STORED_WRITES } from '../ledger/clock-high-water';
 import { lastImportKey } from '../ledger/meta-keys';
 import { getMeta, putReceipt, recordBatchInstant } from '../ledger/repo';
+import { queueAlerts } from '../ledger/alerts';
 import { log } from '../log';
+import { type AlertDeps, BROWSER_ALERTS, deliverAlerts } from './alerts';
 
 export interface GradingDeps {
   readonly policy: Policy;
@@ -66,13 +68,16 @@ export interface GradingDeps {
   readonly policyDocument: unknown;
   /** The clock at the edge (src/clock.ts): epoch ms. */
   readonly nowMs: () => number;
+  /** Where the alerts a batch queued are shown, after it (sprint_4 4.6, ./alerts.ts); none are shown when absent. */
+  readonly alerts?: AlertDeps;
 }
 
-/** The service worker's batches: the shipped policy and the wall clock (the one src/clock.ts reads). */
+/** The service worker's batches: the shipped policy, the wall clock (the one src/clock.ts reads) and Chrome's alerts. */
 export const SHIPPED_GRADING: GradingDeps = Object.freeze({
   policy: DEFAULT_POLICY,
   policyDocument: DEFAULT_POLICY_DOCUMENT,
   nowMs: () => Date.now(),
+  alerts: BROWSER_ALERTS,
 });
 
 /** What one batch did: counts only. */
@@ -220,6 +225,12 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
   if (result.put.length > 0) await putPolicyDocument(db, deps.policy, deps.policyDocument);
   const superseded = supersede(stored);
   for (const receipt of superseded) await putReceipt(db, receipt);
+  // What this batch made FINAL with an alerting grade, as it now stands (sprint_4 4.6; src/ledger/alerts.ts).
+  const latest = new Map<Ulid, Receipt>(superseded.map((receipt) => [receipt.id, receipt]));
+  await queueAlerts(
+    db,
+    result.put.map((receipt) => latest.get(receipt.id) ?? receipt),
+  );
   return {
     evaluatedAt,
     claims: pending.length,
@@ -257,6 +268,7 @@ async function gradeOnce(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary 
     db.receiptInputs,
     db.policies,
     db.batchCoverages,
+    db.alerts,
   ];
   try {
     const summary = await db.transaction('rw', tables, async (): Promise<BatchSummary> => {
@@ -290,9 +302,20 @@ async function gradeOnce(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary 
 
 let queue: Promise<unknown> = Promise.resolve();
 
+/** One batch, then the alerts it queued shown (./alerts.ts); a failure to show is logged, never the batch's. */
+async function gradeAndAlert(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary | null> {
+  const summary = await gradeOnce(db, deps);
+  if (deps.alerts !== undefined && summary !== null && !summary.skipped) {
+    await deliverAlerts(db, deps.alerts).catch((error: unknown) => {
+      log.error('alerts.deliver_failed', { error });
+    });
+  }
+  return summary;
+}
+
 /** Runs one batch once every batch before it has finished: batches never run at once (§3). */
 export function runGradingBatch(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary | null> {
-  const run = queue.then(() => gradeOnce(db, deps));
+  const run = queue.then(() => gradeAndAlert(db, deps));
   queue = run.catch(() => undefined);
   return run;
 }

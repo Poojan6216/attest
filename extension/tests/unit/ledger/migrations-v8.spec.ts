@@ -47,7 +47,7 @@ function v7Row(n: number, computedAt: string) {
 
 describe('v7 → v8', () => {
   it('declares v8 after v7: receipts indexed by agent and grading instant', async () => {
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(MIGRATIONS.slice(0, 8).map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(MIGRATIONS[7]?.stores).toBe(STORES_V8);
     expect(INDEX_FIELDS.receipts).toEqual(['date', 'computedMs']);
     const db = await openLedger(uniqueDbName('v8'));
@@ -70,7 +70,7 @@ describe('v7 → v8', () => {
 
     const db = await openLedger(name);
     opened.push(db);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(MIGRATIONS.at(-1)?.version);
     const stored = await db.table('receipts').toArray();
     expect(stored).toEqual([
       { ...early, computedMs: Date.parse('2026-10-01T14:31:00Z') },

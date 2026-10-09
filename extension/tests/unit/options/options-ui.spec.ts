@@ -33,6 +33,8 @@ let restoreSink: () => void = () => undefined;
 
 beforeEach(() => {
   fakeBrowser.reset();
+  // The popup asks Chrome for its window (PopupLinks); the fake browser has none to give.
+  vi.spyOn(fakeBrowser.windows, 'getCurrent').mockResolvedValue({ id: 1 } as never);
   root = document.createElement('div');
   document.body.append(root);
   records = [];

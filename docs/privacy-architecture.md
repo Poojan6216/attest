@@ -23,7 +23,7 @@
 Nothing. Attest has no server, no account, no analytics and no remote code (Hard Rules 1, 9).
 
 - **No network allowlist.** `NETWORK_ALLOWLIST` in [`extension/src/config.ts`](../extension/src/config.ts) is empty. Sprint 5 adds exactly one host to it, for telemetry that is off until the user turns it on ([§10](#10-not-built-yet)).
-- **Two host permissions, both read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*` and `https://calendar.google.com/*`, so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms` and `sidePanel` (the build adds the last one for the side panel). No AI agent's site is asked for: Meta's, OpenAI's and Anthropic's terms forbid collecting data from their sites by automated means, so those readers are off (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts); Decisions [3.10]). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab.
+- **Two host permissions, both read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*` and `https://calendar.google.com/*`, so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms`, `scripting` (since Sprint 4.5: the readers' content scripts are registered at runtime, so one you turn off is unregistered; it reaches no other host), `notifications` (since Sprint 4.6: an alert when a receipt ends NOT_FOUND, UNASKED or OVER_SCOPE, shown on this device by Chrome and your operating system, naming no counterparty, amount or subject: [§5.15](#515-alerts)) and `sidePanel` (the build adds the last one for the side panel). No AI agent's site is asked for: Meta's, OpenAI's and Anthropic's terms forbid collecting data from their sites by automated means, so those readers are off (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts); Decisions [3.10]). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab.
 - **A test enforces it.** [`extension/tests/e2e/network-intercept.spec.ts`](../extension/tests/e2e/network-intercept.spec.ts) (`@mandatory`) loads the built extension, opens the Gmail Sent, receipt and Calendar fixtures with the shipped content scripts running, reloads them for five minutes, and fails on any request from the extension outside the allowlist. Its negative control proves it catches a request from the service worker, an extension page and a page.
 - **A second test hunts for leaks.** [`extension/tests/e2e/no-leak.spec.ts`](../extension/tests/e2e/no-leak.spec.ts) (`@mandatory`) plants three known secrets in the fixture pages (in message bodies, snippets, event locations) and checks that none reaches the ledger export, IndexedDB, extension storage, the console or the network.
 
@@ -307,6 +307,19 @@ Since schema version 7 (the Sprint 3 close): the coverage a grading batch graded
 | `coverageHash` | SHA-256 of the coverage as grading hashes it ([`docs/grading.md` §3](grading.md#3-inputs)). |
 | `coverage` | The coverage: its `evaluatedAt`, its `observers`, each an interval as `coverageIntervals` holds it (`observerId`, `source`, `lastSyncAt`, `windowStart`, `windowEnd`, `accountHash`, `allCalendars`, `changesSince`), and its `repairs` when the clock ever went back: each repair's span (`from`, `to`), as `meta` holds it ([§5.6](#56-meta)). |
 
+### 5.15 `alerts`
+
+Since schema version 9 (Sprint 4.6): one row per receipt that alerts, keyed by the receipt's id, so a receipt alerts once, ever ([`src/ledger/alerts.ts`](../extension/src/ledger/alerts.ts)). A grading batch adds a row, `pending`, for each receipt it made FINAL as NOT_FOUND, UNASKED or OVER_SCOPE; the service worker then settles it for good before it asks Chrome for a notification. A notification names the grade, the agent and the action with its time ("Not found: Muse", "Muse said it created a calendar event at 14:00. Attest found no sign of it."), never a counterparty, an amount or a subject, because it can show on a locked screen; it is shown by Chrome and your operating system, on this device. Deleted with its receipt by the purge ([§7](#7-retention-and-purge)). Ids, an agent, a grade, a state and two instants only.
+
+| Field | Meaning |
+|---|---|
+| `receiptId` | The receipt's id (a ULID): the key, and the notification's id. |
+| `agent` | The receipt's agent. |
+| `grade` | `NOT_FOUND`, `UNASKED` or `OVER_SCOPE`. |
+| `state` | `pending` until handled, then `shown` (a notification was asked for), `muted` (you had muted that agent's alerts: none is shown, then or later), `superseded` (a later claim explained an UNASKED receipt first), `overridden` (you marked the receipt first) or `gone` (the receipt was purged first). |
+| `finalAt` | When grading made the receipt FINAL. |
+| `handledAt` | When the service worker settled the alert; absent while `pending`. |
+
 ## 6. What is hashed
 
 Every hash is SHA-256 ([`docs/grading.md` §10](grading.md#10-ids-and-hashes-hashts)). Addresses and calendar names are hashed as their UTF-8 text; a vendor's row or event id is hashed as its canonical JSON string (the id in quotes), so that two ids differing only in a lone surrogate stay distinct. A hash hides a value from someone reading the ledger; it does not stop someone who can guess the value from confirming it ([§2](#2-what-attest-cannot-hide)).
@@ -334,6 +347,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 - **Coverage intervals** are cut at the cutoff: nothing before it is kept. **Latest pings** go once their last sync is older than the cutoff.
 - **Calendar snapshots** go when they were read before the cutoff. A range not looked at since is compared with nothing next time, so its events come back as first sightings, never as changes.
 - **Clock repair spans** (`meta` `clockRepair.*`) go once they ended before the cutoff.
+- **Alerts** ([§5.15](#515-alerts)) go with their receipts.
 - **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
 - **Turning away detection off** deletes every time away at once, and the `idleOpen` key with them. Receipts already made keep their reasons: an UNASKED receipt that counted a time away keeps the reason `unasked.idle`, and its replay inputs the signal, until the receipt itself goes.
 

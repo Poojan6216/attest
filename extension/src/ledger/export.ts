@@ -24,6 +24,7 @@ import { replayRecords } from './replay-records';
 import {
   ActivityRecord,
   AdapterHealth,
+  AlertRecord,
   Claim,
   CoveragePing,
   Grant,
@@ -56,6 +57,8 @@ export const LedgerExport = z.strictObject({
     coverageIntervals: z.array(ObserverCoverage).default([]),
     calendarSnapshots: z.array(CalendarRecord).default([]),
     activity: z.array(ActivityRecord).default([]),
+    /** Each receipt that alerted and what became of its alert (sprint_4 4.6); empty in an export taken before. */
+    alerts: z.array(AlertRecord).default([]),
   }),
   /**
    * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
@@ -136,6 +139,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       ),
       calendarSnapshots: readRows('calendarSnapshots', CalendarRecord, await db.calendarSnapshots.toArray()),
       activity: readRows('activity', ActivityRecord, await db.activity.toArray()),
+      alerts: readRows('alerts', AlertRecord, await db.alerts.toArray()),
     },
     ...(await replayRecords(db)),
   }));

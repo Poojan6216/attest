@@ -243,6 +243,7 @@ describe('ledger.changed', () => {
       [
         'activity',
         'adapterHealth',
+        'alerts',
         'calendarSnapshots',
         'claims',
         'coverage',

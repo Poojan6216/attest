@@ -19,6 +19,7 @@ import {
   ObservationSource,
   SCHEMA_LIMITS,
   Sha256,
+  Ulid,
 } from '../core/schema';
 import { coverageProblems, refineWith } from '../core/schema-checks';
 
@@ -111,6 +112,32 @@ export const ActivityRecord = z
 /** A `policies` row: a policy document as policy/default.json writes one, keyed by its `policyHash`. */
 export const PolicyRecord = z.strictObject({ policyHash: Sha256, document: PolicyDocument });
 
+/** The grades a FINAL receipt alerts on (sprint_4 4.6): never VERIFIED, PARTIAL or UNVERIFIABLE. */
+export const AlertGrade = z.enum(['NOT_FOUND', 'UNASKED', 'OVER_SCOPE']);
+
+/**
+ * What became of an alert (sprint_4 4.6; ./alerts.ts): `pending` until the service worker handles it, then once and
+ * for good `shown` (a notification was asked for), `muted` (the person muted that agent's alerts), `superseded` (an
+ * UNASKED receipt a later claim explained), `overridden` (the person marked the receipt first) or `gone` (the receipt
+ * was purged first).
+ */
+export const AlertState = z.enum(['pending', 'shown', 'muted', 'superseded', 'overridden', 'gone']);
+
+/**
+ * An `alerts` row (sprint_4 4.6, ./alerts.ts): one per receipt a grading batch made FINAL with an alerting grade, keyed
+ * by the receipt's id, so a receipt alerts once, ever. Ids, the agent, the grade, the state and two instants only.
+ */
+export const AlertRecord = z.strictObject({
+  receiptId: Ulid,
+  agent: AgentId,
+  grade: AlertGrade,
+  state: AlertState,
+  /** The receipt's `finalAt`: when grading made it FINAL. */
+  finalAt: IsoTs,
+  /** When the service worker handled it; absent while `pending`. */
+  handledAt: IsoTs.optional(),
+});
+
 export type CoveragePing = z.infer<typeof CoveragePing>;
 export type CoveragePingInput = z.input<typeof CoveragePing>;
 export type MetaEntry = z.infer<typeof MetaEntry>;
@@ -121,3 +148,6 @@ export type ActivityRecord = z.infer<typeof ActivityRecord>;
 export type ActivityRecordInput = z.input<typeof ActivityRecord>;
 export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;
 export type PolicyRecord = z.infer<typeof PolicyRecord>;
+export type AlertGrade = z.infer<typeof AlertGrade>;
+export type AlertState = z.infer<typeof AlertState>;
+export type AlertRecord = z.infer<typeof AlertRecord>;

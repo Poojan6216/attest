@@ -26,6 +26,8 @@ export const STORAGE_KEYS = {
  */
 export const SESSION_KEYS = {
   IDLE_SESSION: 'attest.idleSession',
+  /** The receipt a clicked alert asks the side panel to open (sprint_4 4.6; src/background/alerts.ts). */
+  OPEN_RECEIPT: 'attest.openReceipt',
 } as const;
 
 /**

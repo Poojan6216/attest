@@ -32,6 +32,7 @@ export const LEDGER_TABLE_NAMES = [
   'coverageIntervals',
   'calendarSnapshots',
   'activity',
+  'alerts',
 ] as const;
 
 export type LedgerTableName = (typeof LEDGER_TABLE_NAMES)[number];
@@ -71,6 +72,7 @@ export const INDEX_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> 
   receiptInputs: [],
   policies: [],
   batchCoverages: [],
+  alerts: [],
 };
 
 export type RequestRow = Request & { readonly date: string };

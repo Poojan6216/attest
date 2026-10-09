@@ -62,8 +62,9 @@ test('the shipped manifest matches the decisions', () => {
     default_title: 'Attest: receipts for your AI agents',
     default_popup: 'popup.html',
   });
-  // `scripting` registers the page readers at runtime, so a reader the person turns off is unregistered (sprint_4 4.5).
-  expect(manifest.permissions).toEqual(['storage', 'alarms', 'scripting', 'sidePanel']);
+  // `scripting` registers the page readers at runtime, so a reader the person turns off is unregistered (sprint_4 4.5);
+  // `notifications` shows the alerts (sprint_4 4.6).
+  expect(manifest.permissions).toEqual(['storage', 'alarms', 'scripting', 'notifications', 'sidePanel']);
   // Hard Rule 8: away detection asks for `idle` only when the person turns it on (sprint_3 3.14).
   expect(manifest.optional_permissions).toEqual(['idle']);
   // Hard Rule 8: exactly Gmail and Google Calendar (sprint_2 2.0), nothing broader; no agent host while every agent

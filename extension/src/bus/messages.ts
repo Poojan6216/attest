@@ -67,6 +67,7 @@ export const LedgerTable = z.enum([
   'coverageIntervals',
   'calendarSnapshots',
   'activity',
+  'alerts',
 ]);
 
 export const BusMessageType = z.enum([

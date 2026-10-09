@@ -12,67 +12,16 @@
  * The export then replays exactly through `pnpm attest replay` (the Sprint 3 Gate; QA review GAP 4), and the Gmail and
  * Calendar pages saw no input event while Attest read them, imported and graded (Hard Rule 3; QA review GAP 9).
  */
-import { readFileSync } from 'node:fs';
-
-import { expect, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { LedgerExport } from '../../src/ledger/export';
 
-import { DEMO_AWAY, DEMO_LOG, DEMO_SENT, demoSentPage, emptyWeek } from './support/demo';
+import { DEMO_LOG } from './support/demo';
+import { openDemoPages, writeAway } from './support/demo-flow';
 import { installRecorder, recorded } from './support/input-recorder';
 import { pasteActivity } from './support/paste';
 import { replayExport } from './support/replay';
-import { type VendorSession, withVendorSession } from './support/session';
-import { fixtureUrl, readLedger, requestUrl, vendorFixture, waitForLedger } from './support/vendor-pages';
-
-/** Opens the demo's Gmail Sent head and Calendar week, and waits until each pass is stored with its coverage. */
-async function openDemoPages(session: VendorSession): Promise<readonly Page[]> {
-  const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
-  session.routes.set(requestUrl(fixtureUrl(sent)), demoSentPage(readFileSync(sent.htmlPath, 'utf8')));
-  const gmail = await session.extension.context.newPage();
-  await gmail.goto(fixtureUrl(sent));
-  await waitForLedger(
-    session.ledgerPage,
-    (ledger) =>
-      DEMO_SENT.every((row) => ledger.tables.observations.some((o) => o.counterparty === row.email)) &&
-      ledger.tables.coverageIntervals.some((entry) => entry.source === 'gmail.sent'),
-  );
-  const week = vendorFixture('gcal', 'synthetic-gcal-week-two-calendars.html');
-  session.routes.set(requestUrl(fixtureUrl(week)), emptyWeek(readFileSync(week.htmlPath, 'utf8')));
-  const calendar = await session.extension.context.newPage();
-  await calendar.goto(fixtureUrl(week));
-  await waitForLedger(session.ledgerPage, (ledger) =>
-    ledger.tables.coverageIntervals.some(
-      (entry) => entry.source === 'gcal.event' && entry.allCalendars === true,
-    ),
-  );
-  return [gmail, calendar];
-}
-
-/** Stores the away interval of 6 October in the extension's own IndexedDB, from its service worker (DEMO_AWAY). */
-async function writeAway(session: VendorSession): Promise<void> {
-  const worker = await session.extension.serviceWorker();
-  await worker.evaluate(
-    (row) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-        open.onsuccess = () => {
-          const tx = open.result.transaction('activity', 'readwrite');
-          tx.objectStore('activity').put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            reject(new Error('the away interval was not stored'));
-          };
-        };
-      }),
-    DEMO_AWAY,
-  );
-}
+import { withVendorSession } from './support/session';
+import { readLedger } from './support/vendor-pages';
 
 /** Each receipt as the demo states it: grade, state, its claim, its evidence, the agent, and "likely". */
 function receiptsOf(ledger: LedgerExport) {

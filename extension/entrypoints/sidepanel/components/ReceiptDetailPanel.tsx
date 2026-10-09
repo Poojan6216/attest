@@ -77,7 +77,8 @@ export function ReceiptDetailPanel({
       </DetailSection>
       <DetailGrading receipt={receipt} nowMs={nowMs} />
       <DetailRead inputs={inputs} nowMs={nowMs} />
-      <OverrideControl receipt={receipt} onEvent={onEvent} />
+      {/* Keyed by receipt: what came of a mark on one receipt is never said under another. */}
+      <OverrideControl key={receipt.id} receipt={receipt} onEvent={onEvent} />
     </section>
   );
 }

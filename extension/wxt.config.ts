@@ -130,7 +130,8 @@ export default defineConfig({
     incognito: 'not_allowed',
     // `scripting` (sprint_4 4.5; Decisions [4.5]): the page readers' content scripts are registered at runtime, so a
     // reader the person turns off is unregistered (src/background/readers.ts). Host access stays the two observer hosts.
-    permissions: ['storage', 'alarms', 'scripting'],
+    // `notifications` (sprint_4 4.6; Decisions [4.6]): one alert per FINAL NOT_FOUND, UNASKED or OVER_SCOPE receipt.
+    permissions: ['storage', 'alarms', 'scripting', 'notifications'],
     // Away detection is opt-in (sprint_3 3.14, Hard Rule 8): the options page asks for it when the person turns it on.
     optional_permissions: ['idle'],
     host_permissions: [...OBSERVER_HOSTS.gmail, ...OBSERVER_HOSTS.gcal],

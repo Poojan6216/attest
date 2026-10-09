@@ -11,7 +11,8 @@ import { readPastedLog } from '../../../src/adapters/paste';
 import { onClaimsImport } from '../../../src/background/claims-import';
 import { ClaimsImportMessage } from '../../../src/bus/messages';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
-import { IsoTs } from '../../../src/core/schema';
+import { IsoTs, Receipt } from '../../../src/core/schema';
+import { queueAlerts } from '../../../src/ledger/alerts';
 import { putCalendarRecord } from '../../../src/ledger/calendar-snapshots';
 import { recordCoverage } from '../../../src/ledger/coverage';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -124,6 +125,15 @@ async function populate(): Promise<void> {
     pending: [],
   });
   await putReceipt(db, makeReceipt({ id: ulid(301), signals: { timeProximity: 0.5, counterpartyExact: 1 } }));
+  // A receipt that alerted (sprint_4 4.6).
+  const alerted = Receipt.parse(
+    makeReceipt({
+      ...{ id: ulid(302), grade: 'NOT_FOUND', ruleId: 'not_found', observationIds: [], state: 'FINAL' },
+      ...{ reasons: [{ code: 'match.none', params: {} }], finalAt: '2026-10-08T16:00:00-04:00' },
+    }),
+  );
+  await putReceipt(db, alerted);
+  await queueAlerts(db, [alerted]);
   await pasted();
   // A row no reader accepts: both exports skip it, logged by id.
   await db.requests.put({ id: ulid(299), agent: 'nobody' } as never);

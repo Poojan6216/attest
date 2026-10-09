@@ -38,3 +38,6 @@ export function useMark(onEvent: SendEvent) {
   };
   return { sending, said, say, send };
 }
+
+/** A mark's sending state and its line: one per receipt's detail, so the line outlives the form it came from. */
+export type Mark = ReturnType<typeof useMark>;

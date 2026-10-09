@@ -27,7 +27,7 @@ import {
 } from '../../../src/ledger/repo';
 import { RETENTION_DAYS } from '../../../src/config';
 import { purgeExpired } from '../../../src/ledger/retention';
-import { CoveragePing } from '../../../src/ledger/types';
+import { AlertRecord, CoveragePing } from '../../../src/ledger/types';
 import {
   claimId,
   expectLedgerError,
@@ -237,7 +237,29 @@ describe('purgeExpired removes exactly the old rows', () => {
       activity: 0,
       clockRepairs: 0,
       batchCoverages: 0,
+      alerts: 0,
     });
+  });
+});
+
+describe('purgeExpired and alerts', () => {
+  it("deletes a purged receipt's alert with it, and keeps a kept receipt's (sprint_4 4.6)", async () => {
+    await seed();
+    for (const receipt of [R.old, R.fresh]) {
+      const { id: receiptId, agent, computedAt: finalAt } = receipt;
+      await db.alerts.put(
+        AlertRecord.parse({
+          receiptId,
+          agent,
+          grade: 'NOT_FOUND',
+          state: 'shown',
+          finalAt,
+          handledAt: finalAt,
+        }),
+      );
+    }
+    expect((await purgeExpired(db, { now: NOW })).alerts).toBe(1);
+    expect((await db.alerts.toArray()).map(({ receiptId }) => receiptId)).toEqual([R.fresh.id]);
   });
 
   it('keeps every kept row exactly as stored, and a second purge removes nothing', async () => {

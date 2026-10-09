@@ -35,6 +35,7 @@
  *     same transaction.
  *  9. A clock repair's span (`meta` `clockRepair.*`, ./clock-repairs.ts) goes once it ended before C: no claim it
  *     bears on is still graded by then.
+ * 10. A receipt's alert (./alerts.ts, sprint_4 4.6) goes with the receipt.
  * Grants, adapter health and the rest of meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
@@ -93,6 +94,8 @@ export interface PurgeReport {
   readonly batchCoverages: number;
   /** Clock repair spans deleted: those that ended before the cutoff (./clock-repairs.ts). */
   readonly clockRepairs: number;
+  /** Alerts deleted: those of the purged receipts (./alerts.ts, sprint_4 4.6). */
+  readonly alerts: number;
 }
 
 /** What goes, decided before anything is deleted. */
@@ -312,6 +315,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.policies,
     db.batchCoverages,
     db.meta,
+    db.alerts,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
@@ -321,6 +325,9 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     // A receipt may name a claim the ledger does not hold: count the rows that go, not the ids.
     const claims = (await db.claims.bulkGet(claimIds)).filter((row) => row !== undefined).length;
     await db.receipts.bulkDelete([...doomed.receipts.keys()]);
+    const alertKeys = [...doomed.receipts.keys()];
+    const alerts = (await db.alerts.bulkGet(alertKeys)).filter((row) => row !== undefined).length;
+    await db.alerts.bulkDelete(alertKeys);
     await db.claims.bulkDelete(claimIds);
     await db.observations.bulkDelete(observations.map(({ id }) => id));
     await db.requests.bulkDelete(requests);
@@ -344,6 +351,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       policies: replay.policies,
       batchCoverages: replay.batchCoverages,
       clockRepairs: await purgeClockRepairs(db, cutoffMs),
+      alerts,
     };
   });
 }

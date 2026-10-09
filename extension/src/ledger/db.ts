@@ -29,6 +29,7 @@ import {
   AgentId,
   Ulid,
   type AdapterHealth,
+  type AlertRecord,
   type BatchCoverageRecord,
   type Grant,
   type MetaEntry,
@@ -55,7 +56,7 @@ export const STORES_V1 = {
   coverage: '[observerId+accountKey], observerId, lastSyncAt',
   meta: 'key',
 } as const satisfies Readonly<
-  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity'>, string>
+  Record<Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity' | 'alerts'>, string>
 >;
 
 export type CoverageKey = [observerId: string, accountKey: string];
@@ -169,6 +170,18 @@ export const STORES_V8 = {
     'id, claimId, [agent+date], state, grade, *observationIds, supersededBy, [agent+computedMs], [agent+grade+computedMs]',
 } as const;
 
+/** The alerts store (./alerts.ts). */
+export const ALERTS = 'alerts';
+
+/**
+ * Schema v9 (sprint_4 4.6; Decisions [4.6]): `alerts` holds one row per receipt that alerts, keyed by the receipt's id,
+ * with `state` indexed so the service worker reads only the pending ones. New and empty on upgrade: no receipt alerted
+ * before 4.6, and none made FINAL before is alerted later.
+ */
+export const STORES_V9 = {
+  [ALERTS]: 'receiptId, state',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -206,6 +219,7 @@ const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonl
   receiptInputs: { field: 'inputsHash', schema: Sha256 },
   policies: { field: 'policyHash', schema: Sha256 },
   batchCoverages: { field: 'coverageHash', schema: Sha256 },
+  alerts: { field: 'receiptId', schema: Ulid },
 };
 
 export class LedgerDb extends Dexie {
@@ -269,6 +283,11 @@ export class LedgerDb extends Dexie {
   /** Schema v7. Read and written only through ./replay-records.ts. */
   get batchCoverages(): Table<BatchCoverageRecord, string> {
     return this.table<BatchCoverageRecord, string>(BATCH_COVERAGES);
+  }
+
+  /** Schema v9. Read and written only through ./alerts.ts. */
+  get alerts(): Table<AlertRecord, string> {
+    return this.table<AlertRecord, string>(ALERTS);
   }
 }
 

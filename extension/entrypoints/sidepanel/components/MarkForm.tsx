@@ -2,11 +2,12 @@ import { useState } from 'preact/hooks';
 
 import { type OverrideGrade, ReceiptOverride, SCHEMA_LIMITS } from '../../../src/core/schema';
 import { Button } from '../../../src/ui/Button';
-import { type SendEvent, useMark } from '../use-mark';
+import type { Mark } from '../use-mark';
 import { SaidLine } from './SaidLine';
 
 export interface MarkFormProps {
-  readonly onEvent: SendEvent;
+  /** Sends the mark and says what came of it (OverrideControl's, so the line outlives this form). */
+  readonly mark: Mark;
 }
 
 const CHOICES: readonly (readonly [OverrideGrade, string])[] = [
@@ -18,10 +19,10 @@ const CHOICES: readonly (readonly [OverrideGrade, string])[] = [
  * A person's own mark on a receipt (sprint_4 4.3): Verified or Not found, with a reason they must give, at most 120
  * characters, checked with the receipt's own override schema before it is sent; an inline error says what is missing.
  */
-export function MarkForm({ onEvent }: MarkFormProps) {
+export function MarkForm({ mark }: MarkFormProps) {
   const [grade, setGrade] = useState<OverrideGrade | null>(null);
   const [reason, setReason] = useState('');
-  const { sending, said, say, send } = useMark(onEvent);
+  const { sending, said, say, send } = mark;
   const save = () => {
     if (grade === null) say({ kind: 'error', text: 'Choose Verified or Not found.' });
     else if (!ReceiptOverride.shape.reason.safeParse(reason).success)
