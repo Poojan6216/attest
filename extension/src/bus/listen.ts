@@ -10,7 +10,8 @@
  *  1. sender is this extension (`sender.id === runtime.id`, both known), else drop `foreign_sender`;
  *     this runs before parsing, so a foreign message is never parsed (only `type` is read, for the log);
  *  2. it parses as a `BusMessage`, else drop `malformed` (unknown types land here too);
- *  3. `ui.query`, `claims.import` and `receipt.event` come from an extension page, never a content script, else drop
+ *  3. `ui.query` and the pages' commands (`claims.import`, `receipt.event`, `grant.save`) come from an extension page,
+ *     never a content script, else drop
  *     `untrusted_context`;
  *  4. a handler exists for its type, else drop `no_handler`.
  * A dropped message gets no response (the listener returns false) and one `bus.dropped` record: a warning,
@@ -19,8 +20,8 @@
  *
  * A handled message is always answered (classic protocol: return true, call `sendResponse` once the
  * handler settles), so the sender never sees a closed port for a message that was processed.
- * `ui.query` handlers answer with a `ui.result`, the `claims.import` handler with a `ClaimsImportResult`, the
- * `receipt.event` handler with a `ReceiptEventResult`, and the
+ * `ui.query` handlers answer with a `ui.result`, each page command's handler with its own result (`ClaimsImportResult`,
+ * `ReceiptEventResult`, `GrantSaveResult`), and the
  * handlers of acknowledged messages (observer health, rows,
  * coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is validated before it leaves, and
  * a handler that throws or answers badly is answered `handler_failed` / `{ ok: false, code: 'failed' }` and logged
@@ -38,6 +39,7 @@ import {
   type BusMessageOf,
   ClaimsImportResult,
   type BusMessageType,
+  GrantSaveResult,
   ReceiptEventResult,
   isAckedType,
   isBusMessageType,
@@ -61,9 +63,11 @@ export type BusHandlerResult<T extends BusMessageType> = T extends 'ui.query'
     ? ClaimsImportResult | Promise<ClaimsImportResult>
     : T extends 'receipt.event'
       ? ReceiptEventResult | Promise<ReceiptEventResult>
-      : T extends AckedType
-        ? BusAck | Promise<BusAck>
-        : unknown;
+      : T extends 'grant.save'
+        ? GrantSaveResult | Promise<GrantSaveResult>
+        : T extends AckedType
+          ? BusAck | Promise<BusAck>
+          : unknown;
 
 export type BusHandler<T extends BusMessageType> = (
   message: BusMessageOf<T>,
@@ -83,6 +87,7 @@ const EXTENSION_PAGE_ONLY: ReadonlySet<BusMessageType> = new Set<BusMessageType>
   'ui.query',
   'claims.import',
   'receipt.event',
+  'grant.save',
 ]);
 
 function typeOf(raw: unknown): BusMessageType | undefined {
@@ -135,17 +140,20 @@ function checkedAck(message: BusMessage, value: unknown): BusAck {
   return ackRefused('failed');
 }
 
-/** The validated answer to an import, or `{ ok: false, code: 'failed' }` if the handler answered badly. */
-function checkedImport(message: BusMessage, value: unknown): ClaimsImportResult {
-  const parsed = ClaimsImportResult.safeParse(value);
-  if (parsed.success) return parsed.data;
-  log.error('bus.handler_failed', { type: message.type, error: new BusError('invalid_reply') });
-  return { ok: false, code: 'failed' };
-}
+/** The answer schema of each command an extension page sends, each answering `{ ok: false, code: 'failed' }` on failure. */
+const PAGE_RESULTS = {
+  'claims.import': ClaimsImportResult,
+  'receipt.event': ReceiptEventResult,
+  'grant.save': GrantSaveResult,
+} as const;
 
-/** The validated answer to a receipt event, or `{ ok: false, code: 'failed' }` if the handler answered badly. */
-function checkedEvent(message: BusMessage, value: unknown): ReceiptEventResult {
-  const parsed = ReceiptEventResult.safeParse(value);
+type PageCommand = keyof typeof PAGE_RESULTS;
+
+const isPageCommand = (type: string): type is PageCommand => Object.hasOwn(PAGE_RESULTS, type);
+
+/** The validated answer to a page's command, or `{ ok: false, code: 'failed' }` if the handler answered badly. */
+function checkedCommand(message: BusMessage, type: PageCommand, value: unknown): unknown {
+  const parsed = PAGE_RESULTS[type].safeParse(value);
   if (parsed.success) return parsed.data;
   log.error('bus.handler_failed', { type: message.type, error: new BusError('invalid_reply') });
   return { ok: false, code: 'failed' };
@@ -154,16 +162,14 @@ function checkedEvent(message: BusMessage, value: unknown): ReceiptEventResult {
 /** The answer to a message whose handler settled with `value`. */
 function answerOf(message: BusMessage, value: unknown): unknown {
   if (message.type === 'ui.query') return checkedResult(message, value);
-  if (message.type === 'claims.import') return checkedImport(message, value);
-  if (message.type === 'receipt.event') return checkedEvent(message, value);
+  if (isPageCommand(message.type)) return checkedCommand(message, message.type, value);
   return isAckedType(message.type) ? checkedAck(message, value) : undefined;
 }
 
 /** The answer to a message whose handler threw. */
 function failureOf(message: BusMessage): unknown {
   if (message.type === 'ui.query') return uiFailure(message.query.kind, 'handler_failed');
-  if (message.type === 'claims.import' || message.type === 'receipt.event')
-    return { ok: false, code: 'failed' };
+  if (isPageCommand(message.type)) return { ok: false, code: 'failed' };
   return isAckedType(message.type) ? ackRefused('failed') : undefined;
 }
 

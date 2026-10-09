@@ -19,6 +19,7 @@ import {
   CalendarSnapshotMessage,
   ClaimsImportMessage,
   CoveragePingMessage,
+  GrantSaveMessage,
   LedgerChangedMessage,
   ObserverObservationsMessage,
   ReceiptEventMessage,
@@ -272,6 +273,18 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     receiptId: ULID_CLAIM,
     event: { kind: 'override', grade: 'NOT_FOUND', reason: 'I sent it myself' },
   }),
+  'grant.save': GrantSaveMessage.parse({
+    type: 'grant.save',
+    grant: {
+      agent: 'muse',
+      allowedTypes: ['email.sent'],
+      counterpartyAllowlist: ['company.example'],
+      spendCeilingCents: 5000,
+      spendCurrency: 'USD',
+      declaredScopes: [],
+    },
+    alertsMuted: false,
+  }),
 };
 
 /**
@@ -305,4 +318,5 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
     ...VALID['receipt.event'],
     event: { kind: 'override', grade: 'PARTIAL', reason: SECRET },
   },
+  'grant.save': { ...VALID['grant.save'], grant: { ...VALID['grant.save'].grant, notes: SECRET } },
 };

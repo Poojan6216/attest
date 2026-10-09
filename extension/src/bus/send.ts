@@ -29,6 +29,8 @@ import {
   UiResultMessage,
   uiFailure,
   ClaimsImportResult,
+  type GrantSaveMessage,
+  GrantSaveResult,
   type ReceiptEventMessage,
   ReceiptEventResult,
 } from './messages';
@@ -145,6 +147,29 @@ export async function sendReceiptEvent(
   log.warn('bus.receipt_event_unavailable', {
     reason: response === undefined ? 'no_response' : 'malformed_result',
   });
+  return { ok: false, code: 'failed' };
+}
+
+/**
+ * Sends a person's grant for one agent, and whether its alerts are muted, to the service worker (sprint_4 4.4), and
+ * resolves its `GrantSaveResult`: for a valid message it always resolves, an absent or malformed answer becoming
+ * `{ ok: false, code: 'failed' }` (logged as `bus.grant_unavailable`). An invalid message is never sent: it is logged
+ * (`bus.grant_refused`) and rejects with `BusError('invalid_outgoing')`.
+ */
+export async function sendGrant(
+  grant: GrantSaveMessage['grant'],
+  alertsMuted: boolean,
+): Promise<GrantSaveResult> {
+  let response: unknown;
+  try {
+    response = await send({ type: 'grant.save', grant, alertsMuted });
+  } catch (error) {
+    log.warn('bus.grant_refused', { error });
+    throw error;
+  }
+  const parsed = GrantSaveResult.safeParse(response);
+  if (parsed.success) return parsed.data;
+  log.warn('bus.grant_unavailable', { reason: response === undefined ? 'no_response' : 'malformed_result' });
   return { ok: false, code: 'failed' };
 }
 

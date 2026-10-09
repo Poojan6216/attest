@@ -34,6 +34,7 @@ import {
   IsoTs,
   Observation,
   AgentId,
+  Grant,
   OverrideGrade,
   ReceiptOverride,
   Request,
@@ -75,10 +76,11 @@ export const BusMessageType = z.enum([
   'ledger.changed',
   'claims.import',
   'receipt.event',
+  'grant.save',
 ]);
 
 /**
- * The eleven type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The twelve type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -286,6 +288,44 @@ export const ReceiptEventResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(false), code: ReceiptEventCode }),
 ]);
 
+const { agent, allowedTypes, counterpartyAllowlist, spendCeilingCents, spendCurrency, declaredScopes } =
+  Grant.shape;
+
+/**
+ * What a person chooses for one agent (sprint_4 4.4): the `Grant` fields they declare and its rule across fields (a
+ * ceiling needs its currency). Never what Attest observed (`observedScopes`, `accounts`) nor the stamp, which the
+ * service worker keeps from the stored grant and stamps itself (src/ledger/grant-save.ts).
+ */
+export const GrantChoices = z
+  .strictObject({
+    agent,
+    allowedTypes,
+    counterpartyAllowlist,
+    spendCeilingCents,
+    spendCurrency,
+    declaredScopes,
+  })
+  .refine((choices) => choices.spendCeilingCents === null || choices.spendCurrency !== undefined, {
+    path: ['spendCurrency'],
+    message: 'required when spendCeilingCents is set',
+  });
+
+/**
+ * A person's grant for one agent, and whether its alerts are muted (sprint_4 4.4): sent by an extension page only (the
+ * options page's Grants). The service worker saves it on its own clock, after the last grading batch, and then grades.
+ */
+export const GrantSaveMessage = z.strictObject({
+  type: z.literal('grant.save'),
+  grant: GrantChoices,
+  alertsMuted: z.boolean(),
+});
+
+/** The answer to a `grant.save`: saved, or refused (`invalid_input`) or failed. */
+export const GrantSaveResult = z.discriminatedUnion('ok', [
+  z.strictObject({ ok: z.literal(true) }),
+  z.strictObject({ ok: z.literal(false), code: z.enum(['invalid_input', 'failed']) }),
+]);
+
 /** The service worker wrote to the ledger; open UI pages re-query the tables they show. */
 export const LedgerChangedMessage = z.strictObject({
   type: z.literal('ledger.changed'),
@@ -305,6 +345,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   LedgerChangedMessage,
   ClaimsImportMessage,
   ReceiptEventMessage,
+  GrantSaveMessage,
 ]);
 
 export type LedgerTable = z.infer<typeof LedgerTable>;
@@ -329,6 +370,9 @@ export type ClaimsImportResult = z.infer<typeof ClaimsImportResult>;
 export type ReceiptEventMessage = z.infer<typeof ReceiptEventMessage>;
 export type ReceiptEventCode = z.infer<typeof ReceiptEventCode>;
 export type ReceiptEventResult = z.infer<typeof ReceiptEventResult>;
+export type GrantChoices = z.infer<typeof GrantChoices>;
+export type GrantSaveMessage = z.infer<typeof GrantSaveMessage>;
+export type GrantSaveResult = z.infer<typeof GrantSaveResult>;
 export type BusMessage = z.infer<typeof BusMessage>;
 
 /** The member of the union with a given `type` (both `ui.result` shapes for `'ui.result'`). */

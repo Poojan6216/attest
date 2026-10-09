@@ -1,10 +1,12 @@
 /**
  * The clock's high water (./clock-guard.ts has the rule; Decisions [2.7] wave E): the latest instant the ledger stored
  * a sighting, a sync or a read at since the clock last went back, and how many facts it has stored (`STORED_WRITES`).
- * Every writer of such an instant raises both in the transaction that stores the fact (`noteStoredInstant`): ./upsert.ts (a new row's or claim's sighting),
- * ./coverage-store.ts (an interval's `lastSyncAt`), ./calendar-snapshots.ts (a record's `readAt`) and ./health.ts (an
- * observer health report's `checkedAt`, SEC-4). Kept apart from the guard so those writers do not depend on what the
- * guard repairs. The retention purge trusts the wall clock only up to it (./retention-clock.ts, SEC-5).
+ * Every writer of such an instant raises both in the transaction that stores the fact (`noteStoredInstant`):
+ * ./upsert.ts (a new row's or claim's sighting), ./coverage-store.ts (an interval's `lastSyncAt`),
+ * ./calendar-snapshots.ts (a record's `readAt`), ./health.ts (an observer health report's `checkedAt`, SEC-4) and
+ * ./grant-save.ts (the instant a person saved a grant, sprint_4 4.4). Kept apart from the guard so those writers do
+ * not depend on what the guard repairs. The retention purge trusts the wall clock only up to it (./retention-clock.ts,
+ * SEC-5).
  */
 import { z } from 'zod';
 
@@ -17,7 +19,7 @@ export const CLOCK_HIGH_WATER = 'clockHighWater';
 
 /**
  * The meta key of how many facts the ledger has stored (tech review TECH-2): every call of `noteStoredInstant`, so
- * every row, claim, coverage interval, Calendar record, health report and activity row, counts one, in the
+ * every row, claim, coverage interval, Calendar record, health report, activity row and saved grant, counts one, in the
  * transaction that stores it. A grading batch that finds it where the last graded batch left it, and no receipt
  * PENDING, has nothing to grade (src/background/grading.ts). Never lowered, never reset by a clock repair.
  */

@@ -20,6 +20,7 @@ import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
+import { onGrantSave } from './grant-save';
 import { onReceiptEvent } from './user-events';
 import { type GradingDeps, SHIPPED_GRADING } from './grading';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
@@ -82,6 +83,7 @@ export function createHandlers(
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
     'claims.import': (message) => onClaimsImport(imports, message),
+    'grant.save': (message) => onGrantSave(imports, message),
     'receipt.event': (message) =>
       onReceiptEvent({ db: imports.db, nowMs: imports.grading.nowMs, notify: imports.notify }, message),
     'adapter.health': (message, sender) =>

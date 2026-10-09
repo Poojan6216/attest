@@ -13,13 +13,13 @@
  *
  * The ledger keeps two `meta` facts:
  *  - `clockHighWater`: the latest instant stored since the last repair: each new row's and claim's sighting, each
- *    coverage interval's `lastSyncAt`, each Calendar record's `readAt` and each observer health report's `checkedAt`
- *    (`noteStoredInstant`, written in the transaction that stores the fact). Each was read at or before the now of
- *    the transaction that stored it, so a later now below it means the clock went back. Batch instants are not
- *    counted: a batch reads, it is not evidence.
+ *    coverage interval's `lastSyncAt`, each Calendar record's `readAt`, each observer health report's `checkedAt`
+ *    and the instant of each saved grant (`noteStoredInstant`, written in the transaction that stores the fact).
+ *    Each was read at or before the now of the transaction that stored it, so a later now below it means the clock
+ *    went back. Batch instants are not counted: a batch reads, it is not evidence.
  *  - `clockFloorAt`: written by a repair, never lowered: the latest instant stamped before the clock went back. No
  *    Calendar chain vouches for changes before it (src/background/calendar-pass.ts lifts `changesSince` to it).
- * and one per repair, `clockRepair.<ms>`: the span it repaired (step 7), which grading reads (./clock-repairs.ts).
+ * and one per repair, `clockRepair.<ms>`: the span it repaired (step 8), which grading reads (./clock-repairs.ts).
  *
  * `guardClock(db, nowMs)` runs before anything of an observer message is stored (the service worker's clock), and
  * must run before a grading batch records its instant (Sprint 3.6). When now is below the high water (or below a
@@ -41,11 +41,15 @@
  *  6. every session ping and time away stamped after now goes, and a time away that reaches past now is cut at now
  *     (./activity.ts `repairActivity`; security review SEC-3): either would count as UNASKED evidence once real time
  *     reached it; logged as `ledger.clock_activity_repaired` with a count, when there was any;
- *  7. the span from now to the high water is kept for grading (./clock-repairs.ts; docs/grading.md §3 v1.16): a
+ *  7. every grant stamped after the later of now and the last batch instant + 1 ms is re-stamped there, its fields
+ *     kept (sprint_4 4.4): a batch ignores a grant stamped after its instant, and an agent's grant is its only row,
+ *     so until real time caught up the agent would have none in force and every batch grading it would throw
+ *     `missing_grant`; logged as `ledger.clock_grants_restamped` with a count, when there was any;
+ *  8. the span from now to the high water is kept for grading (./clock-repairs.ts; docs/grading.md §3 v1.16): a
  *     `calendar.created` claim whose first-seen bound lies in it is never NOT_FOUND, since its event, first seen
  *     after the repair, can read as earlier than the claim (S2-SIM2-1);
- *  8. the floor becomes the high water (or stays, if higher) and the high water is cleared;
- *  9. it logs `ledger.clock_regressed` once, with counts only (the re-stamped health reports only when there were any).
+ *  9. the floor becomes the high water (or stays, if higher) and the high water is cleared;
+ * 10. it logs `ledger.clock_regressed` once, with counts only (the re-stamped health reports only when there were any).
  * Claims and other rows stay as stored: a batch may have graded with them.
  *
  * Known limit: a jump that comes back before anything is stored and before any batch runs leaves instants that are
@@ -54,7 +58,7 @@
 import { isoWithLocalOffset } from '../clock';
 import { firstSeenAt } from '../core/order';
 import { log } from '../log';
-import { lastBatchMs } from './batch-instant';
+import { lastBatchMs, stampEventAt } from './batch-instant';
 import { repairActivity } from './activity';
 import { CalendarRecord } from './calendar-snapshots';
 import { CLOCK_HIGH_WATER, readInstant } from './clock-high-water';
@@ -62,7 +66,7 @@ import { keepRepairSpan } from './clock-repairs';
 import { readRow, readRows, type LedgerDb } from './db';
 import { setByLedger } from './health';
 import { accountKeyOf, epochMs } from './index-fields';
-import { AdapterHealth, CoveragePing, IsoTs, Observation } from './types';
+import { AdapterHealth, CoveragePing, Grant, IsoTs, Observation } from './types';
 
 export { CLOCK_HIGH_WATER, noteStoredInstant } from './clock-high-water';
 
@@ -82,10 +86,11 @@ export function guardTables(db: LedgerDb) {
     db.calendarSnapshots,
     db.adapterHealth,
     db.activity,
+    db.grants,
   ];
 }
 
-/** What a repair removed or re-stamped (step 9 of the header). */
+/** What a repair removed or re-stamped (step 10 of the header). */
 interface ClockRepair {
   readonly intervals: number;
   readonly pings: number;
@@ -159,7 +164,20 @@ async function repairFutureHealth(db: LedgerDb, nowMs: number): Promise<number> 
   return future.length;
 }
 
-/** Steps 1 to 9 of the header, for a clock at `nowMs` below the stored high water `high`. */
+/**
+ * Step 7: every grant a later batch could not see, re-stamped at the instant the next batch is at or after (header).
+ * The table holds one row per agent, so reading it whole is bounded.
+ */
+async function restampFutureGrants(db: LedgerDb, now: IsoTs): Promise<number> {
+  const at = stampEventAt(now, await lastBatchMs(db));
+  const future = readRows('grants', Grant, await db.grants.toArray()).filter(
+    (grant) => epochMs(grant.updatedAt) > epochMs(at),
+  );
+  await db.grants.bulkPut(future.map((grant) => ({ ...grant, updatedAt: at })));
+  return future.length;
+}
+
+/** Steps 1 to 10 of the header, for a clock at `nowMs` below the stored high water `high`. */
 async function repair(db: LedgerDb, nowMs: number, high: IsoTs): Promise<ClockRepair> {
   const floor = later(await readInstant(db, CLOCK_FLOOR_AT), high) ?? high;
   const coverage = await dropFutureCoverage(db, nowMs);
@@ -169,6 +187,8 @@ async function repair(db: LedgerDb, nowMs: number, high: IsoTs): Promise<ClockRe
   const now = IsoTs.parse(isoWithLocalOffset(new Date(nowMs)));
   const activity = await repairActivity(db, nowMs, now);
   if (activity > 0) log.warn('ledger.clock_activity_repaired', { rowCount: activity });
+  const grants = await restampFutureGrants(db, now);
+  if (grants > 0) log.warn('ledger.clock_grants_restamped', { rowCount: grants });
   await keepRepairSpan(db, now, high);
   await db.meta.put({ key: CLOCK_FLOOR_AT, value: floor });
   await db.meta.delete(CLOCK_HIGH_WATER);
@@ -186,8 +206,8 @@ async function repair(db: LedgerDb, nowMs: number, high: IsoTs): Promise<ClockRe
  * repairs when the clock went back below what the ledger stored, then returns the floor in force (undefined when
  * the clock never went back). Whether a repair is due is decided by a read (TECH-2: the guard runs for every observer
  * message, and the clock almost never went back); the repair is one readwrite transaction over `guardTables` (`meta`,
- * `observations`, `coverageIntervals`, `coverage`, `calendarSnapshots` and `adapterHealth`), which checks again inside
- * it. Either runs in the caller's transaction when it has one with those tables.
+ * `observations`, `coverageIntervals`, `coverage`, `calendarSnapshots`, `adapterHealth`, `activity` and `grants`),
+ * which checks again inside it. Either runs in the caller's transaction when it has one with those tables.
  */
 export async function guardClock(db: LedgerDb, nowMs: number): Promise<IsoTs | undefined> {
   const due = async (): Promise<IsoTs | undefined> => {

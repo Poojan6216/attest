@@ -19,8 +19,10 @@ import { readInterval, recordCoverage } from '../../../src/ledger/coverage';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import {
+  getGrant,
   getObservation,
   putCoveragePing,
+  putGrant,
   recordBatchInstant,
   upsertClaim,
   upsertObservation,
@@ -31,6 +33,7 @@ import {
   captureLogs,
   expectLedgerError,
   makeClaim,
+  makeGrant,
   makeObservation,
   makePing,
   pinClock,
@@ -219,6 +222,29 @@ describe('a clock below the high water (it went back): the repair', () => {
     await db.meta.delete(CLOCK_HIGH_WATER);
     expect(await guardClock(db, ms(at(100)))).toBe(at(300));
     expect(await db.calendarSnapshots.count()).toBe(0);
+  });
+});
+
+describe('the repair: grants', () => {
+  it('re-stamps a grant no later batch could see, at the instant the next batch is at or after', async () => {
+    await putGrant(db, makeGrant({ agent: 'muse', updatedAt: at(300) }));
+    await putGrant(db, makeGrant({ agent: 'claude', updatedAt: at(110) }));
+    await putGrant(db, makeGrant({ agent: 'dots', updatedAt: at(50) }));
+    await noteStoredInstant(db, at(300));
+    await recordBatchInstant(db, at(120));
+    const { records, restore } = captureLogs();
+    await guardClock(db, ms(at(100)));
+    restore();
+    // The next batch is after the last one (at 120), though the clock reads 100: Muse's grant, which no batch before
+    // 300 would have seen, is in force from 1 ms after it; Claude's (110) and Dots' (50) already were, and stay.
+    expect(ms((await getGrant(db, 'muse'))?.updatedAt ?? '')).toBe(ms(at(120)) + 1);
+    expect((await getGrant(db, 'muse'))?.allowedTypes).toEqual(['email.sent', 'calendar.created']);
+    expect((await getGrant(db, 'claude'))?.updatedAt).toBe(at(110));
+    expect((await getGrant(db, 'dots'))?.updatedAt).toBe(at(50));
+    expect(records.map((each) => [each.event, each.fields])).toContainEqual([
+      'ledger.clock_grants_restamped',
+      { rowCount: 1 },
+    ]);
   });
 });
 

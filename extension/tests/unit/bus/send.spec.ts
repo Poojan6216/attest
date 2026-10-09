@@ -69,6 +69,11 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
       ...VALID['receipt.event'],
       event: { kind: 'override', grade: 'VERIFIED', reason: ' \u200b ' },
     },
+    // A ceiling with no currency is no grant (the grant schema's own rule).
+    'grant.save': {
+      ...VALID['grant.save'],
+      grant: { ...VALID['grant.save'].grant, spendCurrency: undefined },
+    },
   };
 }
 

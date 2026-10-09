@@ -21,7 +21,7 @@ import { compareText } from '../core/order';
 import { lastBatchMs } from './batch-instant';
 import { readRow, readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
-import { lastImportKey } from './import-keys';
+import { alertsMutedKey, lastImportKey } from './agent-keys';
 import { epochMs, type ReceiptRow } from './index-fields';
 import {
   AdapterHealth,
@@ -264,5 +264,26 @@ export async function sidePanelOverview(db: LedgerDb): Promise<SidePanelOverview
       lastBatchMs(db),
     ]);
     return { coverage, health, lastBatchMs: last ?? null };
+  });
+}
+
+/** What the options page's Grants show (sprint_4 4.4): every agent's grant, and each agent whose alerts are muted. */
+export interface GrantSettings {
+  readonly grants: readonly Grant[];
+  readonly muted: Partial<Record<AgentId, boolean>>;
+}
+
+/** The grant settings in one read transaction: the grants (one per agent), the mutes read by key. */
+export async function grantSettings(db: LedgerDb): Promise<GrantSettings> {
+  return db.transaction('r', [db.grants, db.meta], async () => {
+    const [grants, rows] = await Promise.all([
+      grantList(db),
+      db.meta.bulkGet(AgentId.options.map(alertsMutedKey)),
+    ]);
+    const muted: Partial<Record<AgentId, boolean>> = {};
+    AgentId.options.forEach((agent, at) => {
+      if (readRow('meta', MetaEntry, rows[at])?.value === true) muted[agent] = true;
+    });
+    return { grants, muted };
   });
 }

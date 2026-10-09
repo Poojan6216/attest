@@ -18,6 +18,8 @@ import { AgentId, type AdapterHealth, type Grade, type Grant } from '../ledger/t
 import {
   coverageSummary,
   type CoverageSummary,
+  grantSettings,
+  type GrantSettings,
   sidePanelOverview,
   type SidePanelOverview,
   grantList,
@@ -32,6 +34,7 @@ import {
 export type { ReceiptDetail } from '../ledger/detail';
 export type {
   CoverageSummary,
+  GrantSettings,
   PopupView,
   ReceiptCursor,
   ReceiptItem,
@@ -120,6 +123,11 @@ export async function loadCoverage(): Promise<CoverageSummary> {
 /** The latest health report of every adapter and observer. */
 export async function loadHealth(): Promise<AdapterHealth[]> {
   return healthReports(await getLedger());
+}
+
+/** The options page's Grants: every agent's grant, and each agent whose alerts are muted. */
+export async function loadGrantSettings(): Promise<GrantSettings> {
+  return grantSettings(await getLedger());
 }
 
 /** Every agent's grant. */

@@ -18,7 +18,15 @@ import {
   type UiQueryMessage,
   type UiResult,
 } from '../../../src/bus/messages';
-import { importClaims, postAcked, query, send, sendChecked, sendReceiptEvent } from '../../../src/bus/send';
+import {
+  importClaims,
+  postAcked,
+  query,
+  send,
+  sendChecked,
+  sendGrant,
+  sendReceiptEvent,
+} from '../../../src/bus/send';
 import {
   captureLogs,
   connectAs,
@@ -52,6 +60,7 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'ledger.changed': serviceWorker,
   'claims.import': () => extensionPage('/sidepanel.html'),
   'receipt.event': () => extensionPage('/sidepanel.html'),
+  'grant.save': () => extensionPage('/options.html'),
 };
 
 function sendFailures(): number {
@@ -308,5 +317,28 @@ describe('receipt.event (sprint_4 4.3)', () => {
     answer = () => Promise.reject(new Error('ledger closed'));
     await expect(sent()).resolves.toEqual({ ok: false, code: 'failed' });
     expect(JSON.stringify(records)).not.toContain(reason);
+  });
+});
+
+describe('grant.save (sprint_4 4.4)', () => {
+  it("from the options page: answered with the handler's result", async () => {
+    connectAs(SENDER_OF['grant.save']());
+    const handler = vi.fn<BusHandler<'grant.save'>>(() => Promise.resolve({ ok: true }));
+    listen({ 'grant.save': handler });
+    await expect(sendGrant(VALID['grant.save'].grant, false)).resolves.toEqual({ ok: true });
+    expect(handler.mock.calls[0]?.[0]).toEqual(VALID['grant.save']);
+  });
+
+  it('from a content script: dropped as untrusted, never handled', async () => {
+    connectAs(contentScript());
+    const handler = vi.fn<BusHandler<'grant.save'>>(() => Promise.resolve({ ok: true }));
+    listen({ 'grant.save': handler });
+    await expect(sendRaw(VALID['grant.save'])).resolves.toBeUndefined();
+    expect(handler).not.toHaveBeenCalled();
+    expect(records).toContainEqual({
+      level: 'warn',
+      event: 'bus.dropped',
+      fields: { reason: 'untrusted_context', type: 'grant.save' },
+    });
   });
 });

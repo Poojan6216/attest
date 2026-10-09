@@ -10,9 +10,9 @@ import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
 import { CLOCK_REPAIR_PREFIX } from './clock-repairs';
 import { PURGE_TRUSTED_AT } from './retention-clock';
 
-import { LAST_IMPORT_PREFIX } from './import-keys';
+import { ALERTS_MUTED_PREFIX, LAST_IMPORT_PREFIX } from './agent-keys';
 
-export { LAST_IMPORT_PREFIX, lastImportKey } from './import-keys';
+export { ALERTS_MUTED_PREFIX, alertsMutedKey, LAST_IMPORT_PREFIX, lastImportKey } from './agent-keys';
 
 /** Every meta key, a prefix for each family of them. */
 export const META_KEYS: readonly string[] = Object.freeze([
@@ -25,4 +25,5 @@ export const META_KEYS: readonly string[] = Object.freeze([
   PURGE_TRUSTED_AT,
   OPEN_IDLE,
   LAST_IMPORT_PREFIX,
+  ALERTS_MUTED_PREFIX,
 ]);

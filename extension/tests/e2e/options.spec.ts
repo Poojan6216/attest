@@ -21,7 +21,8 @@ import { expect, test } from './support/test';
 declare const chrome: WxtBrowser;
 
 const SECTION_TITLES = ['Grants', 'Adapters', 'Privacy', 'Model', 'Export', 'Danger zone'];
-const STUB_SECTION_IDS = ['grants', 'adapters', 'model'];
+// Grants are editable since sprint_4 4.4 (tests/e2e/grants.spec.ts).
+const STUB_SECTION_IDS = ['adapters', 'model'];
 const INTERACTIVE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
 
 test.describe('options page', () => {

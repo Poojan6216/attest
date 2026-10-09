@@ -6,7 +6,7 @@ export interface CheckGroupProps<T extends string> {
   readonly onToggle: (value: T) => void;
 }
 
-/** A labelled group of checkboxes (the timeline's agent and grade filters). */
+/** A labelled group of checkboxes: the timeline's agent and grade filters, a grant's actions. */
 export function CheckGroup<T extends string>({ legend, options, checked, onToggle }: CheckGroupProps<T>) {
   return (
     <fieldset class="flex flex-wrap gap-x-3 gap-y-1">
