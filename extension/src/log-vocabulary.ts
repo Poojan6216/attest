@@ -24,6 +24,8 @@ export const LOG_EVENTS = [
   'bus.handler_failed',
   'bus.import_refused',
   'bus.import_unavailable',
+  'bus.receipt_event_refused',
+  'bus.receipt_event_unavailable',
   'bus.listener_failed',
   'bus.query_unavailable',
   'bus.refused',
@@ -71,7 +73,11 @@ export const LOG_EVENTS = [
   'popup.read_failed',
   'popup.side_panel_failed',
   'popup.window_unknown',
+  'receipt.event_refused',
+  'receipt.overridden',
+  'receipt.reverted',
   'sidepanel.import_failed',
+  'sidepanel.read_failed',
   'ui.listen_failed',
   'ui.root_missing',
 ] as const;
@@ -90,6 +96,12 @@ export const LOG_VALUES = [
   'ui.result',
   'ledger.changed',
   'claims.import',
+  'receipt.event',
+  // A person's receipt events (src/background/user-events.ts): the kind and the refusal codes.
+  'override',
+  'revert',
+  'not_found',
+  'evidence_taken',
   // Bus drop reasons (src/bus/listen.ts DROP_REASONS) and query failures (src/bus/send.ts).
   'foreign_sender',
   'malformed',

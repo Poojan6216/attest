@@ -3,6 +3,7 @@ import { nowIso } from '../../src/clock';
 import { IsoTs } from '../../src/core/schema';
 import { browserOffsetAt } from '../../src/observers/time-zone';
 import { AddActivity } from './components/AddActivity';
+import { SidePanel } from './components/SidePanel';
 import type { ImportClaims, PasteClock } from './use-paste-flow';
 
 /** The paste instant and the browser's zone: the side panel's own clock (src/clock.ts). */
@@ -14,17 +15,11 @@ export const sendImport: ImportClaims = async (agent, claims, activeAt) => {
   return result.ok ? { ok: true, received: result.received, added: result.added } : { ok: false };
 };
 
+/** The side panel's root: the timeline (sprint_4 4.3) with Add agent activity (sprint_3 3.12) above it. */
 export function App() {
   return (
-    <main class="min-h-screen p-4 text-sm text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
-      <h1 class="text-base font-semibold">Attest timeline</h1>
-      <p class="mt-1 text-neutral-600 dark:text-neutral-300">Nothing leaves your browser.</p>
-      <div class="mt-4">
-        <AddActivity clock={CLOCK} onImport={sendImport} />
-      </div>
-      <p class="mt-4 text-neutral-600 dark:text-neutral-300">
-        The timeline of receipts comes in a later version. The options page exports them now.
-      </p>
-    </main>
+    <SidePanel>
+      <AddActivity clock={CLOCK} onImport={sendImport} />
+    </SidePanel>
   );
 }

@@ -280,7 +280,7 @@ describe('popup and side panel shells', () => {
     expect(root.querySelectorAll('a, input')).toHaveLength(0);
   });
 
-  it('the side panel states the privacy line and offers Add agent activity (sprint_3 3.12, 3.13)', async () => {
+  it('the side panel states the privacy line, offers Add agent activity and the filters, and loads the timeline (sprint_4 4.3)', async () => {
     await act(() => {
       render(h(SidePanelApp, null), root);
     });
@@ -289,7 +289,12 @@ describe('popup and side panel shells', () => {
     expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
       'Add agent activity',
     ]);
-    expect(root.querySelectorAll('a, input, textarea')).toHaveLength(0);
+    // The timeline's filters (tests/unit/sidepanel/timeline.spec.ts covers the timeline itself): no link, no text box.
+    expect([...root.querySelectorAll('legend')].map((l) => l.textContent)).toEqual(['Agents', 'Grades']);
+    expect(
+      [...root.querySelectorAll('[role="status"]')].map((status) => status.textContent.trim()),
+    ).toContain('Loading the timeline');
+    expect(root.querySelectorAll('a, textarea')).toHaveLength(0);
   });
 });
 

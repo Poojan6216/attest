@@ -21,6 +21,7 @@ import {
   CoveragePingMessage,
   LedgerChangedMessage,
   ObserverObservationsMessage,
+  ReceiptEventMessage,
   UiQueryMessage,
   UiResultMessage,
 } from '../../../src/bus/messages';
@@ -266,6 +267,11 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     claims: [IMPORTED_CLAIM],
     activeAt: [IMPORTED_CLAIM.claimedAt],
   }),
+  'receipt.event': ReceiptEventMessage.parse({
+    type: 'receipt.event',
+    receiptId: ULID_CLAIM,
+    event: { kind: 'override', grade: 'NOT_FOUND', reason: 'I sent it myself' },
+  }),
 };
 
 /**
@@ -295,4 +301,8 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'ui.result': { type: 'ui.result', kind: 'health.list', ok: false, error: SECRET },
   'ledger.changed': { type: 'ledger.changed', tables: ['claims'], at: '2026-10-01T09:30:00' },
   'claims.import': { ...VALID['claims.import'], text: SECRET },
+  'receipt.event': {
+    ...VALID['receipt.event'],
+    event: { kind: 'override', grade: 'PARTIAL', reason: SECRET },
+  },
 };

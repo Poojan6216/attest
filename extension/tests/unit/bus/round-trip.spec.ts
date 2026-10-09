@@ -18,7 +18,7 @@ import {
   type UiQueryMessage,
   type UiResult,
 } from '../../../src/bus/messages';
-import { importClaims, postAcked, query, send, sendChecked } from '../../../src/bus/send';
+import { importClaims, postAcked, query, send, sendChecked, sendReceiptEvent } from '../../../src/bus/send';
 import {
   captureLogs,
   connectAs,
@@ -51,6 +51,7 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'ui.result': serviceWorker,
   'ledger.changed': serviceWorker,
   'claims.import': () => extensionPage('/sidepanel.html'),
+  'receipt.event': () => extensionPage('/sidepanel.html'),
 };
 
 function sendFailures(): number {
@@ -267,5 +268,45 @@ describe('claims.import: malformed and failed (sprint_3 3.13)', () => {
       'bus.handler_failed',
       'bus.handler_failed',
     ]);
+  });
+});
+
+describe('receipt.event (sprint_4 4.3)', () => {
+  it("from the side panel: answered with the handler's result", async () => {
+    connectAs(SENDER_OF['receipt.event']());
+    const handler = vi.fn<BusHandler<'receipt.event'>>(() => Promise.resolve({ ok: true }));
+    listen({ 'receipt.event': handler });
+    await expect(
+      sendReceiptEvent(VALID['receipt.event'].receiptId, VALID['receipt.event'].event),
+    ).resolves.toEqual({
+      ok: true,
+    });
+    expect(handler.mock.calls[0]?.[0]).toEqual(VALID['receipt.event']);
+  });
+
+  it('from a content script: dropped as untrusted, never handled (only an extension page may change a receipt)', async () => {
+    connectAs(contentScript());
+    const handler = vi.fn<BusHandler<'receipt.event'>>(() => Promise.resolve({ ok: true }));
+    listen({ 'receipt.event': handler });
+    await expect(sendRaw(VALID['receipt.event'])).resolves.toBeUndefined();
+    expect(handler).not.toHaveBeenCalled();
+    expect(records).toContainEqual({
+      level: 'warn',
+      event: 'bus.dropped',
+      fields: { reason: 'untrusted_context', type: 'receipt.event' },
+    });
+  });
+
+  it('a handler that answers badly or throws is answered failed; the reason is never logged', async () => {
+    connectAs(SENDER_OF['receipt.event']());
+    const reason =
+      VALID['receipt.event'].event.kind === 'override' ? VALID['receipt.event'].event.reason : '';
+    let answer: () => Promise<unknown> = () => Promise.resolve({ ok: 'yes' });
+    listen({ 'receipt.event': () => answer() as Promise<{ ok: true }> });
+    const sent = () => sendReceiptEvent(VALID['receipt.event'].receiptId, VALID['receipt.event'].event);
+    await expect(sent()).resolves.toEqual({ ok: false, code: 'failed' });
+    answer = () => Promise.reject(new Error('ledger closed'));
+    await expect(sent()).resolves.toEqual({ ok: false, code: 'failed' });
+    expect(JSON.stringify(records)).not.toContain(reason);
   });
 });

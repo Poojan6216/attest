@@ -246,3 +246,23 @@ export async function popupView(db: LedgerDb, query: ReceiptQuery): Promise<Popu
     return { today, coverage, health, lastBatchMs: last ?? null };
   });
 }
+
+/** What the side panel shows above its timeline (sprint_4 4.3), read at one instant of the ledger. */
+export interface SidePanelOverview {
+  readonly coverage: CoverageSummary;
+  readonly health: readonly AdapterHealth[];
+  /** As `PopupView.lastBatchMs`: a PENDING receipt graded before it is no longer regraded. */
+  readonly lastBatchMs: number | null;
+}
+
+/** The side panel's overview in one read transaction. */
+export async function sidePanelOverview(db: LedgerDb): Promise<SidePanelOverview> {
+  return db.transaction('r', [db.coverage, db.adapterHealth, db.meta], async () => {
+    const [coverage, health, last] = await Promise.all([
+      coverageSummary(db),
+      healthReports(db),
+      lastBatchMs(db),
+    ]);
+    return { coverage, health, lastBatchMs: last ?? null };
+  });
+}

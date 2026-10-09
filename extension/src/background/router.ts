@@ -20,6 +20,7 @@ import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
+import { onReceiptEvent } from './user-events';
 import { type GradingDeps, SHIPPED_GRADING } from './grading';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
 import { createPassState } from './observer-state';
@@ -81,6 +82,8 @@ export function createHandlers(
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
     'claims.import': (message) => onClaimsImport(imports, message),
+    'receipt.event': (message) =>
+      onReceiptEvent({ db: imports.db, nowMs: imports.grading.nowMs, notify: imports.notify }, message),
     'adapter.health': (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ?? onHealth(ctx, message, sender),
     'observer.observations': (message, sender) =>

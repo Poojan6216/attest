@@ -43,7 +43,7 @@ describe('answerUiQuery', () => {
 });
 
 describe('createHandlers', () => {
-  it('handles ui.query, since Sprint 2.7 the observer messages, and since 3.13 the side panel’s import', () => {
+  it('handles ui.query, since Sprint 2.7 the observer messages, since 3.13 the side panel’s import, and since 4.3 its receipt events', () => {
     expect(Object.keys(createHandlers(FIXED_CLOCK)).sort()).toEqual(
       [
         'adapter.health',
@@ -51,6 +51,7 @@ describe('createHandlers', () => {
         'claims.import',
         'coverage.ping',
         'observer.observations',
+        'receipt.event',
         'ui.query',
       ].sort(),
     );

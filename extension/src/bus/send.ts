@@ -29,6 +29,8 @@ import {
   UiResultMessage,
   uiFailure,
   ClaimsImportResult,
+  type ReceiptEventMessage,
+  ReceiptEventResult,
 } from './messages';
 
 /**
@@ -118,6 +120,31 @@ export async function importClaims(
   const parsed = ClaimsImportResult.safeParse(response);
   if (parsed.success) return parsed.data;
   log.warn('bus.import_unavailable', { reason: response === undefined ? 'no_response' : 'malformed_result' });
+  return { ok: false, code: 'failed' };
+}
+
+/**
+ * Sends a person's override or revert of one receipt to the service worker (sprint_4 4.3) and resolves its
+ * `ReceiptEventResult`: for a valid message it always resolves, an absent or malformed answer becoming `{ ok: false,
+ * code: 'failed' }` (logged as `bus.receipt_event_unavailable`). An invalid message is never sent: it is logged
+ * (`bus.receipt_event_refused`) and rejects with `BusError('invalid_outgoing')`. The reason is never logged.
+ */
+export async function sendReceiptEvent(
+  receiptId: ReceiptEventMessage['receiptId'],
+  event: ReceiptEventMessage['event'],
+): Promise<ReceiptEventResult> {
+  let response: unknown;
+  try {
+    response = await send({ type: 'receipt.event', receiptId, event });
+  } catch (error) {
+    log.warn('bus.receipt_event_refused', { error });
+    throw error;
+  }
+  const parsed = ReceiptEventResult.safeParse(response);
+  if (parsed.success) return parsed.data;
+  log.warn('bus.receipt_event_unavailable', {
+    reason: response === undefined ? 'no_response' : 'malformed_result',
+  });
   return { ok: false, code: 'failed' };
 }
 

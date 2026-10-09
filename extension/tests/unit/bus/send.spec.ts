@@ -64,6 +64,11 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
       ...VALID['claims.import'],
       claims: [{ ...IMPORTED_CLAIM, extractor: { ...IMPORTED_CLAIM.extractor, id: 'muse.activity' } }],
     },
+    // A reason with no visible character is no reason (the receipt's own override schema).
+    'receipt.event': {
+      ...VALID['receipt.event'],
+      event: { kind: 'override', grade: 'VERIFIED', reason: ' \u200b ' },
+    },
   };
 }
 

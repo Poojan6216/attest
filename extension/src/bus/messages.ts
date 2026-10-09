@@ -34,9 +34,12 @@ import {
   IsoTs,
   Observation,
   AgentId,
+  OverrideGrade,
+  ReceiptOverride,
   Request,
   SCHEMA_LIMITS,
   Sha256,
+  Ulid,
 } from '../core/schema';
 import { oneLineText } from '../core/schema-text';
 import { CoveragePing } from '../ledger/types';
@@ -71,10 +74,11 @@ export const BusMessageType = z.enum([
   'ui.result',
   'ledger.changed',
   'claims.import',
+  'receipt.event',
 ]);
 
 /**
- * The ten type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
+ * The eleven type strings. A frozen copy: Zod's `.options` is a mutable array shared with the schema,
  * so exporting it directly would let one consumer's `.sort()` or `.push()` rewrite the list for all.
  */
 export const BUS_MESSAGE_TYPES: readonly BusMessageType[] = Object.freeze([...BusMessageType.options]);
@@ -254,6 +258,34 @@ export const ClaimsImportResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(false), code: AckCode }),
 ]);
 
+/**
+ * A person's override of one receipt's grade, or its revert (sprint_4 4.3; src/ledger/user-events.ts): sent by an
+ * extension page only (listen.ts), the side panel's detail. The reason is the person's own words, at most 120
+ * characters with at least one visible (the receipt's own override schema): it is stored on the receipt, and never
+ * logged (Hard Rule 10).
+ */
+export const ReceiptEventMessage = z.strictObject({
+  type: z.literal('receipt.event'),
+  receiptId: Ulid,
+  event: z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('override'),
+      grade: OverrideGrade,
+      reason: ReceiptOverride.shape.reason,
+    }),
+    z.strictObject({ kind: z.literal('revert') }),
+  ]),
+});
+
+/** Why a receipt event was not saved: none such, the state machine refused it, its evidence is another claim's, or it failed. */
+export const ReceiptEventCode = z.enum(['not_found', 'refused', 'evidence_taken', 'failed']);
+
+/** The answer to a `receipt.event`: saved, or why not. */
+export const ReceiptEventResult = z.discriminatedUnion('ok', [
+  z.strictObject({ ok: z.literal(true) }),
+  z.strictObject({ ok: z.literal(false), code: ReceiptEventCode }),
+]);
+
 /** The service worker wrote to the ledger; open UI pages re-query the tables they show. */
 export const LedgerChangedMessage = z.strictObject({
   type: z.literal('ledger.changed'),
@@ -272,6 +304,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   UiResultMessage,
   LedgerChangedMessage,
   ClaimsImportMessage,
+  ReceiptEventMessage,
 ]);
 
 export type LedgerTable = z.infer<typeof LedgerTable>;
@@ -293,6 +326,9 @@ export type UiResult = z.infer<typeof UiResultMessage>;
 export type LedgerChangedMessage = z.infer<typeof LedgerChangedMessage>;
 export type ClaimsImportMessage = z.infer<typeof ClaimsImportMessage>;
 export type ClaimsImportResult = z.infer<typeof ClaimsImportResult>;
+export type ReceiptEventMessage = z.infer<typeof ReceiptEventMessage>;
+export type ReceiptEventCode = z.infer<typeof ReceiptEventCode>;
+export type ReceiptEventResult = z.infer<typeof ReceiptEventResult>;
 export type BusMessage = z.infer<typeof BusMessage>;
 
 /** The member of the union with a given `type` (both `ui.result` shapes for `'ui.result'`). */

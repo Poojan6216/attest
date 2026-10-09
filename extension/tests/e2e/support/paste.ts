@@ -13,8 +13,10 @@ export async function pasteActivity(page: Page, agent: string, log: string): Pro
   await page.getByLabel('Activity log').fill(log);
   await page.getByRole('button', { name: 'Preview' }).click();
   await page.getByRole('button', { name: /^Import \d+ claims?$/u }).click();
-  const status = page.getByRole('status');
-  await expect(status).toHaveText(/^(?:Imported \d+|Attest already had)/u, { timeout: 30_000 });
+  // The panel's other status lines (the timeline loading, an empty timeline) are not the import's: its line is the one
+  // that says what was imported.
+  const status = page.getByRole('status').filter({ hasText: /^(?:Imported \d+|Attest already had)/u });
+  await expect(status).toBeVisible({ timeout: 30_000 });
   return (await status.textContent()) ?? '';
 }
 

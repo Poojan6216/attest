@@ -18,6 +18,8 @@ import { AgentId, type AdapterHealth, type Grade, type Grant } from '../ledger/t
 import {
   coverageSummary,
   type CoverageSummary,
+  sidePanelOverview,
+  type SidePanelOverview,
   grantList,
   healthReports,
   popupView,
@@ -28,7 +30,14 @@ import {
 } from '../ledger/views';
 
 export type { ReceiptDetail } from '../ledger/detail';
-export type { CoverageSummary, PopupView, ReceiptCursor, ReceiptItem, ReceiptPage } from '../ledger/views';
+export type {
+  CoverageSummary,
+  PopupView,
+  ReceiptCursor,
+  ReceiptItem,
+  ReceiptPage,
+  SidePanelOverview,
+} from '../ledger/views';
 
 /** Every agent, in the order the schema lists them. */
 const EVERY_AGENT: readonly AgentId[] = AgentId.options;
@@ -70,10 +79,15 @@ export interface TimelineFilters {
   readonly to: string;
 }
 
-/** One page of the side panel's timeline, newest first; `after` is the page before's `next`. */
+/**
+ * One page of the side panel's timeline, newest first; `after` is the page before's `next`. `limit` reads more than one
+ * page at once: the side panel reads again as many receipts as it shows when the ledger changes, so its list keeps
+ * its place (TIMELINE_PAGE_SIZE when absent).
+ */
 export async function loadTimelinePage(
   filters: TimelineFilters,
   after?: ReceiptCursor,
+  limit: number = TIMELINE_PAGE_SIZE,
 ): Promise<ReceiptPage> {
   const db = await getLedger();
   const days = localDaysMs(filters.from, filters.to);
@@ -82,9 +96,14 @@ export async function loadTimelinePage(
     agents: filters.agents,
     ...(filters.grades === undefined ? {} : { grades: filters.grades }),
     ...days,
-    limit: TIMELINE_PAGE_SIZE,
+    limit,
     ...(after === undefined ? {} : { after }),
   });
+}
+
+/** The side panel's overview: the coverage summary and the health reports, and the last batch's instant (or null). */
+export async function loadOverview(): Promise<SidePanelOverview> {
+  return sidePanelOverview(await getLedger());
 }
 
 /** One receipt with its claim, request, evidence and grading inputs, or undefined when there is no such receipt. */

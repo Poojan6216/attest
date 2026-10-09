@@ -10,15 +10,18 @@ export interface ReceiptRowProps {
   readonly nowMs: number;
   /** The last grading batch's instant, or null before the first: a PENDING receipt graded before it is no longer checked. */
   readonly lastBatchMs: number | null;
+  /** Opens the receipt's detail (the side panel); the row has no Details button without it (the popup). */
+  readonly onOpen?: () => void;
 }
 
 /**
  * One receipt in a list (agents/ux_engineer.md rules 1, 4 and 6): the grade chip first, then the claim in one line,
- * then the agent ("Likely agent: …" for UNASKED); below, its status and why its grade is what it is, and an UNASKED
- * receipt's signals one tap away.
+ * then the agent ("Likely agent: …" for UNASKED), and in the side panel a Details button; below, its status and why its
+ * grade is what it is, and an UNASKED receipt's signals one tap away.
  */
-export function ReceiptRow({ item, nowMs, lastBatchMs }: ReceiptRowProps) {
+export function ReceiptRow({ item, nowMs, lastBatchMs, onOpen }: ReceiptRowProps) {
   const { receipt } = item;
+  const line = receiptLine(item, nowMs);
   const unasked = receipt.grade === 'UNASKED';
   const status = statusLine(receipt, nowMs, lastBatchMs);
   const reason = reasonLine(receipt);
@@ -27,8 +30,18 @@ export function ReceiptRow({ item, nowMs, lastBatchMs }: ReceiptRowProps) {
     <li class="py-row" data-receipt={receipt.id}>
       <div class="flex items-start gap-2">
         <GradeChip grade={receipt.grade} />
-        <p class="min-w-0 flex-1 break-words text-sm text-ink">{receiptLine(item, nowMs)}</p>
+        <p class="min-w-0 flex-1 break-words text-sm text-ink">{line}</p>
         <AgentBadge agent={receipt.agent} likely={unasked} />
+        {onOpen === undefined ? null : (
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={`Details: ${line}`}
+            class="shrink-0 rounded border border-rule px-1.5 py-0.5 text-xs text-ink hover:bg-skeleton"
+          >
+            Details
+          </button>
+        )}
       </div>
       {status === null ? null : <p class="mt-0.5 text-xs text-ink-muted">{status}</p>}
       {reason === null ? null : <p class="mt-0.5 text-xs text-ink-muted">{reason}</p>}
