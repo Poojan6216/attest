@@ -3,11 +3,15 @@
  * the week before (./digest-week.ts), and kept, one row per week (`digests`, schema v10), so the digest page reads it
  * and computes nothing (the sprint's rule: the UI is a view of the ledger). In one read transaction:
  *  - each agent's receipts graded that week (`computedAt` in the week), read through `[agent+computedMs]`, superseded
- *    ones aside: FINAL ones counted by grade, PENDING ones as still checking, marked ones (USER_OVERRIDDEN) as marked,
- *    and of its FINAL claim receipts Attest could check (Verified, Partial, Not found, Over scope), how many are Verified;
- *  - the notable receipts: FINAL NOT_FOUND, UNASKED and OVER_SCOPE, newest first, each with what a share may show: the
- *    action and its time, the counterparty's domain only (an address gives its domain; a name gives nothing), the
- *    amount, and the subject hint the ledger keeps;
+ *    ones aside: FINAL ones and the ones the person marked (USER_OVERRIDDEN) counted by Attest's own grade, the marked
+ *    ones also as marked, PENDING ones as still checking, and of the claim receipts so counted that Attest could check
+ *    (Verified, Partial, Not found, Over scope), how many are Verified. A mark never changes a count (sprint_4 close,
+ *    tech review TECH-4: "they are also how a lazy user hides problems");
+ *  - the notable receipts: NOT_FOUND, UNASKED and OVER_SCOPE by Attest's own grade, FINAL or marked, newest first, each
+ *    with what a share may show: the action and its time, the counterparty's domain only (an address gives its domain;
+ *    a name gives nothing), the amount, the subject hint the ledger keeps, and the person's mark's grade;
+ *  - the person's marks, newest first: Attest's grade, theirs, and their reason, which the digest page shows ("The
+ *    override reason is required and visible in the digest") and no share holds;
  *  - per source the days of the week no coverage window of it reached (`coverageIntervals` spans): Attest could not
  *    check them;
  *  - each reader's latest health.
@@ -26,6 +30,7 @@ import {
   type AgentWeek,
   AlertGrade,
   Claim,
+  type DigestMark,
   DigestRecord,
   Grade,
   type IsoTs,
@@ -53,16 +58,30 @@ function agentWeek(agent: AgentId, receipts: readonly Receipt[]): AgentWeek {
   let checked = 0;
   let verified = 0;
   for (const receipt of receipts) {
-    if (receipt.state === 'PENDING') checking += 1;
-    else if (receipt.state === 'USER_OVERRIDDEN') marked += 1;
-    else {
-      grades[receipt.grade] += 1;
-      if (receipt.claimId !== undefined && CHECKED.has(receipt.grade)) checked += 1;
-      if (receipt.claimId !== undefined && receipt.grade === 'VERIFIED') verified += 1;
+    if (receipt.state === 'PENDING') {
+      checking += 1;
+      continue;
     }
+    if (receipt.state === 'USER_OVERRIDDEN') marked += 1;
+    grades[receipt.grade] += 1;
+    if (receipt.claimId !== undefined && CHECKED.has(receipt.grade)) checked += 1;
+    if (receipt.claimId !== undefined && receipt.grade === 'VERIFIED') verified += 1;
   }
   return { agent, grades, checking, marked, checked, verified };
 }
+
+/** Whether the digest calls `receipt` out (header): an alert grade by Attest's own, FINAL or marked. */
+const isNotable = (receipt: Receipt): boolean =>
+  (receipt.state === 'FINAL' || receipt.state === 'USER_OVERRIDDEN') &&
+  AlertGrade.safeParse(receipt.grade).success;
+
+/** The person's marks among `receipts` (header). */
+const marksOf = (receipts: readonly Receipt[]): DigestMark[] =>
+  receipts.flatMap(({ id: receiptId, agent, grade, override }) =>
+    override === undefined
+      ? []
+      : [{ receiptId, agent, grade, markGrade: override.grade, reason: override.reason }],
+  );
 
 /** What a share may show of each notable receipt (header), newest first. */
 async function notableOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<NotableReceipt[]> {
@@ -93,6 +112,7 @@ async function notableOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<No
       ...(action?.amountCents === undefined ? {} : { amountCents: action.amountCents }),
       ...(action?.currency === undefined ? {} : { currency: action.currency }),
       ...(action?.subjectHint === undefined ? {} : { subjectHint: action.subjectHint }),
+      ...(receipt.override === undefined ? {} : { mark: { grade: receipt.override.grade } }),
     };
   });
 }
@@ -125,6 +145,7 @@ export async function buildDigest(db: LedgerDb, week: DigestWeek, createdAt: Iso
   return db.transaction('r', tables, async (): Promise<DigestRecord> => {
     const agents: AgentWeek[] = [];
     const notable: Receipt[] = [];
+    const marked: Receipt[] = [];
     for (const agent of AgentId.options) {
       const rows = await db.receipts
         .where('[agent+computedMs]')
@@ -135,9 +156,11 @@ export async function buildDigest(db: LedgerDb, week: DigestWeek, createdAt: Iso
       );
       if (receipts.length === 0) continue;
       agents.push(agentWeek(agent, receipts));
-      notable.push(...receipts.filter((r) => r.state === 'FINAL' && AlertGrade.safeParse(r.grade).success));
+      notable.push(...receipts.filter(isNotable));
+      marked.push(...receipts.filter(({ override }) => override !== undefined));
     }
     notable.sort(newestFirst);
+    marked.sort(newestFirst);
     return DigestRecord.parse({
       week: week.week,
       from: isoWithLocalOffset(new Date(week.fromMs)),
@@ -148,6 +171,8 @@ export async function buildDigest(db: LedgerDb, week: DigestWeek, createdAt: Iso
       notableCount: notable.length,
       gaps: await gapsOf(db, week),
       health: readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()),
+      marks: marksOf(marked.slice(0, SCHEMA_LIMITS.LIST)),
+      marksCount: marked.length,
     });
   });
 }

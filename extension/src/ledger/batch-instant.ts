@@ -46,6 +46,25 @@ export async function noteGradedWrites(db: LedgerDb, writes: number): Promise<vo
   await db.meta.put({ key: GRADED_WRITES, value: writes });
 }
 
+/**
+ * The meta key holding how many PENDING receipts the last graded batch kept without producing them (claim-less rows
+ * that hold reverted overrides; src/core/batch-store.ts `held`): rows no batch grades again until a new fact is stored,
+ * so a batch with nothing new skips over them (sprint_4 close, tech review TECH-7). Written only by `noteHeldPending`.
+ */
+export const HELD_PENDING = 'heldPending';
+
+const HeldPending = z.strictObject({ key: z.literal(HELD_PENDING), value: z.number().int().nonnegative() });
+
+/** How many PENDING receipts the last graded batch held (header); 0 before any. */
+export async function heldPending(db: LedgerDb): Promise<number> {
+  return readRow('meta', HeldPending, await db.meta.get(HELD_PENDING))?.value ?? 0;
+}
+
+/** Records how many PENDING receipts a batch held (call it in the batch's transaction). */
+export async function noteHeldPending(db: LedgerDb, count: number): Promise<void> {
+  await db.meta.put(HeldPending.parse({ key: HELD_PENDING, value: count }));
+}
+
 const LastEvaluatedAt = z.strictObject({ key: z.literal(LAST_EVALUATED_AT), value: IsoTs });
 
 /**

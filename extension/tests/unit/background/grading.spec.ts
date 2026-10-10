@@ -23,10 +23,19 @@ import { readRows, type LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
 import { replayRecords } from '../../../src/ledger/replay-records';
-import { listGrants, putGrant } from '../../../src/ledger/repo';
+import { getReceipt, listGrants, putGrant, putReceipt } from '../../../src/ledger/repo';
+import { transition } from '../../../src/core/state';
 import { readSnapshot } from '../../tools/attest-snapshot';
 import { AT } from '../core/demo-ledger';
-import { pinClock, releaseClock, uniqueDbName } from '../ledger/fixtures';
+import {
+  makeReceipt,
+  observationId,
+  omit,
+  pinClock,
+  releaseClock,
+  ulid,
+  uniqueDbName,
+} from '../ledger/fixtures';
 import { storeDemo } from './demo-store';
 
 const DEPS = { policy: DEFAULT_POLICY, policyDocument: DEFAULT_POLICY_DOCUMENT, nowMs: () => Date.now() };
@@ -121,6 +130,39 @@ describe('a batch with nothing to grade (tech review TECH-2)', () => {
     await putSessions(db, 'muse', [IsoTs.parse(later)]);
     const after = new Date(Date.parse(later) + 60_000).toISOString();
     expect(await batchAt(db, after)).toMatchObject({ skipped: false });
+  });
+});
+
+describe('a batch with only held receipts PENDING (tech review TECH-7)', () => {
+  it('grades once and holds them, then skips: a held receipt never keeps every batch reading the ledger', async () => {
+    const db = await open('grading-held');
+    await storeDemo(db, AT.evaluated);
+    await batchAt(db, AT.evaluated);
+    // An unclaimed action's receipt, marked then unmarked, whose action is no longer in the ledger: no batch produces it.
+    const unasked = Receipt.parse({
+      ...omit(
+        makeReceipt({
+          id: ulid(900),
+          grade: 'UNASKED',
+          computedAt: AT.evaluated,
+          observationIds: [observationId(77)],
+        }),
+        'claimId',
+      ),
+      attribution: 'likely',
+      reasons: [{ code: 'unasked.session', params: { agent: 'muse' } }],
+    });
+    const marked = transition(unasked, {
+      event: 'override',
+      grade: 'NOT_FOUND',
+      reason: 'mine',
+      at: AT.evaluated,
+    });
+    await putReceipt(db, transition(marked, { event: 'revert', at: AT.evaluated }));
+    expect(await batchAt(db, AT.nextDay)).toMatchObject({ skipped: false });
+    expect((await getReceipt(db, ulid(900)))?.state).toBe('PENDING');
+    const later = new Date(Date.parse(AT.nextDay) + 5 * 60_000).toISOString();
+    expect(await batchAt(db, later)).toMatchObject({ skipped: true });
   });
 });
 

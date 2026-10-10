@@ -54,7 +54,7 @@ import { readRows, type LedgerDb } from '../ledger/db';
 import { LedgerError } from '../ledger/errors';
 import { createLedgerIndex } from '../ledger/index';
 import { deleteReceiptInputs, putPolicyDocument, putReceiptInputs } from '../ledger/replay-records';
-import { gradedWrites, noteGradedWrites } from '../ledger/batch-instant';
+import { gradedWrites, heldPending, noteGradedWrites, noteHeldPending } from '../ledger/batch-instant';
 import { readCount, STORED_WRITES } from '../ledger/clock-high-water';
 import { lastImportKey } from '../ledger/meta-keys';
 import { getMeta, putReceipt, recordBatchInstant } from '../ledger/repo';
@@ -214,6 +214,7 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
   );
   const stored = new Map<Ulid, Receipt>(receipts.map((receipt) => [receipt.id, receipt]));
   const result = storeBatch(stored, graded, coverage);
+  await noteHeldPending(db, result.held.length);
   await db.receipts.bulkDelete([...result.deleted]);
   for (const id of result.deleted) stored.delete(id);
   for (const receipt of result.put) {
@@ -243,13 +244,15 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
 
 /**
  * Whether a batch has nothing to grade (tech review TECH-2): no receipt is PENDING (its finality reads the clock, so
- * it is always regraded) and no fact was stored since the last batch that graded (`writes`, the ledger's stored-fact
- * count, is where that batch left it; a ledger that never recorded one always grades). Such a batch would read and
- * parse every claim and receipt, every five minutes, and write nothing.
+ * it is always regraded) but those the last graded batch held without producing them (claim-less rows that hold
+ * reverted overrides, which no batch grades until a new fact is stored; sprint_4 close, tech review TECH-7), and no fact
+ * was stored since the last batch that graded (`writes`, the ledger's stored-fact count, is where that batch left it; a
+ * ledger that never recorded one always grades). Such a batch would read and parse every claim and receipt, every five
+ * minutes, and write nothing.
  */
 async function nothingToGrade(db: LedgerDb, writes: number): Promise<boolean> {
   if ((await gradedWrites(db)) !== writes) return false;
-  return (await db.receipts.where('state').equals('PENDING').count()) === 0;
+  return (await db.receipts.where('state').equals('PENDING').count()) <= (await heldPending(db));
 }
 
 /** One batch now (header); null when it ran nothing because its instant was not after the last batch's. */

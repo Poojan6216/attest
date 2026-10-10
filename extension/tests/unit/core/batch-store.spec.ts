@@ -78,6 +78,9 @@ describe('storeBatch', () => {
     );
     const kept = storeBatch(mapOf([held]), claimsOnly, late.coverage);
     expect([kept.deleted, kept.released]).toEqual([[], []]);
+    // Kept, and named held, so a batch with nothing new can skip over it (sprint_4 close, TECH-7).
+    expect(kept.held).toEqual([held.id]);
+    expect(gone.held).toEqual([]);
   });
 });
 

@@ -4,13 +4,14 @@
  * announces a new one (`ledger.changed`: digests). The page shows what was stored and computes nothing. A read that
  * fails is said and logged (Hard Rule 6).
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback, useState } from 'preact/hooks';
 
 import { digestWeeks, getDigest } from '../../src/ledger/digest';
 import { getLedger } from '../../src/ledger/shared';
 import type { DigestRecord } from '../../src/ledger/types';
 import { log } from '../../src/log';
 import { onLedgerChanged } from '../../src/ui/data';
+import { useLedgerRead } from '../../src/ui/use-ledger-read';
 
 export interface DigestSources {
   readonly weeks: () => Promise<string[]>;
@@ -36,31 +37,22 @@ export type DigestState =
       readonly digest: DigestRecord | undefined;
     };
 
+const logReadFailed = (error: unknown): void => {
+  log.error('digest.read_failed', { error });
+};
+
+/** The weeks and the week shown (header), read in order (src/ui/use-ledger-read.ts): a read for a week since replaced by the person's choice lands nowhere. */
 export function useDigests(sources: DigestSources = LIVE_DIGESTS): {
   readonly state: DigestState;
   readonly choose: (week: string) => void;
 } {
-  const [state, setState] = useState<DigestState>({ status: 'loading' });
   const [chosen, choose] = useState<string | null>(null);
-  const read = useMemo(
-    () => () => {
-      sources
-        .weeks()
-        .then(async (weeks) => {
-          const week = chosen !== null && weeks.includes(chosen) ? chosen : (weeks[0] ?? null);
-          const digest = week === null ? undefined : await sources.digest(week);
-          setState({ status: 'ready', weeks, week, digest });
-        })
-        .catch((error: unknown) => {
-          log.error('digest.read_failed', { error });
-          setState({ status: 'failed' });
-        });
-    },
-    [sources, chosen],
-  );
-  useEffect(() => {
-    read();
-    return sources.subscribe(read);
-  }, [read, sources]);
-  return { state, choose };
+  const load = useCallback(async () => {
+    const weeks = await sources.weeks();
+    const week = chosen !== null && weeks.includes(chosen) ? chosen : (weeks[0] ?? null);
+    const digest = week === null ? undefined : await sources.digest(week);
+    return { weeks, week, digest };
+  }, [sources, chosen]);
+  const read = useLedgerRead(load, sources.subscribe, logReadFailed);
+  return { state: read.status === 'ready' ? { status: 'ready', ...read.value } : read, choose };
 }

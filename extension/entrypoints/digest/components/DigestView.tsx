@@ -3,6 +3,7 @@ import { gapLine, healthWord, weekLabel } from '../../../src/ui/digest-labels';
 import { clockTime } from '../../../src/ui/format';
 import { adapterName } from '../../../src/ui/receipt-labels';
 import { AgentWeekCard } from './AgentWeekCard';
+import { MarksSection } from './MarksSection';
 import { NotableItem } from './NotableItem';
 import { ShareDigest, type ShareTools } from './ShareDigest';
 
@@ -14,8 +15,9 @@ export interface DigestViewProps {
 }
 
 /**
- * One week's digest (sprint_4 4.7): each agent's week, the receipts to look at, the days a source was not checked, the
- * readers' health, and the share. A view of the stored digest: it computes nothing.
+ * One week's digest (sprint_4 4.7): each agent's week, the receipts to look at, the person's marks with their reasons
+ * (sprint_4 close, TECH-4), the days a source was not checked, the readers' health, and the share. A view of the stored
+ * digest: it computes nothing.
  */
 export function DigestView({ digest, nowMs, share }: DigestViewProps) {
   const more = digest.notableCount - digest.notable.length;
@@ -56,6 +58,7 @@ export function DigestView({ digest, nowMs, share }: DigestViewProps) {
         )}
         {more > 0 ? <p>And {String(more)} more, in the side panel’s timeline.</p> : null}
       </section>
+      <MarksSection digest={digest} />
       <section aria-labelledby="coverage-heading" class="space-y-2">
         <h2 id="coverage-heading" class="text-base font-semibold">
           What Attest could check

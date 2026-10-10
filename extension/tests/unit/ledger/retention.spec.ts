@@ -262,6 +262,33 @@ describe('purgeExpired and weekly digests', () => {
     expect((await purgeExpired(db, { now: NOW })).digests).toBe(1);
     expect(await db.digests.toCollection().primaryKeys()).toEqual(['2026-10-05']);
   });
+
+  it('deletes a week that started before the cutoff, though it ends after, and a row that no longer parses (SEC-7)', async () => {
+    // The cutoff is 3 October: the week of 28 September holds hints of receipts already purged.
+    await db.digests.put(
+      DigestRecord.parse({
+        week: '2026-09-28',
+        from: '2026-09-28T00:00:00-04:00',
+        to: '2026-10-05T00:00:00-04:00',
+        createdAt: '2026-10-05T09:00:00-04:00',
+        agents: [],
+        notable: [
+          {
+            receiptId: '01JA0000000000000000000009',
+            agent: 'muse',
+            grade: 'NOT_FOUND',
+            subjectHint: 'Q3 review',
+          },
+        ],
+        notableCount: 1,
+        gaps: [],
+        health: [],
+      }),
+    );
+    await db.digests.put({ week: '2026-09-14', unknown: 'a later schema' } as never);
+    expect((await purgeExpired(db, { now: NOW })).digests).toBe(2);
+    expect(await db.digests.count()).toBe(0);
+  });
 });
 
 describe('purgeExpired and alerts', () => {

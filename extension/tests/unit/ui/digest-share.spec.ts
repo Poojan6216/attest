@@ -74,7 +74,7 @@ describe('digest labels', () => {
     expect(gapLine('gmail.sent', week)).toBe('Gmail Sent was not checked all week.');
     expect(digestReadyText(DIGEST)).toEqual({
       title: 'Your weekly digest',
-      message: 'Week of 5 Oct 2026: 3 receipts to look at.',
+      message: 'Week of 5 Oct 2026: 3 receipts to look at. Calendar was not checked Tue–Thu.',
     });
   });
 });
@@ -103,6 +103,52 @@ describe('digestMarkdown', () => {
   it('escapes every character markdown gives a meaning', () => {
     expect(escapeMarkdown('*a* _b_ [c](d) #e <f> `g` |h| ~i~')).toBe(
       '\\*a\\* \\_b\\_ \\[c\\]\\(d\\) \\#e \\<f\\> \\`g\\` \\|h\\| \\~i\\~',
+    );
+  });
+});
+
+describe('the notice that a digest is ready, never an all clear (security review SEC-4)', () => {
+  const clean = DigestRecord.parse({ ...DIGEST, notable: [], notableCount: 0, gaps: [], health: [] });
+
+  it('says what a week it could not check holds: unchecked claims, unseen sources, readers to repair, marks', () => {
+    const week = DigestRecord.parse({
+      ...clean,
+      agents: [{ ...DIGEST.agents[0], grades: { ...ZERO, UNVERIFIABLE: 12 } }],
+      gaps: [
+        {
+          source: 'gmail.sent',
+          days: [
+            '2026-10-05',
+            '2026-10-06',
+            '2026-10-07',
+            '2026-10-08',
+            '2026-10-09',
+            '2026-10-10',
+            '2026-10-11',
+          ],
+        },
+      ],
+      health: [
+        {
+          adapterId: 'gmail.sent',
+          version: '1.4.0',
+          status: 'DEGRADED',
+          reasons: ['selector.missing'],
+          checkedAt: '2026-10-09T09:00:00-04:00',
+        },
+      ],
+      marksCount: 2,
+    });
+    expect(digestReadyText(week).message).toBe(
+      'Week of 5 Oct 2026: 12 claims could not be checked. Gmail Sent was not checked all week. ' +
+        'The Gmail Sent reader needs repair. You marked 2 receipts.',
+    );
+    expect(digestReadyText(week).message).not.toMatch(/nothing to look at/iu);
+  });
+
+  it('says only what ended, when there is nothing else to say', () => {
+    expect(digestReadyText(clean).message).toBe(
+      'Week of 5 Oct 2026: No receipt ended Not found, Unasked or Over scope.',
     );
   });
 });

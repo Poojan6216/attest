@@ -1,6 +1,9 @@
 /**
- * What the pages read from the ledger (sprint_4 4.0): the popup, the side panel, the options page and the digest read
- * through these. Each call reads the page's own connection to the ledger (src/ledger/shared.ts `getLedger`, opened once
+ * What the pages read from the ledger (sprint_4 4.0): the popup, the side panel and the options page's settings and
+ * grants read through these. Two pages read ledger modules of their own, readers only (the lint fence holds pages to
+ * readers; sprint_4 close, tech review TECH-1): the digest page its stored digests (src/ledger/digest.ts `getDigest`,
+ * `digestWeeks`), and the options page's export its file a page at a time (src/ledger/export-file.ts, export-csv.ts).
+ * Each call reads the page's own connection to the ledger (src/ledger/shared.ts `getLedger`, opened once
  * per page) through src/ledger/views.ts: indexed reads, a page at a time, nothing computed beyond joins and sorting.
  * Reading in the page, not through the service worker, keeps the popup from waiting for a stopped worker to start. A
  * page never writes the ledger: what a person changes goes to the service worker over the bus, and `onLedgerChanged`

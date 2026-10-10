@@ -24,11 +24,14 @@ import {
   EXTRACTOR_SCOPES,
   HELPER_RESTRICTED_IMPORTS,
   HELPER_SCOPES,
+  LEDGER_RESTRICTED_IMPORTS,
   LISTENER_SCOPES,
   MESSAGING_SYNTAX,
   NETWORK_EXEMPT_FILES,
   NODE_IMPORTS,
   NODE_TYPE_SYNTAX,
+  PAGE_RESTRICTED_IMPORTS,
+  PAGE_SCOPES,
   restrictGlobals,
   SKELETON_FILES,
   WORKER_SCOPES,
@@ -228,6 +231,15 @@ export default tseslint.config(
   {
     files: DEXIE_ALLOWED,
     rules: { 'no-restricted-imports': ['error', { patterns: [NODE_IMPORTS] }] },
+  },
+  {
+    files: ['src/ledger/**'],
+    rules: { 'no-restricted-imports': ['error', LEDGER_RESTRICTED_IMPORTS] },
+  },
+  {
+    // Pages read the ledger; the service worker writes it (sprint_4 close, tech review TECH-1).
+    files: PAGE_SCOPES,
+    rules: { 'no-restricted-imports': ['error', PAGE_RESTRICTED_IMPORTS] },
   },
   {
     files: ['src/crypto/**'],

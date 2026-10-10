@@ -21,6 +21,8 @@ import {
   Grant,
   IsoTs,
   ObservationSource,
+  OverrideGrade,
+  ReceiptOverride,
   SCHEMA_LIMITS,
   Sha256,
   Ulid,
@@ -167,9 +169,24 @@ export const AgentWeek = z.strictObject({
 });
 
 /**
- * A receipt a digest calls out (sprint_4 4.7): FINAL NOT_FOUND, UNASKED or OVER_SCOPE, with what a share may show of
- * it: the action and its time, the counterparty's domain only (never the address or a name), the amount, and the
- * subject hint the ledger keeps.
+ * A mark the person made on a receipt of the week (sprint_4 close, tech review TECH-4; sprint_4: "The override reason is
+ * required and visible in the digest"): Attest's own grade, the person's grade, and their reason, in their own words.
+ * The digest page shows it; no share ever holds a reason (Decisions [4.8]).
+ */
+export const DigestMark = z.strictObject({
+  receiptId: Ulid,
+  agent: AgentId,
+  /** Attest's own grade. */
+  grade: Grade,
+  markGrade: OverrideGrade,
+  reason: ReceiptOverride.shape.reason,
+});
+
+/**
+ * A receipt a digest calls out (sprint_4 4.7): NOT_FOUND, UNASKED or OVER_SCOPE by Attest's own grade, FINAL or marked
+ * by the person (so a mark never takes it off the list; its grade is `mark`, its reason in the digest's `marks`), with
+ * what a share may show of it: the action and its time, the counterparty's domain only (never the address or a name),
+ * the amount, and the subject hint the ledger keeps.
  */
 export const NotableReceipt = z.strictObject({
   receiptId: Ulid,
@@ -182,6 +199,8 @@ export const NotableReceipt = z.strictObject({
   amountCents: AmountCents.optional(),
   currency: Currency.optional(),
   subjectHint: oneLineText(L.SUBJECT_HINT).optional(),
+  /** The person's mark on it, when they made one: their grade. */
+  mark: z.strictObject({ grade: OverrideGrade }).optional(),
 });
 
 /**
@@ -204,6 +223,9 @@ export const DigestRecord = z.strictObject({
     .max(ObservationSource.options.length),
   /** Each reader's latest health when the digest was made. */
   health: z.array(HealthReport).max(L.LIST),
+  /** The person's marks on the week's receipts, newest first, and how many in all (absent from a digest made before). */
+  marks: z.array(DigestMark).max(L.LIST).optional(),
+  marksCount: count.optional(),
 });
 
 export type CoveragePing = z.infer<typeof CoveragePing>;
@@ -220,5 +242,6 @@ export type AlertGrade = z.infer<typeof AlertGrade>;
 export type DigestRecord = z.infer<typeof DigestRecord>;
 export type AgentWeek = z.infer<typeof AgentWeek>;
 export type NotableReceipt = z.infer<typeof NotableReceipt>;
+export type DigestMark = z.infer<typeof DigestMark>;
 export type AlertState = z.infer<typeof AlertState>;
 export type AlertRecord = z.infer<typeof AlertRecord>;

@@ -43,7 +43,7 @@ const BANNED: readonly (readonly [string, RegExp])[] = [
   ],
   [
     'an "all clear"',
-    /\b(?:all clear|all good|all set|nothing to worry|everything is fine|everything looks good)\b/iu,
+    /\b(?:all clear|all good|all set|nothing to worry|nothing to look at|everything is fine|everything looks good)\b/iu,
   ],
   [
     'blame',

@@ -27,7 +27,11 @@ export const SKELETON_FILES = ['src/adapters/base.ts', 'src/observers/base.ts'];
 /** Files where MV3 listeners are registered. */
 export const LISTENER_SCOPES = ['entrypoints/background.ts', 'src/background/**', 'src/bus/**'];
 
-/** Code the service worker bundle runs: it has no DOM (TECH-V3). src/ledger is listed separately below. */
+/**
+ * Code the service worker bundle runs: it has no DOM (TECH-V3). src/ledger is listed separately below. The worker also
+ * words its alerts and the digest's notice with five text modules of src/ui (sprint_4 4.6, 4.7), held to the same rule
+ * (sprint_4 close, tech review TECH-1).
+ */
 export const WORKER_SCOPES = [
   'entrypoints/background.ts',
   'src/background/**',
@@ -36,6 +40,24 @@ export const WORKER_SCOPES = [
   'src/setup.ts',
   'src/clock.ts',
   'src/log-vocabulary.ts',
+  'src/ui/alert-text.ts',
+  'src/ui/digest-labels.ts',
+  'src/ui/receipt-labels.ts',
+  'src/ui/paste-labels.ts',
+  'src/ui/format.ts',
+];
+
+/**
+ * The extension's pages and their shared UI (sprint_4 close, tech review TECH-1): they read the ledger, and the service
+ * worker is its one writer (Decisions [4.0]).
+ */
+export const PAGE_SCOPES = [
+  'entrypoints/popup/**',
+  'entrypoints/sidepanel/**',
+  'entrypoints/options/**',
+  'entrypoints/digest/**',
+  'entrypoints/dev/**',
+  'src/ui/**',
 ];
 
 /** Dexie is the storage layer; nothing outside the ledger (and crypto, Sprint 6) may import it. Tests may. */
@@ -97,6 +119,48 @@ export const NODE_TYPE_SYNTAX = [
 
 /** The default for extension code: no Dexie outside the ledger, no Node. */
 export const APP_RESTRICTED_IMPORTS = { paths: [DEXIE_RESTRICTION], patterns: [NODE_IMPORTS] };
+
+const ONE_WRITER =
+  'Pages read the ledger; the service worker is its one writer (Decisions [4.0]; sprint_4 close, tech review TECH-1).';
+
+/**
+ * What a page may not import (sprint_4 close, tech review TECH-1): the service worker's code, a ledger module of writers
+ * only, or a writer from a ledger module that also reads. The default's fences besides.
+ */
+export const PAGE_RESTRICTED_IMPORTS = {
+  paths: [DEXIE_RESTRICTION],
+  patterns: [
+    NODE_IMPORTS,
+    { regex: '(^|/)background(/|$)', message: `${ONE_WRITER} No page imports src/background.` },
+    {
+      regex:
+        '(^|/)ledger/(repo|upsert|grant-save|user-events|retention|retention-clock|retention-coverage|replay-records|coverage|calendar-snapshots|activity|clock-guard|clock-repairs|clock-high-water|batch-instant|migrations)$',
+      message: ONE_WRITER,
+    },
+    { group: ['**/ledger/settings'], importNames: ['saveRetentionDays'], message: ONE_WRITER },
+    { group: ['**/ledger/digest'], importNames: ['buildDigest', 'saveDigest'], message: ONE_WRITER },
+    {
+      group: ['**/ledger/auto-check', '**/ledger/auto-check-record'],
+      importNames: ['recordAutoCheck'],
+      message: ONE_WRITER,
+    },
+    { group: ['**/ledger/consent'], importNames: ['saveReaderOff', 'saveFlag'], message: ONE_WRITER },
+    { group: ['**/ledger/alerts'], importNames: ['queueAlerts', 'takeAlerts'], message: ONE_WRITER },
+    { group: ['**/ledger/shared'], importNames: ['deleteLedger'], message: ONE_WRITER },
+  ],
+};
+
+/** The ledger sits below the worker and the pages: it imports neither (sprint_4 close, tech review TECH-1). */
+export const LEDGER_RESTRICTED_IMPORTS = {
+  patterns: [
+    NODE_IMPORTS,
+    {
+      regex: '(^|/)(background|ui)(/|$)',
+      message:
+        'The ledger imports neither the service worker nor the UI (sprint_4 close, tech review TECH-1).',
+    },
+  ],
+};
 
 /** Content scripts reach the ledger only through src/bus (TECH-2, SECURITY-V4). */
 export const ACT_RESTRICTED_IMPORTS = {

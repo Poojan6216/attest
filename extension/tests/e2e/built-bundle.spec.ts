@@ -43,6 +43,10 @@ const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ['Function constructor', /\bFunction\s*\(/],
   ['new Image (beacon)', /\bnew\s+Image\s*\(/],
   ['new Audio (beacon)', /\bnew\s+Audio\s*\(/],
+  // No code or CSS injected into a tab, and no tab changed (sprint_4 close, security review SEC-8; Hard Rule 3).
+  ['executeScript', /\bexecuteScript\b/],
+  ['insertCSS', /\binsertCSS\b/],
+  ['tabs.update', /\btabs\.update\b/],
 ];
 
 function scripts(dir: string): string[] {
@@ -127,7 +131,7 @@ test('the content scripts are exactly Gmail and Calendar, registered at runtime,
   }
 });
 
-test('no shipped script reaches the network or evaluates code', () => {
+test('no shipped script reaches the network, evaluates code, or injects into a tab', () => {
   const files = scripts(EXTENSION_PATH);
   expect(files.length).toBeGreaterThan(3);
   let allowedHits = 0;

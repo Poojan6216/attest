@@ -5,8 +5,6 @@
  * adapter health. Every change goes to the service worker (`retention.save`, `reader.toggle`, `flag.set`,
  * `ledger.wipe`): pages never write. A read that fails is said and logged (Hard Rule 6).
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
-
 import type {
   FlagSetMessage,
   LedgerWipeMessage,
@@ -20,6 +18,7 @@ import type { AdapterHealth } from '../../src/ledger/types';
 import type { RetentionChoice } from '../../src/ledger/settings';
 import { log } from '../../src/log';
 import { loadConsent, loadHealth, loadRetentionDays, onLedgerChanged } from '../../src/ui/data';
+import { useLedgerRead } from '../../src/ui/use-ledger-read';
 
 export interface SettingsView {
   readonly retentionDays: RetentionChoice;
@@ -57,25 +56,12 @@ export type SettingsState =
   | { readonly status: 'failed' }
   | { readonly status: 'ready'; readonly view: SettingsView };
 
+const logReadFailed = (error: unknown): void => {
+  log.error('options.settings_read_failed', { error });
+};
+
+/** The settings, read in order (src/ui/use-ledger-read.ts). */
 export function useSettings(sources: SettingsSources = LIVE_SETTINGS): SettingsState {
-  const [state, setState] = useState<SettingsState>({ status: 'loading' });
-  const read = useMemo(
-    () => () => {
-      sources.load().then(
-        (view) => {
-          setState({ status: 'ready', view });
-        },
-        (error: unknown) => {
-          log.error('options.settings_read_failed', { error });
-          setState({ status: 'failed' });
-        },
-      );
-    },
-    [sources],
-  );
-  useEffect(() => {
-    read();
-    return sources.subscribe(read);
-  }, [read, sources]);
-  return state;
+  const read = useLedgerRead(sources.load, sources.subscribe, logReadFailed);
+  return read.status === 'ready' ? { status: 'ready', view: read.value } : read;
 }

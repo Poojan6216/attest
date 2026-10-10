@@ -36,7 +36,8 @@
  *  9. A clock repair's span (`meta` `clockRepair.*`, ./clock-repairs.ts) goes once it ended before C: no claim it
  *     bears on is still graded by then.
  * 10. A receipt's alert (./alerts.ts, sprint_4 4.6) goes with the receipt.
- * 11. A weekly digest (./digest.ts, sprint_4 4.7) goes once its week ended before C: it describes history now gone.
+ * 11. A weekly digest (./digest.ts, sprint_4 4.7) goes once its week started before C: it copies hints and domains of
+ *     history then going, and must not outlive it (sprint_4 close, SEC-7).
  * Grants, adapter health and the rest of meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
@@ -62,9 +63,10 @@ import { bucketOfMs } from './index';
 import { purgeActivity } from './activity';
 import { purgeClockRepairs } from './clock-repairs';
 import { purgeCalendarRecords } from './calendar-snapshots';
+import { localDate } from './digest-week';
 import { purgeReplayRecords } from './replay-records';
 import { forgetCoverage, purgeCoveragePings } from './retention-coverage';
-import { ActionType, AgentId, Claim, DigestRecord, IsoTs, Observation, Receipt, Request } from './types';
+import { ActionType, AgentId, Claim, IsoTs, Observation, Receipt, Request } from './types';
 import { RETENTION_DAYS } from '../config';
 
 export interface PurgeOptions {
@@ -97,7 +99,7 @@ export interface PurgeReport {
   readonly clockRepairs: number;
   /** Alerts deleted: those of the purged receipts (./alerts.ts, sprint_4 4.6). */
   readonly alerts: number;
-  /** Weekly digests deleted: those whose week ended before the cutoff (./digest.ts, sprint_4 4.7). */
+  /** Weekly digests deleted: those whose week started before the cutoff (./digest.ts, sprint_4 4.7; SEC-7). */
   readonly digests: number;
 }
 
@@ -298,13 +300,16 @@ async function doomedRequests(db: LedgerDb, cutoffMs: number, doomed: Doomed): P
   return [...ids];
 }
 
-/** Rule 11: the digests whose week ended before the cutoff. The table holds one row per week: read whole. */
+/**
+ * Rule 11: the digests whose week started before the cutoff (sprint_4 close, security review SEC-7). A digest copies its
+ * notable receipts' domains and hints, so it goes no later than they do: up to a week early, which keeps less. Deleted
+ * by its key, the week's Monday as a local date, without reading a row, so a row that no longer parses goes too.
+ */
 async function purgeDigests(db: LedgerDb, cutoffMs: number): Promise<number> {
-  const old = readRows('digests', DigestRecord, await db.digests.toArray()).filter(
-    ({ to }) => instantMs(to) < cutoffMs,
-  );
-  await db.digests.bulkDelete(old.map(({ week }) => week));
-  return old.length;
+  return db.digests
+    .where('week')
+    .belowOrEqual(localDate(new Date(cutoffMs)))
+    .delete();
 }
 
 /**

@@ -62,7 +62,7 @@ describe('runWeeklyDigest', () => {
       [
         DIGEST_NOTIFICATION_ID,
         'Your weekly digest',
-        'Week of 5 Oct 2026: Nothing to look at: no receipt ended Not found, Unasked or Over scope.',
+        'Week of 5 Oct 2026: Gmail Sent was not checked all week. Calendar was not checked all week.',
       ],
     ]);
   });

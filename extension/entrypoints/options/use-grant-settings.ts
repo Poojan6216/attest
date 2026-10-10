@@ -3,12 +3,13 @@
  * opens and again when the service worker announces a change to grants or meta, and the save, which goes to the service
  * worker (`grant.save`): pages never write the ledger. A read that fails is said and logged (Hard Rule 6).
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback } from 'preact/hooks';
 
 import type { GrantSaveMessage, GrantSaveResult, LedgerTable } from '../../src/bus/messages';
 import { sendGrant } from '../../src/bus/send';
 import { log } from '../../src/log';
 import { type GrantSettings, loadGrantSettings, onLedgerChanged } from '../../src/ui/data';
+import { useLedgerRead } from '../../src/ui/use-ledger-read';
 
 export interface GrantSources {
   readonly load: () => Promise<GrantSettings>;
@@ -27,25 +28,16 @@ export type GrantSettingsState =
   | { readonly status: 'failed' }
   | { readonly status: 'ready'; readonly settings: GrantSettings };
 
+const logReadFailed = (error: unknown): void => {
+  log.error('options.grants_read_failed', { error });
+};
+
+/** The grant settings, read in order, again when grants or meta change (src/ui/use-ledger-read.ts). */
 export function useGrantSettings(sources: GrantSources = LIVE_GRANTS): GrantSettingsState {
-  const [state, setState] = useState<GrantSettingsState>({ status: 'loading' });
-  const read = useMemo(
-    () => () => {
-      sources.load().then(
-        (settings) => {
-          setState({ status: 'ready', settings });
-        },
-        (error: unknown) => {
-          log.error('options.grants_read_failed', { error });
-          setState({ status: 'failed' });
-        },
-      );
-    },
+  const subscribe = useCallback(
+    (onChange: () => void) => sources.subscribe(['grants', 'meta'], onChange),
     [sources],
   );
-  useEffect(() => {
-    read();
-    return sources.subscribe(['grants', 'meta'], read);
-  }, [read, sources]);
-  return state;
+  const read = useLedgerRead(sources.load, subscribe, logReadFailed);
+  return read.status === 'ready' ? { status: 'ready', settings: read.value } : read;
 }

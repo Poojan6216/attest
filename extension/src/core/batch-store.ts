@@ -27,6 +27,11 @@ export interface StoredBatch {
   readonly put: readonly Receipt[];
   /** Ids of the PENDING claim-less rows the batch no longer produces. */
   readonly deleted: readonly Ulid[];
+  /**
+   * Ids of the PENDING claim-less rows the batch no longer produces and keeps, since they hold reverted overrides: rows
+   * no batch grades again until a new fact makes one produce them (sprint_4 close, tech review TECH-7).
+   */
+  readonly held: readonly Ulid[];
   /** The inputs of every receipt written, by its `inputsHash`. */
   readonly inputs: ReadonlyMap<string, ReceiptInputs>;
   /** The `inputsHash` of each row replaced or deleted that no receipt names any more. */
@@ -52,9 +57,13 @@ export function storeBatch(
     if (held !== undefined) gone.push(held);
   }
   const deleted: Ulid[] = [];
+  const held: Ulid[] = [];
   for (const [id, receipt] of stored) {
     if (receipt.claimId !== undefined || receipt.state !== 'PENDING' || produced.has(id)) continue;
-    if (receipt.reverted !== undefined) continue;
+    if (receipt.reverted !== undefined) {
+      held.push(id);
+      continue;
+    }
     deleted.push(id);
     gone.push(receipt);
   }
@@ -64,7 +73,7 @@ export function storeBatch(
     if (!written.has(id) && !deleted.includes(id)) named.add(receipt.inputsHash);
   }
   const released = [...new Set(gone.map(({ inputsHash }) => inputsHash))].filter((hash) => !named.has(hash));
-  return { put, deleted, inputs, released };
+  return { put, deleted, held, inputs, released };
 }
 
 /**

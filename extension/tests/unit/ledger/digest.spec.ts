@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 /**
- * The weekly digest the ledger builds (sprint_4 4.7; src/ledger/digest.ts) from a seeded week: each agent's FINAL
- * receipts by grade, still checking, marked, and verified of checked; the notable receipts newest first, each with a
+ * The weekly digest the ledger builds (sprint_4 4.7; src/ledger/digest.ts) from a seeded week: each agent's FINAL and
+ * marked receipts by Attest's own grade, still checking, marked, and verified of checked; the person's marks with their
+ * reasons (sprint_4 close, TECH-4: a mark never takes a receipt off the list); the notable receipts newest first, each with a
  * domain only (an address gives its domain, a name none), its amount and subject hint; the days each source's windows
  * never reached; the readers' health. Superseded receipts and receipts of other weeks count nowhere. A week made again
  * replaces itself, and the weeks list newest first. Every value is invented.
@@ -15,7 +16,13 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { buildDigest, digestWeeks, getDigest, saveDigest } from '../../../src/ledger/digest';
 import { lastWeek, weekDays } from '../../../src/ledger/digest-week';
 import { openLedger } from '../../../src/ledger/migrations';
-import { putAdapterHealth, putReceipt, upsertClaim, upsertObservation } from '../../../src/ledger/repo';
+import {
+  getReceipt,
+  putAdapterHealth,
+  putReceipt,
+  upsertClaim,
+  upsertObservation,
+} from '../../../src/ledger/repo';
 import { IsoTs, Receipt, type ReceiptInput } from '../../../src/ledger/types';
 import {
   claimId,
@@ -145,11 +152,11 @@ const ZERO = { VERIFIED: 0, PARTIAL: 0, NOT_FOUND: 0, UNASKED: 0, OVER_SCOPE: 0,
 const AGENTS = [
   {
     agent: 'muse',
-    grades: { ...ZERO, VERIFIED: 1, NOT_FOUND: 1, UNASKED: 1 },
+    grades: { ...ZERO, VERIFIED: 2, NOT_FOUND: 1, UNASKED: 1 },
     checking: 1,
     marked: 1,
-    checked: 2,
-    verified: 1,
+    checked: 3,
+    verified: 2,
   },
   { agent: 'claude', grades: { ...ZERO, OVER_SCOPE: 1 }, checking: 0, marked: 0, checked: 1, verified: 0 },
 ];
@@ -191,6 +198,10 @@ describe('buildDigest', () => {
     expect(digest.agents).toEqual(AGENTS);
     expect(digest.notable).toEqual(NOTABLE);
     expect(digest.notableCount).toBe(3);
+    expect(digest.marks).toEqual([
+      { receiptId: ulid(5), agent: 'muse', grade: 'VERIFIED', markGrade: 'NOT_FOUND', reason: 'not mine' },
+    ]);
+    expect(digest.marksCount).toBe(1);
     expect(JSON.stringify(digest)).not.toMatch(/@/u);
     const days = weekDays(WEEK).map(({ date }) => date);
     expect(digest.gaps).toEqual([
@@ -208,5 +219,34 @@ describe('buildDigest', () => {
     await saveDigest(db, await buildDigest(db, WEEK, made));
     expect(await digestWeeks(db)).toEqual(['2026-10-05', '2026-09-28']);
     expect((await getDigest(db, '2026-10-05'))?.agents).toEqual([]);
+  });
+});
+
+describe('a mark on a receipt the digest calls out (TECH-4)', () => {
+  it('keeps it on the list by Attest’s own grade, with the mark, and its reason among the marks', async () => {
+    await seed();
+    const notFound = await getReceipt(db, ulid(2));
+    if (notFound === undefined) throw new Error('no receipt');
+    await putReceipt(
+      db,
+      Receipt.parse({
+        ...notFound,
+        state: 'USER_OVERRIDDEN',
+        reasons: [...notFound.reasons, { code: 'override.user', params: { grade: 'VERIFIED' } }],
+        override: {
+          grade: 'VERIFIED',
+          reason: 'Sent it from my phone',
+          at: at(1, 21),
+          previousState: 'FINAL',
+        },
+      }),
+    );
+    const digest = await buildDigest(db, WEEK, IsoTs.parse(isoWithLocalOffset(new Date(MADE_AT))));
+    expect(digest.notable.find(({ receiptId }) => receiptId === ulid(2))).toMatchObject({
+      grade: 'NOT_FOUND',
+      mark: { grade: 'VERIFIED' },
+    });
+    expect(digest.agents[0]?.grades.NOT_FOUND).toBe(1);
+    expect(digest.marks?.map(({ reason }) => reason)).toContain('Sent it from my phone');
   });
 });

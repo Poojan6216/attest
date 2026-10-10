@@ -4,6 +4,7 @@ import { instantLabel } from '../../../src/ui/digest-labels';
 import { formatAmount } from '../../../src/ui/format';
 import { GradeChip } from '../../../src/ui/GradeChip';
 import { claimTypeLabel } from '../../../src/ui/paste-labels';
+import { gradeLabel } from '../../../src/ui/receipt-labels';
 
 export interface NotableItemProps {
   readonly receipt: NotableReceipt;
@@ -11,7 +12,8 @@ export interface NotableItemProps {
 
 /**
  * A receipt the week calls out (sprint_4 4.7): its grade first, the agent ("Likely agent" on an UNASKED one, Hard Rule
- * 7), then the action, its time, the counterparty's domain, the amount and the subject hint, as the digest kept them.
+ * 7), then the action, its time, the counterparty's domain, the amount and the subject hint, as the digest kept them,
+ * and the person's mark when they made one (its reason is under Your marks).
  */
 export function NotableItem({ receipt }: NotableItemProps) {
   const { grade, agent, type, at, domain, amountCents, currency, subjectHint } = receipt;
@@ -27,6 +29,9 @@ export function NotableItem({ receipt }: NotableItemProps) {
       <GradeChip grade={grade} />
       <AgentBadge agent={agent} likely={grade === 'UNASKED'} />
       <span>{parts.join(', ')}</span>
+      {receipt.mark === undefined ? null : (
+        <span class="text-ink-muted">Marked {gradeLabel(receipt.mark.grade)} by you</span>
+      )}
     </li>
   );
 }

@@ -1,9 +1,13 @@
 /**
  * The side panel's timeline (sprint_4 4.3): its filters, the receipts they select a page at a time (src/ui/data.ts
  * `loadTimelinePage`, newest first), the overview above them, and the receipt whose detail is open. When the service
- * worker announces a change, the panel reads again as many receipts as it shows, so its list keeps its place, and the
- * open detail too. Reads never overlap: one asked for during a read runs once after it. A read that fails is said and
- * logged (Hard Rule 6).
+ * worker announces a change to what the rows show (LIST_TABLES), the panel reads again as many receipts as it shows, so
+ * its list keeps its place, the open detail and the overview too; a change to what only the overview shows
+ * (coverage, health, meta) reads the overview alone (sprint_4 close, tech review TECH-7). Reads for one set of filters
+ * never overlap: one asked for during a read runs once after it. A read lands only while what it was for is still
+ * current: a list read for filters since changed, a detail for a receipt since closed, and an older page for a list
+ * since read again are each dropped, so the newest state always wins (TECH-2, QA review GAP 5). A read that fails is
+ * said and logged (Hard Rule 6).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
@@ -12,6 +16,7 @@ import { sendReceiptEvent } from '../../src/bus/send';
 import { TIMELINE_PAGE_SIZE } from '../../src/config';
 import { AgentId } from '../../src/ledger/types';
 import { log } from '../../src/log';
+import { serial } from '../../src/ui/serial';
 import {
   loadOverview,
   loadReceipt,
@@ -35,7 +40,11 @@ export interface TimelineSources {
     receiptId: ReceiptEventMessage['receiptId'],
     event: ReceiptEventMessage['event'],
   ) => Promise<ReceiptEventResult>;
-  readonly subscribe: (tables: readonly LedgerTable[], onChange: () => void) => () => void;
+  /** Calls `onChange` with the tables that changed (all of them, when it names none). */
+  readonly subscribe: (
+    tables: readonly LedgerTable[],
+    onChange: (changed?: readonly LedgerTable[]) => void,
+  ) => () => void;
   readonly now: () => Date;
 }
 
@@ -48,16 +57,11 @@ export const LIVE_TIMELINE: TimelineSources = {
   now: () => new Date(),
 };
 
-/** The tables the side panel shows something of. */
-export const TIMELINE_TABLES: readonly LedgerTable[] = [
-  'receipts',
-  'claims',
-  'observations',
-  'requests',
-  'coverage',
-  'adapterHealth',
-  'meta',
-];
+/** The tables the rows and the detail show: a change to one reads the list, the open detail and the overview. */
+export const LIST_TABLES: readonly LedgerTable[] = ['receipts', 'claims', 'requests'];
+
+/** The tables the side panel shows something of: the rows', and the overview's alone. */
+export const TIMELINE_TABLES: readonly LedgerTable[] = [...LIST_TABLES, 'coverage', 'adapterHealth', 'meta'];
 
 /** The days a new timeline shows: the last 30, today included. */
 export const DEFAULT_DAYS = 30;
@@ -99,66 +103,59 @@ export interface Timeline {
   readonly sendEvent: TimelineSources['sendEvent'];
 }
 
-/** Runs `read` with no two at once: a call during a read runs it once more after it. */
-function serial(read: () => Promise<void>): () => void {
-  let running = false;
-  let again = false;
-  // Read through a call: a call during the await sets it, which the type checker cannot see.
-  const asked = (): boolean => again;
-  const run = async (): Promise<void> => {
-    if (running) {
-      again = true;
-      return;
-    }
-    running = true;
-    try {
-      do {
-        again = false;
-        await read();
-      } while (asked());
-    } finally {
-      running = false;
-    }
-  };
-  return () => {
-    void run();
-  };
-}
-
 interface ReceiptList {
   readonly list: ListState;
   readonly overview: SidePanelOverview | null;
   readonly nowMs: number;
   readonly reread: () => void;
+  readonly rereadOverview: () => void;
   readonly loadMore: () => void;
+}
+
+/** The overview above the list, read again by `reread`; a read lands only while the panel shows (header). */
+function useOverview(sources: TimelineSources): { overview: SidePanelOverview | null; reread: () => void } {
+  const [overview, setOverview] = useState<SidePanelOverview | null>(null);
+  const reread = useMemo(
+    () =>
+      serial(async () => {
+        try {
+          setOverview(await sources.overview());
+        } catch (error) {
+          log.error('sidepanel.read_failed', { error });
+        }
+      }),
+    [sources],
+  );
+  return { overview, reread };
 }
 
 /** The receipts `filters` select, a page at a time, and the overview above them (header). */
 function useReceiptList(sources: TimelineSources, filters: TimelineFilters): ReceiptList {
   const [list, setList] = useState<ListState>({ status: 'loading' });
-  const [overview, setOverview] = useState<SidePanelOverview | null>(null);
   const [nowMs, setNowMs] = useState(() => sources.now().getTime());
+  const top = useOverview(sources);
   // How many receipts the list shows, read when a read starts: a change reads again as many.
   const shown = useRef(0);
   shown.current = list.status === 'ready' ? list.items.length : 0;
+  // The filters now shown: a read for others lands nowhere (TECH-2).
+  const current = useRef(filters);
+  current.current = filters;
   const reread = useMemo(
     () =>
       serial(async () => {
         setNowMs(sources.now().getTime());
+        top.reread();
         try {
           const limit = Math.max(TIMELINE_PAGE_SIZE, shown.current);
-          const [page, top] = await Promise.all([
-            sources.page(filters, undefined, limit),
-            sources.overview(),
-          ]);
+          const page = await sources.page(filters, undefined, limit);
+          if (current.current !== filters) return;
           setList({ status: 'ready', items: page.items, next: page.next, more: 'idle' });
-          setOverview(top);
         } catch (error) {
           log.error('sidepanel.read_failed', { error });
-          setList({ status: 'failed' });
+          if (current.current === filters) setList({ status: 'failed' });
         }
       }),
-    [sources, filters],
+    [sources, filters, top.reread],
   );
   useEffect(() => {
     // New filters read one page from the top.
@@ -169,18 +166,24 @@ function useReceiptList(sources: TimelineSources, filters: TimelineFilters): Rec
   const loadMore = useCallback(() => {
     if (list.status !== 'ready' || list.next === null || list.more === 'loading') return;
     const { items, next } = list;
-    setList({ ...list, more: 'loading' });
+    // The list this page extends: it lands only while that list is still the one shown (TECH-2).
+    const extending: ListState = { ...list, more: 'loading' };
+    setList(extending);
     sources.page(filters, next).then(
       (page) => {
-        setList({ status: 'ready', items: [...items, ...page.items], next: page.next, more: 'idle' });
+        setList((shownList) =>
+          shownList === extending
+            ? { status: 'ready', items: [...items, ...page.items], next: page.next, more: 'idle' }
+            : shownList,
+        );
       },
       (error: unknown) => {
         log.error('sidepanel.read_failed', { error });
-        setList({ ...list, more: 'failed' });
+        setList((shownList) => (shownList === extending ? { ...extending, more: 'failed' } : shownList));
       },
     );
   }, [filters, list, sources]);
-  return { list, overview, nowMs, reread, loadMore };
+  return { list, overview: top.overview, nowMs, reread, rereadOverview: top.reread, loadMore };
 }
 
 /** The detail of the receipt `openId`, read again by `reread` (header). */
@@ -189,15 +192,19 @@ function useReceiptDetail(
   openId: string | null,
 ): { readonly detail: Timeline['detail']; readonly reread: () => void } {
   const [detail, setDetail] = useState<Timeline['detail']>(undefined);
+  // The receipt now open: a read for one since closed lands nowhere (TECH-2).
+  const current = useRef(openId);
+  current.current = openId;
   const reread = useMemo(
     () =>
       serial(async () => {
         if (openId === null) return;
         try {
-          setDetail(await sources.receipt(openId));
+          const read = await sources.receipt(openId);
+          if (current.current === openId) setDetail(read);
         } catch (error) {
           log.error('sidepanel.read_failed', { error });
-          setDetail('failed');
+          if (current.current === openId) setDetail('failed');
         }
       }),
     [openId, sources],
@@ -214,14 +221,17 @@ export function useTimeline(sources: TimelineSources = LIVE_TIMELINE): Timeline 
   const [openId, open] = useState<string | null>(null);
   const receipts = useReceiptList(sources, filters);
   const opened = useReceiptDetail(sources, openId);
-  // One subscription for the panel's life, reading the latest list and detail on each change.
-  const latest = useRef({ list: receipts.reread, detail: opened.reread });
-  latest.current = { list: receipts.reread, detail: opened.reread };
+  // One subscription for the panel's life: a change to the rows reads the latest list (and the overview with it) and
+  // detail; one to the overview's tables alone reads the overview (TECH-7).
+  const latest = useRef({ list: receipts.reread, overview: receipts.rereadOverview, detail: opened.reread });
+  latest.current = { list: receipts.reread, overview: receipts.rereadOverview, detail: opened.reread };
   useEffect(
     () =>
-      sources.subscribe(TIMELINE_TABLES, () => {
-        latest.current.list();
-        latest.current.detail();
+      sources.subscribe(TIMELINE_TABLES, (changed) => {
+        if (changed === undefined || changed.some((table) => LIST_TABLES.includes(table))) {
+          latest.current.list();
+          latest.current.detail();
+        } else latest.current.overview();
       }),
     [sources],
   );

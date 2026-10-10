@@ -6,7 +6,7 @@
  * from a clock or a time zone.
  */
 import type { AdapterHealth, DigestRecord, ObservationSource } from '../ledger/types';
-import { sourceName } from './receipt-labels';
+import { adapterName, sourceName } from './receipt-labels';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -66,12 +66,27 @@ export function gapLine(source: ObservationSource, days: readonly string[]): str
   return days.length >= 7 ? `${name} was not checked all week.` : `${name} was not checked ${dayRuns(days)}.`;
 }
 
-/** The notice that a digest is ready (a notification): its week, and how many receipts it calls out. */
+const plural = (count: number, one: string, many: string): string =>
+  `${String(count)} ${count === 1 ? one : many}`;
+
+/**
+ * The notice that a digest is ready (a notification, shown on the lock screen too): its week, then what it holds that
+ * needs a look: the receipts it calls out, the claims Attest could not check, each source not checked on some days,
+ * each reader that needs repair, and the person's marks. Never an "all clear" (Hard Rules 5, 6; sprint_4 close,
+ * security review SEC-4): only with none of these does it say that no receipt ended Not found, Unasked or Over scope.
+ */
 export function digestReadyText(digest: DigestRecord): { readonly title: string; readonly message: string } {
-  const count = digest.notableCount;
-  const look =
-    count === 0
-      ? 'Nothing to look at: no receipt ended Not found, Unasked or Over scope.'
-      : `${String(count)} ${count === 1 ? 'receipt' : 'receipts'} to look at.`;
-  return { title: 'Your weekly digest', message: `${weekLabel(digest.week)}: ${look}` };
+  const parts: string[] = [];
+  if (digest.notableCount > 0)
+    parts.push(`${plural(digest.notableCount, 'receipt', 'receipts')} to look at.`);
+  const unchecked = digest.agents.reduce((sum, { grades }) => sum + grades.UNVERIFIABLE, 0);
+  if (unchecked > 0) parts.push(`${plural(unchecked, 'claim', 'claims')} could not be checked.`);
+  for (const { source, days } of digest.gaps) parts.push(gapLine(source, days));
+  for (const { adapterId, status } of digest.health) {
+    if (status === 'DEGRADED') parts.push(`The ${adapterName(adapterId)} needs repair.`);
+  }
+  const marks = digest.marksCount ?? 0;
+  if (marks > 0) parts.push(`You marked ${plural(marks, 'receipt', 'receipts')}.`);
+  if (parts.length === 0) parts.push('No receipt ended Not found, Unasked or Over scope.');
+  return { title: 'Your weekly digest', message: `${weekLabel(digest.week)}: ${parts.join(' ')}` };
 }

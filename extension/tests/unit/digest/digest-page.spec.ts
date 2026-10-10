@@ -158,3 +158,38 @@ describe('the digest page', () => {
     expect(root.querySelector('select')).toBeNull();
   });
 });
+
+describe('the digest page with the person’s marks (TECH-4)', () => {
+  const marked = DigestRecord.parse({
+    ...LATEST,
+    notable: [{ ...LATEST.notable[0], mark: { grade: 'VERIFIED' } }],
+    marks: [
+      {
+        receiptId: '01JA0000000000000000000003',
+        agent: 'muse',
+        grade: 'UNASKED',
+        markGrade: 'VERIFIED',
+        reason: 'I sent it myself',
+      },
+    ],
+    marksCount: 1,
+  });
+
+  it('shows each mark with its reason beside Attest’s own grade, and the share holds no reason', async () => {
+    await show({ ...sources, digest: () => Promise.resolve(marked) });
+    const section = root.querySelector('section[aria-labelledby="marks-heading"]');
+    expect(section?.textContent).toContain('Your marks');
+    expect(section?.textContent).toContain('Grade: Unasked');
+    expect(section?.textContent).toContain('Likely agent: Muse');
+    expect(section?.textContent).toContain('You marked it Verified: “I sent it myself”');
+    expect(root.textContent).toContain('Marked Verified by you');
+    const shared = digestMarkdown(marked);
+    expect(shared).toContain('(marked Verified by the person)');
+    expect(shared).not.toContain('I sent it myself');
+  });
+
+  it('shows no marks section for a week without marks, or a digest made before marks were kept', async () => {
+    await show();
+    expect(root.querySelector('section[aria-labelledby="marks-heading"]')).toBeNull();
+  });
+});
