@@ -4,7 +4,10 @@
  * out of ./data.ts in the Sprint 4 close (tech review TECH-5), so the popup's start loads none of it. Readers only,
  * through the page's own connection to the ledger (src/ledger/shared.ts); the service worker writes.
  */
-import type { ReaderId } from '../config';
+import { browser } from 'wxt/browser';
+
+import { ByoVendorName } from '../bus/page-commands';
+import { type ByoVendor, type ReaderId, STORAGE_KEYS } from '../config';
 import { type Flags, readersOff, readFlags } from '../ledger/consent';
 import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
@@ -26,6 +29,16 @@ export async function loadGrantSettings(): Promise<GrantSettings> {
 /** The retention window in force (sprint_4 4.5): what the options page's Privacy shows. */
 export async function loadRetentionDays(): Promise<RetentionChoice> {
   return readRetentionDays(await getLedger());
+}
+
+/**
+ * The vendor of the person's own model key (sprint_5 5.3), or null when no key is saved: the vendor is written only
+ * with a key and removed with it (src/background/byo.ts), so the page knows a key is saved without reading it.
+ */
+export async function loadByoVendor(): Promise<ByoVendor | null> {
+  const stored: unknown = (await browser.storage.local.get(STORAGE_KEYS.BYO_VENDOR))[STORAGE_KEYS.BYO_VENDOR];
+  const vendor = ByoVendorName.safeParse(stored);
+  return vendor.success ? vendor.data : null;
 }
 
 /** The person's choices the options page shows (src/ledger/consent.ts): the readers that are off, and the flags. */

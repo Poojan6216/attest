@@ -10,7 +10,9 @@
  * and CacheStorage, the web storage, IndexedDB or cookies of the pages it reads, console output from any
  * context, any network URL or body (telemetry included, from Sprint 5), or the share output (sprint_4 4.7: the weekly
  * digest the session's ledger makes, through its alarm, as the digest page would copy it; searched as written and with
- * its markdown escapes removed). Later sprints extend the page list with real vendor fixtures; the channels stay. The negative control plants
+ * its markdown escapes removed). The person's own model key (sprint_5 5.3), saved through the options page, may be in its
+ * own slot of chrome.storage.local and in no channel otherwise (./support/byo-key.ts). Later sprints extend the page
+ * list with real vendor fixtures; the channels stay. The negative control plants
  * a seed in each channel, some of them lightly transformed, and proves the collectors catch it. Never
  * skipped, retried, or weakened.
  */
@@ -21,6 +23,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
+import { STORAGE_KEYS } from '../../src/config';
 import { unescapeMarkdown } from '../../src/ui/markdown';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import {
@@ -40,6 +43,7 @@ import { datedClock, pasteActivity, seededLog } from './support/paste';
 import { injectSeeds } from './support/seed-pages';
 import { plantInConsole, plantInDigest, plantInNetwork, plantInPage } from './support/leak-plants';
 import { readReceiptShares } from './support/share';
+import { BYO_KEY_SEED, plantKey, saveKey, withoutKeySlot } from './support/byo-key';
 import {
   FIXTURE_TIME_ZONE,
   fixtureUrl,
@@ -80,6 +84,12 @@ interface Collected {
   readonly netLogUrls: readonly string[];
   /** Each share the session read, as written and with its markdown escapes removed. */
   readonly share: readonly string[];
+}
+
+/** The key's leaks: every channel searched for the invented key, its own storage slot taken out (./support/byo-key.ts). */
+function keyLeaks(collected: Collected): Leak[] {
+  const storage = { ...collected.storage, storage: withoutKeySlot(collected.storage.storage) };
+  return allLeaks({ ...collected, storage }, [BYO_KEY_SEED]);
 }
 
 function allLeaks(collected: Collected, seeds: readonly Seed[]): Leak[] {
@@ -210,6 +220,8 @@ async function plantInExtension(page: Page): Promise<void> {
 const PLANTED = [
   'chrome-storage:api_key_openai_shape',
   'chrome-storage:passphrase',
+  'chrome-storage:byo_key',
+  'console:byo_key',
   'indexeddb:person_name_1',
   'ledger-export:person_name_1',
   'web-storage:token_lowercase',
@@ -242,6 +254,8 @@ async function seededSession({ extension, seededUrl }: SessionContext): Promise<
   }
   await openVendorPages(extension);
   for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
+  // The person's own model key, saved and turned on (sprint_5 5.3): it may be in its own storage slot and nowhere else.
+  await saveKey(extension);
   // A pasted log with every seed in it, imported through the side panel (sprint_3 3.13): the claims are stored
   // and graded, and no seed may reach any channel.
   const panel = await extension.openExtensionPage('sidepanel.html');
@@ -282,7 +296,8 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
     expect(Object.keys(collected.pages.pageStorage)).toHaveLength(SEEDED_PAGES.length + VENDOR_PAGES.length);
     expect(collected.consoleLines.some((line) => line.startsWith('service-worker'))).toBe(true);
 
-    const leaks = allLeaks(collected, SEEDS);
+    expect(collected.storage.storage).toHaveProperty(['local', STORAGE_KEYS.BYO_KEY], BYO_KEY_SEED.value);
+    const leaks = [...allLeaks(collected, SEEDS), ...keyLeaks(collected)];
     for (const leak of leaks)
       console.log(`[no-leak] LEAK seed=${leak.seedId} channel=${leak.channel} at=${leak.location}`);
     expect(leaks).toEqual([]);
@@ -298,9 +313,12 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       await plantInConsole(await extension.serviceWorker());
       await plantInNetwork(await extension.openExtensionPage('options.html'));
       await plantInDigest(await extension.openExtensionPage('options.html'));
+      await plantKey(await extension.openExtensionPage('options.html'), await extension.serviceWorker());
       return [(await readShare(extension)).share];
     });
-    const caught = new Set(allLeaks(collected, SEEDS).map((leak) => `${leak.channel}:${leak.seedId}`));
+    const caught = new Set(
+      [...allLeaks(collected, SEEDS), ...keyLeaks(collected)].map((leak) => `${leak.channel}:${leak.seedId}`),
+    );
     for (const expected of PLANTED) {
       expect(caught, expected).toContain(expected);
     }

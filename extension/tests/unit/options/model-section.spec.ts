@@ -30,7 +30,15 @@ let sources: SettingsSources;
 beforeEach(() => {
   root = document.createElement('div');
   document.body.append(root);
-  view = { retentionDays: 90, readersOff: new Set(), autoCheckGmail: false, modelOn: false, health: [] };
+  view = {
+    retentionDays: 90,
+    readersOff: new Set(),
+    autoCheckGmail: false,
+    modelOn: false,
+    modelByoOn: false,
+    byoVendor: null,
+    health: [],
+  };
   send = vi.fn<(command: SettingCommand) => Promise<SettingResult>>(() => Promise.resolve({ ok: true }));
   sources = { load: () => Promise.resolve(view), send, subscribe: () => () => undefined };
   setLogSink(() => undefined);
@@ -127,5 +135,70 @@ describe('the Model section where Chrome has its model, or can download it', () 
     await settle();
     expect(button('Turn on the on-device model')?.disabled).toBe(false);
     expect(stand.destroyed).toBe(1);
+  });
+});
+
+const KEY = 'sk-ant-invented-test-key-0123456789';
+
+/** Types `text` into the key field as a person would. */
+async function typeKey(text: string): Promise<void> {
+  const input = root.querySelector<HTMLInputElement>('input[type="password"]');
+  if (input === null) throw new Error('no key field');
+  await act(() => {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+describe('the person’s own key (sprint_5 5.3)', () => {
+  it('says exactly what is sent, and to whom, and where the key stays', async () => {
+    await show(null);
+    const text = root.textContent;
+    expect(text).toContain('to Anthropic (api.anthropic.com) or OpenAI (api.openai.com)');
+    expect(text).toContain(
+      'what kind of action the claim was, who it was to (an email address or a name), its short subject, its amount and its time, and the same for each item that might match.',
+    );
+    expect(text).toContain('Nothing else: never a page, never what you asked an agent.');
+    expect(text).toContain(
+      'Your key stays in this browser, where only Attest can read it, and goes only to that company.',
+    );
+  });
+
+  it('refuses what is not a key before it is sent, and saves a key with the vendor chosen', async () => {
+    await show(null);
+    expect(button('Turn on my own key')?.disabled).toBe(true);
+    await typeKey('my password');
+    await act(() => {
+      button('Save key')?.click();
+    });
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('That is not a key');
+    expect(send).not.toHaveBeenCalled();
+    const openai = [...root.querySelectorAll('label')].find((l) => l.textContent.trim() === 'OpenAI');
+    await act(() => {
+      openai?.querySelector('input')?.click();
+    });
+    await typeKey(KEY);
+    await act(() => {
+      button('Save key')?.click();
+    });
+    await settle();
+    expect(send).toHaveBeenCalledWith({ type: 'byo.save', vendor: 'openai', key: KEY });
+  });
+
+  it('with a key saved, turns it on, and forgets it', async () => {
+    view = { ...view, byoVendor: 'anthropic' };
+    await show(null);
+    expect(root.textContent).toContain('Your own key is off. Your Anthropic key is saved.');
+    expect(root.querySelector('input[type="password"]')).toBeNull();
+    await act(() => {
+      button('Turn on my own key')?.click();
+    });
+    await settle();
+    expect(send).toHaveBeenCalledWith({ type: 'flag.set', flag: 'ATTEST_MODEL_BYO', on: true });
+    await act(() => {
+      button('Forget my key')?.click();
+    });
+    await settle();
+    expect(send).toHaveBeenLastCalledWith({ type: 'byo.forget' });
   });
 });

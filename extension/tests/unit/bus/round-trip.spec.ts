@@ -64,6 +64,8 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'retention.save': () => extensionPage('/options.html'),
   'reader.toggle': () => extensionPage('/options.html'),
   'flag.set': () => extensionPage('/options.html'),
+  'byo.save': () => extensionPage('/options.html'),
+  'byo.forget': () => extensionPage('/options.html'),
   'ledger.wipe': () => extensionPage('/options.html'),
 };
 

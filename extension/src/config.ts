@@ -17,6 +17,13 @@ export const STORAGE_KEYS = {
   FLAGS: 'attest.flags',
   /** The page readers the person turned off (sprint_4 4.5; src/background/readers.ts). */
   READERS_OFF: 'attest.readersOff',
+  /**
+   * The person's own model key and its vendor (sprint_5 5.3; src/background/byo.ts), apart: the options page reads the
+   * vendor, written only with a key and removed with it, and never the key. Only the extension's own pages and service
+   * worker can read this area (`setAccessLevel` TRUSTED_CONTEXTS), never a content script; nothing logs or exports it.
+   */
+  BYO_VENDOR: 'attest.byoVendor',
+  BYO_KEY: 'attest.byoKey',
 } as const;
 
 /**
@@ -41,6 +48,33 @@ export const importExtractorId = (agent: string): string => `import.${agent}`;
  * Sprint 5 adds exactly one telemetry host here, and only when the user opts in.
  */
 export const NETWORK_ALLOWLIST: readonly string[] = [];
+
+/**
+ * The model vendors a person may bring their own key for (sprint_5 5.3; agents/intel_engineer.md rule 6): each one's
+ * official API host, the one endpoint Attest posts to, and the model it asks. A vendor's host may be contacted only
+ * while the person has their own key on with that vendor (src/intel/providers/byo.ts); it is never in
+ * NETWORK_ALLOWLIST, which holds what may be contacted whatever the person chose.
+ */
+export const BYO_VENDORS = Object.freeze({
+  anthropic: {
+    host: 'api.anthropic.com',
+    endpoint: 'https://api.anthropic.com/v1/messages',
+    model: 'claude-haiku-4-5-20251001',
+  },
+  openai: {
+    host: 'api.openai.com',
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o-mini',
+  },
+} as const);
+
+export type ByoVendor = keyof typeof BYO_VENDORS;
+
+/** The vendors in a fixed order, for their schema and the options page (tests/unit/config.spec.ts pins it to BYO_VENDORS). */
+export const BYO_VENDOR_NAMES = Object.freeze([
+  'anthropic',
+  'openai',
+] as const satisfies readonly ByoVendor[]);
 
 /**
  * Width of the time buckets used by the `[type+timeBucket]` ledger index (storage plumbing, not a
@@ -105,6 +139,7 @@ export const FEATURE_FLAGS = Object.freeze([
   'ATTEST_AUTO_CHECK_GMAIL',
   'ATTEST_TELEMETRY',
   'ATTEST_MODEL',
+  'ATTEST_MODEL_BYO',
 ] as const);
 
 export type FeatureFlag = (typeof FEATURE_FLAGS)[number];
@@ -114,15 +149,17 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
   ATTEST_AUTO_CHECK_GMAIL: false,
   ATTEST_TELEMETRY: false,
   ATTEST_MODEL: false,
+  ATTEST_MODEL_BYO: false,
 });
 
 /**
- * The flags a person turns on or off in the options page: the Gmail auto-check (sprint_4 4.9) and Chrome's on-device
- * model (sprint_5 5.2). Each other flag comes with its feature.
+ * The flags a person turns on or off in the options page: the Gmail auto-check (sprint_4 4.9), Chrome's on-device
+ * model (sprint_5 5.2) and their own model key (5.3). Each other flag comes with its feature.
  */
 export const SETTABLE_FLAGS = Object.freeze([
   'ATTEST_AUTO_CHECK_GMAIL',
   'ATTEST_MODEL',
+  'ATTEST_MODEL_BYO',
 ] as const satisfies readonly FeatureFlag[]);
 
 export type SettableFlag = (typeof SETTABLE_FLAGS)[number];

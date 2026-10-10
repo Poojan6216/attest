@@ -144,7 +144,7 @@ describe('sendSetting(): no answer and invalid commands', () => {
   it.each<[SettingType, SettingMessage]>([
     ['retention.save', { type: 'retention.save', days: 7 as 30 }],
     ['reader.toggle', { type: 'reader.toggle', reader: 'claude' as 'gmail', on: false }],
-    ['flag.set', { type: 'flag.set', flag: 'ATTEST_MODEL' as 'ATTEST_AUTO_CHECK_GMAIL', on: true }],
+    ['flag.set', { type: 'flag.set', flag: 'ATTEST_DOTS' as 'ATTEST_AUTO_CHECK_GMAIL', on: true }],
     ['ledger.wipe', { type: 'ledger.wipe', ...{ everything: true } }],
   ])('never sends an invalid %s: it rejects with invalid_outgoing, logged', async (type, command) => {
     const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage');

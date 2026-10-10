@@ -51,7 +51,11 @@ export default defineConfig({
     restoreMocks: true,
     testTimeout: TEST_TIMEOUT_MS,
     execArgv: TEST_WORKER_EXEC_ARGV,
-    setupFiles: ['tests/unit/lint/test-timeout-setup.ts', 'tests/unit/page-windows-setup.ts'],
+    setupFiles: [
+      'tests/unit/lint/test-timeout-setup.ts',
+      'tests/unit/page-windows-setup.ts',
+      'tests/unit/fake-browser-setup.ts',
+    ],
     tags: TEST_TAGS,
     coverage: {
       provider: 'v8',

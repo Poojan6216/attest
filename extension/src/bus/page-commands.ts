@@ -1,14 +1,15 @@
 /**
  * The commands an extension page sends the service worker for a change a person made (sprint_4): a mark on a receipt
  * (`receipt.event`), an agent's grant (`grant.save`), the retention window (`retention.save`), a page reader on or off
- * (`reader.toggle`), a feature flag on or off (`flag.set`), and deleting every Attest datum (`ledger.wipe`). Pages read
+ * (`reader.toggle`), a feature flag on or off (`flag.set`), the person's own model key (`byo.save`, `byo.forget`), and
+ * deleting every Attest datum (`ledger.wipe`). Pages read
  * the ledger but never write it: the service worker, its one writer, applies each and answers with the command's
  * result. Only an extension page may send one (listen.ts `EXTENSION_PAGE_ONLY`); src/bus/messages.ts puts each in the
  * bus union and re-exports this module.
  */
 import { z } from 'zod';
 
-import { READERS, RETENTION_CHOICES, SETTABLE_FLAGS } from '../config';
+import { BYO_VENDOR_NAMES, READERS, RETENTION_CHOICES, SETTABLE_FLAGS } from '../config';
 import { GrantChoices, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
 
 /**
@@ -93,14 +94,37 @@ export const ReaderToggleMessage = z.strictObject({
 export const SettableFlag = z.enum(SETTABLE_FLAGS);
 
 /**
- * A feature flag on or off (sprint_4 4.9, the options page's Adapters: the Gmail auto-check): the service worker keeps
- * the choice in `chrome.storage.local` (src/background/flags.ts), and the next grading batch reads it.
+ * A feature flag on or off (sprint_4 4.9, the options page's Adapters: the Gmail auto-check; sprint_5 5.2, 5.3, its
+ * Model: the on-device model and the person's own key): the service worker keeps the choice in ledger meta
+ * (src/background/flags.ts, src/ledger/consent.ts), and the next grading batch reads it.
  */
 export const FlagSetMessage = z.strictObject({
   type: z.literal('flag.set'),
   flag: SettableFlag,
   on: z.boolean(),
 });
+
+/** A model vendor a person may bring their own key for (src/config.ts BYO_VENDORS). */
+export const ByoVendorName = z.enum(BYO_VENDOR_NAMES);
+
+/**
+ * A model key as its vendor writes it: letters, digits, `-` and `_`, 20 to 300 characters. Never logged: a refused
+ * one is logged by message type alone (Hard Rule 10).
+ */
+export const ByoKey = z.string().regex(/^[A-Za-z0-9_-]{20,300}$/u, 'must be a key as its vendor wrote it');
+
+/**
+ * The person's own model key and its vendor (sprint_5 5.3, the options page's Model): the service worker keeps them
+ * where only the extension's own pages and service worker can read them (src/background/byo.ts).
+ */
+export const ByoSaveMessage = z.strictObject({
+  type: z.literal('byo.save'),
+  vendor: ByoVendorName,
+  key: ByoKey,
+});
+
+/** Forgets the person's own model key: the service worker deletes it and turns their own key off. */
+export const ByoForgetMessage = z.strictObject({ type: z.literal('byo.forget') });
 
 /**
  * Delete all Attest data (sprint_4 4.5, the options page's Danger zone): the service worker deletes the ledger's
@@ -110,7 +134,7 @@ export const FlagSetMessage = z.strictObject({
  */
 export const LedgerWipeMessage = z.strictObject({ type: z.literal('ledger.wipe') });
 
-/** The answer to a `retention.save`, a `reader.toggle`, a `flag.set` or a `ledger.wipe`: done, or failed. */
+/** The answer to a `retention.save`, a `reader.toggle`, a `flag.set`, a `byo.save`, a `byo.forget` or a `ledger.wipe`: done, or failed. */
 export const SettingResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true) }),
   z.strictObject({ ok: z.literal(false), code: z.enum(['failed']) }),
@@ -126,4 +150,6 @@ export type RetentionSaveMessage = z.infer<typeof RetentionSaveMessage>;
 export type ReaderToggleMessage = z.infer<typeof ReaderToggleMessage>;
 export type FlagSetMessage = z.infer<typeof FlagSetMessage>;
 export type LedgerWipeMessage = z.infer<typeof LedgerWipeMessage>;
+export type ByoSaveMessage = z.infer<typeof ByoSaveMessage>;
+export type ByoForgetMessage = z.infer<typeof ByoForgetMessage>;
 export type SettingResult = z.infer<typeof SettingResult>;

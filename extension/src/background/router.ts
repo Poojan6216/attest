@@ -21,6 +21,7 @@ import { exportLedger } from '../ledger/export';
 import { getLedger, listAdapterHealth } from '../ledger/repo';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
+import { onByoForget, onByoSave } from './byo';
 import { onFlagSet } from './flags';
 import { onGrantSave } from './grant-save';
 import { BROWSER_READERS, onReaderToggle, type ReaderDeps, readerOff, syncReaders } from './readers';
@@ -95,6 +96,8 @@ export function createHandlers(
     'retention.save': (message) => onRetentionSave(settings, message),
     'reader.toggle': (message) => onReaderToggle(message, readers, imports.notify),
     'flag.set': (message) => onFlagSet(message, settings),
+    'byo.save': (message) => onByoSave(message, settings),
+    'byo.forget': () => onByoForget(settings),
     'ledger.wipe': () => onLedgerWipe({ notify: imports.notify, syncReaders: () => syncReaders(readers) }),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??

@@ -42,6 +42,8 @@ import { oneLineText } from '../core/schema-text';
 import { CoveragePing } from '../ledger/types';
 import { CalendarSnapshot } from '../observers/gcal/snapshot';
 import {
+  ByoForgetMessage,
+  ByoSaveMessage,
   FlagSetMessage,
   GrantSaveMessage,
   GrantSaveResult,
@@ -91,6 +93,8 @@ export const BusMessageType = z.enum([
   'retention.save',
   'reader.toggle',
   'flag.set',
+  'byo.save',
+  'byo.forget',
   'ledger.wipe',
 ]);
 
@@ -301,6 +305,8 @@ export const BusMessage = z.discriminatedUnion('type', [
   RetentionSaveMessage,
   ReaderToggleMessage,
   FlagSetMessage,
+  ByoSaveMessage,
+  ByoForgetMessage,
   LedgerWipeMessage,
 ]);
 
@@ -341,6 +347,8 @@ export const PAGE_COMMAND_RESULTS = Object.freeze({
   'retention.save': SettingResult,
   'reader.toggle': SettingResult,
   'flag.set': SettingResult,
+  'byo.save': SettingResult,
+  'byo.forget': SettingResult,
   'ledger.wipe': SettingResult,
 } as const satisfies Partial<Record<BusMessageType, z.ZodType>>);
 

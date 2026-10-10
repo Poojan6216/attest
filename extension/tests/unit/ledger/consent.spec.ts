@@ -70,7 +70,7 @@ describe('the flags', () => {
   });
 
   it('read a flag no page may set as its default, whatever is stored (SEC-3: no telemetry by a stray write)', async () => {
-    for (const flag of ['ATTEST_TELEMETRY', 'ATTEST_MODEL', 'ATTEST_DOTS']) {
+    for (const flag of ['ATTEST_TELEMETRY', 'ATTEST_DOTS']) {
       await db.meta.put({ key: `${FLAG_PREFIX}${flag}`, value: true });
     }
     expect(await readFlags(db)).toEqual(FEATURE_FLAG_DEFAULTS);
@@ -90,7 +90,11 @@ describe('the flags', () => {
 describe('the keys', () => {
   it('are one per reader and per settable flag, each in the documented list of meta keys', () => {
     expect(READERS.map(readerOffKey)).toEqual(['readerOff.gmail', 'readerOff.gcal']);
-    expect(SETTABLE_FLAGS.map(flagKey)).toEqual(['flag.ATTEST_AUTO_CHECK_GMAIL']);
+    expect(SETTABLE_FLAGS.map(flagKey)).toEqual([
+      'flag.ATTEST_AUTO_CHECK_GMAIL',
+      'flag.ATTEST_MODEL',
+      'flag.ATTEST_MODEL_BYO',
+    ]);
     expect(META_KEYS).toEqual(expect.arrayContaining([READER_OFF_PREFIX, FLAG_PREFIX]));
   });
 });

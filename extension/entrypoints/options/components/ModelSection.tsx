@@ -3,6 +3,7 @@ import { Skeleton } from '../../../src/ui/Skeleton';
 import { PAGE_PROMPT_API, useBuiltinModel } from '../use-builtin-model';
 import { LIVE_SETTINGS, type SettingsSources, useSettings } from '../use-settings';
 import { BuiltinModelToggle } from './BuiltinModelToggle';
+import { ByoModel } from './ByoModel';
 import { Section } from './Section';
 
 export interface ModelSectionProps {
@@ -14,7 +15,7 @@ export interface ModelSectionProps {
 
 /**
  * The Model section (sprint_5 5.2): an optional model can suggest which items might match; it never decides a grade,
- * and it is off by default. Chrome's on-device model first; the person's own key arrives with 5.3.
+ * and it is off by default. Chrome's on-device model first (5.2); the person's own key second (5.3).
  */
 export function ModelSection({ sources = LIVE_SETTINGS, promptApi = PAGE_PROMPT_API }: ModelSectionProps) {
   const state = useSettings(sources);
@@ -32,13 +33,16 @@ export function ModelSection({ sources = LIVE_SETTINGS, promptApi = PAGE_PROMPT_
         </p>
       ) : null}
       {state.status === 'ready' ? (
-        <BuiltinModelToggle
-          on={state.view.modelOn}
-          availability={model.availability}
-          download={model.download}
-          startDownload={model.startDownload}
-          toggle={(on) => sources.send({ type: 'flag.set', flag: 'ATTEST_MODEL', on })}
-        />
+        <>
+          <BuiltinModelToggle
+            on={state.view.modelOn}
+            availability={model.availability}
+            download={model.download}
+            startDownload={model.startDownload}
+            toggle={(on) => sources.send({ type: 'flag.set', flag: 'ATTEST_MODEL', on })}
+          />
+          <ByoModel on={state.view.modelByoOn} vendor={state.view.byoVendor} send={sources.send} />
+        </>
       ) : null}
     </Section>
   );

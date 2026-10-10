@@ -72,6 +72,9 @@ const VERBS: ReadonlySet<string> = new Set([
   'Show',
   'Turn',
   'Undo',
+  'Download',
+  'Forget',
+  'Score',
 ]);
 
 /** Each banned word or mark in `strings`, as `file:line: why: "text"`. */

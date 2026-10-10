@@ -23,12 +23,13 @@ const allHostPatterns = (): string[] =>
   [...Object.values(OBSERVER_HOSTS), ...Object.values(AGENT_HOSTS)].flat();
 
 describe('feature flags', () => {
-  it('are exactly the four named flags', () => {
+  it('are exactly the five named flags', () => {
     const expected: readonly FeatureFlag[] = [
       'ATTEST_DOTS',
       'ATTEST_AUTO_CHECK_GMAIL',
       'ATTEST_TELEMETRY',
       'ATTEST_MODEL',
+      'ATTEST_MODEL_BYO',
     ];
     expect(FEATURE_FLAGS).toEqual(expected);
     expect(Object.keys(FEATURE_FLAG_DEFAULTS).sort()).toEqual([...expected].sort());

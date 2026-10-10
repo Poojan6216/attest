@@ -40,6 +40,8 @@ beforeEach(() => {
     readersOff: new Set(['gcal']),
     autoCheckGmail: false,
     modelOn: false,
+    modelByoOn: false,
+    byoVendor: null,
     health: [
       AdapterHealth.parse({
         adapterId: 'gmail.sent',

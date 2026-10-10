@@ -18,6 +18,7 @@ import { getLedger } from '../ledger/shared';
 import { log } from '../log';
 import { resetAlarms } from './alarms';
 import { moveStoredChoices } from './consent-move';
+import { closeStorage } from './byo';
 import { syncReaders } from './readers';
 
 export const INSTALL_REASONS = ['install', 'update', 'chrome_update', 'shared_module_update'] as const;
@@ -67,17 +68,20 @@ export async function settleReaders(sync: () => Promise<void> = syncReaders): Pr
 }
 
 /**
- * The whole onInstalled job. Never rejects: the install id, the alarms and the readers are settled independently and
- * each failure is logged under its own event (`install.failed`, `alarm.reset_failed`, `readers.sync_failed`).
+ * The whole onInstalled job. Never rejects: the install id, the alarms, the readers and the closing of
+ * `chrome.storage.local` to content scripts (./byo.ts, sprint_5 5.3) are settled independently, and each failure is
+ * logged under its own event (`install.failed`, `alarm.reset_failed`, `readers.sync_failed`, `storage.close_failed`).
  */
 export async function onInstalled(details: unknown): Promise<void> {
   const owns = ownsChange(details);
-  const [installId, alarms, readers] = await Promise.allSettled([
+  const [installId, alarms, readers, closed] = await Promise.allSettled([
     handleInstalled(details),
     owns ? resetAlarms() : Promise.resolve(),
     owns ? settleReaders() : Promise.resolve(),
+    owns ? closeStorage() : Promise.resolve(),
   ]);
   if (installId.status === 'rejected') log.error('install.failed', { error: installId.reason });
   if (alarms.status === 'rejected') log.error('alarm.reset_failed', { error: alarms.reason });
   if (readers.status === 'rejected') log.error('readers.sync_failed', { error: readers.reason });
+  if (closed.status === 'rejected') log.error('storage.close_failed', { error: closed.reason });
 }

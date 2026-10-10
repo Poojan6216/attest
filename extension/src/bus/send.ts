@@ -24,6 +24,8 @@ import {
   BusAck,
   BusMessage,
   type BusMessageType,
+  type ByoForgetMessage,
+  type ByoSaveMessage,
   type ClaimsImportResult,
   type FlagSetMessage,
   type GrantSaveMessage,
@@ -165,7 +167,13 @@ export async function sendGrant(
 
 /** Sends one of a person's settings (sprint_4 4.5: retention, a reader, Delete all data; 4.9: a flag; `sendCommand`). */
 export async function sendSetting(
-  message: RetentionSaveMessage | ReaderToggleMessage | FlagSetMessage | LedgerWipeMessage,
+  message:
+    | RetentionSaveMessage
+    | ReaderToggleMessage
+    | FlagSetMessage
+    | ByoSaveMessage
+    | ByoForgetMessage
+    | LedgerWipeMessage,
 ): Promise<SettingResult> {
   return sendCommand(message);
 }

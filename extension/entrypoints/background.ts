@@ -5,6 +5,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 
 import { onAlertClicked } from '../src/background/alerts';
 import { ensureAlarms, handleAlarm } from '../src/background/alarms';
+import { closeStorage } from '../src/background/byo';
 import { type IdleApi, onPermissionsRemoved, watchIdle } from '../src/background/idle';
 import { onInstalled } from '../src/background/install';
 import { syncReaders } from '../src/background/readers';
@@ -31,6 +32,10 @@ export default defineBackground({
       });
       syncReaders().catch((error: unknown) => {
         log.error('readers.sync_failed', { error });
+      });
+      // The person's own model key is kept where no content script can read it (src/background/byo.ts, sprint_5 5.3).
+      closeStorage().catch((error: unknown) => {
+        log.error('storage.close_failed', { error });
       });
     });
 

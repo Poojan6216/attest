@@ -78,6 +78,8 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     'retention.save': { type: 'retention.save', days: 45 as 30 },
     'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' as 'gmail' },
     'flag.set': { ...VALID['flag.set'], flag: 'ATTEST_TELEMETRY' as 'ATTEST_AUTO_CHECK_GMAIL' },
+    'byo.save': { ...VALID['byo.save'], key: SECRET },
+    'byo.forget': { type: 'byo.forget', ...{ key: SECRET } },
     'ledger.wipe': { type: 'ledger.wipe', ...{ confirm: SECRET } },
   };
 }
