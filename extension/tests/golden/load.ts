@@ -26,6 +26,7 @@ import {
   type Grant,
   type GradeContext,
   IsoTs,
+  ModelScores,
   type Observation,
   Reason,
   Ulid,
@@ -141,6 +142,8 @@ export interface LoadedScenario {
   coverage: Coverage;
   activity: Activity;
   fixed: BuiltFixed[];
+  /** mode "batch": the model's scores by claim id (§5.4), as gradeBatch takes them; empty when the file has none. */
+  modelScores: Map<Ulid, ModelScores>;
   gradeCall?: BuiltGradeCall;
   events: BuiltEvent[];
   expected: ResolvedExpect[];
@@ -337,6 +340,20 @@ export function coverageAt(loaded: LoadedScenario, evaluatedAt: IsoTs): Coverage
   return buildCoverage(loaded.scenario.input.coverage, evaluatedAt, loaded.scenario.input.repairs);
 }
 
+/** The model's scores by claim id (§5.4), each claim's in observation id order, parsed as gradeBatch takes them. */
+function buildModelScores(scenario: Scenario, built: Built): Map<Ulid, ModelScores> {
+  return new Map(
+    (scenario.input.modelScores ?? []).map(({ claim, scores }) => [
+      claimId(built, claim),
+      ModelScores.parse(
+        scores
+          .map(({ observation, score }) => ({ observationId: observationId(built, observation), score }))
+          .sort((a, b) => (a.observationId < b.observationId ? -1 : 1)),
+      ),
+    ]),
+  );
+}
+
 export function buildScenario(file: string, scenario: Scenario): LoadedScenario {
   const policyJson = mergePatch(defaultPolicyJson, scenario.policyPatch ?? {});
   const policy = PolicyView.parse(policyJson);
@@ -361,6 +378,7 @@ export function buildScenario(file: string, scenario: Scenario): LoadedScenario 
       claimId: pair.claim === null ? null : claimId(built, pair.claim),
       after: FIXED_AFTER,
     })),
+    modelScores: buildModelScores(scenario, built),
     ...(gradeCall === undefined ? {} : { gradeCall }),
     events: (scenario.events ?? []).map((event) => buildEvent(built, event)),
     expected: scenario.expect.map((expected) => resolveExpect(built, expected)),

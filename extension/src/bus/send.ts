@@ -166,7 +166,10 @@ export async function sendGrant(
   return sendCommand({ type: 'grant.save', grant, alertsMuted });
 }
 
-/** Sends one of a person's settings (sprint_4 4.5: retention, a reader, Delete all data; 4.9: a flag; `sendCommand`). */
+/**
+ * Sends one of a person's settings (sprint_4 4.5: retention, a reader, Delete all data; 4.9: a flag; sprint_5 5.3: the
+ * own key saved or forgotten; `sendCommand`).
+ */
 export async function sendSetting(
   message:
     | RetentionSaveMessage

@@ -18,7 +18,8 @@ import { nowIso } from '../clock';
 import { DEFAULT_POLICY } from '../core/policy';
 import { IsoTs } from '../core/schema';
 import { exportLedger } from '../ledger/export';
-import { getLedger, listAdapterHealth } from '../ledger/repo';
+import { getLedger } from '../ledger/repo';
+import { healthReports } from '../ledger/views';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
 import { onByoForget, onByoSave } from './byo';
@@ -50,7 +51,7 @@ export async function answerUiQuery(query: UiQuery, clock: Clock = systemClock):
         data: await exportLedger(db, { exportedAt: clock() }),
       };
     case 'health.list':
-      return { type: 'ui.result', kind: query.kind, ok: true, data: await listAdapterHealth(db) };
+      return { type: 'ui.result', kind: query.kind, ok: true, data: await healthReports(db) };
   }
 }
 

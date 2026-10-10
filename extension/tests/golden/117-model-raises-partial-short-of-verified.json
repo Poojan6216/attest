@@ -1,0 +1,70 @@
+{
+  "name": "the model's score lifts a floor exactly at partial, and the match stays PARTIAL",
+  "covers": ["edge:model_raise_partial_floor"],
+  "mode": "batch",
+  "notes": [
+    "As golden 02: o1 raj@company.com, 'Q3 budget', the same minute: tp 1, ce 0, cd 1, so 1/3; floor S = 4500/9000 = 1/2, exactly thresholds.partial.",
+    "The model scores o1 1: raised = 17/20 · 1/2 + 3/20 = 23/40 < 17/20 → rule partial (§5.4): the model lifts a floor at partial, never to verified on its own.",
+    "FINAL (graceElapsed, the sync at 15:00 after end + 30 and end + 45)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 budget",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "modelScores": [
+      {
+        "claim": "c1",
+        "scores": [
+          {
+            "observation": "o1",
+            "score": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "1/2",
+      "reasonCodes": ["match.best"],
+      "raisedScore": "23/40"
+    }
+  ]
+}

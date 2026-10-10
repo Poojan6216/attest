@@ -17,11 +17,11 @@
 import type { LedgerTable } from '../bus/messages';
 import { isoWithLocalOffset } from '../clock';
 import { MODEL_ASKS_PER_RUN } from '../config';
+import { modelMayRaise } from '../core/model-raise';
 import { instantMs } from '../core/normalize';
 import { Claim, IsoTs, Observation, Receipt, type Ulid } from '../core/schema';
-import { type IntelProvider, scoresFor } from '../intel';
+import { inputFor, type IntelProvider, scoresFor } from '../intel';
 import { inputsHash } from '../intel/cache';
-import { buildInput, type IntelInput } from '../intel/input';
 import { builtinAvailability, builtinProvider, promptApi, type PromptApi } from '../intel/providers/builtin';
 import { byoProvider } from '../intel/providers/byo';
 import { modelOn, readFlags } from '../ledger/consent';
@@ -61,11 +61,10 @@ export interface ModelAskItem {
   readonly observation: Observation;
 }
 
-/** The receipt's claim and its one observation, when it is PENDING by rule `partial` with exactly one. */
+/** The receipt's claim and its one observation, when the model may still raise it (core `modelMayRaise`), with one. */
 function partialOf(receipt: Receipt): { claimId: Ulid; observationId: Ulid } | null {
   const [observationId, ...more] = receipt.observationIds;
-  if (receipt.ruleId !== 'partial' || receipt.claimId === undefined || observationId === undefined)
-    return null;
+  if (!modelMayRaise(receipt) || receipt.claimId === undefined || observationId === undefined) return null;
   return more.length === 0 ? { claimId: receipt.claimId, observationId } : null;
 }
 
@@ -120,13 +119,8 @@ async function askOne(
   deps: IntelDeps,
   stop: AbortSignal,
 ): Promise<boolean> {
-  let input: IntelInput;
-  try {
-    input = buildInput(item.claim, [item.observation]);
-  } catch (error) {
-    log.warn('intel.failed', { provider: provider.id, error });
-    return false;
-  }
+  const input = inputFor(provider, item.claim, [item.observation]);
+  if (input === undefined) return false;
   const askedAt = IsoTs.parse(isoWithLocalOffset(new Date(deps.grading.nowMs())));
   const ask = { claimId: item.claim.id, inputsHash: inputsHash(input), provider: provider.id, askedAt };
   const outcome = await claimAsk(db, ask);

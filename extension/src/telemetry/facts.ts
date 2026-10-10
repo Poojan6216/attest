@@ -8,12 +8,9 @@ import { browser } from 'wxt/browser';
 
 import { getInstallId } from '../ledger/install-id';
 import type { TelemetryFacts } from './aggregate';
+import { chromeMajorOf } from './chrome-major';
 
-/** Chrome's major version as `userAgent` names it (headless Chrome's too), or null. */
-export function chromeMajorOf(userAgent: string): number | null {
-  const major = /\b(?:Headless)?Chrome\/([0-9]{1,3})\./u.exec(userAgent)?.[1];
-  return major === undefined ? null : Number(major);
-}
+export { chromeMajorOf } from './chrome-major';
 
 /**
  * This browser's facts (header), the install id read by `installId`: the service worker's `getInstallId`, which makes a

@@ -256,11 +256,6 @@ export async function getAdapterHealth(db: LedgerDb, adapterId: string): Promise
   return readRow('adapterHealth', AdapterHealth, await db.adapterHealth.get(adapterId));
 }
 
-/** The latest health report of every adapter/observer, ordered by id. Bounded by the adapter count. */
-export async function listAdapterHealth(db: LedgerDb): Promise<AdapterHealth[]> {
-  return readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray());
-}
-
 // ── Coverage ────────────────────────────────────────────────────────────────────────────────────
 
 /** Keeps the latest ping per observer + account; a ping older than the stored one is ignored. */

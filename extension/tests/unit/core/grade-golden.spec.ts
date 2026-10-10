@@ -9,14 +9,16 @@
  *  - the grant in force then (§3: the latest `updatedAt` not after it);
  *  - a claim receipt: the claim's §4.1 candidates (core `candidates()` over a memory index) minus the
  *    observations the expectations assign to other claims and those the scenario fixes (§4.3); its §6.3
- *    `priorSpendCents`, recomputed here from the `activity.claims` seen by then (§3);
+ *    `priorSpendCents`, recomputed here from the `activity.claims` seen by then (§3); and the model's scores of its
+ *    candidates the scenario states (`input.modelScores`, §5.4), as gradeBatch passes them;
  *  - an UNASKED receipt: the orphan alone, with the attribution the expectation states (its `unasked.*` signals,
  *    its `attributionScore`, the agent's latest adapter sync by then); any other orphan receipt (§8: the terminal
  *    rule) with core `attribute()` over the scenario's activity;
  *  - a scope receipt: no candidate and `context.scope`.
  *
  * Each receipt must match grade, ruleId, the pre-override state, observationIds, the ordered reasons (minus the
- * state.ts lifecycle codes), the display score, §6.4 confidence, computedAt/finalAt, and parse with `Receipt`;
+ * state.ts lifecycle codes), the display score and §6.4 confidence (the raised score where one is stated),
+ * computedAt/finalAt, and parse with `Receipt`;
  * the grant, `priorSpendCents` and scope an expectation states as gradeBatch's `inputs` (§3) must be the ones
  * derived here.
  */
@@ -182,14 +184,19 @@ async function gradeExpectation(
   if (claim === undefined) throw new Error(`${loaded.file}: no claim ${ref}`);
   const own = await ownCandidates(loaded, ref, claim, policy);
   const grant = grantOf(loaded, claim.agent, at);
-  const prior = { priorSpendCents: priorSpend(loaded, claim, policy, at, grant.spendCurrency) };
+  const scores = loaded.modelScores.get(claim.id);
+  const prior: GradeContext = {
+    priorSpendCents: priorSpend(loaded, claim, policy, at, grant.spendCurrency),
+    ...(scores === undefined ? {} : { modelScores: scores }),
+  };
   return graded(grant, prior, grade(claim, own, grant, policy, coverage, prior));
 }
 
 function expectedConfidence(resolved: ResolvedExpect): number {
   const { expected } = resolved;
   if (expected.grade === 'NOT_FOUND' || expected.grade === 'OVER_SCOPE') return 1;
-  const score = expected.grade === 'UNASKED' ? expected.attributionScore : expected.score;
+  const score =
+    expected.grade === 'UNASKED' ? expected.attributionScore : (expected.raisedScore ?? expected.score);
   if (expected.grade === 'UNVERIFIABLE' || score === undefined || score === null) return 0;
   const { num, den } = parseFraction(score);
   return toDisplay(ratio(num, den));
@@ -215,7 +222,9 @@ function check(
   if (resolved.reasons !== undefined) {
     expect(receipt.reasons, label).toEqual(resolved.reasons.filter((reason) => !LIFECYCLE.has(reason.code)));
   }
-  const score = expected.score === null ? undefined : toDisplay(ratio(...parts(expected.score)));
+  // The receipt shows the score the rules read: the model's raise when the scenario states one (§5.4), else the floor.
+  const shown = expected.raisedScore ?? expected.score;
+  const score = shown === null ? undefined : toDisplay(ratio(...parts(shown)));
   expect(receipt.signals.score, label).toBe(score);
   expect(receipt.confidence, label).toBe(expectedConfidence(resolved));
   expect(receipt.computedAt, label).toBe(at);

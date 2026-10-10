@@ -10,7 +10,6 @@ import {
   getCoveragePing,
   getGrant,
   getMeta,
-  listAdapterHealth,
   listGrants,
   putAdapterHealth,
   putCoveragePing,
@@ -18,6 +17,7 @@ import {
   setMeta,
 } from '../../../src/ledger/repo';
 import { expectLedgerError, makeGrant, makeHealth, makePing, omit, sha, uniqueDbName } from './fixtures';
+import { healthReports } from '../../../src/ledger/views';
 
 let db: LedgerDb;
 
@@ -112,17 +112,17 @@ describe('putAdapterHealth', () => {
   });
 });
 
-describe('getAdapterHealth / listAdapterHealth', () => {
+describe('getAdapterHealth / healthReports', () => {
   it('returns the latest report per adapter, ordered by adapter id', async () => {
     await putAdapterHealth(db, makeHealth({ adapterId: 'muse' }));
     await putAdapterHealth(db, makeHealth({ adapterId: 'gmail', version: '0.1.0' }));
-    expect((await listAdapterHealth(db)).map((h) => h.adapterId)).toEqual(['gmail', 'muse']);
+    expect((await healthReports(db)).map((h) => h.adapterId)).toEqual(['gmail', 'muse']);
     expect((await getAdapterHealth(db, 'gmail'))?.version).toBe('0.1.0');
   });
 
   it('returns undefined / empty when nothing was reported', async () => {
     expect(await getAdapterHealth(db, 'claude')).toBeUndefined();
-    expect(await listAdapterHealth(db)).toEqual([]);
+    expect(await healthReports(db)).toEqual([]);
   });
 });
 

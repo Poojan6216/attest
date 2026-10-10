@@ -7,13 +7,13 @@
  * input gives no score, and the claim is graded rules-only (Hard Rule 6). The log names the provider and what went
  * wrong, never the input, the answer or an error's text (Hard Rule 10).
  */
-import { INTEL_TIMEOUT_MS } from '../config';
+import { INTEL_TIMEOUT_MS, type MODEL_PROVIDERS } from '../config';
 import type { Claim, Observation } from '../core/schema';
 import { log } from '../log';
 import { buildInput, type IntelInput } from './input';
 import { type ModelScores, scoresOf } from './schema';
 
-export type IntelProviderId = 'builtin' | 'byo';
+export type IntelProviderId = (typeof MODEL_PROVIDERS)[number];
 
 /** One way to ask the model. Its answer is parsed by the caller; `signal` aborts once the time is up. */
 export interface IntelProvider {
@@ -25,23 +25,20 @@ const TIMED_OUT = Symbol('timed out');
 const STOPPED = Symbol('stopped');
 
 /**
- * The model scores `provider` gives `claim`'s `candidates` (header), or undefined when it gives none: it threw, it took
- * longer than `timeoutMs`, or its answer was not one. Never throws; never blocks longer than `timeoutMs`.
+ * `claim`'s input for `candidates` (./input.ts), or undefined, logged by provider, when it cannot be built. Never
+ * throws. The service worker builds every input it asks with this (src/background/intel.ts; tech review TECH-7).
  */
-export async function modelScores(
+export function inputFor(
   provider: IntelProvider,
   claim: Claim,
   candidates: readonly Observation[],
-  timeoutMs: number = INTEL_TIMEOUT_MS,
-): Promise<ModelScores | undefined> {
-  let input: IntelInput;
+): IntelInput | undefined {
   try {
-    input = buildInput(claim, candidates);
+    return buildInput(claim, candidates);
   } catch (error) {
     log.warn('intel.failed', { provider: provider.id, error });
     return undefined;
   }
-  return scoresFor(provider, input, timeoutMs);
 }
 
 /**

@@ -5,6 +5,9 @@ import type { BuiltinAvailability } from '../../../src/intel/providers/builtin';
 import { log } from '../../../src/log';
 import { Button } from '../../../src/ui/Button';
 import type { DownloadState } from '../use-builtin-model';
+import { CheckModelButton } from './CheckModelButton';
+import { ModelDownload } from './ModelDownload';
+import { ModelStatement } from './ModelStatement';
 
 export interface BuiltinModelToggleProps {
   /** Whether the on-device model is on (flag ATTEST_MODEL). */
@@ -25,64 +28,10 @@ const WHY_NOT: Readonly<Record<Exclude<BuiltinAvailability, 'available'>, string
   unavailable: 'Chrome says this computer cannot run its on-device model.',
   downloadable: 'Chrome has not downloaded its on-device model yet.',
   downloading: 'Chrome is downloading its on-device model. Come back once it has finished.',
+  unknown: 'Chrome did not answer. Check again.',
 });
 
 type ToggleState = 'idle' | 'saving' | 'failed';
-
-/** What the model sees, where it runs, and what it may do to a grade. */
-function ModelStatement() {
-  return (
-    <>
-      <p class="text-sm">
-        Off unless you turn it on. The model runs on this computer, inside Chrome: nothing is sent anywhere.
-        For each claim it sees only what kind of action it was, who it was to, its short subject, its amount
-        and its time, and the same for each item that might match. It never sees a page or what you asked an
-        agent.
-      </p>
-      <p class="text-sm">
-        It never decides a grade. It can only move a partial match toward verified, and never lowers a grade.
-      </p>
-    </>
-  );
-}
-
-/** The download a person may start with a click, its progress, and its failure. */
-function ModelDownload({
-  download,
-  startDownload,
-}: Pick<BuiltinModelToggleProps, 'download' | 'startDownload'>) {
-  return (
-    <>
-      <Button variant="secondary" disabled={download.status === 'downloading'} onClick={startDownload}>
-        Download Chrome’s on-device model
-      </Button>
-      {download.status === 'downloading' ? (
-        <p role="status" class="text-sm">
-          Chrome is downloading its model: {Math.round(download.loaded * 100)}% so far.
-        </p>
-      ) : null}
-      {download.status === 'failed' ? (
-        <p role="alert" class="text-sm text-error-fg">
-          Chrome did not download its model. Try again later.
-        </p>
-      ) : null}
-    </>
-  );
-}
-
-/** The check a person asks for, where this Chrome has the Prompt API and has not said its model is ready. */
-function ModelCheck({
-  availability,
-  checking,
-  check,
-}: Pick<BuiltinModelToggleProps, 'availability' | 'checking' | 'check'>) {
-  if (availability === 'no_api' || availability === 'available') return null;
-  return (
-    <Button variant="secondary" disabled={checking} onClick={check}>
-      Check Chrome’s on-device model
-    </Button>
-  );
-}
 
 /**
  * Chrome's on-device model (sprint_5 5.2, 5.4; src/intel/providers/builtin.ts): off until the person turns it on
@@ -118,7 +67,7 @@ export function BuiltinModelToggle(props: BuiltinModelToggleProps) {
         {checking ? ' Checking whether Chrome has it.' : ''}
         {reason === null || checking ? '' : ` ${reason}`}
       </p>
-      <ModelCheck availability={availability} checking={checking} check={props.check} />
+      <CheckModelButton availability={availability} checking={checking} check={props.check} />
       <Button variant="secondary" disabled={state === 'saving' || (!on && !usable)} onClick={change}>
         {on ? 'Turn off the on-device model' : 'Turn on the on-device model'}
       </Button>

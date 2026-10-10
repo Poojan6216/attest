@@ -20,6 +20,8 @@ export async function runTelemetryAlarm(
 ): Promise<void> {
   const sent = await sendTelemetry({ db: await getLedger(), nowMs: nowMs(), facts: telemetryFacts });
   if (sent.outcome === 'sent') notify(['meta']);
+  // On every path, `off` and `already_sent` among them: once an hour, it says the alarm's work is done (QA GAP 7).
+  log.info('telemetry.alarm_done', { outcome: sent.outcome });
 }
 
 /** Handles one `telemetry.send` (header): what the send did, and the day it was about. */
@@ -32,7 +34,8 @@ export async function onTelemetrySend(
     if (sent.outcome === 'sent') notify(['meta']);
     return { ok: true, ...sent };
   } catch (error) {
-    log.error('telemetry.send_failed', { error });
+    // Anything but the call itself (which send.ts logs as `telemetry.send_failed`): its own name (TECH-6).
+    log.error('telemetry.handler_failed', { error });
     return { ok: false, code: 'failed' };
   }
 }

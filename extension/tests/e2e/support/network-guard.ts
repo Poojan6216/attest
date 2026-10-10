@@ -59,6 +59,8 @@ export interface RouteRecord {
   readonly from: string;
   /** Request body, if any (searched by the no-leak test). */
   readonly body: string;
+  /** Every request header, as JSON (searched by the no-leak test: a key travels in a header; Sprint 5 close, SEC-3). */
+  readonly headers: string;
 }
 
 export interface AttributedRequest {
@@ -151,7 +153,12 @@ export async function installRouteGuard(
       await route.continue();
       return;
     }
-    records.push({ url: request.url(), from: requestSource(request), body: request.postData() ?? '' });
+    records.push({
+      url: request.url(),
+      from: requestSource(request),
+      body: request.postData() ?? '',
+      headers: JSON.stringify(await request.allHeaders()),
+    });
     await route.abort('blockedbyclient');
   });
   return records;

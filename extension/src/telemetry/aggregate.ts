@@ -20,7 +20,7 @@ import { readFlags, readersOff } from '../ledger/consent';
 import { readInterval, spansEndingIn } from '../ledger/coverage-store';
 import { readRows, type LedgerDb } from '../ledger/db';
 import { localDate } from '../ledger/digest-week';
-import { listAdapterHealth } from '../ledger/repo';
+import { healthReports } from '../ledger/views';
 import { TELEMETRY_COMPONENTS, TELEMETRY_COUNT_MAX, TelemetryPayload } from './schema';
 
 /** The day a payload reports, as `YYYY-MM-DD`, and its bounds in epoch ms on the browser's clock. */
@@ -77,7 +77,7 @@ async function countsOf(db: LedgerDb, day: TelemetryDay): Promise<Counts> {
 /** Each reader's latest health report made on `day`, OK or DEGRADED (header). */
 async function healthOf(db: LedgerDb, day: TelemetryDay): Promise<TelemetryPayload['adapterHealth']> {
   const health: TelemetryPayload['adapterHealth'] = {};
-  for (const report of await listAdapterHealth(db)) {
+  for (const report of await healthReports(db)) {
     const component = TELEMETRY_COMPONENTS.find((id) => id === report.adapterId);
     const checkedMs = instantMs(report.checkedAt);
     if (component === undefined || report.status === 'IDLE') continue;
@@ -86,7 +86,10 @@ async function healthOf(db: LedgerDb, day: TelemetryDay): Promise<TelemetryPaylo
   return health;
 }
 
-/** The whole hours of `day` the windows of `source` covered (header): their union, clipped to the day. */
+/** The most whole hours a day reports (src/telemetry/schema.ts `coverageHours`). */
+const HOURS_PER_DAY = 24;
+
+/** The whole hours of `day` the windows of `source` covered (header): their union, clipped to the day, at most 24. */
 async function hoursOf(db: LedgerDb, source: ObservationSource, day: TelemetryDay): Promise<number> {
   const spans = (await spansEndingIn(db, source, day.fromMs, Number.MAX_SAFE_INTEGER).toArray())
     .flatMap((row) => {
@@ -102,7 +105,9 @@ async function hoursOf(db: LedgerDb, source: ObservationSource, day: TelemetryDa
     covered += Math.max(0, to - Math.max(from, reached));
     reached = Math.max(reached, to);
   }
-  return Math.floor(covered / MS_PER_HOUR);
+  // A day is 25 hours long when the clocks go back: a whole day covered still counts 24, the most the schema takes, so
+  // that day is sent like any other (Sprint 5 close, tech review TECH-2).
+  return Math.min(HOURS_PER_DAY, Math.floor(covered / MS_PER_HOUR));
 }
 
 /** `day`'s payload (header), or null when it is not one the schema takes (Chrome's version unknown, say). */

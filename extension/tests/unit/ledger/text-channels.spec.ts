@@ -13,7 +13,6 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { exportLedger } from '../../../src/ledger/export';
 import { openLedger } from '../../../src/ledger/migrations';
 import {
-  listAdapterHealth,
   putAdapterHealth,
   putCoveragePing,
   putGrant,
@@ -32,6 +31,7 @@ import {
   makeRequest,
   uniqueDbName,
 } from './fixtures';
+import { healthReports } from '../../../src/ledger/views';
 
 /** Probe p8: a message body padded to the old 120-character reason cap. */
 const BODY = 'Hi Priya,\nthe door code is 4417 and my SSN is 078-05-1120.\nThanks, P'.padEnd(120, '.');
@@ -86,7 +86,7 @@ describe('putAdapterHealth refuses page text (probe p8)', () => {
   it('stores and lists a DEGRADED report of reason codes exactly', async () => {
     const health = makeHealth({ status: 'DEGRADED', reasons: ['selector.missing', 'not_sent_folder'] });
     expect(await putAdapterHealth(db, health)).toEqual({ written: true });
-    expect(await listAdapterHealth(db)).toEqual([health]);
+    expect(await healthReports(db)).toEqual([health]);
   });
 });
 

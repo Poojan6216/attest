@@ -45,6 +45,8 @@ import { injectSeeds } from './support/seed-pages';
 import { plantInConsole, plantInDigest, plantInNetwork, plantInPage } from './support/leak-plants';
 import { readReceiptShares } from './support/share';
 import { BYO_KEY_SEED, plantKey, saveKey, withoutKeySlot } from './support/byo-key';
+import { plantInModel, stubAnthropic, type VendorRequest } from './support/model-vendor';
+import { askAboutPriya } from './support/priya';
 import { plantInTelemetry, sendTodaysNumbers, stubTelemetry, turnTelemetryOn } from './support/telemetry';
 import {
   FIXTURE_TIME_ZONE,
@@ -76,6 +78,8 @@ const VENDOR_PAGES = [
   vendorFixture('gmail', 'receipt-stripe.html'),
   vendorFixture('gmail', 'receipt-uber.html'),
 ];
+/** The Gmail Sent list the own key's call is about (./support/priya.ts): one more page, searched as the others. */
+const MODEL_PAGES = 1;
 const SETTLE_MS = 5_000;
 
 interface Collected {
@@ -88,6 +92,13 @@ interface Collected {
   readonly share: readonly string[];
   /** Each telemetry payload sent to the stand-in API, and each the options page showed (sprint_5 5.7). */
   readonly telemetry: readonly string[];
+  /**
+   * What the model vendor's stand-in received (Sprint 5 close, QA GAP 5): each request's body and headers, but its
+   * `x-api-key`, the one place the person's key belongs.
+   */
+  readonly model: readonly string[];
+  /** How many POSTs the vendor received. */
+  readonly modelPosts: number;
 }
 
 /** The key's leaks: every channel searched for the invented key, its own storage slot taken out (./support/byo-key.ts). */
@@ -108,13 +119,18 @@ function allLeaks(collected: Collected, seeds: readonly Seed[]): Leak[] {
     ...findLeaks('console', collected.consoleLines, seeds),
     ...findLeaks(
       'network',
-      [...collected.netLogUrls, ...collected.routeRecords.map((r) => `${r.url} ${r.body}`)],
+      [...collected.netLogUrls, ...collected.routeRecords.map((r) => `${r.url} ${r.body} ${r.headers}`)],
       seeds,
     ),
     ...findLeaks('share', collected.share, seeds),
     ...findLeaks('telemetry', collected.telemetry, seeds),
+    ...findLeaks('model', collected.model, seeds),
   ];
 }
+
+/** A request the vendor received, as searched: its body and its headers, without the key's own header. */
+const modelChannel = ({ body, headers }: VendorRequest): string =>
+  `${body} ${JSON.stringify(Object.fromEntries(Object.entries(headers).filter(([name]) => name !== 'x-api-key')))}`;
 
 const seed = (id: string): Seed => {
   const found = SEEDS.find((s) => s.id === id);
@@ -128,15 +144,13 @@ interface SessionContext {
   readonly seededUrl: (page: string) => string;
   /** Where the session puts each telemetry payload the options page showed. */
   readonly shown: string[];
+  /** The pages the guard serves at their own addresses; the session may add one. */
+  readonly routes: Map<string, string>;
 }
 
-async function collectAfter(
-  act: (ctx: SessionContext) => Promise<readonly string[] | undefined>,
-): Promise<Collected> {
-  const server = await startFixtureServer();
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-noleak-'));
+/** The pages the guard serves at their addresses: the seeded pages at `seededUrl`, and the vendor fixtures. */
+function routedPages(seededUrl: (page: string) => string): Map<string, string> {
   const routedFixtures = new Map<string, string>();
-  const seededUrl = (page: string) => server.url(`_seeded/${page}`);
   for (const page of SEEDED_PAGES) {
     routedFixtures.set(
       seededUrl(page),
@@ -146,12 +160,23 @@ async function collectAfter(
   for (const fixture of VENDOR_PAGES) {
     routedFixtures.set(requestUrl(fixtureUrl(fixture)), readFileSync(fixture.htmlPath, 'utf8'));
   }
+  return routedFixtures;
+}
+
+async function collectAfter(
+  act: (ctx: SessionContext) => Promise<readonly string[] | undefined>,
+): Promise<Collected> {
+  const server = await startFixtureServer();
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'attest-noleak-'));
+  const seededUrl = (page: string) => server.url(`_seeded/${page}`);
+  const routedFixtures = routedPages(seededUrl);
   const consoleLines: string[] = [];
   let storage: StorageChannels;
   let pages: PageChannels;
   let routeRecords: readonly RouteRecord[];
   let shares: readonly string[];
   let sent: readonly string[];
+  let asked: readonly VendorRequest[];
   const shown: string[] = [];
   // One NetLog per browser launch attempt; every one is searched (tests/e2e/support/extension.ts).
   const extension = await launchExtension({
@@ -166,11 +191,13 @@ async function collectAfter(
     });
     // A stand-in for the telemetry API, after the guard so it answers first: every body sent to it is kept.
     sent = await stubTelemetry(extension.context);
+    // A stand-in for Anthropic's API, likewise: every request the person's own key makes is kept (QA GAP 5).
+    asked = await stubAnthropic(extension.context);
     recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
     extension.context.on('page', (page) => {
       recordConsole(page, page.url() || 'page', consoleLines);
     });
-    shares = (await act({ extension, seededUrl, shown })) ?? [];
+    shares = (await act({ extension, seededUrl, shown, routes: routedFixtures })) ?? [];
     const probe = await extension.openExtensionPage('options.html');
     storage = await collectStorageChannels(probe, extension.context);
     pages = await collectPageChannels(extension.context);
@@ -181,8 +208,15 @@ async function collectAfter(
   const netLogUrls = readNetLogRequests(dir).map((r) => r.url);
   rmSync(dir, { recursive: true, force: true });
   const share = shares.flatMap((text) => [text, unescapeMarkdown(text)]);
-  return { storage, pages, consoleLines, routeRecords, netLogUrls, share, telemetry: [...sent, ...shown] };
+  const telemetry = [...sent, ...shown];
+  return { storage, pages, consoleLines, routeRecords, netLogUrls, share, telemetry, ...modelOf(asked) };
 }
+
+/** The model channel and the count of POSTs, from what the vendor's stand-in received (QA GAP 5). */
+const modelOf = (asked: readonly VendorRequest[]) => ({
+  model: asked.map(modelChannel),
+  modelPosts: asked.filter(({ method }) => method === 'POST').length,
+});
 
 /**
  * Opens the Gmail and Calendar fixtures at their live addresses, checks their own seeds are on the page, and waits
@@ -250,6 +284,8 @@ const PLANTED = [
   'network:ssn_shape',
   'share:person_name_2',
   'telemetry:token_lowercase',
+  'model:phone_number',
+  'model:byo_key',
 ] as const;
 
 /**
@@ -257,7 +293,12 @@ const PLANTED = [
  * seed pasted and imported, then the week's digest made by its alarm with the clock advanced, and its share read as it
  * would be copied (sprint_4 4.7). Returns the share.
  */
-async function seededSession({ extension, seededUrl, shown }: SessionContext): Promise<readonly string[]> {
+async function seededSession({
+  extension,
+  seededUrl,
+  shown,
+  routes,
+}: SessionContext): Promise<readonly string[]> {
   for (const page of SEEDED_PAGES) {
     const tab = await extension.context.newPage();
     await tab.goto(seededUrl(page));
@@ -266,8 +307,10 @@ async function seededSession({ extension, seededUrl, shown }: SessionContext): P
   }
   await openVendorPages(extension);
   for (const page of EXTENSION_PAGES) await extension.openExtensionPage(page);
-  // The person's own model key, saved and turned on (sprint_5 5.3): it may be in its own storage slot and nowhere else.
+  // The person's own model key, saved and turned on (sprint_5 5.3): it may be in its own storage slot and nowhere else,
+  // and in the header of the one call it makes, about a claim that lands PARTIAL in its grace (QA GAP 5).
   await saveKey(extension);
+  await askAboutPriya(extension, routes, await extension.openExtensionPage('options.html'));
   // A pasted log with every seed in it, imported through the side panel (sprint_3 3.13): the claims are stored
   // and graded, and no seed may reach any channel.
   const panel = await extension.openExtensionPage('sidepanel.html');
@@ -286,6 +329,24 @@ async function seededSession({ extension, seededUrl, shown }: SessionContext): P
   await turnTelemetryOn(extension);
   shown.push(await sendTodaysNumbers(extension));
   return [(await readShare(extension)).share, ...(await readReceiptShares(extension))];
+}
+
+/** The negative control's session: a seed planted in each channel (PLANTED), the key in its own and two others. */
+async function plantEverything({ extension, seededUrl }: SessionContext): Promise<readonly string[]> {
+  await plantInExtension(await extension.openExtensionPage('options.html'));
+  const fixture = await extension.context.newPage();
+  await fixture.goto(seededUrl('_harness/blank.html'));
+  await plantInPage(fixture);
+  await plantInConsole(await extension.serviceWorker());
+  await plantInNetwork(await extension.openExtensionPage('options.html'));
+  await plantInDigest(await extension.openExtensionPage('options.html'));
+  await plantKey(await extension.openExtensionPage('options.html'), await extension.serviceWorker());
+  await plantInTelemetry(await extension.openExtensionPage('options.html'), seed('token_lowercase').value);
+  await plantInModel(await extension.openExtensionPage('options.html'), [
+    seed('phone_number').value,
+    BYO_KEY_SEED.value,
+  ]);
+  return [(await readShare(extension)).share];
 }
 
 test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
@@ -309,10 +370,14 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
     expect(Object.keys(collected.storage.indexedDb)).toContain('attest');
     expect(collected.storage.storage).toHaveProperty('local');
     expect(Object.keys(collected.storage.webStorage).length).toBeGreaterThanOrEqual(EXTENSION_PAGES.length);
-    expect(Object.keys(collected.pages.pageStorage)).toHaveLength(SEEDED_PAGES.length + VENDOR_PAGES.length);
+    expect(Object.keys(collected.pages.pageStorage)).toHaveLength(
+      SEEDED_PAGES.length + VENDOR_PAGES.length + MODEL_PAGES,
+    );
     expect(collected.consoleLines.some((line) => line.startsWith('service-worker'))).toBe(true);
 
     expect(collected.storage.storage).toHaveProperty(['local', STORAGE_KEYS.BYO_KEY], BYO_KEY_SEED.value);
+    // The key's one call was made, and searched.
+    expect(collected.modelPosts).toBe(1);
     const leaks = [...allLeaks(collected, SEEDS), ...keyLeaks(collected)];
     for (const leak of leaks)
       console.log(`[no-leak] LEAK seed=${leak.seedId} channel=${leak.channel} at=${leak.location}`);
@@ -321,21 +386,7 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
 
   test('negative control: a seed planted in each channel is caught', async () => {
     test.setTimeout(2 * 60_000);
-    const collected = await collectAfter(async ({ extension, seededUrl }) => {
-      await plantInExtension(await extension.openExtensionPage('options.html'));
-      const fixture = await extension.context.newPage();
-      await fixture.goto(seededUrl('_harness/blank.html'));
-      await plantInPage(fixture);
-      await plantInConsole(await extension.serviceWorker());
-      await plantInNetwork(await extension.openExtensionPage('options.html'));
-      await plantInDigest(await extension.openExtensionPage('options.html'));
-      await plantKey(await extension.openExtensionPage('options.html'), await extension.serviceWorker());
-      await plantInTelemetry(
-        await extension.openExtensionPage('options.html'),
-        seed('token_lowercase').value,
-      );
-      return [(await readShare(extension)).share];
-    });
+    const collected = await collectAfter(plantEverything);
     const caught = new Set(
       [...allLeaks(collected, SEEDS), ...keyLeaks(collected)].map((leak) => `${leak.channel}:${leak.seedId}`),
     );

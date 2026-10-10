@@ -46,6 +46,8 @@ export const BYO_VENDORS = Object.freeze({
     label: 'Anthropic',
     host: 'api.anthropic.com',
     endpoint: 'https://api.anthropic.com/v1/messages',
+    /** The API version its requests name (`anthropic-version`; tech review TECH-9). */
+    apiVersion: '2023-06-01',
     model: 'claude-haiku-4-5-20251001',
   },
   openai: {

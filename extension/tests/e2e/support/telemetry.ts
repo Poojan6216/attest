@@ -2,8 +2,8 @@
  * The opt-in telemetry on the built extension (sprint_5 5.7): a stand-in for the API at exactly the extension's
  * endpoint (src/config.ts TELEMETRY_ENDPOINT), registered after the route guard so it answers first, recording each
  * body and answering 204 as the API does (a browser's CORS preflight too); the switch turned on in the options page as
- * a person would; the telemetry alarm fired at once (an unpacked extension's alarm may fire within a second), its
- * firing read from the worker's own log; today's numbers sent from the options page; and the secret-seed test's plant.
+ * a person would; the telemetry alarm fired at once (an unpacked extension's alarm may fire within a second), its end
+ * read from the worker's own log; today's numbers sent from the options page; and the secret-seed test's plant.
  * Nothing reaches the network: the browser runs behind the dead proxy.
  */
 import { expect, type BrowserContext, type Page, type Worker } from '@playwright/test';
@@ -40,14 +40,15 @@ export async function turnTelemetryOn(extension: LaunchedExtension): Promise<voi
   await options.close();
 }
 
-/** Fires the telemetry alarm at once and waits until the worker logged it fired and the alarm has ended. */
+/**
+ * Fires the telemetry alarm at once and waits until the worker logged the alarm's work done, whatever it did
+ * (`telemetry.alarm_done`, logged on every path: Sprint 5 close, QA GAP 7, never a fixed wait).
+ */
 export async function fireTelemetryAlarm(worker: Worker, lines: readonly string[]): Promise<void> {
-  const fired = (): number => lines.filter((line) => line.includes('"alarm":"attest.telemetry"')).length;
-  const before = fired();
+  const done = (): number => lines.filter((line) => line.includes('"event":"telemetry.alarm_done"')).length;
+  const before = done();
   await worker.evaluate(() => chrome.alarms.create('attest.telemetry', { when: Date.now() + 300 }));
-  await expect.poll(fired, { timeout: 15_000 }).toBeGreaterThan(before);
-  // The send runs after the log line: let it finish (a stand-in answers at once).
-  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  await expect.poll(done, { timeout: 15_000 }).toBeGreaterThan(before);
 }
 
 /**

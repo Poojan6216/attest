@@ -617,5 +617,22 @@
     "o1": "54EJNPZ7CV4AJYQZQFH9NY9KQS",
     "o2": "6TV57BF5RM3DWCGSQFFF1C6X68",
     "o3": "2ANMTY2PW88QQHMKQ8Y0DB46WV"
+  },
+  "116-model-raises-partial-to-verified.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "2G5FSM996GNC7PF2VZMTVDZR8C"
+  },
+  "117-model-raises-partial-short-of-verified.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "40284YCWSV9WK1TW0SHNV3JS0R"
+  },
+  "118-model-never-lifts-below-partial.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "0BW45BNNN329RN1YNVTGAFVXW4"
+  },
+  "119-model-score-on-another-candidate.json": {
+    "c1": "090TBE32E3P9NECV8YM47Z378N",
+    "o1": "2G5FSM996GNC7PF2VZMTVDZR8C",
+    "o2": "4BM8GQDZHXVR2F2T6HCXYGB4PN"
   }
 }

@@ -12,6 +12,7 @@
 import { BYO_VENDORS, type ByoVendor } from '../../config';
 import type { IntelProvider } from '..';
 import { dataBlock, SYSTEM_PROMPT } from '../prompt';
+import { parsedOrText } from '../schema';
 
 /** How long a reply may be: one short JSON answer per candidate. */
 const MAX_REPLY_TOKENS = 1_024;
@@ -48,7 +49,7 @@ function requestOf(
       headers: {
         'content-type': 'application/json',
         'x-api-key': key,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': BYO_VENDORS.anthropic.apiVersion,
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
@@ -88,15 +89,6 @@ function textOf(vendor: ByoVendor, reply: unknown): string {
   return text;
 }
 
-/** The answer as JSON, or the text itself when it is not JSON (the caller reads that as no answer). */
-function parsedOrText(text: string): unknown {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
-
 /** The extension's one call to a model vendor (header): a POST to that vendor's endpoint, written out. */
 function post(vendor: ByoVendor, init: RequestInit): Promise<Response> {
   return fetch(BYO_VENDORS[vendor].endpoint, init);
@@ -120,7 +112,14 @@ export function byoProvider(vendor: ByoVendor, key: string): IntelProvider {
         redirect: 'error',
       });
       if (!response.ok) throw new IntelError(refusalOf(response.status));
-      return parsedOrText(textOf(vendor, (await response.json()) as unknown));
+      let reply: unknown;
+      try {
+        reply = await response.json();
+      } catch {
+        // A reply that is not JSON is unreadable, said by its code alone (tech review TECH-6).
+        throw new IntelError('bad_reply');
+      }
+      return parsedOrText(textOf(vendor, reply));
     },
   };
 }

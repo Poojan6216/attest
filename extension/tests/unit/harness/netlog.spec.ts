@@ -114,7 +114,7 @@ describe('analyse', () => {
   it('flags route-recorded page requests', () => {
     const report = analyse(
       [],
-      [{ url: 'https://beacon.example.com/p', from: `${FIXTURES}/a.html`, body: '' }],
+      [{ url: 'https://beacon.example.com/p', from: `${FIXTURES}/a.html`, body: '', headers: '{}' }],
       options,
     );
     expect(report.violations).toEqual(['beacon.example.com']);

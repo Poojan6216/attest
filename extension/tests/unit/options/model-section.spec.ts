@@ -99,6 +99,16 @@ describe('the Model section where Chrome cannot run its model', () => {
     expect(button('Download Chrome’s on-device model')).toBeUndefined();
   });
 
+  it('says Chrome did not answer, never that it cannot run, when the check itself fails (SEC-10)', async () => {
+    const stand = standIn('available');
+    await show({ ...stand.api, availability: () => Promise.reject(new Error('the model service is down')) });
+    await checkModel();
+    expect(status()).toBe('The on-device model is off. Chrome did not answer. Check again.');
+    expect(button('Turn on the on-device model')?.disabled).toBe(true);
+    // The check can be asked again.
+    expect(button('Check Chrome’s on-device model')?.disabled).toBe(false);
+  });
+
   it('never asks Chrome as the page opens: only a click on Check does (Decisions [5.4])', async () => {
     const stand = standIn('available');
     const asked = vi.fn(() => Promise.resolve(stand.availability));
@@ -189,7 +199,7 @@ describe('the person’s own key (sprint_5 5.3)', () => {
     const text = root.textContent;
     expect(text).toContain('to Anthropic (api.anthropic.com) or OpenAI (api.openai.com)');
     expect(text).toContain(
-      'what kind of action the claim was, who it was to (an email address or a name), its short subject, its amount and its time, and the same for each item that might match.',
+      'what kind of action the claim was, who it was to (an email address or a name), its short subject, its amount and its time, and the same for the one sent email or event it partly matched, with Attest’s id for it and, for a purchase, the merchant.',
     );
     expect(text).toContain('Nothing else: never a page, never what you asked an agent.');
     expect(text).toContain(
@@ -210,14 +220,26 @@ describe('the person’s own key (sprint_5 5.3)', () => {
     await act(() => {
       openai?.querySelector('input')?.click();
     });
+    // An Anthropic key under OpenAI is refused before it is sent (Sprint 5 close, SEC-7).
     await typeKey(KEY);
     await act(() => {
       button('Save key')?.click();
     });
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+      'That key is not the chosen company’s: Anthropic’s keys begin sk-ant-, and OpenAI’s begin sk-.',
+    );
+    expect(send).not.toHaveBeenCalled();
+    const openaiKey = 'sk-proj-invented-test-key-0123456789';
+    await typeKey(openaiKey);
+    await act(() => {
+      button('Save key')?.click();
+    });
     await settle();
-    expect(send).toHaveBeenCalledWith({ type: 'byo.save', vendor: 'openai', key: KEY });
+    expect(send).toHaveBeenCalledWith({ type: 'byo.save', vendor: 'openai', key: openaiKey });
   });
+});
 
+describe('the person’s own key, saved (sprint_5 5.3)', () => {
   it('with a key saved, turns it on, and forgets it', async () => {
     view = { ...view, byoVendor: 'anthropic' };
     await show(null);

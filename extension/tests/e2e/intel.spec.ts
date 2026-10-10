@@ -15,11 +15,11 @@
  *    key is off grows by exactly that host while it is on);
  *  - replay reproduces every receipt from both exports, the raised one with its stored scores (Hard Rule 4).
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { expect, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import { BYO_VENDORS } from '../../src/config';
 import { buildInput } from '../../src/intel/input';
@@ -27,50 +27,17 @@ import { dataBlock, SYSTEM_PROMPT } from '../../src/intel/prompt';
 import type { LedgerExport } from '../../src/ledger/export';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import { saveKey } from './support/byo-key';
-import { demoSentPage } from './support/demo';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { stubAnthropic, type VendorRequest } from './support/model-vendor';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import { analyse, guardArgs, installRouteGuard, type NetworkReport } from './support/network-guard';
 import { clockAt, pasteActivity } from './support/paste';
+import { claimOf, MINUTE_MS, openSent } from './support/priya';
 import { replayExport } from './support/replay';
-import {
-  FIXTURE_TIME_ZONE,
-  fixtureUrl,
-  requestUrl,
-  type VendorRoutes,
-  vendorFixture,
-  waitForLedger,
-} from './support/vendor-pages';
+import { FIXTURE_TIME_ZONE, type VendorRoutes, waitForLedger } from './support/vendor-pages';
 
 /** An invented key in the shape of Anthropic's (src/bus/page-commands.ts ByoKey). */
 const INVENTED_KEY = 'sk-ant-invented-e2e-4f8Kq2Lm7Np3Rs9T';
-const MINUTE_MS = 60_000;
-
-/** A Sent row's time as Gmail's title writes it: "Sat, Oct 10, 2026, 2:55 PM" (./support/demo.ts). */
-function gmailTitle(ms: number): string {
-  const format = new Intl.DateTimeFormat('en-US', {
-    timeZone: FIXTURE_TIME_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-  return format.format(new Date(ms)).replace(/\s/gu, ' ');
-}
-
-/** The claim of `ledger` for `counterparty`, and its receipt. */
-function claimOf(ledger: LedgerExport, counterparty: string) {
-  const claim = ledger.tables.claims.find((row) => row.counterparty === counterparty);
-  const receipt = ledger.tables.receipts.find(
-    (row) => row.claimId !== undefined && row.claimId === claim?.id,
-  );
-  return { claim, receipt };
-}
-
 /** Turns the person's own key off in the options page's Model section, as a person would. */
 async function turnKeyOff(extension: LaunchedExtension): Promise<void> {
   const options = await extension.openExtensionPage('options.html');
@@ -78,46 +45,6 @@ async function turnKeyOff(extension: LaunchedExtension): Promise<void> {
   await byo.getByRole('button', { name: 'Turn off my own key' }).click();
   await expect(byo.getByRole('status')).toContainText('Your own key is off.');
   await options.close();
-}
-
-/** Opens Gmail's Sent head: the send to Priya at `priyaMs`, and Lee's three hours before `nowMs`. */
-async function openSent(
-  extension: LaunchedExtension,
-  routes: VendorRoutes,
-  ledgerPage: Page,
-  nowMs: number,
-  priyaMs: number,
-) {
-  const sent = vendorFixture('gmail', 'synthetic-sent-page-1.html');
-  const rows = [
-    {
-      name: 'Priya',
-      email: 'priya@company.example',
-      subject: 'Q3 deck',
-      snippet: 'Here it is.',
-      at: priyaMs,
-    },
-    {
-      name: 'Lee',
-      email: 'lee@company.example',
-      subject: 'Lunch',
-      snippet: 'Noon works.',
-      at: nowMs - 180 * MINUTE_MS,
-    },
-  ].map(({ at, ...row }, index) => ({
-    ...row,
-    title: gmailTitle(at),
-    messageId: `1a1020a0b0c0e00${String(index + 1)}`,
-  }));
-  routes.set(requestUrl(fixtureUrl(sent)), demoSentPage(readFileSync(sent.htmlPath, 'utf8'), rows));
-  const gmail = await extension.context.newPage();
-  await gmail.goto(fixtureUrl(sent));
-  await waitForLedger(
-    ledgerPage,
-    (read) =>
-      read.tables.observations.length === 2 &&
-      read.tables.coverageIntervals.some((entry) => entry.source === 'gmail.sent'),
-  );
 }
 
 interface Session {

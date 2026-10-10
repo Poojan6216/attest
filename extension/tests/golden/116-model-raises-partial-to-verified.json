@@ -1,0 +1,71 @@
+{
+  "name": "the model's score lifts a partial match with a floor above 14/17 to VERIFIED",
+  "covers": ["edge:model_raise_verified"],
+  "mode": "batch",
+  "notes": [
+    "Σw = 9000 (tp 2500, ce 3500, cd 1500, so 1500). o1 is the claim's own address, the same minute, a disjoint subject: tp 1, ce 1, cd 1, so 0.",
+    "Floor S = 7500/9000 = 5/6, PARTIAL by the rules (5/6 < 17/20).",
+    "The model scores o1 1 (10 000 bp); λ = 3/20 (features.modelScore 1500 bp): raised = max(5/6, 17/20 · 5/6 + 3/20 · 1) = 85/120 + 18/120 = 103/120 ≥ 17/20 → rule verified (§5.4). A floor below 14/17 could not get there.",
+    "FINAL: the sync at 15:00 is after end + 30 = 14:33."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Lunch plans",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "modelScores": [
+      {
+        "claim": "c1",
+        "scores": [
+          {
+            "observation": "o1",
+            "score": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "VERIFIED",
+      "ruleId": "verified",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "5/6",
+      "reasonCodes": ["match.best"],
+      "raisedScore": "103/120"
+    }
+  ]
+}

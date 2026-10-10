@@ -148,6 +148,18 @@ export const INTEL_TIMEOUT_MS = 2_000;
  */
 export const MODEL_ASKS_PER_RUN = 10;
 
+/** The model providers: Chrome's on-device model and the person's own key (sprint_5 5.2, 5.3; one list, TECH-7). */
+export const MODEL_PROVIDERS = Object.freeze(['builtin', 'byo'] as const);
+
+/** What a telemetry send did (src/telemetry/send.ts; the `telemetry.send` answer's words; one list, TECH-7). */
+export const TELEMETRY_OUTCOMES = Object.freeze([
+  'off',
+  'already_sent',
+  'not_built',
+  'sent',
+  'failed',
+] as const);
+
 /**
  * What the Gmail auto-check opens (sprint_4 4.9; src/background/auto-check.ts): the Sent folder of the first account
  * signed in, which the Gmail reader's Sent observer reads. One of OBSERVER_HOSTS.gmail.

@@ -20,6 +20,13 @@ export default defineBackground({
   main() {
     listen(createHandlers());
 
+    // At every start of the worker, idempotent: `chrome.storage.local`, where the person's own model key is kept, is
+    // closed to content scripts (src/background/byo.ts, sprint_5 5.3). Starting only at install, update and browser
+    // start, it could stay open after the extension was turned off and on (Sprint 5 close, security review SEC-6).
+    closeStorage().catch((error: unknown) => {
+      log.error('storage.close_failed', { error });
+    });
+
     browser.runtime.onInstalled.addListener((details) => {
       void onInstalled(details);
     });
@@ -32,10 +39,6 @@ export default defineBackground({
       });
       syncReaders().catch((error: unknown) => {
         log.error('readers.sync_failed', { error });
-      });
-      // The person's own model key is kept where no content script can read it (src/background/byo.ts, sprint_5 5.3).
-      closeStorage().catch((error: unknown) => {
-        log.error('storage.close_failed', { error });
       });
     });
 

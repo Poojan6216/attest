@@ -1,0 +1,71 @@
+{
+  "name": "the model's score never lifts a match below partial: NOT_FOUND stays NOT_FOUND",
+  "covers": ["edge:model_raise_below_partial"],
+  "mode": "batch",
+  "notes": [
+    "o1 raj@company.com, 'Lunch', the same minute: tp 1, ce 0, cd 1, so 0 → floor S = 4000/9000 = 4/9 < 1/2.",
+    "The model scores o1 1, and nothing moves: §5.4 raises only a floor at or above thresholds.partial. Grace elapsed and Gmail's coverage full → rule not_found.",
+    "FINAL at once (§8 NOT_FOUND).",
+    "The coverage entry's account is bound to no grant account, so the NOT_FOUND says so (coverage.account_unbound, §6.4)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Lunch",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "modelScores": [
+      {
+        "claim": "c1",
+        "scores": [
+          {
+            "observation": "o1",
+            "score": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "NOT_FOUND",
+      "ruleId": "not_found",
+      "state": "FINAL",
+      "observationRefs": [],
+      "score": "4/9",
+      "reasonCodes": ["coverage.account_unbound", "match.best"],
+      "raisedScore": "4/9"
+    }
+  ]
+}

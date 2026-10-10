@@ -58,6 +58,12 @@ export const IsoTs = z.iso.datetime({ offset: true }).max(L.ISO_TS).brand<'IsoTs
 export const AmountCents = z.number().int().min(0).max(L.AMOUNT_CENTS);
 /** ISO 4217 alphabetic code, uppercase (the form normalize.amount emits), so equal currencies compare equal. */
 export const Currency = z.string().regex(/^[A-Z]{3}$/, 'expected an uppercase ISO 4217 code');
+
+/**
+ * A local calendar day, `YYYY-MM-DD`, in ASCII digits (Decisions [5.6]): the one pattern of the telemetry payload's day,
+ * its sent day, the `telemetry.send` answer and the digest's weeks (Sprint 5 close, tech review TECH-7).
+ */
+export const DAY_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u;
 /** Rule ids end up in receipts and logs, so they are plain snake_case identifiers. */
 export const RuleId = z.string().max(L.ID).regex(RULE_ID, 'expected a snake_case rule id');
 

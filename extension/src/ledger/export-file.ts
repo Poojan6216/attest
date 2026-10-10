@@ -10,7 +10,7 @@
 import type { IndexableType, Table } from 'dexie';
 
 import { EXPORT_PAGE_SIZE } from '../config';
-import { CalendarRecord } from './calendar-snapshots';
+import { CalendarRecord } from './calendar-record';
 import { readRows, type LedgerDb } from './db';
 import {
   canonicalGrant,

@@ -17,7 +17,7 @@
 import type { BestCandidate } from './grade-best';
 import type { Policy } from './policy';
 import { compareRatio, ratio, ratioGteBasisPoints, toDisplay } from './ratio';
-import type { GradeContext } from './schema';
+import type { GradeContext, Receipt } from './schema';
 import { BASIS_POINTS } from './units';
 
 const B = BigInt(BASIS_POINTS);
@@ -42,4 +42,13 @@ export function raisedBest(
   const raised = ratio((B - weight) * num * B + weight * BigInt(model.score) * den, B * B * den);
   if (compareRatio(raised, best.score) <= 0) return { ...best, signals };
   return { ...best, score: raised, signals: { ...signals, score: toDisplay(raised) } };
+}
+
+/**
+ * Whether the model's score may still change `receipt` (header; docs/grading.md §5.4): only a PARTIAL still PENDING.
+ * The raise moves PARTIAL toward VERIFIED and nothing else, and a receipt no longer PENDING is never graded again (§8).
+ * Read from the grade and the state, never from the policy's rule ids (Sprint 5 close, tech review TECH-9).
+ */
+export function modelMayRaise(receipt: Pick<Receipt, 'grade' | 'state'>): boolean {
+  return receipt.state === 'PENDING' && receipt.grade === 'PARTIAL';
 }

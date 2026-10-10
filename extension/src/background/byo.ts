@@ -18,6 +18,7 @@ import {
   type LedgerTable,
   type SettingResult,
 } from '../bus/messages';
+import { keyFitsVendor } from '../bus/page-commands';
 import { STORAGE_KEYS } from '../config';
 import { saveFlag } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
@@ -25,7 +26,10 @@ import { log } from '../log';
 import { stopModelRuns } from './model-run';
 
 /** The key and its vendor as stored, read back through the schemas the bus checked them with. */
-export const StoredByo = z.strictObject({ vendor: ByoVendorName, key: ByoKey });
+export const StoredByo = z
+  .strictObject({ vendor: ByoVendorName, key: ByoKey })
+  // A pair whose key is not its vendor's (one saved before SEC-7's check) reads as none: nothing is sent with it.
+  .refine(({ vendor, key }) => keyFitsVendor(vendor, key));
 export type StoredByo = z.infer<typeof StoredByo>;
 
 export type ByoStorage = Pick<typeof browser.storage.local, 'get' | 'set' | 'remove' | 'setAccessLevel'>;

@@ -90,3 +90,24 @@ describe('the grace alarm', () => {
     expect(seen).toEqual([2]);
   });
 });
+
+describe('the grace alarm and the model', () => {
+  it('asks the model last, after the upkeep: nothing the alarm does waits for its calls (TECH-10)', async () => {
+    await closeLedger();
+    await Dexie.delete(DB_NAME);
+    await storeDemo(await getLedger(), AT.beforeGrace);
+    pinClock(AT.beforeGrace);
+    const { runGraceBatch } = await import('../../../src/background/alarms');
+    const order: string[] = [];
+    const upkeep = () => {
+      order.push('upkeep');
+      return Promise.resolve();
+    };
+    const askModel = () => {
+      order.push('model');
+      return Promise.resolve(0);
+    };
+    await runGraceBatch(vi.fn(), upkeep, askModel);
+    expect(order).toEqual(['upkeep', 'model']);
+  });
+});

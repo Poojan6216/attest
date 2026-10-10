@@ -14,6 +14,7 @@
  */
 
 export const LOG_EVENTS = [
+  'alarm.done',
   'alarm.ensure_failed',
   'alarm.fired',
   'alarm.handler_failed',
@@ -24,11 +25,14 @@ export const LOG_EVENTS = [
   'digest.notify_failed',
   'intel.answer_invalid',
   'intel.answered',
+  'intel.availability_failed',
   'intel.ask_failed',
   'intel.failed',
   'intel.stopped',
   'intel.timeout',
   'privacy.read_failed',
+  'telemetry.alarm_done',
+  'telemetry.handler_failed',
   'telemetry.not_built',
   'telemetry.refused',
   'telemetry.send_failed',
@@ -150,6 +154,11 @@ export const LOG_VALUES = [
   // The advisory model's providers (src/intel; sprint_5 5.1).
   'builtin',
   'byo',
+  // What a telemetry send did (src/config.ts TELEMETRY_OUTCOMES; 'failed' is listed below).
+  'off',
+  'already_sent',
+  'not_built',
+  'sent',
   // Bus message types (src/bus/messages.ts BusMessageType).
   'adapter.health',
   'adapter.claims',

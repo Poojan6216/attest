@@ -51,6 +51,15 @@ export const INTEL_OUTPUT_JSON_SCHEMA = {
 } as const;
 export type ModelScores = NonNullable<GradeContext['modelScores']>;
 
+/** A model's answer as JSON, or the text itself when it is not JSON (`scoresOf` then reads it as no answer). */
+export function parsedOrText(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
 /**
  * The model scores an answer gives `input`'s candidates, in basis points and id order; null when the answer is not
  * an `IntelOutput`, names a candidate it was not given, or scores one twice. A candidate it leaves out has no score.

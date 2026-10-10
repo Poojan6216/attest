@@ -6,7 +6,7 @@
  * `score`. A browser's CORS preflight is answered too, as the API answers one. Nothing reaches the network: the
  * browser also runs behind the dead proxy (./network-guard.ts).
  */
-import type { BrowserContext } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 
 import { BYO_VENDORS } from '../../../src/config';
 
@@ -62,4 +62,21 @@ export async function stubAnthropic(context: BrowserContext, score = 1): Promise
     });
   });
   return requests;
+}
+
+/**
+ * The secret-seed test's plant into the model channel (Sprint 5 close, QA GAP 5): `values` in the body of a request to
+ * Anthropic's endpoint from an extension page, answered by the stand-in, which keeps it. The body is a Messages request
+ * with no data block, so the stand-in answers it as a request naming no candidate.
+ */
+export async function plantInModel(page: Page, values: readonly string[]): Promise<void> {
+  const body = JSON.stringify({ messages: [{ role: 'user', content: values.join(' ') }] });
+  await page.evaluate(
+    ([endpoint, sent]) =>
+      fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: sent }).then(
+        () => undefined,
+        () => undefined,
+      ),
+    [BYO_VENDORS.anthropic.endpoint, body] as const,
+  );
 }

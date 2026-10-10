@@ -10,7 +10,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ModelCheck } from '../../../entrypoints/model-check/App';
+import { ModelCheck } from '../../../entrypoints/model-check/ModelCheck';
 import { setLogSink } from '../../../src/log';
 import { scoringAll, standIn } from './stand-in';
 

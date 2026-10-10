@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 import type { AgentId, Grade } from '../core/schema';
+import { DAY_PATTERN } from '../core/schema-primitives';
 
 /** The pages whose readers report health (src/observers, src/adapters): the keys `adapterHealth` may carry. */
 export const TELEMETRY_COMPONENTS = ['gmail.sent', 'gmail.receipt', 'gcal.event', 'muse.chat'] as const;
@@ -21,7 +22,7 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 /** The extension's version: three numbers, no letters. */
 const VERSION = /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$/;
 /** A day, `YYYY-MM-DD`; `realDay` holds it to the calendar. */
-const DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+const DAY = DAY_PATTERN;
 
 /** The most receipts one agent can have counted for one grade in a day, far above any person's. */
 export const TELEMETRY_COUNT_MAX = 100_000;

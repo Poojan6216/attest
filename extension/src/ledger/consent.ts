@@ -3,7 +3,9 @@
  * which page readers are off, and the feature flags they set. They are kept in ledger meta, which only the extension's
  * own pages and service worker can open. A content script runs in the vendor page's origin and cannot reach the
  * extension's IndexedDB, so no script on a vendor page can turn a reader back on or Check Gmail for me on.
- * `chrome.storage.local`, where 4.5 and 4.9 kept them, is open to content scripts on every Chrome Attest supports.
+ * `chrome.storage.local`, where 4.5 and 4.9 kept them, is open to content scripts by default; Attest closes it since
+ * Sprint 5.3, for the person's own key (src/background/byo.ts), but the choices stay in the ledger, which no content
+ * script can reach whatever an area's access level.
  *
  * One meta key each:
  *  - `readerOff.<reader>`: `true` while the person has that reader off; absent while it is on (every reader is on until

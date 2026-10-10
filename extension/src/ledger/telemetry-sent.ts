@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 
+import { DAY_PATTERN } from '../core/schema-primitives';
 import { readRow, type LedgerDb } from './db';
 import { parseWrite } from './errors';
 import { MetaEntry } from './types';
@@ -14,7 +15,7 @@ export const TELEMETRY_SENT_DAY = 'telemetrySentDay';
 
 const SentDay = z.strictObject({
   key: z.literal(TELEMETRY_SENT_DAY),
-  value: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u),
+  value: z.string().regex(DAY_PATTERN),
 });
 
 /** The last day sent, or null when none was (or what is stored is not a day). */

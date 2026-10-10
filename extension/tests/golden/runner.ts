@@ -121,6 +121,7 @@ async function batchAt(loaded: LoadedScenario, policy: Policy, evaluatedAt: IsoT
     coverage,
     loaded.activity,
     loaded.fixed,
+    loaded.modelScores,
   );
   const entries = results.map(({ receipt, inputs }): Graded => {
     const { grant, context, policyHash } = inputs;

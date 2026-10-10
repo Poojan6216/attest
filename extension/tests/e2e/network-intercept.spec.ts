@@ -6,7 +6,9 @@
  * then asserts that every request the extension or a page initiated went to an allowlisted host. With the opt-in
  * telemetry and the person's own model key off, as here, the allowlist is empty. Sprint 4's surfaces run first (sprint_4 close, QA review GAP 7; ./support/sprint4-surfaces.ts):
  * Check Gmail for me opening its tab, alerts, a receipt's share and image, the weekly digest with its page and share,
- * a grant saved, both exports, a reader turned off and on, and Delete all data. Then every page is reloaded in turn
+ * a grant saved, both exports, a reader turned off and on, and Delete all data. Sprint 5's follow, with both options that
+ * send off (Sprint 5 close, QA GAP 2; ./support/sprint5-surfaces.ts): the Model section, an invented key saved and left
+ * off, the usage numbers, the model-check page, and the grace alarm's model step. Then every page is reloaded in turn
  * for 5 minutes.
  * The negative control proves on every run that the guard sees a canary request from the service
  * worker, an extension page and a fixture page. The extension's own canaries go to hosts its content security policy
@@ -30,6 +32,7 @@ import { recordConsole } from './support/channels';
 import { datedClock, pasteActivity } from './support/paste';
 import type { VendorSession } from './support/session';
 import { checkGmailForMe, sprint4Surfaces } from './support/sprint4-surfaces';
+import { sprint5Surfaces } from './support/sprint5-surfaces';
 import { FIXTURE_TIME_ZONE, fixtureUrl, routesFor, vendorFixture } from './support/vendor-pages';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
@@ -176,9 +179,10 @@ async function openEverything(session: GuardedSession): Promise<Page[]> {
   const autoCheckTab = await checkGmailForMe(vendor);
   const pages = await openAll(session);
   const digest = await sprint4Surfaces(vendor);
+  const sprint5 = await sprint5Surfaces(vendor);
   recordConsole(autoCheckTab, 'auto-check tab', session.consoleLines);
   recordConsole(digest, 'digest.html', session.consoleLines);
-  return [...pages, autoCheckTab, digest];
+  return [...pages, autoCheckTab, digest, ...sprint5];
 }
 
 /** Reloads `pages` in turn, one every STEP_MS, for `ms`; resolves how many reloads it made. */

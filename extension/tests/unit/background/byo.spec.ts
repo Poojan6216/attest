@@ -45,13 +45,20 @@ const stored = () => fakeBrowser.storage.local.get(null);
 
 describe('byo.save', () => {
   it('closes the area to content scripts, keeps the key and its vendor apart, and logs the vendor alone', async () => {
-    expect(await onByoSave({ type: 'byo.save', vendor: 'openai', key: KEY }, ctx())).toEqual({ ok: true });
+    // An OpenAI key under OpenAI: a key must be its vendor's (Sprint 5 close, SEC-7; ./byo-vendor-fit.spec.ts).
+    const openaiKey = 'sk-proj-invented-test-key-0123456789';
+    expect(await onByoSave({ type: 'byo.save', vendor: 'openai', key: openaiKey }, ctx())).toEqual({
+      ok: true,
+    });
     expect(accessLevels.get('local')).toBe('TRUSTED_CONTEXTS');
-    expect(await stored()).toEqual({ [STORAGE_KEYS.BYO_KEY]: KEY, [STORAGE_KEYS.BYO_VENDOR]: 'openai' });
-    expect(await readByo()).toEqual({ vendor: 'openai', key: KEY });
+    expect(await stored()).toEqual({
+      [STORAGE_KEYS.BYO_KEY]: openaiKey,
+      [STORAGE_KEYS.BYO_VENDOR]: 'openai',
+    });
+    expect(await readByo()).toEqual({ vendor: 'openai', key: openaiKey });
     expect(notified).toEqual([['meta']]);
     expect(records.map(({ event, fields }) => [event, fields.vendor])).toEqual([['byo.saved', 'openai']]);
-    expect(JSON.stringify(records)).not.toContain(KEY);
+    expect(JSON.stringify(records)).not.toContain(openaiKey);
   });
 
   it('says a failure, and logs it without the key', async () => {

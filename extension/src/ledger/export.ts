@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 import { PolicyDocument } from '../core/policy-document';
 import { Coverage } from '../core/schema';
-import { CalendarRecord } from './calendar-snapshots';
+import { CalendarRecord } from './calendar-record';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { replayRecords } from './replay-records';

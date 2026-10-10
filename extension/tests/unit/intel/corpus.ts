@@ -151,7 +151,9 @@ export interface AskedInput {
 export async function askedOf(intelCase: IntelCase): Promise<AskedInput | null> {
   const receipt = await gradeCase(intelCase);
   const [taken, ...more] = receipt.observationIds;
-  if (receipt.ruleId !== 'partial' || taken === undefined || more.length > 0) return null;
+  // The grade the service worker's predicate reads (core `modelMayRaise`): the corpus grades once, past the grace, so
+  // its receipts are FINAL where the worker asks while they are PENDING (tech review TECH-9).
+  if (receipt.grade !== 'PARTIAL' || taken === undefined || more.length > 0) return null;
   const { claim, rows } = ledgerOf(intelCase);
   const observation = rows.find(({ id }) => id === taken);
   if (observation === undefined) throw new Error(`${intelCase.id}: the taken observation is missing`);

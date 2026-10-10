@@ -60,6 +60,15 @@ describe('raisedBest under the shipped policy (λ = 0.15)', () => {
     const raised = raisedBest(best(ratio(1, 2)), context(10_000), DEFAULT_POLICY);
     expect(compareRatio(scoreOf(raised), ratio(575, 1_000))).toBe(0);
   });
+
+  it('bounds any answer, a hint that steered the model to 1 included: verified only from a floor of 14/17 (SEC-11)', () => {
+    // The model's input carries subject hints an agent or a sender wrote; whatever they make it say, its score is at
+    // most 1, and 0.85 · S + 0.15 reaches verified (0.85) only for S ≥ 14/17, about 0.8235: the cap is the control.
+    const edge = raisedBest(best(ratio(14, 17)), context(10_000), DEFAULT_POLICY);
+    expect(compareRatio(scoreOf(edge), ratio(85, 100))).toBe(0);
+    const below = raisedBest(best(ratio(8_235, 10_000)), context(10_000), DEFAULT_POLICY);
+    expect(compareRatio(scoreOf(below), ratio(85, 100))).toBe(-1);
+  });
 });
 
 describe('raisedBest without a model score, or without a weight', () => {

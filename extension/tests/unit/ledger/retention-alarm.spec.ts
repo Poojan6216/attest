@@ -50,7 +50,7 @@ describe('the purge alarm', () => {
     const db = await getLedger();
     expect(await getObservation(db, OLD.id)).toBeUndefined();
     expect(await getObservation(db, FRESH.id)).toEqual(FRESH);
-    expect(logs.records.map((record) => record.event)).toEqual(['alarm.fired']);
+    expect(logs.records.map((record) => record.event)).toEqual(['alarm.fired', 'alarm.done']);
   });
 
   it('runRetentionPurge rejects when the ledger cannot be opened, and handleAlarm logs it by alarm name', async () => {

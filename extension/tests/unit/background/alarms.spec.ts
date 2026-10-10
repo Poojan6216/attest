@@ -123,8 +123,9 @@ describe('ensureAlarms (browser startup)', () => {
 describe('handleAlarm', () => {
   it('logs our alarm by name and runs its handler', async () => {
     await handleAlarm({ name: ALARM_NAMES.PURGE });
-    // The handler is the retention purge (Sprint 2.6): on an empty ledger it logs nothing more.
-    expect(records.map((r) => r.event)).toEqual(['alarm.fired']);
+    // The handler is the retention purge (Sprint 2.6): on an empty ledger it logs nothing more than the alarm's start
+    // and its end (`alarm.done`, Sprint 5 close, QA GAP 7).
+    expect(records.map((r) => r.event)).toEqual(['alarm.fired', 'alarm.done']);
     expect(records[0]?.fields).toEqual({ alarm: ALARM_NAMES.PURGE });
   });
 
@@ -148,6 +149,12 @@ describe('handleAlarm', () => {
         fields: { alarm: ALARM_NAMES.PURGE, error: 'LedgerError code=open_failed messageLength=39' },
       },
     ]);
+    // The end is logged after a failure too, last, so a test waiting for it never waits forever (QA GAP 7).
+    expect(records.at(-1)).toEqual({
+      level: 'info',
+      event: 'alarm.done',
+      fields: { alarm: ALARM_NAMES.PURGE },
+    });
   });
 });
 
@@ -168,6 +175,6 @@ describe('the purge alarm trusts the clock only as far as the ledger (SEC-5)', (
     pinClock('2027-10-01T10:30:00-04:00');
     await handleAlarm({ name: ALARM_NAMES.PURGE });
     expect(await getObservation(db, current.id)).toMatchObject({ contentHash: current.contentHash });
-    expect(records.map((r) => r.event)).toEqual(['alarm.fired', 'ledger.purge_clock_ahead']);
+    expect(records.map((r) => r.event)).toEqual(['alarm.fired', 'ledger.purge_clock_ahead', 'alarm.done']);
   });
 });

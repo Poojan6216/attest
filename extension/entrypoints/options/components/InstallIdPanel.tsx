@@ -11,9 +11,9 @@ export function InstallIdPanel() {
         Install id
       </h3>
       <p>
-        A random id, not made from anything about you, your accounts or this device. Only the opt-in telemetry
-        in a later version uses it. Resetting it means past and future reports can no longer be linked to each
-        other.
+        A random id, not made from anything about you, your accounts or this device. Only the anonymous usage
+        numbers use it, and only while you have them on: each day’s numbers carry it. After a reset, the
+        reports before and after it no longer share an id.
       </p>
       <InstallIdValue view={view} />
       <ResetInstallIdControl onReset={reset} />

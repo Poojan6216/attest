@@ -1,0 +1,79 @@
+{
+  "name": "a model score on a candidate the claim did not take changes nothing",
+  "covers": ["edge:model_score_other_candidate"],
+  "mode": "batch",
+  "notes": [
+    "o1 priya@company.com, 'Lunch plans', the same minute: floor 5/6 (as golden 116), the best candidate, taken.",
+    "o2 raj@company.com, 'Q3 deck', the same minute: tp 1, ce 0, cd 1, so 1 → 5500/9000 = 11/18, not taken.",
+    "The model scores o2 alone, 1: §5.4 raises the taken candidate only when the context holds a score for it, so c1 stays PARTIAL at 5/6, and its signals show no model score.",
+    "FINAL (the sync at 15:00)."
+  ],
+  "input": {
+    "evaluatedAt": "2026-10-06T15:00:00-04:00",
+    "claims": [
+      {
+        "ref": "c1",
+        "agent": "muse",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "observations": [
+      {
+        "ref": "o1",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "priya@company.com",
+        "subjectHint": "Lunch plans",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      },
+      {
+        "ref": "o2",
+        "source": "gmail.sent",
+        "type": "email.sent",
+        "counterparty": "raj@company.com",
+        "subjectHint": "Q3 deck",
+        "occurredAt": "2026-10-06T14:02:00-04:00"
+      }
+    ],
+    "grants": [
+      {
+        "agent": "muse"
+      }
+    ],
+    "coverage": [
+      {
+        "source": "gmail.sent",
+        "lastSyncAt": "2026-10-06T15:00:00-04:00",
+        "windowStart": "2026-10-06T12:00:00-04:00",
+        "windowEnd": "2026-10-06T15:00:00-04:00",
+        "accountHash": "acct-a"
+      }
+    ],
+    "modelScores": [
+      {
+        "claim": "c1",
+        "scores": [
+          {
+            "observation": "o2",
+            "score": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "ref": "c1",
+      "grade": "PARTIAL",
+      "ruleId": "partial",
+      "state": "FINAL",
+      "observationRefs": ["o1"],
+      "score": "5/6",
+      "reasonCodes": ["match.best"],
+      "raisedScore": "5/6"
+    }
+  ]
+}

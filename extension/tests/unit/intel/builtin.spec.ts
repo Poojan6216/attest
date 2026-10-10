@@ -66,12 +66,19 @@ describe('the built-in model’s availability is read, never assumed', () => {
     },
   );
 
-  it('is unavailable when Chrome’s check fails', async () => {
+  it('is unknown when Chrome’s check fails, never “cannot run”, and says so in the log (SEC-10)', async () => {
     const failing = {
       ...standIn('available').api,
       availability: () => Promise.reject(new Error('no model')),
     };
-    expect(await builtinAvailability(failing)).toBe('unavailable');
+    const records: LogRecord[] = [];
+    const restore = setLogSink((record) => records.push(record));
+    try {
+      expect(await builtinAvailability(failing)).toBe('unknown');
+    } finally {
+      restore();
+    }
+    expect(records.map((record) => record.event)).toEqual(['intel.availability_failed']);
   });
 });
 

@@ -43,6 +43,51 @@ function scoreOf(loaded: LoadedScenario, receipt: Receipt, policy: Policy): stri
   return fractionOf(features(claim, observation, policy).score);
 }
 
+/**
+ * The receipt's raised score (§5.4, v1.19) from the contract alone: its best candidate's floor S (`features`, as
+ * `scoreOf`), the model's score m of it in the scenario's `modelScores`, and λ = features.modelScore:
+ * max(S, (1 − λ)·S + λ·m) when S is at or above thresholds.partial, else S. Null with no best candidate.
+ */
+function raisedOf(
+  loaded: LoadedScenario,
+  receipt: Receipt,
+  policy: Policy,
+): { exact: string; m: number | null } | null {
+  const best = receipt.reasons.find((reason) => reason.code === 'match.best');
+  const claim = [...loaded.claims.values()].find((candidate) => candidate.id === receipt.claimId);
+  const observation = [...loaded.observations.values()].find((o) => o.id === best?.params.observationId);
+  if (best === undefined || claim === undefined || observation === undefined) return null;
+  const floor = features(claim, observation, policy).score;
+  const m = loaded.modelScores.get(claim.id)?.find((s) => s.observationId === observation.id)?.score;
+  const bp = BigInt(BASIS_POINTS);
+  if (m === undefined || floor.num * bp < BigInt(policy.bp.thresholds.partial) * floor.den)
+    return { exact: fractionOf(floor), m: m ?? null };
+  const lambda = BigInt(policy.bp.features.modelScore);
+  const raised = {
+    num: (bp - lambda) * floor.num * bp + lambda * BigInt(m) * floor.den,
+    den: bp * bp * floor.den,
+  };
+  const higher = raised.num * floor.den >= floor.num * raised.den ? raised : floor;
+  return { exact: fractionOf(higher), m };
+}
+
+/** The raise an expectation states, against the contract's, and the receipt's signals (§5.4: shown to 4 places). */
+function diffRaised(context: Context, s: string, entry: ResolvedExpect, receipt: Receipt): void {
+  if (entry.expected.raisedScore === undefined) return;
+  const raised = raisedOf(context.loaded, receipt, context.run.policy);
+  context.diff.check(s, 'raisedScore', entry.expected.raisedScore, raised?.exact);
+  if (raised === null) return;
+  const [num = '0', den = '1'] = raised.exact.split('/');
+  context.diff.check(
+    s,
+    'signals.score',
+    Math.round((Number(num) / Number(den)) * 10_000) / 10_000,
+    receipt.signals.score,
+  );
+  const shown = raised.m === null ? undefined : raised.m / BASIS_POINTS;
+  context.diff.check(s, 'signals.modelScore', shown, receipt.signals.modelScore);
+}
+
 /** The grading a receipt's current version came from (the scenario's own instant when none is recorded). */
 function sourceOf(context: Context, receipt: Receipt): Source | undefined {
   return context.run.sources.get(receipt.id);
@@ -107,6 +152,7 @@ function diffExpected(context: Context, entry: ResolvedExpect): void {
   diff.check(s, 'override.previousState', expected.previousState, receipt.override?.previousState);
   diff.check(s, 'supersededBy', entry.supersededById, receipt.supersededBy);
   diffUnasked(context, s, entry, receipt);
+  diffRaised(context, s, entry, receipt);
   diffInputs(context, s, entry, receipt);
 }
 

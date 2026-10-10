@@ -1,16 +1,17 @@
 /**
  * The commands an extension page sends the service worker for a change a person made (sprint_4): a mark on a receipt
  * (`receipt.event`), an agent's grant (`grant.save`), the retention window (`retention.save`), a page reader on or off
- * (`reader.toggle`), a feature flag on or off (`flag.set`), the person's own model key (`byo.save`, `byo.forget`), and
- * deleting every Attest datum (`ledger.wipe`). Pages read
+ * (`reader.toggle`), a feature flag on or off (`flag.set`), the person's own model key (`byo.save`, `byo.forget`), a
+ * day's usage numbers sent now (`telemetry.send`), and deleting every Attest datum (`ledger.wipe`). Pages read
  * the ledger but never write it: the service worker, its one writer, applies each and answers with the command's
  * result. Only an extension page may send one (listen.ts `EXTENSION_PAGE_ONLY`); src/bus/messages.ts puts each in the
  * bus union and re-exports this module.
  */
 import { z } from 'zod';
 
-import { BYO_VENDOR_NAMES, READERS, RETENTION_CHOICES, SETTABLE_FLAGS } from '../config';
+import { BYO_VENDOR_NAMES, READERS, RETENTION_CHOICES, SETTABLE_FLAGS, TELEMETRY_OUTCOMES } from '../config';
 import { GrantChoices, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
+import { DAY_PATTERN } from '../core/schema-primitives';
 
 /**
  * A person's override of one receipt's grade, or its revert (sprint_4 4.3; src/ledger/user-events.ts): sent by an
@@ -114,14 +115,30 @@ export const ByoVendorName = z.enum(BYO_VENDOR_NAMES);
 export const ByoKey = z.string().regex(/^[A-Za-z0-9_-]{20,300}$/u, 'must be a key as its vendor wrote it');
 
 /**
+ * Whether `key` is written as `vendor` writes its keys (Sprint 5 close, security review SEC-7): Anthropic's begin
+ * `sk-ant-`, OpenAI's begin `sk-` and never `sk-ant-`. So a key saved under the wrong vendor is refused, never sent to
+ * the other company.
+ */
+export function keyFitsVendor(vendor: z.infer<typeof ByoVendorName>, key: string): boolean {
+  return vendor === 'anthropic'
+    ? key.startsWith('sk-ant-')
+    : key.startsWith('sk-') && !key.startsWith('sk-ant-');
+}
+
+/**
  * The person's own model key and its vendor (sprint_5 5.3, the options page's Model): the service worker keeps them
  * where only the extension's own pages and service worker can read them (src/background/byo.ts).
  */
-export const ByoSaveMessage = z.strictObject({
-  type: z.literal('byo.save'),
-  vendor: ByoVendorName,
-  key: ByoKey,
-});
+export const ByoSaveMessage = z
+  .strictObject({
+    type: z.literal('byo.save'),
+    vendor: ByoVendorName,
+    key: ByoKey,
+  })
+  .refine(({ vendor, key }) => keyFitsVendor(vendor, key), {
+    path: ['key'],
+    message: 'must be a key of its vendor',
+  });
 
 /** Forgets the person's own model key: the service worker deletes it and turns their own key off. */
 export const ByoForgetMessage = z.strictObject({ type: z.literal('byo.forget') });
@@ -144,8 +161,8 @@ export const TelemetrySendMessage = z.strictObject({ type: z.literal('telemetry.
 export const TelemetrySendResult = z.discriminatedUnion('ok', [
   z.strictObject({
     ok: z.literal(true),
-    outcome: z.enum(['off', 'already_sent', 'not_built', 'sent', 'failed']),
-    day: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u),
+    outcome: z.enum(TELEMETRY_OUTCOMES),
+    day: z.string().regex(DAY_PATTERN),
   }),
   z.strictObject({ ok: z.literal(false), code: z.enum(['failed']) }),
 ]);

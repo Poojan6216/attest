@@ -7,7 +7,7 @@
  * one send runs at a time, so the hourly alarm and the options page's button never send a day twice. The log says what
  * happened and the HTTP status, never the payload (Hard Rule 10).
  */
-import { TELEMETRY_ENDPOINT, TELEMETRY_TIMEOUT_MS } from '../config';
+import { TELEMETRY_ENDPOINT, type TELEMETRY_OUTCOMES, TELEMETRY_TIMEOUT_MS } from '../config';
 import { readFlags } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
 import { recordTelemetrySent, telemetrySentDay } from '../ledger/telemetry-sent';
@@ -15,7 +15,7 @@ import { log } from '../log';
 import { buildTelemetry, reportedDay, type TelemetryFacts } from './aggregate';
 
 /** What a send did: nothing (telemetry off, the day already sent, no payload to build), sent, or failed. */
-export type TelemetryOutcome = 'off' | 'already_sent' | 'not_built' | 'sent' | 'failed';
+export type TelemetryOutcome = (typeof TELEMETRY_OUTCOMES)[number];
 
 export interface TelemetrySent {
   readonly outcome: TelemetryOutcome;

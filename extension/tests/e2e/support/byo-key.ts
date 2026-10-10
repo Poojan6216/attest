@@ -24,14 +24,22 @@ export const BYO_KEY_SEED: Seed = {
 };
 
 /** Saves `key` in the options page's Model section, as a person would, and turns their own key on. */
-export async function saveKey(extension: LaunchedExtension, key: string = BYO_KEY_SEED.value): Promise<void> {
+export async function saveKey(
+  extension: LaunchedExtension,
+  key: string = BYO_KEY_SEED.value,
+  { turnOn = true }: { readonly turnOn?: boolean } = {},
+): Promise<void> {
   const options = await extension.openExtensionPage('options.html');
   const byo = options.getByRole('group', { name: 'Your own model key' });
   await byo.getByLabel('Your key').fill(key);
   await byo.getByRole('button', { name: 'Save key' }).click();
   await expect(byo.getByRole('status')).toContainText('Your Anthropic key is saved.');
-  await byo.getByRole('button', { name: 'Turn on my own key' }).click();
-  await expect(byo.getByRole('status')).toContainText('Your own key is on.');
+  if (turnOn) {
+    await byo.getByRole('button', { name: 'Turn on my own key' }).click();
+    await expect(byo.getByRole('status')).toContainText('Your own key is on.');
+  } else {
+    await expect(byo.getByRole('status')).toContainText('Your own key is off.');
+  }
   await options.close();
 }
 

@@ -7,6 +7,9 @@
  */
 import { z } from 'zod';
 
+import { MODEL_PROVIDERS } from '../config';
+import { DAY_PATTERN } from '../core/schema-primitives';
+
 import { instantMs } from '../core/normalize';
 import {
   ActionType,
@@ -145,7 +148,7 @@ export const AlertRecord = z.strictObject({
 });
 
 /** Who answered for the advisory model (src/intel): Chrome's on-device model, or the person's own key. */
-export const ModelProvider = z.enum(['builtin', 'byo']);
+export const ModelProvider = z.enum(MODEL_PROVIDERS);
 
 /**
  * A `modelAnswers` row (sprint_5 5.4, ./model-answers.ts): one per claim the service worker asked the advisory model
@@ -163,7 +166,7 @@ export const ModelAnswer = z.strictObject({
 });
 
 /** A local calendar date, `YYYY-MM-DD`. */
-const LocalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, 'must be a YYYY-MM-DD date');
+const LocalDate = z.string().regex(DAY_PATTERN, 'must be a YYYY-MM-DD date');
 
 const count = z.number().int().min(0);
 

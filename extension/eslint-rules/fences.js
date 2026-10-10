@@ -37,7 +37,11 @@ export const WORKER_SCOPES = [
   'src/background/**',
   'src/bus/**',
   'src/intel/**',
+  // The usage numbers' builder and sender (sprint_5 5.7; Sprint 5 close, tech review TECH-1).
+  'src/telemetry/**',
   'src/config.ts',
+  'src/config-network.ts',
+  'src/log-error-names.ts',
   'src/setup.ts',
   'src/clock.ts',
   'src/log-vocabulary.ts',
@@ -148,6 +152,19 @@ export const PAGE_RESTRICTED_IMPORTS = {
     { group: ['**/ledger/consent'], importNames: ['saveReaderOff', 'saveFlag'], message: ONE_WRITER },
     { group: ['**/ledger/alerts'], importNames: ['queueAlerts', 'takeAlerts'], message: ONE_WRITER },
     { group: ['**/ledger/shared'], importNames: ['deleteLedger'], message: ONE_WRITER },
+    // Sprint 5's writers (Sprint 5 close, tech review TECH-1): the model's asks, the sent day, and the install id's
+    // makers (a page reads the id with `readInstallId`; the reset is the person's own act, in the Danger zone).
+    {
+      group: ['**/ledger/model-answers'],
+      importNames: ['claimAsk', 'answerAsk', 'purgeModelAnswers'],
+      message: ONE_WRITER,
+    },
+    { group: ['**/ledger/telemetry-sent'], importNames: ['recordTelemetrySent'], message: ONE_WRITER },
+    {
+      group: ['**/ledger/install-id'],
+      importNames: ['getInstallId', 'ensureInstallId'],
+      message: ONE_WRITER,
+    },
   ],
 };
 

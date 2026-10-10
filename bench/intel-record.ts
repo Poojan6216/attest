@@ -19,7 +19,12 @@ import { isoWithLocalOffset } from '../extension/src/clock';
 import { BYO_VENDORS, type ByoVendor } from '../extension/src/config';
 import type { IntelProvider } from '../extension/src/intel';
 import { byoProvider } from '../extension/src/intel/providers/byo';
-import { BENCH_INPUTS, type BenchAnswers, recordBench } from '../extension/entrypoints/model-check/record';
+import {
+  BENCH_INPUTS,
+  type BenchAnswers,
+  recordBench,
+  recordingFile,
+} from '../extension/entrypoints/model-check/record';
 import { INTEL_FIXTURES } from './intel';
 
 /** What a run was asked to do, or why it cannot run (never naming the key). */
@@ -48,14 +53,13 @@ export function keyFrom(text: string): string | null {
 
 /** The recording's file, as the bench reads it (extension/tests/unit/intel/corpus.ts `IntelRecording`). */
 export function byoRecording(vendor: ByoVendor, answers: BenchAnswers, recordedAt: string): string {
-  const recording = {
+  return recordingFile({
     note: `The answers of ${vendor}'s ${BYO_VENDORS[vendor].model} to the bench's inputs, recorded with a person's own key by bench/intel-record.ts. Scores only, in basis points; null where it gave none in time.`,
     provider: 'byo',
     model: BYO_VENDORS[vendor].model,
     recordedAt,
     answers,
-  };
-  return `${JSON.stringify(recording, null, 2)}\n`;
+  });
 }
 
 /** Asks `provider` about every bench input and writes the recording (header); resolves how many it answered. */

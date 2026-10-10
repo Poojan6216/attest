@@ -8,9 +8,10 @@
  */
 import { z } from 'zod';
 
-import { type IntelProvider, scoresFor } from '../../src/intel';
+import { type IntelProvider, type IntelProviderId, scoresFor } from '../../src/intel';
 import { IntelInput } from '../../src/intel/input';
 import type { ModelScores } from '../../src/intel/schema';
+import { chromeMajorOf } from '../../src/telemetry/chrome-major';
 import benchInputsFile from './bench-inputs.json';
 
 const BenchInputs = z.strictObject({
@@ -37,15 +38,30 @@ export async function recordBench(
   return answers;
 }
 
-/** The recording's file, as the bench reads it (tests/unit/intel/corpus.ts `IntelRecording`). */
+/** A recording's fields, as the bench reads them (tests/unit/intel/corpus.ts `IntelRecording`). */
+export interface RecordingFields {
+  readonly note: string;
+  readonly provider: IntelProviderId;
+  readonly model: string;
+  readonly recordedAt: string;
+  readonly answers: BenchAnswers;
+}
+
+/**
+ * The recording's file (header): its fields as JSON, two-space indented, with a final newline. The one builder of the
+ * model check's recording and bench/intel-record.ts's (Sprint 5 close, tech review TECH-7).
+ */
+export function recordingFile({ note, provider, model, recordedAt, answers }: RecordingFields): string {
+  return `${JSON.stringify({ note, provider, model, recordedAt, answers }, null, 2)}\n`;
+}
+
+/** The on-device model's recording (header), its Chrome version read as the usage numbers read it. */
 export function recordingOf(answers: BenchAnswers, recordedAt: string, userAgent: string): string {
-  const chrome = /\bChrome\/(\d+)/u.exec(userAgent)?.[1] ?? 'unknown';
-  const recording = {
+  return recordingFile({
     note: "Chrome's on-device model's answers to the bench's inputs, recorded on the model-check page (entrypoints/model-check/record.ts). Scores only, in basis points; null where it gave none in time.",
     provider: 'builtin',
-    model: `Chrome ${chrome} on-device model`,
+    model: `Chrome ${String(chromeMajorOf(userAgent) ?? 'unknown')} on-device model`,
     recordedAt,
     answers,
-  };
-  return `${JSON.stringify(recording, null, 2)}\n`;
+  });
 }

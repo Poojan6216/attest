@@ -130,13 +130,15 @@ function gradeOfRule(ruleId: string, policy: PolicyView): string | undefined {
  * or by the terminal default, cannot have a best score that rule would have matched first.
  */
 function ruleOrderScoreProblems(e: ExpectedReceipt, policy: PolicyView): string[] {
-  if (e.score === null) return [];
+  // The rules read the raised score when the model raised one (§5.4), the floor otherwise.
+  const ruled = e.raisedScore ?? e.score;
+  if (ruled === null) return [];
   const ids = policy.rules.map((rule) => rule.id);
   const position = (id: string): number => (ids.includes(id) ? ids.indexOf(id) : ids.length);
   const { thresholds } = basisPointsOf(policy);
   const problems: string[] = [];
   for (const rule of ['verified', 'partial'] as const) {
-    if (ids.includes(rule) && position(e.ruleId) > position(rule) && atLeast(e.score, thresholds[rule]))
+    if (ids.includes(rule) && position(e.ruleId) > position(rule) && atLeast(ruled, thresholds[rule]))
       problems.push(`rule ${e.ruleId} comes after ${rule}, so its best score must be below ${rule}`);
   }
   return problems;
@@ -154,9 +156,10 @@ function scoreProblems(e: ExpectedReceipt, policy: PolicyView): string[] {
     problems.push('cp.* needs match.best');
   if (e.observationRefs.length !== (assigned ? 1 : 0))
     problems.push('evidence = the assigned candidate only');
-  if (e.ruleId === 'verified' && !(e.score !== null && atLeast(e.score, verified)))
-    problems.push('verified < T');
-  if (e.ruleId === 'partial' && !(assigned && e.score !== null && !atLeast(e.score, verified))) {
+  // The rules read the raised score (§5.4); assignment and evidence follow the floor alone.
+  const ruled = e.raisedScore ?? e.score;
+  if (e.ruleId === 'verified' && !(ruled !== null && atLeast(ruled, verified))) problems.push('verified < T');
+  if (e.ruleId === 'partial' && !(assigned && ruled !== null && !atLeast(ruled, verified))) {
     problems.push('partial outside [partial, verified)');
   }
   if (e.grade === 'NOT_FOUND' && assigned) problems.push('NOT_FOUND with a score ≥ partial');

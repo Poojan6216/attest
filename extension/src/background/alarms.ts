@@ -54,24 +54,26 @@ export async function runRetentionPurge(): Promise<void> {
  * The grace alarm (sprint_3 3.13; docs/grading.md §3, §8): one grading batch (./grading.ts), which finalises every
  * PENDING receipt whose grace has elapsed and grades whatever arrived since the last batch. Everything it needs is in
  * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts. When it wrote,
- * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8). Then the advisory
- * model is asked about the claims the batch left PARTIAL, which asks nothing unless the person turned a model on
- * (sprint_5 5.4, ./intel.ts); the Gmail auto-check, which does nothing unless the person turned it on (sprint_4 4.9,
- * ./auto-check.ts); and the upkeep below.
+ * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8). Then the Gmail
+ * auto-check, which does nothing unless the person turned it on (sprint_4 4.9, ./auto-check.ts), and the upkeep below.
+ * Last, after a batch that ran, the advisory model is asked about the claims the batch left PARTIAL, which asks nothing
+ * unless the person turned a model on (sprint_5 5.4, ./intel.ts): its calls may take MODEL_ASKS_PER_RUN times
+ * INTEL_TIMEOUT_MS, and nothing else the alarm does waits for them (Sprint 5 close, tech review TECH-10).
  */
 export async function runGraceBatch(
   notify: (tables: readonly LedgerTable[]) => void = announce(nowIso),
   upkeep: () => Promise<void> = graceUpkeep,
   askModel: (db: LedgerDb) => Promise<number> = (db) => askTheModel(db, { grading: SHIPPED_GRADING, notify }),
 ): Promise<void> {
+  let db: LedgerDb;
   try {
-    const db = await getLedger();
+    db = await getLedger();
     if (changedReceipts(await runGradingBatch(db, SHIPPED_GRADING))) notify(['receipts']);
-    await askModel(db);
     await autoCheckGmail(browserAutoCheck(notify));
   } finally {
     await upkeep();
   }
+  await askModel(db);
 }
 
 /**
@@ -172,5 +174,8 @@ export async function handleAlarm(alarm: { name: string }): Promise<void> {
     await HANDLERS[alarm.name]();
   } catch (error) {
     log.error('alarm.handler_failed', { alarm: alarm.name, error });
+  } finally {
+    // The alarm's work is over, the model's asks after a grace batch included (Sprint 5 close, QA GAP 6).
+    log.info('alarm.done', { alarm: alarm.name });
   }
 }

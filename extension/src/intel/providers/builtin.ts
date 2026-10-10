@@ -8,12 +8,17 @@
  * answer is parsed as JSON; text that is not JSON is passed on as it is, which the caller reads as no answer. All of
  * it runs on this device: nothing is sent anywhere (Hard Rule 1).
  */
+import { log } from '../../log';
 import type { IntelProvider } from '..';
 import { dataBlock, SYSTEM_PROMPT } from '../prompt';
-import { INTEL_OUTPUT_JSON_SCHEMA } from '../schema';
+import { INTEL_OUTPUT_JSON_SCHEMA, parsedOrText } from '../schema';
 
 export type PromptAvailability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
-export type BuiltinAvailability = PromptAvailability | 'no_api';
+/**
+ * What Chrome says of its model here, `no_api` where this Chrome has no Prompt API, or `unknown` when the check itself
+ * failed (Sprint 5 close, security review SEC-10): never read as Chrome saying its model cannot run.
+ */
+export type BuiltinAvailability = PromptAvailability | 'no_api' | 'unknown';
 
 /** The language of Attest's prompt and data, so Chrome can say whether its model reads it. */
 const LANGUAGES = {
@@ -55,22 +60,17 @@ export function promptApi(scope: object = globalThis): PromptApi | null {
     : null;
 }
 
-/** Whether Chrome's model can run Attest's prompt here (header); a check that fails reads as `unavailable`. */
+/**
+ * Whether Chrome's model can run Attest's prompt here (header); a check that fails is logged and reads as `unknown`,
+ * so no model is used and the page says Chrome did not answer (Hard Rule 6).
+ */
 export async function builtinAvailability(api: PromptApi | null): Promise<BuiltinAvailability> {
   if (api === null) return 'no_api';
   try {
     return await api.availability(LANGUAGES);
-  } catch {
-    return 'unavailable';
-  }
-}
-
-/** The answer as JSON, or the text itself when it is not JSON (the caller reads that as no answer). */
-function parsedOrText(text: string): unknown {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
+  } catch (error) {
+    log.warn('intel.availability_failed', { error });
+    return 'unknown';
   }
 }
 

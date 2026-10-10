@@ -8,112 +8,15 @@
  */
 import { z } from 'zod';
 
-/** §15 ReasonCode table, in table order (the order receipts list codes within a group). */
-export const REASON_CODES = [
-  'match.best',
-  'match.none',
-  'cp.plus_tag',
-  'cp.confusable',
-  'cp.non_ascii',
-  'claim.too_vague',
-  'claim.no_target',
-  'coverage.none',
-  'coverage.partial',
-  'coverage.account_unbound',
-  'coverage.calendars_hidden',
-  'coverage.changes_unfollowed',
-  'coverage.change_unprovable',
-  'coverage.clock_repaired',
-  'coverage.list_unsettled',
-  'coverage.account_partial',
-  'coverage.multiple_accounts',
-  'coverage.no_account',
-  'coverage.no_parser',
-  'coverage.never_completed',
-  'grace.waiting',
-  'scope.type_not_allowed',
-  'scope.counterparty_not_allowed',
-  'allowlist.unchecked',
-  'ceiling.exceeded',
-  'ceiling.cumulative_exceeded',
-  'ceiling.currency_mismatch',
-  'scope.observed_not_declared',
-  'unasked.session',
-  'unasked.idle',
-  'unasked.signature',
-  'unasked.adjacent',
-  'override.user',
-  'superseded',
-] as const;
+import {
+  type ParamKind,
+  REASON_CODES,
+  REASON_PARAMS,
+  ReasonCode,
+  ReasonParamsByCode,
+} from './scenario-reasons';
 
-export const ReasonCode = z.enum(REASON_CODES);
-export type ReasonCode = z.infer<typeof ReasonCode>;
-
-/**
- * What one reason param holds (§15 "Params per code (closed)"). Ids are written in scenario files as refs
- * (`o1`, `c1`) and resolved by the loader; a `scopeHash` is written as the observed scope itself and the
- * loader stores `sha256Hex(scope)` (§15 v1.3), so no hash is typed by hand; everything else is written as the
- * value itself.
- */
-export type ParamKind =
-  | 'observationRef'
-  | 'claimRef'
-  | 'source'
-  | 'actionType'
-  | 'cents'
-  | 'currency'
-  | 'scopeHash'
-  | 'agent'
-  | 'grade';
-
-const NO_PARAMS = {} as const;
-const SOURCE = { source: 'source' } as const;
-const AGENT = { agent: 'agent' } as const;
-
-/** §15 (v1.4) params per code, written from the contract. `source` is omitted for a type with no sources. */
-export const REASON_PARAMS: Readonly<Record<ReasonCode, Readonly<Record<string, ParamKind>>>> = {
-  'match.best': { observationId: 'observationRef' },
-  'match.none': NO_PARAMS,
-  'cp.plus_tag': NO_PARAMS,
-  'cp.confusable': NO_PARAMS,
-  'cp.non_ascii': NO_PARAMS,
-  'claim.too_vague': NO_PARAMS,
-  'claim.no_target': NO_PARAMS,
-  'coverage.none': SOURCE,
-  'coverage.partial': SOURCE,
-  'coverage.account_unbound': SOURCE,
-  'coverage.calendars_hidden': SOURCE,
-  'coverage.changes_unfollowed': SOURCE,
-  'coverage.change_unprovable': SOURCE,
-  'coverage.clock_repaired': SOURCE,
-  'coverage.list_unsettled': SOURCE,
-  'coverage.account_partial': SOURCE,
-  'coverage.multiple_accounts': SOURCE,
-  'coverage.no_account': SOURCE,
-  // §15 v1.4: coverage.no_parser carries {source} like the other coverage caps.
-  'coverage.no_parser': SOURCE,
-  'coverage.never_completed': NO_PARAMS,
-  'grace.waiting': SOURCE,
-  'scope.type_not_allowed': { type: 'actionType' },
-  'scope.counterparty_not_allowed': NO_PARAMS,
-  'allowlist.unchecked': NO_PARAMS,
-  'ceiling.exceeded': { amountCents: 'cents', ceilingCents: 'cents' },
-  'ceiling.cumulative_exceeded': { priorSpendCents: 'cents', amountCents: 'cents', ceilingCents: 'cents' },
-  'ceiling.currency_mismatch': { currency: 'currency', spendCurrency: 'currency' },
-  'scope.observed_not_declared': { scopeHash: 'scopeHash' },
-  'unasked.session': AGENT,
-  'unasked.idle': AGENT,
-  'unasked.signature': AGENT,
-  'unasked.adjacent': AGENT,
-  'override.user': { grade: 'grade' },
-  superseded: { claimId: 'claimRef' },
-};
-
-/** A param value as written in a scenario file: a ref, an enum value, a code, a hash, or an integer. */
-const ParamValue = z.union([z.string().min(1).max(64), z.number().int().min(0)]);
-const ParamName = z.string().regex(/^[a-z][A-Za-z]*$/, 'param names are camelCase identifiers');
-export const ReasonParamsByCode = z.partialRecord(ReasonCode, z.record(ParamName, ParamValue));
-export type ReasonParamsByCode = z.infer<typeof ReasonParamsByCode>;
+export { type ParamKind, REASON_CODES, REASON_PARAMS, ReasonCode, ReasonParamsByCode };
 
 export const AGENT_IDS = ['muse', 'chatgpt', 'dots', 'claude'] as const;
 export const AgentId = z.enum(AGENT_IDS);
@@ -271,6 +174,19 @@ export const ScenarioActivity = z.strictObject({
 });
 export type ScenarioActivity = z.infer<typeof ScenarioActivity>;
 
+/**
+ * Batch mode (§5.4, v1.19; Sprint 5 close, QA GAP 9): the model's scores of a claim's candidates, in basis points, as
+ * the service worker passes the stored answers to gradeBatch (src/background/grading.ts): the claim by ref, each
+ * candidate by its observation ref.
+ */
+export const ScenarioModelScores = z.strictObject({
+  claim: ClaimRef,
+  scores: z
+    .array(z.strictObject({ observation: ObservationRef, score: z.number().int().min(0).max(10_000) }))
+    .min(1),
+});
+export type ScenarioModelScores = z.infer<typeof ScenarioModelScores>;
+
 /** A FINAL or USER_OVERRIDDEN pre-assignment (§4.3). `claim: null` is an overridden UNASKED receipt. */
 export const FixedPair = z.strictObject({ claim: ClaimRef.nullable(), observation: ObservationRef });
 
@@ -333,6 +249,12 @@ export const ExpectedReceipt = z
     score: Fraction.nullable(),
     reasonCodes: z.array(ReasonCode),
     /**
+     * Batch mode with `input.modelScores` (§5.4, v1.19): the score the rules read, max(S, (1 − λ)·S + λ·m) from the
+     * floor `score` S at or above thresholds.partial, else S. The runner computes it from the contract alone, and checks
+     * the receipt's signals show it and the model's score (QA GAP 9).
+     */
+    raisedScore: Fraction.optional(),
+    /**
      * Optional: the params of every reason (§15 closed table), keyed by code. When present it names exactly
      * the codes in `reasonCodes`, and the runner compares the receipt's reasons `{code, params}` exactly.
      */
@@ -359,6 +281,7 @@ const ScenarioInput = z.strictObject({
   repairs: z.array(z.strictObject({ from: IsoTs, to: IsoTs })).optional(),
   activity: ScenarioActivity.optional(),
   fixed: z.array(FixedPair).optional(),
+  modelScores: z.array(ScenarioModelScores).optional(),
   grade: GradeCall.optional(),
 });
 export type ScenarioInput = z.infer<typeof ScenarioInput>;
@@ -388,6 +311,10 @@ export const Scenario = z
   .refine((s) => s.mode === 'batch' || s.input.fixed === undefined, {
     message: 'fixed pre-assignments are a gradeBatch input',
     path: ['input', 'fixed'],
+  })
+  .refine((s) => s.mode === 'batch' || s.input.modelScores === undefined, {
+    message: 'model scores are a gradeBatch input',
+    path: ['input', 'modelScores'],
   })
   .refine((s) => s.mode === 'batch' || !(s.events ?? []).some((event) => event.event === 'regrade'), {
     message: 'regrade events re-run gradeBatch',

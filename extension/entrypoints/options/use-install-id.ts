@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 
 import {
-  getInstallId,
   type InstallId,
   onInstallIdChanged,
+  readInstallId,
   resetInstallId,
 } from '../../src/ledger/install-id';
 import { log } from '../../src/log';
@@ -26,8 +26,9 @@ export interface UseInstallId {
  * service worker), and exposes the reset action.
  *
  * A change to a value that is not a valid id shows `missing` rather than the old id, which would no longer
- * be true. The listener never writes: two open tabs must not race to regenerate the id. The next read or a
- * reset creates a new one.
+ * be true. The page never makes an id (Sprint 5 close, tech review TECH-1; Decisions [5.7]): it reads the stored one,
+ * `missing` when there is none, so a page never recreates an id removed elsewhere, and two open tabs never race to.
+ * The person's reset makes a new one; the service worker makes one at install and when it sends the usage numbers.
  */
 export function useInstallId(): UseInstallId {
   const [view, setView] = useState<InstallIdView>({ status: 'loading' });
@@ -40,9 +41,10 @@ export function useInstallId(): UseInstallId {
       changedElsewhere = true;
       setView(id === null ? { status: 'missing' } : { status: 'ready', id });
     });
-    getInstallId()
+    readInstallId()
       .then((id) => {
-        if (active && !changedElsewhere) setView({ status: 'ready', id });
+        if (active && !changedElsewhere)
+          setView(id === null ? { status: 'missing' } : { status: 'ready', id });
       })
       .catch((error: unknown) => {
         log.error('options.install_id_read_failed', { error });

@@ -1,5 +1,5 @@
 /**
- * One model call (src/intel/index.ts `modelScores`; sprint_5 5.1, 5.2; agents/intel_engineer.md rule 4): an answer
+ * One model call (src/intel/index.ts `inputFor` and `scoresFor`, as the service worker makes it; sprint_5 5.1, 5.2; agents/intel_engineer.md rule 4): an answer
  * becomes scores; a provider that throws, one slower than the time allowed, and an answer that is no answer each give
  * none, never throw, and are logged by provider and kind only, never with the input or the answer (Hard Rules 6, 10).
  * Every value is invented.
@@ -7,9 +7,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Claim, Observation } from '../../../src/core/schema';
-import { type IntelProvider, modelScores } from '../../../src/intel';
+import { inputFor, type IntelProvider, scoresFor } from '../../../src/intel';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { makeClaim, makeObservation } from '../ledger/fixtures';
+
+/** What the service worker asks with (src/background/intel.ts): the input built, then one call; undefined for none. */
+async function modelScores(
+  provider: IntelProvider,
+  claim: Parameters<typeof inputFor>[1],
+  candidates: Parameters<typeof inputFor>[2],
+  timeoutMs?: number,
+): ReturnType<typeof scoresFor> {
+  const input = inputFor(provider, claim, candidates);
+  return input === undefined ? undefined : scoresFor(provider, input, timeoutMs);
+}
 
 const CLAIM = Claim.parse(makeClaim({ subjectHint: 'Quarterly numbers' }));
 const CANDIDATE = Observation.parse(makeObservation({}));

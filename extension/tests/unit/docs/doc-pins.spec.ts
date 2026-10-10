@@ -2,7 +2,8 @@
  * What the docs state about the code, pinned to the code (sprint_4 close: tech review TECH-3, security review SEC-10), as
  * changelog.spec.ts pins the golden count: PRIVACY.md's permissions are the manifest's; docs/privacy-architecture.md's
  * schema version and its export example are the last migration's and `LedgerExport`'s, and its list of
- * `chrome.storage.session` keys is `SESSION_KEYS`; docs/adapters.md's bound on `ledger.changed` is `LedgerTable`'s
+ * `chrome.storage.session` keys is `SESSION_KEYS`, and of `chrome.storage.local` keys `STORAGE_KEYS` (Sprint 5 close,
+ * tech review TECH-4: the person's key and its vendor among them); docs/adapters.md's bound on `ledger.changed` is `LedgerTable`'s
  * length. Each reader also runs on a changed copy of its doc, to prove it can fail.
  */
 import { readFileSync } from 'node:fs';
@@ -10,8 +11,8 @@ import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { LedgerTable } from '../../../src/bus/messages';
-import { SESSION_KEYS } from '../../../src/config';
+import { LedgerTable, PAGE_COMMAND_RESULTS } from '../../../src/bus/messages';
+import { SESSION_KEYS, SETTABLE_FLAGS, STORAGE_KEYS } from '../../../src/config';
 import { LedgerExport } from '../../../src/ledger/export';
 import { MIGRATIONS } from '../../../src/ledger/migrations';
 import config from '../../../wxt.config';
@@ -71,6 +72,29 @@ function sessionKeys(doc: string): string[] {
   return [...new Set([...paragraph.matchAll(/`(attest\.[A-Za-z]+)`/gu)].map(([, key = '']) => key))].sort();
 }
 
+/** The `chrome.storage.local` keys the doc names: from its first mention of the area to its first of the session's. */
+function localKeys(doc: string): string[] {
+  const from = doc.indexOf('`chrome.storage.local`');
+  const paragraph = doc.slice(from, doc.indexOf('`chrome.storage.session`', from));
+  return [...new Set([...paragraph.matchAll(/`(attest\.[A-Za-z]+)`/gu)].map(([, key = '']) => key))].sort();
+}
+
+/** The flags adapters.md's `flag.set` row says a page may set. */
+const settableFlags = (doc: string): string[] =>
+  [...(/one of `SETTABLE_FLAGS` \(([^;)]*);/u.exec(doc)?.[1] ?? '').matchAll(/`([A-Z_]+)`/gu)]
+    .map(([, flag = '']) => flag)
+    .sort();
+
+/** The types adapters.md says are dropped as `untrusted_context` from a content script. */
+const pageOnlyTypes = (doc: string): string[] =>
+  [
+    ...(/`untrusted_context` \(([^)]*) from a content script\)/u.exec(doc)?.[1] ?? '').matchAll(
+      /`([a-z.]+)`/gu,
+    ),
+  ]
+    .map(([, type = '']) => type)
+    .sort();
+
 /** How many table names adapters.md says a `ledger.changed` carries at most. */
 const changedBound = (doc: string): number =>
   Number(
@@ -93,10 +117,25 @@ describe('the docs state what the code does (TECH-3, SEC-10)', () => {
 
   it('privacy-architecture lists exactly the chrome.storage.session keys, and adapters.md the tables bound', () => {
     expect(sessionKeys(ARCHITECTURE)).toEqual(Object.values(SESSION_KEYS).sort());
+    expect(localKeys(ARCHITECTURE)).toEqual(Object.values(STORAGE_KEYS).sort());
     expect(changedBound(ADAPTERS)).toBe(LedgerTable.options.length);
   });
 
+  it('adapters.md lists exactly the settable flags and the types only an extension page may send (TECH-5)', () => {
+    expect(settableFlags(ADAPTERS)).toEqual([...SETTABLE_FLAGS].sort());
+    expect(pageOnlyTypes(ADAPTERS)).toEqual(['ui.query', ...Object.keys(PAGE_COMMAND_RESULTS)].sort());
+    expect(settableFlags(ADAPTERS.replace(', `ATTEST_TELEMETRY`', ''))).not.toEqual(
+      [...SETTABLE_FLAGS].sort(),
+    );
+    expect(pageOnlyTypes(ADAPTERS.replace(', `byo.forget`', ''))).not.toEqual(
+      ['ui.query', ...Object.keys(PAGE_COMMAND_RESULTS)].sort(),
+    );
+  });
+
   it('each reader fails on a changed copy of its doc', () => {
+    expect(localKeys(ARCHITECTURE.replace(', and `attest.byoVendor`, its company', ''))).not.toEqual(
+      Object.values(STORAGE_KEYS).sort(),
+    );
     expect(privacyPermissions(PRIVACY.replace(/^- notifications,.*\n/mu, ''))).not.toEqual(
       manifestPermissions(),
     );
