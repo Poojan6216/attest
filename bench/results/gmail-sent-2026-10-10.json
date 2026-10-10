@@ -1,0 +1,32 @@
+{
+  "bench": "gmail-sent",
+  "date": "2026-10-10",
+  "command": "pnpm bench",
+  "metrics": {
+    "gmailSentSelectorsVersion": "1.4.0",
+    "gmailFixtureFolders": "2026-10-03,2026-10-06,2026-10-07",
+    "gmailFixtures": 41,
+    "gmailSentListFixtures": 11,
+    "gmailSentRealFixtures": 4,
+    "gmailSentLabelledObservations": 108,
+    "gmailSentProducedObservations": 108,
+    "gmailSentFieldsCompared": 324,
+    "gmailSentFieldsCorrect": 324,
+    "gmailSentRecipientAccuracy": 1,
+    "gmailSentSubjectHintAccuracy": 1,
+    "gmailSentOccurredAtAccuracy": 1,
+    "gmailSentAccuracy": 1,
+    "gmailSentAccuracyGate": 0.95,
+    "gmailSentAccuracyGatePassed": true,
+    "gmailSentHealthGatePassed": true,
+    "gmailSentNegativesGatePassed": true,
+    "gmailSentCoverageGatePassed": true,
+    "gmailSentDedupGatePassed": true,
+    "gmailSentSubjectHintMaxCodePoints": 80,
+    "gmailSentSubjectHintGatePassed": true,
+    "gmailSentSeedsGatePassed": true,
+    "commit": "d71d49ebc3e132ce60d6a3eac6421efd51182049",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}

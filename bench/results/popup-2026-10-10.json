@@ -1,0 +1,27 @@
+{
+  "bench": "popup",
+  "date": "2026-10-10",
+  "command": "pnpm bench",
+  "metrics": {
+    "popupReceipts": 5000,
+    "popupRuns": 5,
+    "popupRows": 50,
+    "popupFirstPaintMedianMs": 64,
+    "popupFirstPaintMinMs": 52,
+    "popupFirstPaintMaxMs": 72,
+    "popupDayPaintMedianMs": 96,
+    "popupDayPaintMinMs": 88,
+    "popupDayPaintMaxMs": 104,
+    "popupCpuMedianMs": 74.2,
+    "popupCpuMinMs": 72.2,
+    "popupCpuMaxMs": 85.3,
+    "popupChromeMajor": "153",
+    "popupTrace": "bench/traces/popup-paint.zip",
+    "popupPaintGateMs": 100,
+    "popupPaintGateMetric": "popupFirstPaintMedianMs",
+    "popupPaintGatePassed": true,
+    "commit": "d71d49ebc3e132ce60d6a3eac6421efd51182049",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}
