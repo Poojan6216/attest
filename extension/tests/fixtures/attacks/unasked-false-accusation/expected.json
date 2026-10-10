@@ -1,0 +1,1304 @@
+{
+  "number": 15,
+  "strategy": "unasked-false-accusation",
+  "title": "UNASKED false accusation: the person's own send",
+  "cases": [
+    {
+      "id": "person-no-agent-activity-near-1",
+      "attack": "The person sends; the agent logs nothing within ten minutes",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-no-agent-activity-near-2",
+      "attack": "The person sends; the agent logs nothing within ten minutes",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-no-agent-activity-near-3",
+      "attack": "The person sends; the agent logs nothing within ten minutes",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-line-after-1",
+      "attack": "The person sends; the agent logs one action a minute after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-line-after-2",
+      "attack": "The person sends; the agent logs one action a minute after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-line-after-3",
+      "attack": "The person sends; the agent logs one action a minute after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-claim-before-1",
+      "attack": "The person sends; the agent claims one other action a minute before",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Review\" Thu 2pm",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-claim-before-2",
+      "attack": "The person sends; the agent claims one other action a minute before",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Check-in\" Wed 10am",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-agent-claim-before-3",
+      "attack": "The person sends; the agent claims one other action a minute before",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Debrief\" Mon 4pm",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-claim-before-and-line-after-1",
+      "attack": "The person sends; the agent claims another action a minute before and logs one five minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Review\" Thu 2pm",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 55
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-claim-before-and-line-after-2",
+      "attack": "The person sends; the agent claims another action a minute before and logs one five minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Check-in\" Wed 10am",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 55
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-claim-before-and-line-after-3",
+      "attack": "The person sends; the agent claims another action a minute before and logs one five minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Debrief\" Mon 4pm",
+              "minutesAgo": 61
+            },
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 55
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-two-agent-lines-near-1",
+      "attack": "The person sends; the agent logs two actions, four minutes before and six after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 64
+            },
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-two-agent-lines-near-2",
+      "attack": "The person sends; the agent logs two actions, four minutes before and six after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 64
+            },
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-two-agent-lines-near-3",
+      "attack": "The person sends; the agent logs two actions, four minutes before and six after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 64
+            },
+            {
+              "text": "Checked the shared drive",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-claims-after-and-later-1",
+      "attack": "The person sends; the agent claims another action a minute after and logs one eight minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Review\" Thu 2pm",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 52
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-claims-after-and-later-2",
+      "attack": "The person sends; the agent claims another action a minute after and logs one eight minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Check-in\" Wed 10am",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 52
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-claims-after-and-later-3",
+      "attack": "The person sends; the agent claims another action a minute after and logs one eight minutes after",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Debrief\" Mon 4pm",
+              "minutesAgo": 59
+            },
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 52
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-busy-all-around-1",
+      "attack": "The person sends while the agent logs an action every three minutes around it",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 66
+            },
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 63
+            },
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 57
+            },
+            {
+              "text": "Checked the shared drive",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Review\" Thu 2pm",
+              "minutesAgo": 51
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-busy-all-around-2",
+      "attack": "The person sends while the agent logs an action every three minutes around it",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 66
+            },
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 63
+            },
+            {
+              "text": "Checked the shared drive",
+              "minutesAgo": 57
+            },
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Check-in\" Wed 10am",
+              "minutesAgo": 51
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-busy-all-around-3",
+      "attack": "The person sends while the agent logs an action every three minutes around it",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 66
+            },
+            {
+              "text": "Checked the shared drive",
+              "minutesAgo": 63
+            },
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 57
+            },
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 54
+            },
+            {
+              "text": "Created calendar event \"Debrief\" Mon 4pm",
+              "minutesAgo": 51
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-line-far-1",
+      "attack": "The person sends; the agent's nearest action is fifteen minutes away",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 45
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-line-far-2",
+      "attack": "The person sends; the agent's nearest action is fifteen minutes away",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Read the thread about the offsite",
+              "minutesAgo": 45
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-agent-line-far-3",
+      "attack": "The person sends; the agent's nearest action is fifteen minutes away",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Looked up the venue's hours",
+              "minutesAgo": 45
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "person-one-line-before-1",
+      "attack": "The person sends; the agent logs one action two minutes before",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Re: contract",
+              "snippet": "Here it is.",
+              "minutesAgo": 60
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Searched for flights to Denver",
+              "minutesAgo": 62
+            },
+            {
+              "text": "Created calendar event \"Planning\" Fri 3pm",
+              "minutesAgo": 20
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "orphans": true,
+          "count": 0,
+          "allowed": [
+            "UNASKED"
+          ]
+        }
+      ]
+    }
+  ]
+}

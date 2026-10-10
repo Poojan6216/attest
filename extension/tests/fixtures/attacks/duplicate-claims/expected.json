@@ -1,0 +1,254 @@
+{
+  "number": 9,
+  "strategy": "duplicate-claims",
+  "title": "Duplicate claims",
+  "cases": [
+    {
+      "id": "pasted-twice",
+      "attack": "The same log pasted twice",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        },
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ],
+          "maxVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "pasted-twice-in-another-unicode-form",
+      "attack": "The same log pasted again in another Unicode form (decomposed accents)",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Caf\u00e9 menu",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Caf\u00e9 menu\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        },
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Cafe\u0301 menu\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ],
+          "maxVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "pasted-twice-with-other-spacing",
+      "attack": "The same log pasted again with doubled spaces",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        },
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent  email  \"Q3 deck\"  to  Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ],
+          "maxVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "one-entry-in-two-logs",
+      "attack": "An entry pasted alone, then again inside a longer log",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Raj",
+              "email": "raj@company.example",
+              "subject": "Budget",
+              "snippet": "Here it is.",
+              "minutesAgo": 100
+            },
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        },
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            },
+            {
+              "text": "Sent email \"Budget\" to Raj",
+              "minutesAgo": 100
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "counterparty": "Priya"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ]
+        },
+        {
+          "claims": {
+            "counterparty": "Raj"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ]
+        }
+      ]
+    }
+  ]
+}

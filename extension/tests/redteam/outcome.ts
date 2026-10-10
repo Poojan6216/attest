@@ -104,7 +104,11 @@ export function violationsOf(ledger: JudgedLedger, expectation: Expectation): Vi
   const violations: Violation[] = [];
   const { count, maxVerified, minVerified } = expectation;
   if (count !== undefined && grades.length !== count) {
-    const severity = grades.length < count ? severityOf(expectation.allowed, null) : 'LOW';
+    // Too few: as bad as a missing receipt. Too many: an extra UNASKED blames an agent for what it did not do, as a
+    // false NOT_FOUND does (MEDIUM); any other extra receipt misleads less.
+    const accuses = expectation.orphans === true && grades.includes('UNASKED');
+    const severity =
+      grades.length < count ? severityOf(expectation.allowed, null) : accuses ? 'MEDIUM' : 'LOW';
     violations.push({
       severity,
       problem: `${label}: ${String(grades.length)} receipts where ${String(count)} is right`,

@@ -116,6 +116,26 @@ export const AttackLog = z.strictObject({
     .max(100),
 });
 
+/** An agent's grant, set in the options page as a person sets it (sprint_4 4.4), before anything is pasted. */
+const AttackGrant = z.strictObject({
+  agent: AgentId,
+  /** The spend ceiling, a whole number in `currency`'s main unit (the form's own rule). */
+  spendCeiling: z.number().int().min(0).max(1_000_000).optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/u)
+    .optional(),
+  /** Actions the agent may not take: their boxes unticked. */
+  denied: z.array(ActionType).max(9).optional(),
+  /** The domains or addresses it may write to, one a line. */
+  mayWriteTo: z.array(Text.min(1)).max(20).optional(),
+});
+
+/** A span the person was away from the computer, as away detection records one: minutes before the run, from then to. */
+const AwaySpan = z
+  .strictObject({ fromMinutesAgo: MinutesAgo, toMinutesAgo: MinutesAgo })
+  .refine((span) => span.fromMinutesAgo >= span.toMinutesAgo, 'from must not be after to');
+
 export const Expectation = z
   .strictObject({
     /** The receipts of the claims matching every field given. */
@@ -156,6 +176,10 @@ export const AttackCase = z
     modelInput: z
       .strictObject({ asked: z.number().int().min(1), excludes: z.array(Text.min(1)).min(1).max(20) })
       .optional(),
+    /** Agents' grants, set before the logs are pasted. */
+    grants: z.array(AttackGrant).max(4).optional(),
+    /** When the person was away (Chrome reports it only live, so the run writes it, as the §2 demo's test does). */
+    away: z.array(AwaySpan).max(10).optional(),
     /** Each named reader's health once the pages were read: an anomaly on a page must show (Hard Rule 6). */
     health: z
       .array(
@@ -180,6 +204,7 @@ export const AttackFile = z.strictObject({
 
 export type AttackPage = z.infer<typeof AttackPage>;
 export type AttackLog = z.infer<typeof AttackLog>;
+export type AttackGrant = z.infer<typeof AttackGrant>;
 export type Expectation = z.infer<typeof Expectation>;
 export type AttackCase = z.infer<typeof AttackCase>;
 export type AttackFile = z.infer<typeof AttackFile>;

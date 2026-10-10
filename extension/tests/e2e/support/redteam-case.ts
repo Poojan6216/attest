@@ -16,6 +16,7 @@ import { installRouteGuard } from './network-guard';
 import { clockAt } from './paste';
 import { MINUTE_MS } from './priya';
 import { served } from './redteam-pages';
+import { setGrant, writeAway } from './redteam-setup';
 import { FIXTURE_TIME_ZONE, readLedger, requestUrl, type VendorRoutes } from './vendor-pages';
 
 /** How long a page may take to be read, and grading to settle, before the case fails loud (Hard Rule 12). */
@@ -176,6 +177,8 @@ export async function runAttackCase(
     const ledgerPage = await extension.openExtensionPage('options.html');
     for (const page of attackCase.pages)
       await openPage(extension, routes, ledgerPage, served(strategy, page, nowMs));
+    for (const grant of attackCase.grants ?? []) await setGrant(extension, grant);
+    await writeAway(extension, attackCase.away ?? [], nowMs);
     for (const log of attackCase.logs ?? []) await pasteLog(extension, log, nowMs);
     if (requests === null) return await settled(ledgerPage);
     const modelRequests = await modelBodies(requests, attackCase.modelInput?.asked ?? 1);
