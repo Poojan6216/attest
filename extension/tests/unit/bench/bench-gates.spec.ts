@@ -155,6 +155,14 @@ describe('pnpm bench: exit code and result files', () => {
     expect(log.at(-1)).toBe('pnpm bench: gate failed: core.gradingGatePassed');
   });
 
+  it('says a bench with no gate was measured, never that its gates passed (the red team)', async () => {
+    const log: string[] = [];
+    const { options } = tempRun(log);
+    const ungated: Bench = { name: 'redteam', run: () => Promise.resolve({ redteamStrategies: 0 }) };
+    expect(await runBenches([ungated], options)).toBe(0);
+    expect(log[0]).toBe('redteam: measured, it has no gate → redteam-2026-10-02.json');
+  });
+
   it('dates the result file with the local calendar date', () => {
     expect(localDate(new Date(2026, 9, 2, 23, 59))).toBe('2026-10-02');
   });

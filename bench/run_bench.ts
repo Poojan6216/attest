@@ -27,7 +27,7 @@ import { runPopupBench } from './popup';
 import { runRedteamBench } from './redteam';
 import { runUiBench } from './ui';
 import { gitIn, type Provenance, provenance } from './provenance';
-import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
+import { failedGates, gatesOf, latestResults, parseBenchResult, render, type MetricValue } from './results';
 
 const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(BENCH_DIR, '..');
@@ -84,9 +84,14 @@ export async function runBenches(benches: readonly Bench[], options: BenchRunOpt
     writeFileSync(path.join(options.resultsDir, fileName), `${JSON.stringify(result, null, 2)}\n`);
     const gates = failedGates(result);
     failed.push(...gates.map((gate) => `${bench.name}.${gate}`));
-    options.log(
-      `${bench.name}: ${gates.length === 0 ? 'every gate passed' : `FAILED ${gates.join(', ')}`} → ${fileName}`,
-    );
+    // A bench with no gate (the red team: its losses are reported, never failed away) says so, never "passed".
+    const status =
+      gatesOf(result).length === 0
+        ? 'measured, it has no gate'
+        : gates.length === 0
+          ? 'every gate passed'
+          : `FAILED ${gates.join(', ')}`;
+    options.log(`${bench.name}: ${status} → ${fileName}`);
   }
   writeFileSync(options.resultsMd, render(latestResults(options.resultsDir)));
   options.log(
