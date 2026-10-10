@@ -12,13 +12,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { type BrowserContext, chromium, expect, type Page, test } from '@playwright/test';
-import { build } from 'vite';
 
 import { BusMessage } from '../../src/bus/messages';
 import { OBSERVER_DEBOUNCE_MS, OBSERVER_MAX_WAIT_MS } from '../../src/config';
 import { accountHashOf } from '../../src/observers/account';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { OBSERVER_HARNESS_MARKER } from './support/observer-harness-marker';
+import { bundleTestScript } from './support/test-bundle';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const HARNESS_ENTRY = path.join(ROOT, 'tests/e2e/support/observer-harness.ts');
@@ -31,29 +31,7 @@ interface Post {
 }
 
 /** Bundles the harness entry into one classic script (IIFE), in memory. */
-async function bundleHarness(): Promise<string> {
-  const result = await build({
-    configFile: false,
-    root: ROOT,
-    logLevel: 'silent',
-    build: {
-      write: false,
-      minify: false,
-      sourcemap: false,
-      lib: {
-        entry: HARNESS_ENTRY,
-        formats: ['iife'],
-        name: 'AttestObserverHarness',
-        fileName: () => 'harness.js',
-      },
-    },
-  });
-  for (const output of Array.isArray(result) ? result : [result]) {
-    if (!('output' in output)) continue;
-    for (const chunk of output.output) if (chunk.type === 'chunk') return chunk.code;
-  }
-  throw new Error('vite produced no harness bundle');
-}
+const bundleHarness = (): Promise<string> => bundleTestScript(HARNESS_ENTRY, 'AttestObserverHarness');
 
 /** Before any page script: the recording runtime, then the mutation and input recorders, then the harness. */
 async function installHarness(context: BrowserContext, bundle: string): Promise<void> {
@@ -243,4 +221,40 @@ test('a DOM change makes another pass; the user-activity flag follows real input
   const [, observations, ping] = messages((await posts(page)).slice(before));
   expect(observations?.type === 'observer.observations' ? observations.observations.length : 0).toBe(3);
   expect(ping?.type === 'coverage.ping' ? ping.ping.userActive : null).toBe(true);
+});
+
+/** How long the page below changes, 100 times a second (sprint_6 6.4). */
+const CHURN_MS = 6_000;
+
+test('under 100 DOM changes a second the skeleton reads once per max wait, and still reads (sprint_6 6.4)', async () => {
+  const page = await open('synthetic-observer.html');
+  await expect.poll(async () => types(await posts(page)), { timeout: 5_000 }).toContain('coverage.ping');
+  const start = await page.evaluate(() => performance.now());
+  // The test changes its own fixture page, as a busy vendor page might: a row's snippet rewritten every 10 ms.
+  const changes = await page.evaluate(
+    (ms) =>
+      new Promise<number>((resolve) => {
+        const snippet = document.querySelector('[role="grid"] [data-snippet]');
+        let count = 0;
+        const timer = setInterval(() => {
+          count += 1;
+          if (snippet !== null) snippet.textContent = `Changed ${String(count)}`;
+        }, 10);
+        setTimeout(() => {
+          clearInterval(timer);
+          resolve(count);
+        }, ms);
+      }),
+    CHURN_MS,
+  );
+  const end = await page.evaluate(() => performance.now());
+  const during = (await posts(page)).filter((post) => post.at > start && post.at <= end);
+  const passes = types(during).filter((type) => type === 'adapter.health').length;
+  console.log(
+    `[observer-batching] ${String(changes)} changes in ${String(CHURN_MS)} ms: ${String(passes)} passes`,
+  );
+  expect(changes).toBeGreaterThan(CHURN_MS / 20);
+  // At most one pass per max wait while the page never settles, and at least one each max wait but the last.
+  expect(passes).toBeLessThanOrEqual(Math.ceil(CHURN_MS / OBSERVER_MAX_WAIT_MS) + 1);
+  expect(passes).toBeGreaterThanOrEqual(Math.floor(CHURN_MS / OBSERVER_MAX_WAIT_MS) - 1);
 });

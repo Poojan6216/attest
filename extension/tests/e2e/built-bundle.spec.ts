@@ -22,7 +22,7 @@ import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 
 import { EXTENSION_PATH } from './support/extension';
-import { OBSERVER_HARNESS_MARKER } from './support/observer-harness-marker';
+import { OBSERVER_HARNESS_MARKER, SENT_PASS_HARNESS_MARKER } from './support/observer-harness-marker';
 
 /**
  * The only matches allowed, each a whole, exact construct, removed before the scan, and each held to where it may be:
@@ -102,7 +102,10 @@ function files(dir: string): string[] {
 test('no test code ships: no harness, and nothing reaches the fixture server (sprint_2 2.0)', () => {
   const shipped = files(EXTENSION_PATH);
   expect(shipped.length).toBeGreaterThan(3);
-  const marked = shipped.filter((file) => readFileSync(file, 'utf8').includes(OBSERVER_HARNESS_MARKER));
+  const markers = [OBSERVER_HARNESS_MARKER, SENT_PASS_HARNESS_MARKER];
+  const marked = shipped.filter((file) =>
+    markers.some((marker) => readFileSync(file, 'utf8').includes(marker)),
+  );
   expect(marked.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
   expect(
     shipped.filter((file) => /harness|[\\/]tests?[\\/]/i.test(path.relative(EXTENSION_PATH, file))),

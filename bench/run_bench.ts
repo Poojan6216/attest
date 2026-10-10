@@ -23,6 +23,7 @@ import { runIntelBench } from './intel';
 import { runGcalBench } from './observers/gcal';
 import { runGmailBench } from './observers/gmail';
 import { runReceiptsBench } from './observers/receipts';
+import { runPerfBench } from './perf';
 import { runPopupBench } from './popup';
 import { runRedteamBench } from './redteam';
 import { runUiBench } from './ui';
@@ -61,6 +62,7 @@ export const BENCHES: readonly Bench[] = [
   { name: 'popup', run: runPopupBench },
   { name: 'intel', run: () => runIntelBench() },
   { name: 'redteam', run: () => runRedteamBench() },
+  { name: 'perf', run: runPerfBench },
 ];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
