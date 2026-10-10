@@ -36,6 +36,7 @@ export const WORKER_SCOPES = [
   'entrypoints/background.ts',
   'src/background/**',
   'src/bus/**',
+  'src/intel/**',
   'src/config.ts',
   'src/setup.ts',
   'src/clock.ts',

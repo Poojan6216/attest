@@ -22,6 +22,9 @@ export const LOG_EVENTS = [
   'digest.made',
   'digest.read_failed',
   'digest.notify_failed',
+  'intel.answer_invalid',
+  'intel.failed',
+  'intel.timeout',
   'alerts.deliver_failed',
   'alerts.open_failed',
   'alerts.opened',
@@ -124,6 +127,9 @@ export const LOG_EVENTS = [
 export type LogEvent = (typeof LOG_EVENTS)[number];
 
 export const LOG_VALUES = [
+  // The advisory model's providers (src/intel; sprint_5 5.1).
+  'builtin',
+  'byo',
   // Bus message types (src/bus/messages.ts BusMessageType).
   'adapter.health',
   'adapter.claims',

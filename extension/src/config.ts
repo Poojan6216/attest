@@ -98,7 +98,7 @@ export const AGENT_READERS: Readonly<Record<keyof typeof AGENT_HOSTS, ReaderStat
 /**
  * Feature flags. Every flag defaults to off: Dots support, auto-check Gmail (Hard Rule 11), opt-in
  * telemetry (Hard Rule 1) and the advisory model (Hard Rule 4) are each turned on by the user only.
- * The user's choices are stored under STORAGE_KEYS.FLAGS.
+ * The user's choices are kept in ledger meta (src/ledger/consent.ts; sprint_4 close, security review SEC-3).
  */
 export const FEATURE_FLAGS = Object.freeze([
   'ATTEST_DOTS',
@@ -120,6 +120,12 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
  * The flags a person turns on or off in the options page (sprint_4 4.9): the Gmail auto-check. Each other flag comes
  * with its feature.
  */
+/**
+ * The advisory model's time for one claim (sprint_5 5.1; agents/intel_engineer.md rule 4): an answer later than this
+ * is no answer, and the claim is graded rules-only.
+ */
+export const INTEL_TIMEOUT_MS = 2_000;
+
 export const SETTABLE_FLAGS = Object.freeze([
   'ATTEST_AUTO_CHECK_GMAIL',
 ] as const satisfies readonly FeatureFlag[]);
