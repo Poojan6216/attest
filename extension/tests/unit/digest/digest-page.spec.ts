@@ -14,6 +14,7 @@ import type { DigestSources } from '../../../entrypoints/digest/use-digests';
 import { DigestRecord } from '../../../src/ledger/types';
 import { setLogSink } from '../../../src/log';
 import { digestMarkdown } from '../../../src/ui/digest-share';
+import { UNASKED_LIMIT } from '../../../src/ui/labels';
 
 const ZERO = { VERIFIED: 0, PARTIAL: 0, NOT_FOUND: 0, UNASKED: 0, OVER_SCOPE: 0, UNVERIFIABLE: 0 };
 
@@ -119,6 +120,8 @@ describe('the digest page', () => {
     expect(text).toContain('Email sent, 6 Oct 2026, 14:03, supplier.example');
     expect(text).toContain('Calendar was not checked Tue–Thu.');
     expect(text).toContain('Gmail Sent reader: working, version 1.4.0.');
+    // What an Unasked receipt cannot catch, among what Attest could check (sprint_6 6.9; Decisions [6.9]).
+    expect(text).toContain(UNASKED_LIMIT);
     expect(text).not.toContain('@');
   });
 

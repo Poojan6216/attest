@@ -1,8 +1,8 @@
 import type { DigestRecord } from '../../../src/ledger/types';
-import { gapLine, healthWord, weekLabel } from '../../../src/ui/digest-labels';
+import { weekLabel } from '../../../src/ui/digest-labels';
 import { clockTime } from '../../../src/ui/format';
-import { adapterName } from '../../../src/ui/receipt-labels';
 import { AgentWeekCard } from './AgentWeekCard';
+import { DigestCoverage } from './DigestCoverage';
 import { MarksSection } from './MarksSection';
 import { NotableItem } from './NotableItem';
 import { ShareDigest, type ShareTools } from './ShareDigest';
@@ -59,22 +59,7 @@ export function DigestView({ digest, nowMs, share }: DigestViewProps) {
         {more > 0 ? <p>And {String(more)} more, in the side panel’s timeline.</p> : null}
       </section>
       <MarksSection digest={digest} />
-      <section aria-labelledby="coverage-heading" class="space-y-2">
-        <h2 id="coverage-heading" class="text-base font-semibold">
-          What Attest could check
-        </h2>
-        <ul class="space-y-1">
-          {digest.gaps.length === 0 ? <li>Gmail Sent and Calendar were checked every day.</li> : null}
-          {digest.gaps.map(({ source, days }) => (
-            <li key={source}>{gapLine(source, days)}</li>
-          ))}
-          {digest.health.map(({ adapterId, status, version }) => (
-            <li key={adapterId}>
-              {adapterName(adapterId)}: {healthWord(status)}, version {version}.
-            </li>
-          ))}
-        </ul>
-      </section>
+      <DigestCoverage digest={digest} />
       <ShareDigest digest={digest} {...share} />
     </article>
   );

@@ -109,3 +109,12 @@ export function excerpt(text: string, max = 120): string {
         .join('')
         .trimEnd()}…`;
 }
+
+/**
+ * What an Unasked receipt can and cannot catch (sprint_6 6.9; Decisions [6.9]): the red team's most severe attack that
+ * works is a send an agent made and never claimed, with no agent activity near it (docs/attacks-that-work.md, strategy
+ * 10). So where a person could read no Unasked receipt as no unasked action, the side panel's grade filter and the
+ * weekly digest say this.
+ */
+export const UNASKED_LIMIT =
+  'Attest marks a send as likely Unasked only when an agent was active near it, so a send with no agent activity near it is never flagged.';

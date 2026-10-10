@@ -1,6 +1,6 @@
 import { AgentId, type Grade, Grade as Grades } from '../../../src/core/schema';
 import type { TimelineFilters } from '../../../src/ui/data';
-import { AGENT_NAMES } from '../../../src/ui/labels';
+import { AGENT_NAMES, UNASKED_LIMIT } from '../../../src/ui/labels';
 import { gradeLabel } from '../../../src/ui/receipt-labels';
 import { CheckGroup } from '../../../src/ui/CheckGroup';
 import { DayRange } from './DayRange';
@@ -20,6 +20,8 @@ const everyGrade = ({ agents, from, to }: TimelineFilters): TimelineFilters => (
 /**
  * The timeline's filters (sprint_4 4.3: agent, grade, date range), combined: the receipts of the agents checked, of
  * the grades checked, graded on the days from and to (both included). A change reads the timeline again from the top.
+ * While Unasked is shown, what it cannot catch is said under the grades (sprint_6 6.9: no Unasked receipt is not no
+ * unasked action).
  */
 export function TimelineFiltersForm({ filters, onChange }: TimelineFiltersFormProps) {
   const shown = filters.grades ?? Grades.options;
@@ -49,6 +51,7 @@ export function TimelineFiltersForm({ filters, onChange }: TimelineFiltersFormPr
         checked={(grade) => shown.includes(grade)}
         onToggle={toggleGrade}
       />
+      {shown.includes('UNASKED') ? <p class="text-xs text-ink-muted">{UNASKED_LIMIT}</p> : null}
       <DayRange
         from={filters.from}
         to={filters.to}
