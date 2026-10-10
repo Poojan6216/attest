@@ -9,7 +9,8 @@
  *  1. What it sees (§3): coverage entries with `lastSyncAt > evaluatedAt` and candidates with `observedAt >
  *     evaluatedAt` are dropped; candidates are one per id and ordered by (`occurredAt` instant, id).
  *  2. Score (§5): an assignable claim's candidates through `features()`; the best is the highest exact score,
- *     ties by observation id. It is ASSIGNED (named in `observationIds`) iff its score ≥ `thresholds.partial`.
+ *     ties by observation id. It is ASSIGNED (named in `observationIds`) iff its score ≥ `thresholds.partial`. Then
+ *     the model's score of it, when the context holds one, may raise that score, never below `partial` (§5.4, v1.19).
  *  3. Rules (§6): `policy.rules`, first match wins; nothing matches → terminal `default_unverifiable`
  *     (UNVERIFIABLE). A PENDING outcome is stored as grade UNVERIFIABLE (the placeholder, §2), rule `pending`.
  *  4. Finality (§8): `isFinalizable` in conditions.ts sets `state` and `finalAt`, or `finalFrom` (v1.18).
@@ -41,6 +42,7 @@ import { assignedOf, type BestCandidate, bestCandidate, visibleInputs } from './
 import { GradeError } from './grade-error';
 import { checkCandidates } from './grade-guard';
 import { confidenceOf, gradeReasons } from './grade-reasons';
+import { raisedBest } from './model-raise';
 import {
   assertLoadedPolicy,
   type Policy,
@@ -195,7 +197,7 @@ function waitsForCandidate(
 }
 
 /** §6, §8, §3: decides one grading from its evidence and writes the receipt. */
-function judge(
+function decideAndWrite(
   claim: Claim | null,
   evidence: Evidence,
   grant: Grant,
@@ -253,6 +255,21 @@ function judge(
     }),
     computedAt: coverage.evaluatedAt,
   });
+}
+
+/**
+ * Judges one grading: the best candidate, chosen and assigned on its floor score, may have that score raised by the
+ * model's (§5.4, v1.19; model-raise.ts) before the rules read it; then `decideAndWrite`.
+ */
+function judge(
+  claim: Claim | null,
+  evidence: Evidence,
+  grant: Grant,
+  policy: Policy,
+  context: GradeContext,
+): Receipt {
+  const best = raisedBest(evidence.best, context, policy);
+  return decideAndWrite(claim, { ...evidence, best }, grant, policy, context);
 }
 
 /**

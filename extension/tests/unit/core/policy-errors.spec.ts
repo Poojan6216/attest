@@ -9,35 +9,7 @@ import { describe, expect, it } from 'vitest';
 import policyJson from '../../../../policy/default.json';
 import { loadPolicy, PolicyError } from '../../../src/core/policy';
 import { MS_PER_DAY, MS_PER_MINUTE } from '../../../src/core/units';
-
-type Segment = string | number;
-type Edit = readonly [path: readonly Segment[], value: unknown];
-
-const REMOVE = Symbol('remove');
-
-/** A copy of the shipped policy with each edit applied (REMOVE deletes the key). */
-function edited(...edits: readonly Edit[]): unknown {
-  const doc: unknown = structuredClone(policyJson);
-  for (const [path, value] of edits) {
-    let parent = doc as Record<Segment, unknown>;
-    for (const segment of path.slice(0, -1)) parent = parent[segment] as Record<Segment, unknown>;
-    const last = path.at(-1);
-    if (last === undefined) throw new Error('an edit needs a path');
-    if (value === REMOVE) Reflect.deleteProperty(parent, last);
-    else parent[last] = value;
-  }
-  return doc;
-}
-
-function issuesOf(raw: unknown): readonly string[] {
-  try {
-    loadPolicy(raw);
-  } catch (error) {
-    if (error instanceof PolicyError) return error.issues;
-    throw error;
-  }
-  throw new Error('expected loadPolicy to throw a PolicyError');
-}
+import { type Edit, edited, issuesOf, REMOVE, type Segment } from './policy-edit';
 
 const MULTIPLE = 'must be a multiple of 0.0001';
 const ZERO_SUM = 'the weights of the listed features must sum to more than 0';
@@ -207,12 +179,15 @@ const PER_TYPE_CASES: readonly Case[] = [
     REMOVE,
     'featuresByType["listing.posted"]: is required',
   ),
-  one(
+  [
+    // counterpartyDomain is identity for no type, so weighting it 0 changes nothing else (§5.2).
     'listed weights sum to 0',
-    ['featuresByType', 'other'],
-    ['modelScore'],
-    `featuresByType.other: ${ZERO_SUM}`,
-  ),
+    [
+      [['features', 'counterpartyDomain'], 0],
+      [['featuresByType', 'other'], ['counterpartyDomain']],
+    ],
+    [`featuresByType.other: ${ZERO_SUM}`],
+  ],
   [
     // Also zeroes identity features: calendar subjects, purchase amounts and merchants (§5.3 v1.2).
     'every purchase-like feature weighted 0',
@@ -246,13 +221,14 @@ const PER_TYPE_CASES: readonly Case[] = [
   [
     'zero-weight feature listed for its type and named as identity',
     [
+      [['features', 'counterpartyDomain'], 0],
       [
         ['featuresByType', 'other'],
-        ['timeProximity', 'modelScore'],
+        ['timeProximity', 'counterpartyDomain'],
       ],
-      [['identityFeatures', 'other'], ['modelScore']],
+      [['identityFeatures', 'other'], ['counterpartyDomain']],
     ],
-    [zeroIdentity('other', 0, 'modelScore')],
+    [zeroIdentity('other', 0, 'counterpartyDomain')],
   ],
   one(
     'identity feature not listed for its type',

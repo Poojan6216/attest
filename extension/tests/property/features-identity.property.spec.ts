@@ -3,7 +3,8 @@
  * together leave no claim that can be assigned without a weighted feature.
  *  - The loader accepts a policy exactly when an independent oracle says it should: every type with sources
  *    names at least one identity feature, every identity feature is listed for its type with weight > 0 and is not
- *    `timeProximity` (v1.11), and every non-empty featuresByType list has a positive total weight.
+ *    `timeProximity` (v1.11), every non-empty featuresByType list has a positive total weight, and the model's weight
+ *    is below its cap (v1.19).
  *  - Under every policy it accepts, features() scores every assignable claim with an exact value in [0, 1]
  *    and never throws; a claim that is not assignable either scores or throws RatioError('zero_weight_sum').
  *  - Receipt signals are the §5.1 feature names plus `score`, and `cp.*` reasons come only from an address
@@ -65,16 +66,25 @@ const identityArb = fc.record(
 function oracleAccepts(bp: Record<FeatureKey, number>, identity: Record<TypeKey, string[]>): boolean {
   const weights = new Map<string, number>(Object.entries(bp));
   const weightOf = (feature: string): number => weights.get(feature) ?? 0;
-  return TYPES.every((type) => {
-    const listed: readonly string[] = defaultPolicyJson.featuresByType[type];
-    const hasSources = defaultPolicyJson.sourcesByType[type].length > 0;
-    const total = listed.reduce((sum, feature) => sum + weightOf(feature), 0);
-    if (listed.length > 0 && total === 0) return false;
-    if (hasSources && identity[type].length === 0) return false;
-    return identity[type].every(
-      (feature) => listed.includes(feature) && weightOf(feature) > 0 && feature !== 'timeProximity',
-    );
-  });
+  return (
+    TYPES.every((type) => {
+      const listed: readonly string[] = defaultPolicyJson.featuresByType[type];
+      const hasSources = defaultPolicyJson.sourcesByType[type].length > 0;
+      const total = listed.reduce((sum, feature) => sum + weightOf(feature), 0);
+      if (listed.length > 0 && total === 0) return false;
+      if (hasSources && identity[type].length === 0) return false;
+      return identity[type].every(
+        (feature) => listed.includes(feature) && weightOf(feature) > 0 && feature !== 'timeProximity',
+      );
+    }) && modelBelowCap(weightOf('modelScore'))
+  );
+}
+
+/** §5.4 (v1.19): the model's weight λ stays below (verified − partial) / (1 − partial), in basis points. */
+function modelBelowCap(modelBp: number): boolean {
+  const partial = Math.round(defaultPolicyJson.thresholds.partial * BASIS_POINTS);
+  const verified = Math.round(defaultPolicyJson.thresholds.verified * BASIS_POINTS);
+  return modelBp * (BASIS_POINTS - partial) < (verified - partial) * BASIS_POINTS;
 }
 
 function load(bp: Record<FeatureKey, number>, identity: Record<TypeKey, string[]>): Policy | null {

@@ -14,7 +14,7 @@ import {
   isAssignable,
   isUnderspecified,
 } from '../../../src/core/features';
-import { DEFAULT_POLICY, loadPolicy, type Policy } from '../../../src/core/policy';
+import { DEFAULT_POLICY, loadPolicy, type Policy, PolicyError } from '../../../src/core/policy';
 import { type Ratio, RatioError, ratioGteBasisPoints } from '../../../src/core/ratio';
 import defaultPolicyJson from '../../../../policy/default.json';
 
@@ -114,15 +114,18 @@ describe('applicableFeatures() reads the claim alone (§5.2)', () => {
     ]);
   });
 
-  it('never applies modelScore (Sprint 5), even when a policy lists it', () => {
-    const withModel = patched({
-      featuresByType: {
-        ...defaultPolicyJson.featuresByType,
-        [EMAIL]: ['timeProximity', 'subjectOverlap', 'modelScore'],
-      },
-      identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: ['subjectOverlap'] },
-    });
-    expect(applicableFeatures(claim({ type: EMAIL, subjectHint: 'Q3 deck' }), withModel)).toEqual([
+  it('never applies modelScore: no type may list it (v1.19), and its shipped weight adds no feature', () => {
+    expect(() =>
+      patched({
+        featuresByType: {
+          ...defaultPolicyJson.featuresByType,
+          [EMAIL]: ['timeProximity', 'subjectOverlap', 'modelScore'],
+        },
+        identityFeatures: { ...defaultPolicyJson.identityFeatures, [EMAIL]: ['subjectOverlap'] },
+      }),
+    ).toThrow(PolicyError);
+    expect(DEFAULT_POLICY.bp.features.modelScore).toBeGreaterThan(0);
+    expect(applicableFeatures(claim({ type: EMAIL, subjectHint: 'Q3 deck' }), DEFAULT_POLICY)).toEqual([
       'timeProximity',
       'subjectOverlap',
     ]);

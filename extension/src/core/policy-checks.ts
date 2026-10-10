@@ -14,6 +14,9 @@ export interface PolicyIssue {
   readonly message: string;
 }
 
+/** §5.4 (v1.19): the model's score raises a matched candidate; it is never a feature of a pair or of a type. */
+const MODEL_NOT_A_PAIR_FEATURE = '"modelScore" is never listed by type: the model only raises a match (§5.4)';
+
 /**
  * Basis points of a weight. Exact for a valid weight; for an invalid one (already reported by the field
  * schema) only an approximation, which is all a cross-check needs.
@@ -68,14 +71,22 @@ function thresholdIssues({ thresholds, unasked }: PolicyDocument): PolicyIssue[]
  * assigned then has Σw > 0 and a zero weight can never make a claim matchable on time alone. `timeProximity` is
  * never an identity feature (v1.11): it says when, never which action. So every claim that is not underspecified has
  * an applicable content feature, and the §5.3 content gate (a pair that matched on time alone scores 0) never
- * leaves such a claim with nothing that could match it.
+ * leaves such a claim with nothing that could match it. `modelScore` is listed by no type and is no identity (§5.4,
+ * v1.19): it is never a pair feature (`features()` never applies it), only the raise of a candidate the floor already
+ * matched, so it never counts towards a type's total and never says which action.
  */
 function featureIssues(doc: PolicyDocument): PolicyIssue[] {
   const { features, featuresByType, identityFeatures, sourcesByType } = doc;
   return ActionType.options.flatMap((type) => {
     const listed = featuresByType[type];
-    const issues: PolicyIssue[] = [];
-    const totalBasisPoints = listed.reduce((sum, feature) => sum + roundedBasisPoints(features[feature]), 0);
+    const issues: PolicyIssue[] = listed.flatMap((feature, index) =>
+      feature === 'modelScore'
+        ? [{ path: ['featuresByType', type, index], message: MODEL_NOT_A_PAIR_FEATURE }]
+        : [],
+    );
+    const totalBasisPoints = listed
+      .filter((feature) => feature !== 'modelScore')
+      .reduce((sum, feature) => sum + roundedBasisPoints(features[feature]), 0);
     if (listed.length > 0 && totalBasisPoints === 0) {
       issues.push({
         path: ['featuresByType', type],
@@ -96,6 +107,7 @@ function featureIssues(doc: PolicyDocument): PolicyIssue[] {
       if (feature === 'timeProximity') {
         issues.push({ path, message: '"timeProximity" says when, never which action' });
       }
+      if (feature === 'modelScore') issues.push({ path, message: MODEL_NOT_A_PAIR_FEATURE });
     });
     return issues;
   });
@@ -161,7 +173,35 @@ function ruleIssues({ rules }: PolicyDocument): PolicyIssue[] {
   );
 }
 
+/**
+ * §5.4 (v1.19): the model's weight λ = `features.modelScore` raises a candidate already at `partial` or above to
+ * `max(S, (1 − λ)·S + λ·m)`. It is capped so that the model alone never carries a candidate at the partial floor to
+ * VERIFIED: `(1 − λ)·partial + λ < verified`, that is λ·(1 − partial) < verified − partial, in basis points. The
+ * deterministic evidence carries most of the way, and the model only proposes (Hard Rule 4).
+ */
+function modelIssues({ features, thresholds }: PolicyDocument): PolicyIssue[] {
+  const model = roundedBasisPoints(features.modelScore);
+  const partial = roundedBasisPoints(thresholds.partial);
+  const verified = roundedBasisPoints(thresholds.verified);
+  // Unordered thresholds are already refused (thresholdIssues); the cap is defined only between ordered ones.
+  if (!(partial < verified)) return [];
+  if (model * (BASIS_POINTS - partial) < (verified - partial) * BASIS_POINTS) return [];
+  return [
+    {
+      path: ['features', 'modelScore'],
+      message:
+        'must be < (verified − partial) / (1 − partial): the model alone never makes a partial match verified',
+    },
+  ];
+}
+
 /** Every cross-field problem in `doc`, in document order. Empty for a valid policy. */
 export function policyIssues(doc: PolicyDocument): PolicyIssue[] {
-  return [...windowIssues(doc), ...thresholdIssues(doc), ...featureIssues(doc), ...ruleIssues(doc)];
+  return [
+    ...windowIssues(doc),
+    ...thresholdIssues(doc),
+    ...featureIssues(doc),
+    ...modelIssues(doc),
+    ...ruleIssues(doc),
+  ];
 }

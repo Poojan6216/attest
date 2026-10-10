@@ -42,7 +42,8 @@ const CORE_LITERAL_EXEMPT: Readonly<Record<string, string>> = {
   [path.join('src', 'core', 'punycode.ts')]: 'RFC 3492 bootstring parameters',
   [path.join('src', 'core', 'units.ts')]:
     'named unit conversions: ms per minute/hour/day, cents, basis points',
-  [path.join('src', 'core', 'schema.ts')]: 'SCHEMA_LIMITS length caps and build_spec §7 field limits',
+  [path.join('src', 'core', 'schema-primitives.ts')]:
+    'SCHEMA_LIMITS length caps and build_spec §7 field limits',
 };
 
 interface NumericLiteral {

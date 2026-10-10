@@ -286,7 +286,7 @@ Since Sprint 3.13 (schema version 5): what each receipt was graded with besides 
 | `inputsHash` | The receipt's own `inputsHash`. |
 | `coverageHash` | The coverage the batch graded with, named by its hash (since schema version 7): every receipt of a batch shares one, stored once in `batchCoverages` ([§5.14](#514-batchcoverages)). |
 | `grant` | The agent's grant in force then, as `grants` holds it (`agent`, `allowedTypes`, `counterpartyAllowlist`, `spendCeilingCents`, `spendCurrency`, `declaredScopes`, `observedScopes`, `accounts`, `updatedAt`). |
-| `context` | `priorSpendCents` (the agent's spending before this claim, in cents), `attribution` on an UNASKED receipt (the likely `agent`, its `scoreBp`, the `signals` that fired, and `adapterLastSyncAt`), and `scope` on a permission receipt (the `observed` permission). |
+| `context` | `priorSpendCents` (the agent's spending before this claim, in cents), `attribution` on an UNASKED receipt (the likely `agent`, its `scoreBp`, the `signals` that fired, and `adapterLastSyncAt`), and `scope` on a permission receipt (the `observed` permission). From Sprint 5.0 (grading contract v1.19), `modelScores` once the optional model is on: the model's score of each of the claim's candidates, an `observationId` and a `score` in basis points, never text; replay applies exactly these ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119)). |
 | `policyHash` | The policy it was graded under. |
 
 Index field: none (`policyHash` and `coverageHash` are indexed as stored, so a policy or a coverage no input names any more is found and deleted).

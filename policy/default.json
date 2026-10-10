@@ -18,7 +18,7 @@
     "subjectOverlap": 0.15,
     "amountExact": 0.25,
     "merchantMatch": 0.2,
-    "modelScore": 0
+    "modelScore": 0.15
   },
   "sourcesByType": {
     "email.sent": ["gmail.sent"],

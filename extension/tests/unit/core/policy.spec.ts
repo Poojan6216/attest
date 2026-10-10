@@ -187,7 +187,7 @@ describe('loadPolicy: basis points (§5.3)', () => {
         subjectOverlap: 1500,
         amountExact: 2500,
         merchantMatch: 2000,
-        modelScore: 0,
+        modelScore: 1500,
       },
       thresholds: { verified: 8500, partial: 5000 },
       unasked: {
@@ -242,16 +242,20 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
     }
   });
 
-  it('property: k / 10,000 loads as exactly k basis points at any weight (identity features above 0)', () => {
+  it('property: k / 10,000 loads as exactly k basis points at any weight (identity features above 0, the model below its cap)', () => {
     const paths = [
       ...FeatureName.options.map((key) => ['features', key] as const),
       ...SignalName.options.map((key) => ['unasked', 'signals', key] as const),
     ];
     const identity = new Set<string>(Object.values(policyJson.identityFeatures).flat());
+    // §5.4 (v1.19): the model's weight stays below (verified − partial) / (1 − partial), 0.7 under the shipped thresholds.
+    const { verified, partial } = DEFAULT_POLICY.bp.thresholds;
+    const modelCap = ((verified - partial) * BASIS_POINTS) / (BASIS_POINTS - partial);
     const grid = fc.integer({ min: 0, max: BASIS_POINTS });
     const named = fc
       .tuple(fc.constantFrom(...paths), grid)
-      .filter(([where, k]) => k > 0 || where[0] !== 'features' || !identity.has(where[1]));
+      .filter(([where, k]) => k > 0 || where[0] !== 'features' || !identity.has(where[1]))
+      .filter(([where, k]) => where[0] !== 'features' || where[1] !== 'modelScore' || k < modelCap);
     fc.assert(
       fc.property(named, ([where, k]) => {
         const doc = structuredClone(policyJson);
@@ -277,6 +281,8 @@ describe('loadPolicy: the basis-point grid (§5.3)', () => {
             verified: Math.max(a, b) / BASIS_POINTS,
             partial: Math.min(a, b) / BASIS_POINTS,
           };
+          // The model's cap depends on these thresholds (§5.4); its own cases hold it, so it weighs 0 here.
+          doc.features.modelScore = 0;
           doc.unasked.threshold = unasked / BASIS_POINTS;
           const { bp } = loadPolicy(doc);
           expect(bp.thresholds).toEqual({ verified: Math.max(a, b), partial: Math.min(a, b) });

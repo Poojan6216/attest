@@ -215,7 +215,7 @@ function listedWeightsPositive(features: Record<string, number>): boolean {
 }
 
 describe('policy schema: the whole valid domain loads unchanged', () => {
-  it('any version >= 1, valid windows, ordered grid thresholds above 0 (the unasked one too) and grid weights are accepted', () => {
+  it('any version >= 1, valid windows, ordered grid thresholds above 0 (the unasked one too) and grid weights (the model’s below its cap) are accepted', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 1, max: 1_000_000 }),
@@ -225,12 +225,16 @@ describe('policy schema: the whole valid domain loads unchanged', () => {
         weights(Object.keys(policyJson.unasked.signals)),
         fc.integer({ min: 1, max: BASIS_POINTS }).map((k) => k / BASIS_POINTS),
         (version, windowValues, [a = 0, b = 0], features, signals, threshold) => {
+          const [partial, verified] = [Math.min(a, b), Math.max(a, b)];
+          // §5.4 (v1.19): the largest model weight below (verified − partial) / (1 − partial), in basis points.
+          const modelCap = Math.ceil(((verified - partial) * BASIS_POINTS) / (BASIS_POINTS - partial)) - 1;
+          const modelBp = Math.min(Math.round((features.modelScore ?? 0) * BASIS_POINTS), modelCap);
           const doc = {
             ...structuredClone(policyJson),
             version,
             windows: windowValues,
-            thresholds: { verified: Math.max(a, b) / BASIS_POINTS, partial: Math.min(a, b) / BASIS_POINTS },
-            features,
+            thresholds: { verified: verified / BASIS_POINTS, partial: partial / BASIS_POINTS },
+            features: { ...features, modelScore: modelBp / BASIS_POINTS },
             unasked: { ...structuredClone(policyJson.unasked), signals, threshold },
           };
           const { bp, policyHash, ...loaded } = loadPolicy(doc);
