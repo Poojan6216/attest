@@ -100,7 +100,7 @@ describe('the docs state what the code does (TECH-3, SEC-10)', () => {
     expect(privacyPermissions(PRIVACY.replace(/^- notifications,.*\n/mu, ''))).not.toEqual(
       manifestPermissions(),
     );
-    expect(statedSchema(ARCHITECTURE.replace('schema version 10 in', 'schema version 9 in'))).not.toBe(
+    expect(statedSchema(ARCHITECTURE.replace('schema version 11 in', 'schema version 10 in'))).not.toBe(
       LATEST_SCHEMA,
     );
     const noDigests = exportExample(ARCHITECTURE.replace(',\n    "digests": []', ''));
@@ -108,7 +108,7 @@ describe('the docs state what the code does (TECH-3, SEC-10)', () => {
     expect(sessionKeys(ARCHITECTURE.replace('`attest.openReceipt`', 'the receipt'))).not.toEqual(
       Object.values(SESSION_KEYS).sort(),
     );
-    expect(changedBound(ADAPTERS.replace('(1 to 13 ledger', '(1 to 12 ledger'))).not.toBe(
+    expect(changedBound(ADAPTERS.replace('(1 to 14 ledger', '(1 to 13 ledger'))).not.toBe(
       LedgerTable.options.length,
     );
   });

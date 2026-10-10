@@ -25,13 +25,17 @@ import { EXTENSION_PATH } from './support/extension';
 import { OBSERVER_HARNESS_MARKER } from './support/observer-harness-marker';
 
 /**
- * The only matches allowed. Each is a whole, exact construct, removed before the scan:
- *  - Zod 4's eval probe, skipped when `jitless` is set (src/setup.ts sets it before any schema is built).
+ * The only matches allowed, each a whole, exact construct, removed before the scan, and each held to where it may be:
+ *  - Zod 4's eval probe, skipped when `jitless` is set (src/setup.ts sets it before any schema is built), in every
+ *    chunk that bundles Zod;
+ *  - the person's own model key's one call (src/intel/providers/byo.ts `post`; sprint_5 5.4, Decisions [5.4]): a fetch
+ *    of a vendor's `endpoint` in BYO_VENDORS, nowhere else, once, in the service worker alone.
  * Sprint 5.7 adds the one fetch in src/telemetry/send.ts here, with a Decisions.md entry.
  */
-const ALLOWED = [
-  /if\([\w$]+\.jitless\|\|[^;]{0,120}Cloudflare`\)\)return!1;try\{return Function\(``\),!0\}catch\{return!1\}/g,
-];
+const ZOD_PROBE =
+  /if\([\w$]+\.jitless\|\|[^;]{0,120}Cloudflare`\)\)return!1;try\{return Function\(``\),!0\}catch\{return!1\}/g;
+const BYO_CALL = /\breturn fetch\([\w$]+\[[\w$]+\]\.endpoint,[\w$]+\)/g;
+const ALLOWED = [ZOD_PROBE, BYO_CALL];
 
 const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ['fetch(', /\bfetch\s*\(/],
@@ -135,13 +139,13 @@ test('the content scripts are exactly Gmail and Calendar, registered at runtime,
 test('no shipped script reaches the network, evaluates code, or injects into a tab', () => {
   const files = scripts(EXTENSION_PATH);
   expect(files.length).toBeGreaterThan(3);
-  let allowedHits = 0;
+  const allowedIn = new Map<RegExp, string[]>(ALLOWED.map((allowed) => [allowed, []]));
   const hits: string[] = [];
   for (const file of files) {
     let source = readFileSync(file, 'utf8');
     for (const allowed of ALLOWED) {
       source = source.replace(allowed, () => {
-        allowedHits += 1;
+        allowedIn.get(allowed)?.push(path.relative(EXTENSION_PATH, file));
         return '';
       });
     }
@@ -150,8 +154,10 @@ test('no shipped script reaches the network, evaluates code, or injects into a t
     }
   }
   expect(hits).toEqual([]);
-  // The allowlist is not stale: the Zod probe is really there (once per chunk that bundles Zod).
-  expect(allowedHits).toBeGreaterThanOrEqual(1);
+  // The allowlist is not stale: the Zod probe is really there (once per chunk that bundles Zod), and the one call a
+  // person's own key makes is there once, in the service worker, and in no page or content script.
+  expect(allowedIn.get(ZOD_PROBE)?.length ?? 0).toBeGreaterThanOrEqual(1);
+  expect(allowedIn.get(BYO_CALL)).toEqual(['background.js']);
 });
 
 /**

@@ -38,6 +38,7 @@
  * 10. A receipt's alert (./alerts.ts, sprint_4 4.6) goes with the receipt.
  * 11. A weekly digest (./digest.ts, sprint_4 4.7) goes once its week started before C: it copies hints and domains of
  *     history then going, and must not outlive it (sprint_4 close, SEC-7).
+ * 12. A claim's model answer (./model-answers.ts, sprint_5 5.4) goes with the claim.
  * Grants, adapter health and the rest of meta are not dated history and are kept.
  *
  * Everything runs in one readwrite transaction over the dated tables, so the purge never interleaves with a grading
@@ -61,6 +62,7 @@ import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { bucketOfMs } from './index';
 import { purgeActivity } from './activity';
+import { purgeModelAnswers } from './model-answers';
 import { purgeClockRepairs } from './clock-repairs';
 import { purgeCalendarRecords } from './calendar-snapshots';
 import { localDate } from './digest-week';
@@ -99,6 +101,8 @@ export interface PurgeReport {
   readonly clockRepairs: number;
   /** Alerts deleted: those of the purged receipts (./alerts.ts, sprint_4 4.6). */
   readonly alerts: number;
+  /** Model answers deleted: those of the purged claims (./model-answers.ts, sprint_5 5.4). */
+  readonly modelAnswers: number;
   /** Weekly digests deleted: those whose week started before the cutoff (./digest.ts, sprint_4 4.7; SEC-7). */
   readonly digests: number;
 }
@@ -334,6 +338,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
     db.meta,
     db.alerts,
     db.digests,
+    db.modelAnswers,
   ];
   return db.transaction('rw', tables, async (): Promise<PurgeReport> => {
     const doomed = await doomedHistory(db, cutoffMs);
@@ -371,6 +376,7 @@ export async function purgeExpired(db: LedgerDb, options: PurgeOptions): Promise
       clockRepairs: await purgeClockRepairs(db, cutoffMs),
       alerts,
       digests: await purgeDigests(db, cutoffMs),
+      modelAnswers: await purgeModelAnswers(db, claimIds),
     };
   });
 }

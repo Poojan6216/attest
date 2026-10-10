@@ -28,6 +28,7 @@ import { BROWSER_READERS, onReaderToggle, type ReaderDeps, readerOff, syncReader
 import { onLedgerWipe, onRetentionSave } from './settings';
 import { onReceiptEvent } from './user-events';
 import { type GradingDeps, SHIPPED_GRADING } from './grading';
+import { askTheModel } from './intel';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
 import { createPassState } from './observer-state';
 import { wrongSite } from './sender-site';
@@ -77,7 +78,8 @@ export function importContext(
   clock: Clock = systemClock,
   grading: GradingDeps = SHIPPED_GRADING,
 ): ImportContext {
-  return { db: getLedger, grading, notify: announce(clock) };
+  const notify = announce(clock);
+  return { db: getLedger, grading, notify, askModel: (db) => askTheModel(db, { grading, notify }) };
 }
 
 export function createHandlers(

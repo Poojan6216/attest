@@ -9,8 +9,11 @@ import type { DownloadState } from '../use-builtin-model';
 export interface BuiltinModelToggleProps {
   /** Whether the on-device model is on (flag ATTEST_MODEL). */
   readonly on: boolean;
-  /** Chrome's model here; null while it is being read. */
+  /** Chrome's model here: `no_api` where it has no Prompt API, else null until the person asks (../use-builtin-model.ts). */
   readonly availability: BuiltinAvailability | null;
+  /** Whether Chrome is being asked now. */
+  readonly checking: boolean;
+  readonly check: () => void;
   readonly download: DownloadState;
   readonly startDownload: () => void;
   readonly toggle: (on: boolean) => Promise<SettingResult>;
@@ -67,13 +70,28 @@ function ModelDownload({
   );
 }
 
+/** The check a person asks for, where this Chrome has the Prompt API and has not said its model is ready. */
+function ModelCheck({
+  availability,
+  checking,
+  check,
+}: Pick<BuiltinModelToggleProps, 'availability' | 'checking' | 'check'>) {
+  if (availability === 'no_api' || availability === 'available') return null;
+  return (
+    <Button variant="secondary" disabled={checking} onClick={check}>
+      Check Chrome’s on-device model
+    </Button>
+  );
+}
+
 /**
- * Chrome's on-device model (sprint_5 5.2; src/intel/providers/builtin.ts): off until the person turns it on
- * (`flag.set`), and only where Chrome has the model; otherwise the reason, in one line. Turning it off is always
- * possible. Its text says what it sees and that everything stays on this computer.
+ * Chrome's on-device model (sprint_5 5.2, 5.4; src/intel/providers/builtin.ts): off until the person turns it on
+ * (`flag.set`), which they can do once a check they asked for found Chrome has the model; otherwise the reason, in
+ * one line. Chrome is asked only at their click, never as the page opens (../use-builtin-model.ts). Turning it off is
+ * always possible. Its text says what it sees and that everything stays on this computer.
  */
 export function BuiltinModelToggle(props: BuiltinModelToggleProps) {
-  const { on, availability, download } = props;
+  const { on, availability, checking, download } = props;
   const [state, setState] = useState<ToggleState>('idle');
   const change = (): void => {
     setState('saving');
@@ -97,14 +115,11 @@ export function BuiltinModelToggle(props: BuiltinModelToggleProps) {
       <ModelStatement />
       <p role="status" class="text-sm">
         {on ? 'The on-device model is on.' : 'The on-device model is off.'}
-        {availability === null ? ' Checking whether Chrome has it.' : ''}
-        {reason === null ? '' : ` ${reason}`}
+        {checking ? ' Checking whether Chrome has it.' : ''}
+        {reason === null || checking ? '' : ` ${reason}`}
       </p>
-      <Button
-        variant="secondary"
-        disabled={state === 'saving' || availability === null || (!on && !usable)}
-        onClick={change}
-      >
+      <ModelCheck availability={availability} checking={checking} check={props.check} />
+      <Button variant="secondary" disabled={state === 'saving' || (!on && !usable)} onClick={change}>
         {on ? 'Turn off the on-device model' : 'Turn on the on-device model'}
       </Button>
       {availability === 'downloadable' || download.status !== 'idle' ? (

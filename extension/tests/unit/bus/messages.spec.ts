@@ -254,6 +254,7 @@ describe('ledger.changed', () => {
         'digests',
         'grants',
         'meta',
+        'modelAnswers',
         'observations',
         'receipts',
         'requests',

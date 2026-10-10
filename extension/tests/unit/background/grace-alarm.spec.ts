@@ -73,4 +73,20 @@ describe('the grace alarm', () => {
     await runGraceBatch(notify);
     expect(notify).toHaveBeenCalledTimes(1);
   });
+
+  it('asks the advisory model after its batch, about what the batch graded (sprint_5 5.4)', async () => {
+    await closeLedger();
+    await Dexie.delete(DB_NAME);
+    await storeDemo(await getLedger(), AT.beforeGrace);
+    pinClock(AT.beforeGrace);
+    const { runGraceBatch } = await import('../../../src/background/alarms');
+    const seen: number[] = [];
+    const askModel = vi.fn(async (db: Awaited<ReturnType<typeof getLedger>>) => {
+      seen.push(await db.receipts.count());
+      return 0;
+    });
+    await runGraceBatch(vi.fn(), () => Promise.resolve(), askModel);
+    expect(askModel).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([2]);
+  });
 });

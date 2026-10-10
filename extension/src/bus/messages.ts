@@ -75,6 +75,7 @@ export const LedgerTable = z.enum([
   'activity',
   'alerts',
   'digests',
+  'modelAnswers',
 ]);
 
 export const BusMessageType = z.enum([

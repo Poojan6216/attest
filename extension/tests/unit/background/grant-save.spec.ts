@@ -136,6 +136,18 @@ describe('grant.save', () => {
   });
 });
 
+describe('grant.save: the advisory model', () => {
+  it('asks the model after its batch, and answers without waiting for it (sprint_5 5.4)', async () => {
+    await imported();
+    const askModel = vi.fn(() => new Promise<number>(() => undefined));
+    const held = await getGrant(db, 'muse');
+    if (held === undefined) throw new Error('no default grant');
+    pinClock('2026-10-08T17:05:00-04:00');
+    expect(await onGrantSave({ ...ctx, askModel }, saveOf(choicesOf(held), false))).toEqual({ ok: true });
+    expect(askModel.mock.calls).toEqual([[db]]);
+  });
+});
+
 describe('grant.save: what Attest observed', () => {
   it('keeps what Attest observed, and grades at once with nothing PENDING: a narrower access adds its scope receipt', async () => {
     const accounts = { 'gmail.sent': [sha(7)] };

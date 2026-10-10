@@ -34,6 +34,11 @@ export interface ImportContext {
   readonly grading: GradingDeps;
   /** Tells open UI pages which tables moved (src/background/router.ts `announce`). */
   readonly notify: (tables: readonly LedgerTable[]) => void;
+  /**
+   * Asks the advisory model about the claims a batch left PARTIAL (./intel.ts `askTheModel`), after the batch and
+   * without waiting for it (sprint_5 5.4: a receipt never waits for the model); nothing is asked when absent.
+   */
+  readonly askModel?: (db: LedgerDb) => Promise<number>;
 }
 
 /** Records `at` as the agent's last import, unless a later one is already recorded. */
@@ -79,5 +84,6 @@ export async function onClaimsImport(
   } catch (error) {
     log.error('grading.failed', { error });
   }
+  if (ctx.askModel !== undefined) void ctx.askModel(db);
   return { ok: true, received: message.claims.length, added };
 }

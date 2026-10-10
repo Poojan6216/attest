@@ -299,9 +299,18 @@ export const Attribution = z
   .superRefine(refineWith(attributionProblems));
 
 /** The advisory model's score of one candidate, in basis points (§5.4, v1.19: it proposes, `grade()` decides). */
-const ModelScore = z.strictObject({ observationId: Ulid, score: z.number().int().min(0).max(BASIS_POINTS) });
+export const ModelScore = z.strictObject({
+  observationId: Ulid,
+  score: z.number().int().min(0).max(BASIS_POINTS),
+});
 const inIdOrder = (scores: readonly { observationId: string }[]): boolean =>
   scores.every((score, i) => i === 0 || (scores[i - 1]?.observationId ?? '') < score.observationId);
+
+/** A claim's model scores, at most one per candidate, in id order, so equal sets hash alike (§5.4, v1.19). */
+export const ModelScores = z
+  .array(ModelScore)
+  .max(L.BATCH)
+  .refine(inIdOrder, 'one per observation, in id order');
 
 /** The sixth grade() input, hashed with the others (§3, §14.1). */
 export const GradeContext = z.strictObject({
@@ -309,12 +318,8 @@ export const GradeContext = z.strictObject({
   attribution: Attribution.optional(),
   /** Claim-less scope-diff receipts only: the observed scope under test. */
   scope: z.strictObject({ observed: oneLineText(L.ITEM).min(1) }).optional(),
-  /** A claim's model scores, at most one per candidate, in id order, so equal sets hash alike (§5.4, v1.19). */
-  modelScores: z
-    .array(ModelScore)
-    .max(L.BATCH)
-    .refine(inIdOrder, 'one per observation, in id order')
-    .optional(),
+  /** A claim's model scores (`ModelScores`). */
+  modelScores: ModelScores.optional(),
 });
 
 const AgentAt = z.strictObject({ agent: AgentId, at: IsoTs });
@@ -344,6 +349,7 @@ export type Reason = z.infer<typeof Reason>;
 export type ReceiptOverride = z.infer<typeof ReceiptOverride>;
 export type Receipt = z.infer<typeof Receipt>;
 export type Attribution = z.infer<typeof Attribution>;
+export type ModelScores = z.infer<typeof ModelScores>;
 export type GradeContext = z.infer<typeof GradeContext>;
 export type Activity = z.infer<typeof Activity>;
 

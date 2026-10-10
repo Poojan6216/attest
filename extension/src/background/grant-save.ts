@@ -27,5 +27,6 @@ export async function onGrantSave(ctx: ImportContext, message: GrantSaveMessage)
   } catch (error) {
     log.error('grading.failed', { error });
   }
+  if (ctx.askModel !== undefined) void ctx.askModel(db);
   return { ok: true };
 }

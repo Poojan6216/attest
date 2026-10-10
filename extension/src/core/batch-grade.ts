@@ -25,6 +25,7 @@ import type {
   Coverage,
   GradeContext,
   Grant,
+  ModelScores,
   Observation,
   Receipt,
   Sha256,
@@ -67,6 +68,8 @@ export interface ReceiptBatch {
    * read as the grant's `spendCurrency`.
    */
   readonly priorSpend: (claim: Claim, spendCurrency: string | undefined) => number;
+  /** §5.4 (v1.19): the advisory model's scores of a claim's candidates, by claim id; a claim with none has no entry. */
+  readonly modelScores: ReadonlyMap<Ulid, ModelScores>;
 }
 
 /** The evidence parts every grading of a batch shares, each computed once per batch (or per grant), on first use. */
@@ -196,7 +199,11 @@ function claimReceipt(
   const [kept, order] = [shared.scratch(0, length), shared.scratch(1, length)];
   const count = scored === null ? 0 : keptPositions(scored, batch, kept);
   const grant = grantOf(batch.grants, claim.agent);
-  const context: GradeContext = { priorSpendCents: batch.priorSpend(claim, grant.spendCurrency) };
+  const modelScores = batch.modelScores.get(claim.id);
+  const context: GradeContext = {
+    priorSpendCents: batch.priorSpend(claim, grant.spendCurrency),
+    ...(modelScores === undefined ? {} : { modelScores }),
+  };
   const { policy } = batch;
   const inputs: BatchInputs = { grant, context, policyHash: policy.policyHash };
   if (scored !== null && scored.found.table.ranks() === null) {

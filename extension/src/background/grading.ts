@@ -21,9 +21,10 @@
  *     from the earliest instant the batch's coverage reaches, less the widest attribution window (src/ledger/
  *     activity.ts, sprint_3 3.14): an orphan is looked for in every window that coverage holds, which can reach
  *     further back than the orphan horizon (a Gmail interval spans days), so its signals are read wherever it is.
- *  6. `gradeBatch`, then core's `storeBatch` and `supersede` (src/core/batch-store.ts, the rule the replay simulator
- *     plays): receipts written, rows deleted, each written receipt's inputs stored and the replaced ones' released,
- *     and the policy document stored once.
+ *  6. `gradeBatch`, with the advisory model's stored scores of each claim while the person has a model on (sprint_5
+ *     5.4, `batchModelScores`), then core's `storeBatch` and `supersede` (src/core/batch-store.ts, the rule the replay
+ *     simulator plays): receipts written, rows deleted, each written receipt's inputs stored (its model scores with
+ *     them) and the replaced ones' released, and the policy document stored once.
  * `BatchError` and `IllegalTransitionError` are bugs (§3): they fail loud and are never caught here. Logs name ids,
  * counts and instants only (Hard Rule 10).
  */
@@ -39,6 +40,7 @@ import {
   type Coverage,
   Grant,
   IsoTs,
+  type ModelScores,
   Receipt,
   SCHEMA_LIMITS,
   type Ulid,
@@ -59,6 +61,8 @@ import { readCount, STORED_WRITES } from '../ledger/clock-high-water';
 import { lastImportKey } from '../ledger/meta-keys';
 import { getMeta, putReceipt, recordBatchInstant } from '../ledger/repo';
 import { queueAlerts } from '../ledger/alerts';
+import { modelOn, readFlags } from '../ledger/consent';
+import { modelScoresOf } from '../ledger/model-answers';
 import { log } from '../log';
 import { type AlertDeps, BROWSER_ALERTS, deliverAlerts } from './alerts';
 
@@ -195,6 +199,18 @@ async function batchActivity(
   };
 }
 
+/**
+ * The advisory model's scores of the claims a batch grades (header, step 6; src/ledger/model-answers.ts), while the
+ * person has a model on: turned off, its answers count no more, and the PENDING receipts are graded rules-only.
+ */
+async function batchModelScores(db: LedgerDb, pending: readonly Claim[]): Promise<Map<Ulid, ModelScores>> {
+  if (!modelOn(await readFlags(db))) return new Map();
+  return modelScoresOf(
+    db,
+    pending.map(({ id }) => id),
+  );
+}
+
 /** One batch inside its transaction, after its instant is recorded (header, steps 3 to 6). */
 async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps): Promise<BatchSummary> {
   const receipts = readRows('receipts', Receipt, await db.receipts.toArray());
@@ -211,6 +227,7 @@ async function gradeInside(db: LedgerDb, evaluatedAt: IsoTs, deps: GradingDeps):
     coverage,
     activity,
     preAssignments(receipts),
+    await batchModelScores(db, pending),
   );
   const stored = new Map<Ulid, Receipt>(receipts.map((receipt) => [receipt.id, receipt]));
   const result = storeBatch(stored, graded, coverage);
@@ -272,6 +289,7 @@ async function gradeOnce(db: LedgerDb, deps: GradingDeps): Promise<BatchSummary 
     db.policies,
     db.batchCoverages,
     db.alerts,
+    db.modelAnswers,
   ];
   try {
     const summary = await db.transaction('rw', tables, async (): Promise<BatchSummary> => {

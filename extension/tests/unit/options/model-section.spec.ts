@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 /**
- * The options page's Model section (entrypoints/options/components/ModelSection.tsx; sprint_5 5.2 done-when), over
- * stand-in settings and a stand-in Prompt API (tests/unit/intel/stand-in.ts): where Chrome has no model, or cannot run
- * it, or has not downloaded it, the switch is disabled and the section says why in one line; where it has it, the
- * switch sends `flag.set` for ATTEST_MODEL; a person's click downloads it, with progress, and the switch then works;
- * turning it off is always possible. Its text says the model runs on this computer and never decides a grade. Every
- * value is invented.
+ * The options page's Model section (entrypoints/options/components/ModelSection.tsx; sprint_5 5.2 done-when, 5.4),
+ * over stand-in settings and a stand-in Prompt API (tests/unit/intel/stand-in.ts): Chrome is asked about its model only
+ * when the person clicks Check, never as the page opens; where Chrome has no model, or cannot run it, or has not
+ * downloaded it, the switch is disabled and the section says why in one line; where it has it, the switch sends
+ * `flag.set` for ATTEST_MODEL; a person's click downloads it, with progress, and the switch then works; turning it off
+ * is always possible. Its text says the model runs on this computer and never decides a grade. Every value is invented.
  */
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -67,16 +67,45 @@ const button = (name: string) =>
   [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === name);
 const status = () => root.querySelector('[role="group"] [role="status"]')?.textContent.trim();
 
+/** Clicks Check, as a person asks whether Chrome can run its model here. */
+async function checkModel(): Promise<void> {
+  await act(() => {
+    button('Check Chrome’s on-device model')?.click();
+  });
+  await settle();
+}
+
 describe('the Model section where Chrome cannot run its model', () => {
+  it('says at once where this Chrome has no Prompt API, with nothing to check', async () => {
+    await show(null);
+    expect(status()).toBe(
+      'The on-device model is off. This Chrome has no on-device model: it needs Chrome 138 or later on a computer that can run it.',
+    );
+    expect(button('Turn on the on-device model')?.disabled).toBe(true);
+    expect(button('Check Chrome’s on-device model')).toBeUndefined();
+  });
+
   it.each([
-    [null, 'This Chrome has no on-device model: it needs Chrome 138 or later on a computer that can run it.'],
     ['unavailable', 'Chrome says this computer cannot run its on-device model.'],
     ['downloading', 'Chrome is downloading its on-device model. Come back once it has finished.'],
-  ] as const)('disables the switch and says why (%s)', async (said, why) => {
-    await show(said === null ? null : standIn(said).api);
+  ] as const)('disables the switch, and says why once the person checks (%s)', async (said, why) => {
+    await show(standIn(said).api);
+    expect(status()).toBe('The on-device model is off.');
+    expect(button('Turn on the on-device model')?.disabled).toBe(true);
+    await checkModel();
     expect(status()).toBe(`The on-device model is off. ${why}`);
     expect(button('Turn on the on-device model')?.disabled).toBe(true);
     expect(button('Download Chrome’s on-device model')).toBeUndefined();
+  });
+
+  it('never asks Chrome as the page opens: only a click on Check does (Decisions [5.4])', async () => {
+    const stand = standIn('available');
+    const asked = vi.fn(() => Promise.resolve(stand.availability));
+    await show({ ...stand.api, availability: asked });
+    expect(asked).not.toHaveBeenCalled();
+    await checkModel();
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(button('Check Chrome’s on-device model')).toBeUndefined();
   });
 
   it('says the model runs on this computer, sees a few facts, and never decides a grade', async () => {
@@ -91,6 +120,8 @@ describe('the Model section where Chrome cannot run its model', () => {
 describe('the Model section where Chrome has its model, or can download it', () => {
   it('turns the model on through flag.set, and off again whatever Chrome says', async () => {
     await show(standIn('available').api);
+    expect(status()).toBe('The on-device model is off.');
+    await checkModel();
     expect(status()).toBe('The on-device model is off.');
     await act(() => {
       button('Turn on the on-device model')?.click();
@@ -120,6 +151,7 @@ describe('the Model section where Chrome has its model, or can download it', () 
         }),
     };
     await show(api);
+    await checkModel();
     expect(status()).toBe('The on-device model is off. Chrome has not downloaded its on-device model yet.');
     await act(() => {
       button('Download Chrome’s on-device model')?.click();

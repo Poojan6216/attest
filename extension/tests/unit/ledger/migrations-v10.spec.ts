@@ -53,7 +53,8 @@ describe('v9 → v10', () => {
     await old.table('receipts').add(toReceiptRow(receipt));
     await old.table('alerts').add(alert);
     old.close();
-    const db = await openLedger(name);
+    // At v10 itself: the shipped ledger is later (./migrations-v11.spec.ts).
+    const db = await openAtVersion(name, MIGRATIONS.slice(0, 10));
     opened.push(db);
     expect(db.verno).toBe(10);
     expect(await getReceipt(db, ulid(1))).toEqual(receipt);

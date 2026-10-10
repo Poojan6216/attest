@@ -20,6 +20,8 @@ import { recordCoverage } from '../../../src/ledger/coverage';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { exportLedger, LedgerExport } from '../../../src/ledger/export';
 import { exportLedgerBlob } from '../../../src/ledger/export-file';
+import { answerAsk, claimAsk } from '../../../src/ledger/model-answers';
+import { ModelAnswer, ModelScores } from '../../../src/ledger/types';
 import { LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
 import { openLedger } from '../../../src/ledger/migrations';
 import {
@@ -138,6 +140,11 @@ async function populate(): Promise<void> {
   await queueAlerts(db, [alerted]);
   // A weekly digest (sprint_4 4.7).
   await saveDigest(db, await buildDigest(db, lastWeek(Date.now()), IsoTs.parse(NOW)));
+  // A claim the advisory model was asked about, and its answer (sprint_5 5.4).
+  const asked = ModelAnswer.parse({ claimId: ulid(401), inputsHash: sha(7), provider: 'byo', askedAt: NOW });
+  await claimAsk(db, asked);
+  const scores = ModelScores.parse([{ observationId: ulid(402), score: 9_000 }]);
+  await answerAsk(db, asked.claimId, scores, asked.askedAt);
   await pasted();
   // A row no reader accepts: both exports skip it, logged by id.
   await db.requests.put({ id: ulid(299), agent: 'nobody' } as never);

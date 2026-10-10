@@ -144,6 +144,24 @@ describe('claims.import: the import instant and a failed batch', () => {
     expect(await getMeta(db, lastImportKey('muse'))).toBe('2026-10-09T09:00:00-04:00');
   });
 
+  it('asks the advisory model after its batch, and answers without waiting for it (sprint_5 5.4)', async () => {
+    const { db, ctx } = await setup();
+    const seen: number[] = [];
+    const askModel = vi.fn(async (asked: LedgerDb) => {
+      seen.push(await asked.receipts.count());
+      return new Promise<number>(() => undefined);
+    });
+    expect(await onClaimsImport({ ...ctx, askModel }, message(claimsOf(LOG)))).toEqual({
+      ok: true,
+      received: 2,
+      added: 2,
+    });
+    expect(askModel.mock.calls).toEqual([[db]]);
+    await vi.waitFor(() => {
+      expect(seen).toEqual([2]);
+    });
+  });
+
   it('a batch that fails is logged loud, and the import still stands', async () => {
     const { db, ctx } = await setup({ ...DEFAULT_POLICY });
     expect(await onClaimsImport(ctx, message(claimsOf(LOG)))).toEqual({ ok: true, received: 2, added: 2 });

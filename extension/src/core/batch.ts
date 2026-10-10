@@ -54,7 +54,7 @@ import { isAssignable, planClaims, TextFacts } from './features';
 import { grade, gradeOrphan } from './grade';
 import { instantMs } from './normalize';
 import { assertLoadedPolicy, type Policy, type RuleOutcome } from './policy';
-import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, Ulid } from './schema';
+import type { Activity, AgentId, Claim, Coverage, GradeContext, Grant, ModelScores, Ulid } from './schema';
 import { scopeSubjects, spendIndex } from './scope';
 import { compareText as compareTextShared } from './order';
 
@@ -339,7 +339,9 @@ function byReceiptId(graded: readonly BatchReceipt[]): BatchReceipt[] {
  * for fixed pairs in force that are not one-to-one; `NormalizeError('invalid_iso')` for a pre-assignment instant that
  * is not an IsoTs; and whatever `grade` and the index throw. Nothing is graded approximately (Hard Rule 6). A graded
  * claim that `activity.claims` omits still counts in the spend history and still suppresses adjacency (§3, §6.3,
- * §7: `historyOf`).
+ * §7: `historyOf`). `modelScores` holds the advisory model's scores of a claim's candidates, by claim id (§5.4,
+ * v1.19): each graded claim's context carries its own, so its receipt's inputs hold them for replay; the floor still
+ * chooses and assigns, and a claim without an entry is graded rules-only.
  */
 export async function gradeBatch(
   claims: readonly Claim[],
@@ -349,6 +351,7 @@ export async function gradeBatch(
   coverage: Coverage,
   activity: Activity,
   fixed: readonly BatchFixed[] = [],
+  modelScores: ReadonlyMap<Ulid, ModelScores> = new Map(),
 ): Promise<BatchReceipt[]> {
   assertLoadedPolicy(policy);
   const evaluatedMs = instantMs(coverage.evaluatedAt);
@@ -369,7 +372,7 @@ export async function gradeBatch(
   const assignment = assign(pairs, policy, fixedPairs, taken);
   const covered = await coveredObservations(visible, coverage, policy);
   const priorSpend = spendIndex(read.claims, policy);
-  const receiptBatch = { policy, coverage, grants: inForce, assignment, taken, priorSpend };
+  const receiptBatch = { policy, coverage, grants: inForce, assignment, taken, priorSpend, modelScores };
   const evidence = new BatchEvidence(receiptBatch);
   return byReceiptId([
     ...claimReceipts(graded, scored, receiptBatch, evidence),

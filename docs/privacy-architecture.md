@@ -20,10 +20,11 @@
 
 ## 1. What leaves the browser
 
-Nothing. Attest has no server, no account, no analytics and no remote code (Hard Rules 1, 9).
+Nothing, unless you give Attest your own model key and turn it on (below). Attest has no server, no account, no analytics and no remote code (Hard Rules 1, 9).
 
 - **No network allowlist.** `NETWORK_ALLOWLIST` in [`extension/src/config.ts`](../extension/src/config.ts) is empty. Sprint 5 adds exactly one host to it, for telemetry that is off until the user turns it on ([§10](#10-not-built-yet)).
 - **Two host permissions, both read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*` and `https://calendar.google.com/*`, so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms`, `scripting` (since Sprint 4.5: the readers' content scripts are registered at runtime, so one you turn off is unregistered; it reaches no other host), `notifications` (since Sprint 4.6: an alert when a receipt ends NOT_FOUND, UNASKED or OVER_SCOPE, shown on this device by Chrome and your operating system, naming no counterparty, amount or subject: [§5.15](#515-alerts)) and `sidePanel` (the build adds the last one for the side panel). No AI agent's site is asked for: Meta's, OpenAI's and Anthropic's terms forbid collecting data from their sites by automated means, so those readers are off (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts); Decisions [3.10]). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab. The one tab Attest may open is your Gmail Sent folder, pinned and in front of you, and only if you turn on Check Gmail for me ([§3](#3-what-is-read-and-what-is-kept)); it needs no `tabs` permission, and the manifest has none.
+- **Your own model key, off unless you turn it on (since Sprint 5.4).** With an Anthropic or OpenAI key saved and turned on in the options page's Model section, and Chrome's on-device model not on and ready, Attest asks that company's official endpoint (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim still checking with a partial match: the claim's kind, counterparty, short subject, amount and time, and the same for the one sent email or event it matched ([`src/intel/input.ts`](../extension/src/intel/input.ts)), with your key in the request's header. Never a page, never what you asked an agent. The company keeps what it receives under its own terms. Each claim is asked once ([§5.17](#517-modelanswers)); the answer can only move a partial match toward verified ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119)). Chrome's on-device model, when on, runs on this computer and sends nothing.
 - **A test enforces it.** [`extension/tests/e2e/network-intercept.spec.ts`](../extension/tests/e2e/network-intercept.spec.ts) (`@mandatory`) loads the built extension, opens the Gmail Sent, receipt and Calendar fixtures with the shipped content scripts running, reloads them for five minutes, and fails on any request from the extension outside the allowlist. Its negative control proves it catches a request from the service worker, an extension page and a page.
 - **A second test hunts for leaks.** [`extension/tests/e2e/no-leak.spec.ts`](../extension/tests/e2e/no-leak.spec.ts) (`@mandatory`) plants three known secrets in the fixture pages (in message bodies, snippets, event locations) and checks that none reaches the ledger export, IndexedDB, extension storage, the console or the network.
 
@@ -99,7 +100,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 ## 5. Every ledger table and field
 
-The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 10 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
+The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 11 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
 
 Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). Your choices about what Attest may read or open, the page readers you turned off and the flags you set, are kept in the ledger's meta ([§5.6](#56-meta); [`src/ledger/consent.ts`](../extension/src/ledger/consent.ts)), where no script on a Gmail or Calendar page can reach them. Sprints 4.5 and 4.9 kept them in `chrome.storage.local` (`attest.readersOff`, `attest.flags`), which content scripts can write; an update moves them into the ledger once and removes those keys ([`src/background/consent-move.ts`](../extension/src/background/consent-move.ts); security review SEC-3). A reader that is off has no content script registered, so a page you open is not read, and what a tab opened before sends is not stored. `chrome.storage.session` (memory Chrome empties when the browser closes) holds at most two keys: `attest.idleSession`, while away detection is on, `true` once this browser session has started watching, so a time away that the previous session left open is closed at what was confirmed, never stretched over the next day ([`src/background/idle.ts`](../extension/src/background/idle.ts)); and `attest.openReceipt`, from Sprint 4.6, the id of the receipt a clicked alert asked the side panel to open ([`src/background/alerts.ts`](../extension/src/background/alerts.ts)).
 
@@ -338,6 +339,20 @@ Since schema version 10 (Sprint 4.7): one weekly digest per week, keyed by the w
 | `gaps` | Per source (`gmail.sent`, `gcal.event`), the `days` of the week no window of it covered: Attest could not check them. |
 | `health` | Each reader's latest health report when the digest was made (as in [§5.5](#55-adapterhealth)). |
 
+### 5.17 `modelAnswers`
+
+Since schema version 11 (Sprint 5.4): one row per claim Attest asked the optional model about, keyed by the claim's id ([`src/ledger/model-answers.ts`](../extension/src/ledger/model-answers.ts)). A claim is asked only while you have a model on (Chrome's on-device model, or your own key), and only while its receipt is still checking with a partial match: the one case where the model's score can change a grade ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119)). The row is written before the model is asked, so a claim is asked once, ever. A grading batch reads the scores while a model is on; turned off, they count no more. Deleted with its claim by the purge ([§7](#7-retention-and-purge)). Ids, a hash, a provider, an instant and numbers only: never the facts the model was given, never its words, never your key.
+
+| Field | Meaning |
+|---|---|
+| `claimId` | The claim's id (a ULID): the key. |
+| `inputsHash` | SHA-256 of what the model was given (the claim's and its match's allowlisted facts, [`src/intel/input.ts`](../extension/src/intel/input.ts)). When the same model was given the same facts before, its answer is copied and nothing is sent again. |
+| `provider` | `builtin` (Chrome's on-device model) or `byo` (your own key). |
+| `askedAt` | When it was asked. |
+| `scores` | The model's answer, once it came: for each candidate, its `observationId` and its `score` in basis points (0 to 10,000). Absent when the model gave none (too slow, refused, or not an answer): the claim is then graded by the rules alone, and never asked again. |
+
+Index field: none (`inputsHash` is indexed as stored).
+
 ## 6. What is hashed
 
 Every hash is SHA-256 ([`docs/grading.md` §10](grading.md#10-ids-and-hashes-hashts)). Addresses and calendar names are hashed as their UTF-8 text; a vendor's row or event id is hashed as its canonical JSON string (the id in quotes), so that two ids differing only in a lone surrogate stay distinct. A hash hides a value from someone reading the ledger; it does not stop someone who can guess the value from confirming it ([§2](#2-what-attest-cannot-hide)).
@@ -366,6 +381,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 - **Calendar snapshots** go when they were read before the cutoff. A range not looked at since is compared with nothing next time, so its events come back as first sightings, never as changes.
 - **Clock repair spans** (`meta` `clockRepair.*`) go once they ended before the cutoff.
 - **Alerts** ([§5.15](#515-alerts)) go with their receipts.
+- **Model answers** ([§5.17](#517-modelanswers)) go with their claims.
 - **Weekly digests** ([§5.16](#516-digests)) go once their week started before the cutoff: up to a week before the receipts they copy, never after (security review SEC-7). They are deleted by their key, unread, so a digest that no longer reads goes too.
 - **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
 - **Turning away detection off** deletes every time away at once, and the `idleOpen` key with them. Receipts already made keep their reasons: an UNASKED receipt that counted a time away keeps the reason `unasked.idle`, and its replay inputs the signal, until the receipt itself goes.
@@ -379,7 +395,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 ```json
 {
   "format": "attest-ledger",
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "exportedAt": "2026-10-09T09:30:00.000-04:00",
   "tables": {
     "requests": [],
@@ -394,7 +410,8 @@ Dated history is kept for the window you choose in the options page's Privacy se
     "calendarSnapshots": [],
     "activity": [],
     "alerts": [],
-    "digests": []
+    "digests": [],
+    "modelAnswers": []
   },
   "receiptInputs": {},
   "batchCoverages": {},
@@ -402,7 +419,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 }
 ```
 
-It holds every table of [§5](#5-every-ledger-table-and-field), with exactly the fields listed there: index fields are stripped, and a row that fails its schema is left out (logged by id). It is deterministic: one read transaction, each table in key order, each object's keys in schema order. An export made before Sprint 2.7 has no `coverageIntervals` or `calendarSnapshots`, and one made before Sprint 4.6 or 4.7 no `alerts` or `digests`; each still reads, with what it lacks empty. [`extension/tests/e2e/observers.spec.ts`](../extension/tests/e2e/observers.spec.ts) opens the Sent and Calendar fixtures with the built extension and checks that the export holds the labelled observations with allowlisted fields only.
+It holds every table of [§5](#5-every-ledger-table-and-field), with exactly the fields listed there: index fields are stripped, and a row that fails its schema is left out (logged by id). It is deterministic: one read transaction, each table in key order, each object's keys in schema order. An export made before Sprint 2.7 has no `coverageIntervals` or `calendarSnapshots`, one made before Sprint 4.6 or 4.7 no `alerts` or `digests`, and one made before Sprint 5.4 no `modelAnswers`; each still reads, with what it lacks empty. [`extension/tests/e2e/observers.spec.ts`](../extension/tests/e2e/observers.spec.ts) opens the Sent and Calendar fixtures with the built extension and checks that the export holds the labelled observations with allowlisted fields only.
 
 **Shares (Sprints 4.7, 4.8).** A receipt (the side panel's detail) and a weekly digest (the digest page) can each be shared, as text or as an image, which you see in full before you copy either: Attest copies it to your clipboard at your click and sends nothing anywhere. A share is made from the ledger's derived facts only ([`src/ui/receipt-share.ts`](../extension/src/ui/receipt-share.ts), [`src/ui/digest-share.ts`](../extension/src/ui/digest-share.ts)). It names a counterparty by its domain only, and only from an address: a name gives nothing, even one written with a dot like "A.Kumar", and a merchant gives its domain only when it is written as one ("Amazon.com"; [`src/ledger/domain.ts`](../extension/src/ledger/domain.ts); security review SEC-1). It keeps amounts (one with no currency, behind a bare "$", says so) and times, and shows a subject only as the hint the ledger keeps, with any address in it written as its domain. It never holds what you asked an agent, why you marked a receipt, or an address. A hint is the subject's first 80 characters as written, so it can hold a name the subject held: you see it in the preview before you copy. Text that came from a page is escaped, so it can never become a link. The image draws exactly the same lines on a canvas in the page ([`src/ui/share-png.ts`](../extension/src/ui/share-png.ts)), in its light or dark colours. Every golden scenario's receipts are checked against these rules, and the mandatory no-leak test searches the digest's share and every receipt's share for every seeded secret, for any `@`, and for a pasted name written with a dot.
 
@@ -417,6 +434,6 @@ The ledger and the observers' service-worker side log, among others: `observer.c
 Each of these will be described here, with the code and the test that enforce it, before it ships:
 
 - **Telemetry (Sprint 5):** opt-in, off by default, aggregate counts and booleans only, to one host, with a payload example generated from the real builder.
-- **The optional local model (Sprint 5):** what it sees, where it runs. It may propose a match score; it never sets a grade (Hard Rule 4).
+- **The optional model (Sprint 5):** Chrome's on-device model and your own key are built (Sprints 5.2 to 5.4: [§1](#1-what-leaves-the-browser), [§5.17](#517-modelanswers)); their full description, what each sees and where it runs, comes with Sprint 5.9. It may propose a match score; it never sets a grade (Hard Rule 4).
 - **Encryption at rest (Sprint 6.5):** optional; what it does and does not protect.
 - **The scroll-depth limit (Sprint 6.3):** how far down a list the observers can see is a coverage limit, measured by the red team.

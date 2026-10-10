@@ -239,6 +239,7 @@ describe('purgeExpired removes exactly the old rows', () => {
       batchCoverages: 0,
       alerts: 0,
       digests: 0,
+      modelAnswers: 0,
     });
   });
 });

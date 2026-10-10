@@ -25,7 +25,12 @@ export async function pasteActivity(page: Page, agent: string, log: string): Pro
  * which the side panel reads it in): always before the paste, whatever time of day the suite runs.
  */
 export function datedClock(minutesAgo: number, timeZone: string): string {
-  const at = new Date(Date.now() - minutesAgo * 60_000);
+  return clockAt(Date.now() - minutesAgo * 60_000, timeZone);
+}
+
+/** The instant `ms` as a log writes a dated time ("Oct 8, 4:33 pm"), in `timeZone`. */
+export function clockAt(ms: number, timeZone: string): string {
+  const at = new Date(ms);
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone,

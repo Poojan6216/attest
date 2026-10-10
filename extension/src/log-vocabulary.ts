@@ -23,6 +23,8 @@ export const LOG_EVENTS = [
   'digest.read_failed',
   'digest.notify_failed',
   'intel.answer_invalid',
+  'intel.answered',
+  'intel.ask_failed',
   'intel.failed',
   'intel.timeout',
   'byo.forget_failed',
@@ -296,6 +298,7 @@ export const LOG_VALUES = [
   'batch_coverages',
   'alerts',
   'digests',
+  'model_answers',
   // The Activity lists a grading batch reads (src/background/grading.ts `latest`).
   'sessions',
   'idle_intervals',

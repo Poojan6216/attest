@@ -37,6 +37,8 @@ export function ModelSection({ sources = LIVE_SETTINGS, promptApi = PAGE_PROMPT_
           <BuiltinModelToggle
             on={state.view.modelOn}
             availability={model.availability}
+            checking={model.checking}
+            check={model.check}
             download={model.download}
             startDownload={model.startDownload}
             toggle={(on) => sources.send({ type: 'flag.set', flag: 'ATTEST_MODEL', on })}

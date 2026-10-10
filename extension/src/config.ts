@@ -171,6 +171,13 @@ export type SettableFlag = (typeof SETTABLE_FLAGS)[number];
 export const INTEL_TIMEOUT_MS = 2_000;
 
 /**
+ * How many claims the service worker asks the advisory model about in one run after a batch (sprint_5 5.4,
+ * src/background/intel.ts), one at a time: at most 20 seconds of calls, inside the half minute an idle service worker
+ * is kept. Those left are asked after the next batch: the grace alarm runs one every GRADE_ALARM_PERIOD_MINUTES.
+ */
+export const MODEL_ASKS_PER_RUN = 10;
+
+/**
  * What the Gmail auto-check opens (sprint_4 4.9; src/background/auto-check.ts): the Sent folder of the first account
  * signed in, which the Gmail reader's Sent observer reads. One of OBSERVER_HOSTS.gmail.
  */

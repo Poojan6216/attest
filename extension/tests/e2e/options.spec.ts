@@ -113,6 +113,11 @@ test.describe('options page: the Model section (sprint_5 5.2)', () => {
     // The test browser runs no model; one that did would need this test to say what it shows.
     expect(Object.keys(WHY_NOT)).toContain(said);
     const model = page.getByRole('group', { name: 'Chrome’s on-device model' });
+    // Chrome is asked only at the person's click (sprint_5 5.4): until then the section says only that it is off.
+    if (said !== 'no_api') {
+      await expect(model.getByRole('status')).toHaveText('The on-device model is off.');
+      await model.getByRole('button', { name: 'Check Chrome’s on-device model' }).click();
+    }
     await expect(model.getByRole('status')).toHaveText(`The on-device model is off. ${WHY_NOT[said] ?? ''}`);
     await expect(model.getByRole('button', { name: 'Turn on the on-device model' })).toBeDisabled();
     expect(errors).toEqual([]);

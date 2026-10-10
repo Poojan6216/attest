@@ -1,9 +1,12 @@
 /**
- * Chrome's on-device model as the options page sees it (sprint_5 5.2; src/intel/providers/builtin.ts): its
- * availability, read when the section opens and again after a download, and the download a person may start with a
- * click (Chrome downloads its model only in answer to one). A failed download is said and logged (Hard Rule 6).
+ * Chrome's on-device model as the options page sees it (sprint_5 5.2, 5.4; src/intel/providers/builtin.ts): whether
+ * this Chrome has the Prompt API at all, known when the page opens without calling it; its availability, read only
+ * when the person asks (`check`) and again after a download they started; and the download, which Chrome starts only in
+ * answer to a click. Chrome logs a console warning each time a page asks while its model service is not running
+ * (Chromium 153, Decisions [5.4]), so the page never asks on its own. A failed download is said and logged (Hard
+ * Rule 6).
  */
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useState } from 'preact/hooks';
 
 import {
   type BuiltinAvailability,
@@ -20,8 +23,12 @@ export type DownloadState =
   | { readonly status: 'failed' };
 
 export interface BuiltinModel {
-  /** Null while it is being read. */
+  /** `no_api` at once where this Chrome has no Prompt API; otherwise null until the person asks. */
   readonly availability: BuiltinAvailability | null;
+  /** Whether Chrome is being asked now. */
+  readonly checking: boolean;
+  /** Asks Chrome whether it can run its model here (header). */
+  readonly check: () => void;
   readonly download: DownloadState;
   readonly startDownload: () => void;
 }
@@ -30,12 +37,18 @@ export interface BuiltinModel {
 export const PAGE_PROMPT_API = (): PromptApi | null => promptApi();
 
 export function useBuiltinModel(api: () => PromptApi | null = PAGE_PROMPT_API): BuiltinModel {
-  const [availability, setAvailability] = useState<BuiltinAvailability | null>(null);
+  const [availability, setAvailability] = useState<BuiltinAvailability | null>(() =>
+    api() === null ? 'no_api' : null,
+  );
+  const [checking, setChecking] = useState(false);
   const [download, setDownload] = useState<DownloadState>({ status: 'idle' });
-  const read = useCallback(() => {
-    void builtinAvailability(api()).then(setAvailability);
+  const check = useCallback(() => {
+    setChecking(true);
+    void builtinAvailability(api()).then((said) => {
+      setAvailability(said);
+      setChecking(false);
+    });
   }, [api]);
-  useEffect(read, [read]);
   const startDownload = useCallback(() => {
     const prompt = api();
     if (prompt === null) return;
@@ -45,14 +58,14 @@ export function useBuiltinModel(api: () => PromptApi | null = PAGE_PROMPT_API): 
     }).then(
       () => {
         setDownload({ status: 'idle' });
-        read();
+        check();
       },
       (error: unknown) => {
         log.warn('options.model_download_failed', { error });
         setDownload({ status: 'failed' });
-        read();
+        check();
       },
     );
-  }, [api, read]);
-  return { availability, download, startDownload };
+  }, [api, check]);
+  return { availability, checking, check, download, startDownload };
 }

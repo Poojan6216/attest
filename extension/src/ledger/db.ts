@@ -34,6 +34,7 @@ import {
   type DigestRecord,
   type Grant,
   type MetaEntry,
+  type ModelAnswer,
   type ObserverCoverage,
   type ReceiptInputsRecord,
   Sha256,
@@ -58,7 +59,10 @@ export const STORES_V1 = {
   meta: 'key',
 } as const satisfies Readonly<
   Record<
-    Exclude<LedgerTableName, 'coverageIntervals' | 'calendarSnapshots' | 'activity' | 'alerts' | 'digests'>,
+    Exclude<
+      LedgerTableName,
+      'coverageIntervals' | 'calendarSnapshots' | 'activity' | 'alerts' | 'digests' | 'modelAnswers'
+    >,
     string
   >
 >;
@@ -197,6 +201,18 @@ export const STORES_V10 = {
   [DIGESTS]: 'week',
 } as const;
 
+/** The model answers store (./model-answers.ts). */
+export const MODEL_ANSWERS = 'modelAnswers';
+
+/**
+ * Schema v11 (sprint_5 5.4; Decisions [5.4]): `modelAnswers` holds one row per claim the advisory model was asked
+ * about, keyed by the claim's id, with `inputsHash` indexed so an input answered before is never sent again. New and
+ * empty on upgrade: no model was asked before 5.4.
+ */
+export const STORES_V11 = {
+  [MODEL_ANSWERS]: 'claimId, inputsHash',
+} as const;
+
 /** What one stored interval covers: one instant (`windowStart = windowEnd`) or a span of time. */
 export type IntervalKind = 'point' | 'span';
 
@@ -236,6 +252,7 @@ const ROW_ID: Readonly<Record<StoredTableName, { readonly field: string; readonl
   batchCoverages: { field: 'coverageHash', schema: Sha256 },
   alerts: { field: 'receiptId', schema: Ulid },
   digests: { field: 'week', schema: PLAIN_KEY },
+  modelAnswers: { field: 'claimId', schema: Ulid },
 };
 
 export class LedgerDb extends Dexie {
@@ -309,6 +326,11 @@ export class LedgerDb extends Dexie {
   /** Schema v10. Read and written only through ./digest.ts. */
   get digests(): Table<DigestRecord, string> {
     return this.table<DigestRecord, string>(DIGESTS);
+  }
+
+  /** Schema v11. Read and written only through ./model-answers.ts. */
+  get modelAnswers(): Table<ModelAnswer, string> {
+    return this.table<ModelAnswer, string>(MODEL_ANSWERS);
   }
 }
 

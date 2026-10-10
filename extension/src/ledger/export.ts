@@ -32,6 +32,7 @@ import {
   Grant,
   IsoTs,
   MetaEntry,
+  ModelAnswer,
   Observation,
   ObserverCoverage,
   Receipt,
@@ -63,6 +64,8 @@ export const LedgerExport = z.strictObject({
     alerts: z.array(AlertRecord).default([]),
     /** The weekly digests kept (sprint_4 4.7); empty in an export taken before. */
     digests: z.array(DigestRecord).default([]),
+    /** The claims the advisory model was asked about, and its scores (sprint_5 5.4); empty in an export taken before. */
+    modelAnswers: z.array(ModelAnswer).default([]),
   }),
   /**
    * The replay records (sprint_3 3.13; ./replay-records.ts): what each receipt was graded with, by its `inputsHash`,
@@ -145,6 +148,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       activity: readRows('activity', ActivityRecord, await db.activity.toArray()),
       alerts: readRows('alerts', AlertRecord, await db.alerts.toArray()),
       digests: readRows('digests', DigestRecord, await db.digests.toArray()),
+      modelAnswers: readRows('modelAnswers', ModelAnswer, await db.modelAnswers.toArray()),
     },
     ...(await replayRecords(db)),
   }));

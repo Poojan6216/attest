@@ -35,6 +35,8 @@ import {
   GradeContext,
   Grant,
   MetaEntry,
+  ModelAnswer,
+  ModelScore,
   Observation,
   ObserverCoverage,
   Reason,
@@ -90,6 +92,7 @@ const TABLE_FIELDS: Readonly<Record<StoredTableName, readonly string[]>> = {
   batchCoverages: [...keys(BatchCoverageRecord), ...keys(Coverage), ...keys(ObserverCoverage)],
   alerts: keys(AlertRecord),
   digests: [...keys(DigestRecord), ...keys(AgentWeek), ...keys(NotableReceipt)],
+  modelAnswers: [...keys(ModelAnswer), ...keys(ModelScore)],
 };
 
 /** Every table the ledger database holds: the ledger tables and the replay records (sprint_3 3.13). */

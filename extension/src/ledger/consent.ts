@@ -68,6 +68,9 @@ export async function readFlags(db: LedgerDb): Promise<Flags> {
   return Object.freeze({ ...FEATURE_FLAG_DEFAULTS, ...set });
 }
 
+/** Whether the person turned an advisory model on: Chrome's on-device model or their own key (sprint_5 5.4). */
+export const modelOn = (flags: Flags): boolean => flags.ATTEST_MODEL || flags.ATTEST_MODEL_BYO;
+
 /** Turns `reader` off or on: the key is written while it is off and removed when it is on. */
 export async function saveReaderOff(db: LedgerDb, reader: ReaderId, off: boolean): Promise<void> {
   if (off) await db.meta.put(parseWrite(Choice, { key: readerOffKey(reader), value: true }, REFUSED, META));

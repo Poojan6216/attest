@@ -26,6 +26,7 @@ import {
   AlertRecord,
   BatchCoverageRecord,
   DigestRecord,
+  ModelAnswer,
   Claim,
   CoveragePing,
   Grant,
@@ -127,6 +128,7 @@ function tablePlans(db: LedgerDb): readonly Plan[] {
     plan('activity', db.activity, (rows) => readRows('activity', ActivityRecord, rows)),
     plan('alerts', db.alerts, (rows) => readRows('alerts', AlertRecord, rows)),
     plan('digests', db.digests, (rows) => readRows('digests', DigestRecord, rows)),
+    plan('modelAnswers', db.modelAnswers, (rows) => readRows('modelAnswers', ModelAnswer, rows)),
   ];
 }
 

@@ -21,6 +21,7 @@ import {
   IsoTs,
   ObservationSource,
   OverrideGrade,
+  ModelScores,
   ReceiptOverride,
   SCHEMA_LIMITS,
   Sha256,
@@ -143,6 +144,24 @@ export const AlertRecord = z.strictObject({
   handledAt: IsoTs.optional(),
 });
 
+/** Who answered for the advisory model (src/intel): Chrome's on-device model, or the person's own key. */
+export const ModelProvider = z.enum(['builtin', 'byo']);
+
+/**
+ * A `modelAnswers` row (sprint_5 5.4, ./model-answers.ts): one per claim the service worker asked the advisory model
+ * about, keyed by the claim's id. The input's hash (the cache key, src/intel/cache.ts), the provider and when it was
+ * asked; the scores once it answered, in basis points and id order (docs/grading.md §5.4). Never the input, never
+ * the answer's hint, never a key (Hard Rules 2, 10).
+ */
+export const ModelAnswer = z.strictObject({
+  claimId: Ulid,
+  inputsHash: Sha256,
+  provider: ModelProvider,
+  askedAt: IsoTs,
+  /** Absent while the call runs, and for good when it gave no answer: the claim is never asked again. */
+  scores: ModelScores.optional(),
+});
+
 /** A local calendar date, `YYYY-MM-DD`. */
 const LocalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, 'must be a YYYY-MM-DD date');
 
@@ -240,3 +259,5 @@ export type NotableReceipt = z.infer<typeof NotableReceipt>;
 export type DigestMark = z.infer<typeof DigestMark>;
 export type AlertState = z.infer<typeof AlertState>;
 export type AlertRecord = z.infer<typeof AlertRecord>;
+export type ModelProvider = z.infer<typeof ModelProvider>;
+export type ModelAnswer = z.infer<typeof ModelAnswer>;
