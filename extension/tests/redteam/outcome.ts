@@ -3,7 +3,7 @@
  * expectations (./attack-schema.ts), and a strategy's row: how many of its cases worked, the rate, the worst severity
  * among them, and the grades Attest gave. PURE: it reads the ledger it is given and nothing else.
  */
-import { type Claim, Grade, type Receipt } from '../../src/core/schema';
+import { type Claim, Grade, type HealthReport, type Receipt } from '../../src/core/schema';
 import type { AttackCase, Expectation, Strategy } from './attack-schema';
 
 /** agents/red_team.md rule 4, least severe first. */
@@ -11,12 +11,17 @@ export const SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 type GradeName = Receipt['grade'];
 
-/** What judging a case reads of the ledger it left: the claims and the receipts, the fields named (a ledger export). */
+/**
+ * What judging a case reads of the ledger it left (a ledger export): the claims and receipts, the fields named, each
+ * reader's health, and the bodies of the requests the model's stand-in received when the case turned a model on.
+ */
 export interface JudgedLedger {
   readonly tables: {
     readonly claims: readonly Pick<Claim, 'id' | 'counterparty' | 'type' | 'subjectHint'>[];
     readonly receipts: readonly Pick<Receipt, 'claimId' | 'observationIds' | 'grade' | 'supersededBy'>[];
+    readonly adapterHealth?: readonly Pick<HealthReport, 'adapterId' | 'status'>[];
   };
+  readonly modelRequests?: readonly string[];
 }
 
 /** The grades that flag an action: a correct Attest that gives one of them has caught something. */
@@ -133,9 +138,43 @@ export function gradeCounts(ledger: JudgedLedger): Partial<Record<GradeName, num
   return counts;
 }
 
+/** Each reader the case names whose health is not one it allows: an anomaly that never showed (Hard Rule 6). */
+function healthViolations(attackCase: AttackCase, ledger: JudgedLedger): Violation[] {
+  return (attackCase.health ?? []).flatMap(({ reader, status }) => {
+    const report = ledger.tables.adapterHealth?.find((health) => health.adapterId === reader);
+    if (report !== undefined && status.includes(report.status)) return [];
+    const problem = `${reader}: ${report?.status ?? 'no report'} where ${status.join(' or ')} is right`;
+    return [{ severity: 'LOW' as const, problem }];
+  });
+}
+
+/**
+ * What reached the model's stand-in against the case's `modelInput` (agents/red_team.md 6): text it must never receive
+ * is a leak past the allowlist, CRITICAL; too few requests means the case never reached the model and proves nothing.
+ */
+function modelViolations(attackCase: AttackCase, ledger: JudgedLedger): Violation[] {
+  const { modelInput } = attackCase;
+  if (modelInput === undefined) return [];
+  const bodies = (ledger.modelRequests ?? []).map((body) => body.toLowerCase());
+  const violations: Violation[] = [];
+  if (bodies.length < modelInput.asked) {
+    const problem = `the model was asked ${String(bodies.length)} times where at least ${String(modelInput.asked)} is right`;
+    violations.push({ severity: 'LOW', problem });
+  }
+  for (const text of modelInput.excludes) {
+    if (bodies.some((body) => body.includes(text.toLowerCase())))
+      violations.push({ severity: 'CRITICAL', problem: `the model received "${text}"` });
+  }
+  return violations;
+}
+
 /** One case, judged on the ledger its run left. */
 export function evaluateCase(attackCase: AttackCase, ledger: JudgedLedger): CaseResult {
-  const violations = attackCase.expect.flatMap((expectation) => violationsOf(ledger, expectation));
+  const violations = [
+    ...attackCase.expect.flatMap((expectation) => violationsOf(ledger, expectation)),
+    ...healthViolations(attackCase, ledger),
+    ...modelViolations(attackCase, ledger),
+  ];
   return {
     id: attackCase.id,
     works: violations.length > 0,

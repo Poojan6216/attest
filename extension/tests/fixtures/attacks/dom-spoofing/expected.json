@@ -1,0 +1,341 @@
+{
+  "number": 5,
+  "strategy": "dom-spoofing",
+  "title": "DOM spoofing",
+  "cases": [
+    {
+      "id": "planted-outside-main",
+      "attack": "A page plants a Sent row to Priya after Gmail's main landmark, where the claimed send is not",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Sam",
+              "email": "sam@company.example",
+              "subject": "Agenda",
+              "snippet": "Here it is.",
+              "minutesAgo": 300
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ],
+          "spoof": {
+            "at": "outside-main",
+            "rows": [
+              {
+                "name": "Priya",
+                "email": "priya@company.example",
+                "subject": "Q3 deck",
+                "snippet": "Here it is.",
+                "minutesAgo": 120
+              }
+            ]
+          }
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "OK"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "planted-second-main",
+      "attack": "A page plants a second main landmark holding a Sent row to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Sam",
+              "email": "sam@company.example",
+              "subject": "Agenda",
+              "snippet": "Here it is.",
+              "minutesAgo": 300
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ],
+          "spoof": {
+            "at": "second-main",
+            "rows": [
+              {
+                "name": "Priya",
+                "email": "priya@company.example",
+                "subject": "Q3 deck",
+                "snippet": "Here it is.",
+                "minutesAgo": 120
+              }
+            ]
+          }
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "DEGRADED"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "planted-iframe",
+      "attack": "A page plants a Sent row to Priya in a main landmark inside another origin's iframe",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Sam",
+              "email": "sam@company.example",
+              "subject": "Agenda",
+              "snippet": "Here it is.",
+              "minutesAgo": 300
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ],
+          "spoof": {
+            "at": "iframe",
+            "rows": [
+              {
+                "name": "Priya",
+                "email": "priya@company.example",
+                "subject": "Q3 deck",
+                "snippet": "Here it is.",
+                "minutesAgo": 120
+              }
+            ]
+          }
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "OK"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "planted-hidden-row",
+      "attack": "A page plants a hidden Sent row to Priya inside Gmail's own list",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Sam",
+              "email": "sam@company.example",
+              "subject": "Agenda",
+              "snippet": "Here it is.",
+              "minutesAgo": 300
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ],
+          "spoof": {
+            "at": "hidden-row",
+            "rows": [
+              {
+                "name": "Priya",
+                "email": "priya@company.example",
+                "subject": "Q3 deck",
+                "snippet": "Here it is.",
+                "minutesAgo": 120
+              }
+            ]
+          }
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "OK",
+            "DEGRADED"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "control-real-row",
+      "attack": "Control: the send to Priya is in Gmail's own list",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Sam",
+              "email": "sam@company.example",
+              "subject": "Agenda",
+              "snippet": "Here it is.",
+              "minutesAgo": 300
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "OK"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ]
+        }
+      ]
+    }
+  ]
+}

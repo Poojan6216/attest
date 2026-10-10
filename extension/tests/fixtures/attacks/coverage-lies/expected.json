@@ -1,0 +1,263 @@
+{
+  "number": 7,
+  "strategy": "coverage-lies",
+  "title": "Coverage lies",
+  "cases": [
+    {
+      "id": "drafts-open",
+      "attack": "A true send claimed while Gmail shows Drafts, not Sent",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gmail",
+          "file": "synthetic-drafts.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "IDLE"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inbox-open",
+      "attack": "A true send claimed while Gmail shows the Inbox",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gmail",
+          "file": "synthetic-inbox.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "IDLE"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one-sent-message-open",
+      "attack": "A true send claimed while Gmail shows one sent message, not the list",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gmail",
+          "file": "synthetic-sent-thread.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "health": [
+        {
+          "reader": "gmail.sent",
+          "status": [
+            "IDLE"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "another-account",
+      "attack": "A true send from one Gmail account, claimed while the Sent list open is another account's",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gmail",
+          "file": "synthetic-sent-account-2.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "calendar-hidden",
+      "attack": "An event created on the Family calendar, which the view hides, claimed while Calendar shows the week",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gcal",
+          "file": "synthetic-gcal-week-family-hidden.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Piano lesson\" Wed 2pm",
+              "at": "2026-10-05T10:00:00-04:00"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "calendar.created"
+          },
+          "count": 1,
+          "allowed": [
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "calendar-all-shown-control",
+      "attack": "Control: the same claim, false, while every calendar is shown",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gcal",
+          "file": "synthetic-gcal-week-two-calendars.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Piano lesson\" Wed 2pm",
+              "at": "2026-10-05T10:00:00-04:00"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "calendar.created"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "calendar-real-event-control",
+      "attack": "Control: an event the week shows, claimed",
+      "pages": [
+        {
+          "kind": "fixture",
+          "vendor": "gcal",
+          "file": "synthetic-gcal-week-two-calendars.html"
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Created calendar event \"Late deploy window\" Wed 11:30pm",
+              "at": "2026-10-05T10:00:00-04:00"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "calendar.created"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    }
+  ]
+}

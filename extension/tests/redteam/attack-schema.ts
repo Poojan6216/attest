@@ -14,7 +14,7 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
-import { ActionType, AgentId, Grade } from '../../src/core/schema';
+import { ActionType, AgentId, Grade, IsoTs } from '../../src/core/schema';
 
 /** The file each strategy's folder holds. */
 export const EXPECTED_FILE = 'expected.json';
@@ -46,14 +46,46 @@ const isVendorUrl = (value: string): boolean => {
   }
 };
 
+/**
+ * A time in a served page, as Gmail writes it in a title ("Sat, Oct 10, 2026, 2:55 PM"), `minutes` before the run:
+ * `{{gmailTime:<minutes>}}`, filled in by the runner, so a page's dates mean the same on any day.
+ */
+export const GMAIL_TIME = /\{\{gmailTime:(-?\d+)\}\}/gu;
+
+/** Where a page plants Sent rows of its own, beside Gmail's list (agents/red_team.md 5: DOM spoofing). */
+export const SPOOF_PLACES = ['outside-main', 'second-main', 'iframe', 'hidden-row'] as const;
+
+const HtmlFile = z.string().regex(/^[a-z0-9][a-z0-9.-]*\.html$/u);
+
 export const AttackPage = z.discriminatedUnion('kind', [
-  /** Gmail's Sent list holding `rows`, newest first, as Gmail draws them. */
-  z.strictObject({ kind: z.literal('gmail.sent'), rows: z.array(SentRow).min(1).max(100) }),
+  /**
+   * Gmail's Sent list holding `rows`, newest first, as Gmail draws them; with `spoof`, rows of the page's own planted
+   * beside it: after the main landmark, in a second main landmark, in a main landmark inside another origin's iframe, or
+   * hidden inside Gmail's list.
+   */
+  z.strictObject({
+    kind: z.literal('gmail.sent'),
+    rows: z.array(SentRow).min(1).max(100),
+    spoof: z.strictObject({ at: z.enum(SPOOF_PLACES), rows: z.array(SentRow).min(1).max(10) }).optional(),
+  }),
   /** A page of the strategy's own, `file` in its folder, served at `url`, a Gmail or Calendar address. */
   z.strictObject({
     kind: z.literal('file'),
-    file: z.string().regex(/^[a-z0-9][a-z0-9.-]*\.html$/u),
+    file: HtmlFile,
     url: z.string().refine(isVendorUrl, 'a Gmail or Google Calendar address'),
+  }),
+  /**
+   * A labelled page of the shared fixtures (tests/fixtures/pages), served at its own address, with each `from` text
+   * replaced by its `to` (a forged sender, amount or time); a `from` the page does not hold fails the run.
+   */
+  z.strictObject({
+    kind: z.literal('fixture'),
+    vendor: z.enum(['gmail', 'gcal']),
+    file: HtmlFile,
+    replace: z
+      .array(z.strictObject({ from: Text.min(1), to: Text }))
+      .max(20)
+      .optional(),
   }),
 ]);
 
@@ -62,12 +94,23 @@ export const AttackLog = z.strictObject({
   agent: AgentId,
   lines: z
     .array(
-      z.strictObject({
-        text: Text.min(1),
-        minutesAgo: MinutesAgo,
-        /** How its time is written: in the browser's zone, as logs write it (the default), or in UTC, saying so. */
-        clock: z.enum(['local', 'utc']).optional(),
-      }),
+      z
+        .strictObject({
+          text: Text.min(1),
+          /** When the line says it happened: minutes before the run, or `at`, an instant of its own. */
+          minutesAgo: MinutesAgo.optional(),
+          /**
+           * A fixed instant, for a case whose pages are fixed in time (a captured Calendar week, whose events a claim
+           * made after them can never name: a claim's event time is read forward from the claim).
+           */
+          at: IsoTs.optional(),
+          /** How its time is written: in the browser's zone, as logs write it (the default), or in UTC, saying so. */
+          clock: z.enum(['local', 'utc']).optional(),
+        })
+        .refine(
+          (line) => (line.minutesAgo === undefined) !== (line.at === undefined),
+          'give minutesAgo or at',
+        ),
     )
     .min(1)
     .max(100),
@@ -96,15 +139,36 @@ export const Expectation = z
   })
   .refine((e) => (e.claims === undefined) !== (e.orphans === undefined), 'name either claims or orphans');
 
-export const AttackCase = z.strictObject({
-  id: Slug,
-  /** What the case tries, in one line. */
-  attack: Text.min(1),
-  pages: z.array(AttackPage).max(10),
-  /** What the agents say they did: each log pasted in turn, as a person pastes one agent's activity after another. */
-  logs: z.array(AttackLog).max(10).optional(),
-  expect: z.array(Expectation).min(1),
-});
+export const AttackCase = z
+  .strictObject({
+    id: Slug,
+    /** What the case tries, in one line. */
+    attack: Text.min(1),
+    pages: z.array(AttackPage).max(10),
+    /** What the agents say they did: each log pasted in turn, as a person pastes one agent's activity after another. */
+    logs: z.array(AttackLog).max(10).optional(),
+    /**
+     * The person's own model key, saved and on (sprint_5 5.3), its vendor a stand-in that scores every candidate it is
+     * sent `score`, as a model obeying an injected instruction would (agents/red_team.md 6).
+     */
+    model: z.strictObject({ score: z.number().min(0).max(1) }).optional(),
+    /** What the model's stand-in received: at least `asked` requests, so the case reaches it, and none of `excludes`. */
+    modelInput: z
+      .strictObject({ asked: z.number().int().min(1), excludes: z.array(Text.min(1)).min(1).max(20) })
+      .optional(),
+    /** Each named reader's health once the pages were read: an anomaly on a page must show (Hard Rule 6). */
+    health: z
+      .array(
+        z.strictObject({
+          reader: z.enum(['gmail.sent', 'gmail.receipt', 'gcal.event']),
+          status: z.array(z.enum(['OK', 'IDLE', 'DEGRADED'])).min(1),
+        }),
+      )
+      .max(5)
+      .optional(),
+    expect: z.array(Expectation).min(1),
+  })
+  .refine((c) => c.modelInput === undefined || c.model !== undefined, 'modelInput needs a model');
 
 export const AttackFile = z.strictObject({
   /** The strategy's number in agents/red_team.md (1 to 13), or a new one past them. */

@@ -5,27 +5,18 @@
  * request that is neither a served page nor the fixture server is blocked (./network-guard.ts), and the browser runs
  * behind the dead proxy (./extension.ts), so an attack page reaches nothing.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import type { Page } from '@playwright/test';
 
 import type { LedgerExport } from '../../../src/ledger/export';
 import { AGENT_NAMES } from '../../../src/ui/labels';
-import type { AttackCase, AttackLog, AttackPage, Strategy } from '../../redteam/attack-schema';
-import { demoSentPage } from './demo';
+import type { AttackCase, AttackLog, Strategy } from '../../redteam/attack-schema';
 import { type LaunchedExtension, launchExtension } from './extension';
+import { stubAnthropic, type VendorRequest } from './model-vendor';
 import { installRouteGuard } from './network-guard';
 import { clockAt } from './paste';
-import { gmailTitle, MINUTE_MS } from './priya';
-import {
-  FIXTURE_TIME_ZONE,
-  fixtureUrl,
-  readLedger,
-  requestUrl,
-  type VendorRoutes,
-  vendorFixture,
-} from './vendor-pages';
+import { MINUTE_MS } from './priya';
+import { served } from './redteam-pages';
+import { FIXTURE_TIME_ZONE, readLedger, requestUrl, type VendorRoutes } from './vendor-pages';
 
 /** How long a page may take to be read, and grading to settle, before the case fails loud (Hard Rule 12). */
 const READ_TIMEOUT_MS = 20_000;
@@ -39,20 +30,6 @@ const READERS: Readonly<Record<string, readonly string[]>> = {
   'mail.google.com': ['gmail.sent', 'gmail.receipt'],
   'calendar.google.com': ['gcal.event'],
 };
-
-const SENT_HEAD = vendorFixture('gmail', 'synthetic-sent-page-1.html');
-
-/** The address `page` is served at, and its HTML. */
-function served(strategy: Strategy, page: AttackPage, nowMs: number): { url: string; html: string } {
-  if (page.kind === 'file')
-    return { url: page.url, html: readFileSync(path.join(strategy.dir, page.file), 'utf8') };
-  const rows = page.rows.map(({ minutesAgo, ...row }, index) => ({
-    ...row,
-    title: gmailTitle(nowMs - minutesAgo * MINUTE_MS),
-    messageId: `1a1020a0b0c0f${String(index + 100).padStart(3, '0')}`,
-  }));
-  return { url: fixtureUrl(SENT_HEAD), html: demoSentPage(readFileSync(SENT_HEAD.htmlPath, 'utf8'), rows) };
-}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -98,8 +75,8 @@ async function openPage(
 /** `log` as the agent's activity view writes it: each line, then its time (in the browser's zone, or in UTC, saying so). */
 function logText(log: AttackLog, nowMs: number): string {
   return log.lines
-    .flatMap(({ text, minutesAgo, clock }) => {
-      const at = nowMs - minutesAgo * MINUTE_MS;
+    .flatMap(({ text, minutesAgo, at: fixed, clock }) => {
+      const at = fixed === undefined ? nowMs - (minutesAgo ?? 0) * MINUTE_MS : Date.parse(fixed);
       return [text, clock === 'utc' ? `${clockAt(at, 'UTC')} UTC` : clockAt(at, FIXTURE_TIME_ZONE)];
     })
     .join('\n');
@@ -156,22 +133,53 @@ async function settled(ledgerPage: Page): Promise<LedgerExport> {
   );
 }
 
-/** Runs `attackCase` of `strategy` (header) and returns the ledger it left. `fixtureOrigin`: the fixture server's. */
+/** An invented key of Anthropic's form, saved and turned on in the options page as a person does (sprint_5 5.3). */
+const INVENTED_KEY = 'sk-ant-redteam-invented-7Kq2Lm9Np3Rs';
+
+async function turnOnOwnKey(extension: LaunchedExtension): Promise<void> {
+  const options = await extension.openExtensionPage('options.html');
+  const byo = options.getByRole('group', { name: 'Your own model key' });
+  await byo.getByLabel('Your key').fill(INVENTED_KEY);
+  await byo.getByRole('button', { name: 'Save key' }).click();
+  await byo.getByRole('status').filter({ hasText: 'Your Anthropic key is saved.' }).waitFor();
+  await byo.getByRole('button', { name: 'Turn on my own key' }).click();
+  await byo.getByRole('status').filter({ hasText: 'Your own key is on.' }).waitFor();
+  await options.close();
+}
+
+/** The bodies of the requests the model's stand-in received, once it has received `asked` of them or a while passed. */
+async function modelBodies(requests: readonly VendorRequest[], asked: number): Promise<string[]> {
+  const deadline = Date.now() + READ_TIMEOUT_MS;
+  const posts = () => requests.filter((request) => request.method === 'POST');
+  while (posts().length < asked && Date.now() < deadline) await sleep(POLL_MS);
+  return posts().map((request) => request.body);
+}
+
+/**
+ * Runs `attackCase` of `strategy` (header) and returns the ledger it left, with the bodies the model's stand-in
+ * received when the case turns a model on. `fixtureOrigin`: the fixture server's.
+ */
 export async function runAttackCase(
   strategy: Strategy,
   attackCase: AttackCase,
   fixtureOrigin: string,
-): Promise<LedgerExport> {
+): Promise<LedgerExport & { readonly modelRequests?: readonly string[] }> {
   const nowMs = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
   const routes: VendorRoutes = new Map();
   const extension = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE });
   try {
     await installRouteGuard(extension.context, { fixtureOrigin, routedFixtures: routes });
+    // After the guard, so the stand-in answers first (./model-vendor.ts).
+    const requests =
+      attackCase.model === undefined ? null : await stubAnthropic(extension.context, attackCase.model.score);
+    if (requests !== null) await turnOnOwnKey(extension);
     const ledgerPage = await extension.openExtensionPage('options.html');
     for (const page of attackCase.pages)
       await openPage(extension, routes, ledgerPage, served(strategy, page, nowMs));
     for (const log of attackCase.logs ?? []) await pasteLog(extension, log, nowMs);
-    return await settled(ledgerPage);
+    if (requests === null) return await settled(ledgerPage);
+    const modelRequests = await modelBodies(requests, attackCase.modelInput?.asked ?? 1);
+    return { ...(await settled(ledgerPage)), modelRequests };
   } finally {
     await extension.close();
   }

@@ -8,7 +8,7 @@
  * demo's. An earlier send at 09:00 starts the head's window before the demo's minute (the list may go on, so the window
  * starts a minute after its oldest row, docs/grading.md §3).
  */
-interface SentRow {
+export interface SentRow {
   readonly name: string;
   readonly email: string;
   readonly subject: string;
@@ -46,7 +46,8 @@ export const DEMO_SENT: readonly SentRow[] = [
   },
 ];
 
-function rowHtml(row: SentRow, index: number): string {
+/** One Sent row as Gmail draws it; `index` keeps its element ids apart from every other row's on the page. */
+export function sentRowHtml(row: SentRow, index: number): string {
   const id = (part: number) => `:d${String(index)}${String(part)}`;
   const recipient = `<span class="sPwCL p6yzXV dIC"><span translate="no" class="l2cAGn" email="${row.email}" name="${row.name}" data-hovercard-id="${row.email}" data-hovercard-owner-id="0">${row.name}</span></span>`;
   const ids = `data-thread-id="#thread-f:18780361693596${String(index)}0000" data-legacy-thread-id="${row.messageId}" data-legacy-last-message-id="${row.messageId}" data-legacy-last-non-draft-message-id="${row.messageId}"`;
@@ -67,7 +68,7 @@ export function demoSentPage(head: string, rows: readonly SentRow[] = DEMO_SENT)
   const start = head.indexOf('<tbody>');
   const end = head.indexOf('</tbody>');
   if (start < 0 || end < start) throw new Error('the Sent fixture has no table body');
-  return `${head.slice(0, start + '<tbody>'.length)}\n${rows.map(rowHtml).join('\n')}\n${head.slice(end)}`;
+  return `${head.slice(0, start + '<tbody>'.length)}\n${rows.map(sentRowHtml).join('\n')}\n${head.slice(end)}`;
 }
 
 /**
