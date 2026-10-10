@@ -1,7 +1,7 @@
 /**
  * `pnpm bench` — the one command that produces RESULTS.md (Hard Rule 12).
  *
- * Runs the registered benches. Each bench returns its metrics; this script adds where they were measured (the git
+ * Runs the registered benches (or one: `--only <name>`). Each bench returns its metrics; this script adds where they were measured (the git
  * commit, whether the tree was dirty, the Node version: bench/provenance.ts), validates the result and writes it to
  * bench/results/<name>-<yyyy-mm-dd>.json, then regenerates RESULTS.md from the newest result file of each bench
  * (bench/results.ts). RESULTS.md is generated, never hand-edited. The exit code is 1 when any gate of a result
@@ -24,6 +24,7 @@ import { runGcalBench } from './observers/gcal';
 import { runGmailBench } from './observers/gmail';
 import { runReceiptsBench } from './observers/receipts';
 import { runPopupBench } from './popup';
+import { runRedteamBench } from './redteam';
 import { runUiBench } from './ui';
 import { gitIn, type Provenance, provenance } from './provenance';
 import { failedGates, latestResults, parseBenchResult, render, type MetricValue } from './results';
@@ -59,6 +60,7 @@ export const BENCHES: readonly Bench[] = [
   { name: 'ui', run: runUiBench },
   { name: 'popup', run: runPopupBench },
   { name: 'intel', run: () => runIntelBench() },
+  { name: 'redteam', run: () => runRedteamBench() },
 ];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
@@ -87,10 +89,23 @@ export async function runBenches(benches: readonly Bench[], options: BenchRunOpt
     );
   }
   writeFileSync(options.resultsMd, render(latestResults(options.resultsDir)));
-  options.log(`RESULTS.md regenerated (${String(benches.length)} benches registered).`);
+  options.log(`RESULTS.md regenerated (${String(benches.length)} benches run).`);
   if (failed.length === 0) return 0;
   options.log(`pnpm bench: gate failed: ${failed.join(', ')}`);
   return 1;
+}
+
+/**
+ * The benches a run measures: every one registered, or with `--only <name>` that one alone (`pnpm redteam` is
+ * `--only redteam`). A name nothing is registered under throws, so a typo never measures nothing.
+ */
+export function selectedBenches(benches: readonly Bench[], argv: readonly string[]): readonly Bench[] {
+  const at = argv.indexOf('--only');
+  if (at === -1) return benches;
+  const name = argv[at + 1];
+  const chosen = benches.filter((bench) => bench.name === name);
+  if (chosen.length === 0) throw new Error(`pnpm bench: no bench is named ${name ?? '(none given)'}`);
+  return chosen;
 }
 
 /** Why a run must not write results (a tree that differs from its commit, without `--dirty`), or null. */
@@ -107,7 +122,7 @@ if (invokedAs !== undefined && import.meta.url === pathToFileURL(path.resolve(in
     console.log(refusal);
     process.exitCode = 1;
   } else {
-    process.exitCode = await runBenches(BENCHES, {
+    process.exitCode = await runBenches(selectedBenches(BENCHES, process.argv.slice(2)), {
       resultsDir: path.join(BENCH_DIR, 'results'),
       resultsMd: path.join(REPO_ROOT, 'RESULTS.md'),
       date: localDate(new Date()),

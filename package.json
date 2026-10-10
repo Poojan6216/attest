@@ -24,6 +24,7 @@
     "test:poison": "pnpm --dir extension run test:poison",
     "e2e": "pnpm --dir extension run e2e",
     "bench": "pnpm --dir extension run bench",
+    "redteam": "pnpm --dir extension run redteam",
     "capture": "pnpm --dir extension run capture",
     "attest": "pnpm --dir extension run attest"
   },

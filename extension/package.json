@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "e2e": "wxt build && playwright test",
     "bench": "tsx ../bench/run_bench.ts",
+    "redteam": "tsx ../bench/run_bench.ts --only redteam",
     "capture": "tsx tests/tools/capture-fixture.ts",
     "attest": "tsx tests/tools/attest-cli.ts",
     "postinstall": "wxt prepare",

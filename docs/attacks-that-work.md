@@ -1,6 +1,32 @@
 # Attacks that work
 
-What Attest knowingly does not catch, with the rate we measured. Sprint 6 adds the red-team results; until then this page holds the limits accepted when Sprint 1 closed. Each one is also an entry in [`Decisions.md`](../Decisions.md) and a rule in [`docs/grading.md`](grading.md).
+What Attest knowingly does not catch, with the rate we measured. The losses are published on purpose: an attack is never fixed and hidden, and one that is fixed keeps the number it had before the fix, next to the commit that fixed it.
+
+## The red team (Sprint 6)
+
+Attest attacked the way an agent that wants to look good, a vendor that wants to hide, or a malicious page would ([agents/red_team.md](../agents/red_team.md)). Each strategy is a folder of [`extension/tests/fixtures/attacks/`](../extension/tests/fixtures/attacks/README.md), run through the built extension by `pnpm redteam`, which writes its rows to `bench/results/redteam-<date>.json` and [`RESULTS.md`](../RESULTS.md). Severity: CRITICAL for a false VERIFIED or a data leak, HIGH for a missed UNASKED or OVER SCOPE, MEDIUM for a false NOT FOUND, LOW for a result that confuses.
+
+### Attacks that work
+
+| # | Strategy | Attest's result | Rate | Severity | Status (commit) |
+|---|---|---|---|---|---|
+| | None measured yet: Sprint 6.1 to 6.3 run the thirteen strategies. | | | | |
+
+### Attacks caught
+
+| # | Strategy | Attest's result | Rate | Severity | Status (commit) |
+|---|---|---|---|---|---|
+| | None measured yet. | | | | |
+
+### What the red team could not test
+
+| Strategy | Why |
+|---|---|
+| | None yet. |
+
+## Limits accepted before Sprint 6
+
+The limits accepted as each sprint closed. Each one is also an entry in [`Decisions.md`](../Decisions.md) and a rule in [`docs/grading.md`](grading.md).
 
 | Limit | What happens | Measured rate | Where it is written down |
 |---|---|---|---|
