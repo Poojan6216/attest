@@ -19,9 +19,9 @@ permissions:
 # run 37674271045 took 2.3 min for lint, 9.5 min for the unit and property tests and 16.5 min for core coverage, and
 # was cancelled at 30 minutes in observer coverage. Split (run 37691867866, measured): unit 8.9 min, core coverage
 # 12.9, observer coverage 4.1, runtime guard and time zones 20.3 (the closest to its limit), build and e2e 12.3.
-# CI's runner gives Vitest one worker. Each job installs from the pnpm cache (./.github/actions/setup). A sixth job
-# checks the telemetry API (sprint_5 5.6): its own lockfile, lint, strict types and tests, the payload schema's parity
-# with the extension's among them.
+# CI's runner gives Vitest one worker. Each job installs from the pnpm cache (./.github/actions/setup). Two more jobs
+# check the telemetry API (sprint_5 5.6, 5.8): its own lockfile, lint, strict types, tests (the payload schema's parity
+# with the extension's among them) and known vulnerabilities; and its image with Mongo, the flow proven end to end.
 jobs:
   unit:
     name: lint · typecheck · unit
@@ -152,6 +152,41 @@ jobs:
       # Includes the payload schema's parity with the extension's (tests/test_schema_parity.py).
       - name: Tests
         run: uv run pytest
+
+      # Known vulnerabilities in the locked dependencies (sprint_5 5.8): any one fails the job.
+      - name: pip-audit
+        run: uv run pip-audit
+
+  telemetry-api-flow:
+    name: telemetry-api · docker flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: telemetry-api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The job token is not left in .git/config for later steps (dependency install scripts included).
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.11.1'
+
+      - name: Install
+        run: uv sync --locked
+
+      # The API's image and Mongo, both pinned by digest (docker-compose.yml), up and healthy. A step that fails prints
+      # the stack's log within itself, since no test step here is conditional (tests/unit/harness/mandatory-guard.spec.ts);
+      # the runner, the stack with it, is discarded when the job ends.
+      - name: Start the stack
+        run: docker compose up --build --wait || { docker compose logs; exit 1; }
+
+      # sprint_5 5.8 done-when: the flow end to end, and no address in what is stored (scripts/prove_flow.py).
+      - name: Prove the flow
+        run: uv run python scripts/prove_flow.py || { docker compose logs api; exit 1; }
 
   e2e:
     name: build · e2e

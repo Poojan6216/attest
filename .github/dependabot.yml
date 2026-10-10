@@ -28,3 +28,32 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
     open-pull-requests-limit: 2
+  # The telemetry API (sprint_5 5.8): its locked Python dependencies, and the digest-pinned images of its Dockerfile and
+  # docker-compose.yml. Minor and patch only, as above.
+  - package-ecosystem: uv
+    directory: /telemetry-api
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        update-types: ['minor', 'patch']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    open-pull-requests-limit: 1
+  - package-ecosystem: docker
+    directory: /telemetry-api
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    open-pull-requests-limit: 1
+  - package-ecosystem: docker-compose
+    directory: /telemetry-api
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    open-pull-requests-limit: 1
