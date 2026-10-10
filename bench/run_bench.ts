@@ -89,7 +89,9 @@ export async function runBenches(benches: readonly Bench[], options: BenchRunOpt
     );
   }
   writeFileSync(options.resultsMd, render(latestResults(options.resultsDir)));
-  options.log(`RESULTS.md regenerated (${String(benches.length)} benches run).`);
+  options.log(
+    `RESULTS.md regenerated (${String(benches.length)} ${benches.length === 1 ? 'bench' : 'benches'} run).`,
+  );
   if (failed.length === 0) return 0;
   options.log(`pnpm bench: gate failed: ${failed.join(', ')}`);
   return 1;
