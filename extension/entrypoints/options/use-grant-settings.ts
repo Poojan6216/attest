@@ -8,7 +8,8 @@ import { useCallback } from 'preact/hooks';
 import type { GrantSaveMessage, GrantSaveResult, LedgerTable } from '../../src/bus/messages';
 import { sendGrant } from '../../src/bus/send';
 import { log } from '../../src/log';
-import { type GrantSettings, loadGrantSettings, onLedgerChanged } from '../../src/ui/data';
+import { onLedgerChanged } from '../../src/ui/data';
+import { type GrantSettings, loadGrantSettings } from '../../src/ui/settings-data';
 import { useLedgerRead } from '../../src/ui/use-ledger-read';
 
 export interface GrantSources {

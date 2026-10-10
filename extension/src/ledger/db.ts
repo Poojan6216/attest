@@ -35,10 +35,10 @@ import {
   type Grant,
   type MetaEntry,
   type ObserverCoverage,
-  type PolicyRecord,
   type ReceiptInputsRecord,
   Sha256,
 } from './types';
+import type { PolicyRecord } from './policy-record';
 
 /**
  * Schema v1 (tech_reviewer index requirements). First entry of each spec is the primary key.

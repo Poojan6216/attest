@@ -35,6 +35,8 @@ pnpm lint
 pnpm typecheck
 pnpm test           # unit, property, golden, then the serial perf gates
 pnpm test:coverage  # src/core coverage; fails below 95% lines
+pnpm test:coverage:observers  # src/observers and src/adapters; fails below 85% lines
+pnpm test:coverage:ui         # src/ui and the four pages; fails below 70% lines
 pnpm e2e
 pnpm bench          # perf gates → RESULTS.md; exits 1 when a gate fails
 ```

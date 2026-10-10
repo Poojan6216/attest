@@ -17,7 +17,8 @@ import type { ReaderId } from '../../src/config';
 import type { AdapterHealth } from '../../src/ledger/types';
 import type { RetentionChoice } from '../../src/ledger/settings';
 import { log } from '../../src/log';
-import { loadConsent, loadHealth, loadRetentionDays, onLedgerChanged } from '../../src/ui/data';
+import { onLedgerChanged } from '../../src/ui/data';
+import { loadConsent, loadHealth, loadRetentionDays } from '../../src/ui/settings-data';
 import { useLedgerRead } from '../../src/ui/use-ledger-read';
 
 export interface SettingsView {

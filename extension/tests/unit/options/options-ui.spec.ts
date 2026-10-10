@@ -307,19 +307,22 @@ describe('entrypoint mounts', () => {
     vi.resetModules();
   });
 
-  it.each(['options', 'popup', 'sidepanel'] as const)('%s/main.tsx renders into #app', async (name) => {
-    const app = document.createElement('div');
-    app.id = 'app';
-    document.body.append(app);
-    await act(async () => {
-      await import(`../../../entrypoints/${name}/main.tsx`);
-    });
-    expect(app.querySelector('h1')).not.toBeNull();
-    render(null, app);
-  });
+  it.each(['options', 'popup', 'sidepanel', 'digest'] as const)(
+    '%s/main.tsx renders into #app',
+    async (name) => {
+      const app = document.createElement('div');
+      app.id = 'app';
+      document.body.append(app);
+      await act(async () => {
+        await import(`../../../entrypoints/${name}/main.tsx`);
+      });
+      expect(app.querySelector('h1')).not.toBeNull();
+      render(null, app);
+    },
+  );
 
   // TECH-13: every surface mounts through src/ui/mount.ts, so popup and side panel fail loudly too.
-  it.each(['options', 'popup', 'sidepanel'] as const)(
+  it.each(['options', 'popup', 'sidepanel', 'digest'] as const)(
     '%s/main.tsx logs ui.root_missing when #app is missing',
     async (name) => {
       // A fresh module graph (resetModules) has its own logger instance: route that one.

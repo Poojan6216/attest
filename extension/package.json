@@ -26,6 +26,7 @@
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:coverage": "vitest run --coverage",
     "test:coverage:observers": "vitest run --config vitest.observers.config.ts",
+    "test:coverage:ui": "vitest run --config vitest.ui.config.ts",
     "test:poison": "vitest run --config vitest.poison.config.ts"
   },
   "dependencies": {

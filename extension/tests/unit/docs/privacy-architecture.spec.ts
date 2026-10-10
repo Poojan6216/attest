@@ -37,13 +37,13 @@ import {
   MetaEntry,
   Observation,
   ObserverCoverage,
-  PolicyRecord,
   Reason,
   Receipt,
   ReceiptInputsRecord,
   ReceiptOverride,
   Request,
 } from '../../../src/ledger/types';
+import { PolicyRecord } from '../../../src/ledger/policy-record';
 import {
   SnapshotCalendar,
   SnapshotDay,

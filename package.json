@@ -20,6 +20,7 @@
     "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",
     "test:coverage": "pnpm --dir extension run test:coverage",
     "test:coverage:observers": "pnpm --dir extension run test:coverage:observers",
+    "test:coverage:ui": "pnpm --dir extension run test:coverage:ui",
     "test:poison": "pnpm --dir extension run test:poison",
     "e2e": "pnpm --dir extension run e2e",
     "bench": "pnpm --dir extension run bench",

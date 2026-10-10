@@ -12,7 +12,8 @@
  *    and 9), apart from the allowlisted sites below;
  *  - the extension never runs in incognito tabs (Decisions [2.close] S3, SEC-9);
  *  - each content script stays within its size budget, and no shipped script carries zod's JSON Schema code
- *    (TECH-17: wxt.config.ts `zodWithoutJsonSchema`).
+ *    (TECH-17: wxt.config.ts `zodWithoutJsonSchema`);
+ *  - the popup's start load stays within its budget (sprint_4 close, tech review TECH-5).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -173,4 +174,44 @@ test('each content script is within its size budget, and no script ships zod JSO
     readFileSync(file, 'utf8').includes('json-schema.org'),
   );
   expect(carrying.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
+});
+
+/**
+ * The popup's start load, gzipped at level 9 file by file (sprint_4 close, tech review TECH-5): its page's stylesheet
+ * and module, and every module those import statically, transitively, before any `import()` (a receipt's detail and
+ * the bus listener load later). The checklist's ceiling is 150 KB. The budget sits about 10% above what the popup
+ * loads at the Sprint 4 close (113,062 B), as the content scripts' does, so its next growth is a decision, not a drift.
+ */
+const POPUP_START_BUDGET_GZIP = 125_000;
+
+/** The files `page` loads before any `import()`: what its HTML names, and each module's static imports, transitively. */
+function startLoad(page: string): string[] {
+  const html = readFileSync(path.join(EXTENSION_PATH, page), 'utf8');
+  const seen = new Set<string>();
+  const visit = (file: string): void => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    if (!file.endsWith('.js')) return;
+    const code = readFileSync(path.join(EXTENSION_PATH, file), 'utf8');
+    for (const [, from = ''] of code.matchAll(
+      /\b(?:import|export)\s*(?:[^"'();]*?from\s*)?["']([^"']+)["']/gu,
+    )) {
+      if (from.startsWith('.')) visit(path.posix.join(path.posix.dirname(file), from));
+    }
+  };
+  for (const [, file = ''] of html.matchAll(/(?:src|href)="\/([^"]+\.(?:js|css))"/gu)) visit(file);
+  return [...seen].sort();
+}
+
+test('the popup’s start load is within its budget (TECH-5)', () => {
+  const files = startLoad('popup.html');
+  expect(files.filter((file) => /^chunks\/popup-[\w-]+\.js$/u.test(file))).toHaveLength(1);
+  const size = files.reduce(
+    (sum, file) => sum + gzipSync(readFileSync(path.join(EXTENSION_PATH, file)), { level: 9 }).length,
+    0,
+  );
+  console.info(
+    `[bundle] popup start: ${String(files.length)} files, ${String(size)} B gzipped (budget ${String(POPUP_START_BUDGET_GZIP)})`,
+  );
+  expect(size).toBeLessThanOrEqual(POPUP_START_BUDGET_GZIP);
 });

@@ -12,9 +12,8 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { DB_NAME, POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../../../src/config';
 import { closeLedger, getLedger, putAdapterHealth, putGrant, putReceipt } from '../../../src/ledger/repo';
 import type { AgentId, Grade, ReceiptInput } from '../../../src/ledger/types';
+import { loadGrantSettings, loadHealth } from '../../../src/ui/settings-data';
 import {
-  loadGrantSettings,
-  loadHealth,
   loadPopup,
   loadReceipt,
   loadTimelinePage,

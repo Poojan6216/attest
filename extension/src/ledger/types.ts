@@ -7,7 +7,6 @@
  */
 import { z } from 'zod';
 
-import { PolicyDocument } from '../core/policy-document';
 import { instantMs } from '../core/normalize';
 import {
   ActionType,
@@ -117,9 +116,6 @@ export const ActivityRecord = z
       ctx.addIssue({ code: 'custom', path: ['to'], message: 'an interval ends at or after it starts' });
     }
   });
-
-/** A `policies` row: a policy document as policy/default.json writes one, keyed by its `policyHash`. */
-export const PolicyRecord = z.strictObject({ policyHash: Sha256, document: PolicyDocument });
 
 /** The grades a FINAL receipt alerts on (sprint_4 4.6): never VERIFIED, PARTIAL or UNVERIFIABLE. */
 export const AlertGrade = z.enum(['NOT_FOUND', 'UNASKED', 'OVER_SCOPE']);
@@ -237,7 +233,6 @@ export type BatchCoverageRecord = z.infer<typeof BatchCoverageRecord>;
 export type ActivityRecord = z.infer<typeof ActivityRecord>;
 export type ActivityRecordInput = z.input<typeof ActivityRecord>;
 export type ReceiptInputsRecord = z.infer<typeof ReceiptInputsRecord>;
-export type PolicyRecord = z.infer<typeof PolicyRecord>;
 export type AlertGrade = z.infer<typeof AlertGrade>;
 export type DigestRecord = z.infer<typeof DigestRecord>;
 export type AgentWeek = z.infer<typeof AgentWeek>;

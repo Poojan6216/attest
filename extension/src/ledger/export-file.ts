@@ -32,11 +32,11 @@ import {
   MetaEntry,
   Observation,
   ObserverCoverage,
-  PolicyRecord,
   Receipt,
   ReceiptInputsRecord,
   Request,
 } from './types';
+import { PolicyRecord } from './policy-record';
 
 /** `JSON.stringify`'s indent, as the export writes it. */
 const GAP = 2;

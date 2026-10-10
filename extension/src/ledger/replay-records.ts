@@ -21,13 +21,8 @@ import { coverageHash } from '../core/receipt';
 import { Coverage } from '../core/schema';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
-import {
-  BatchCoverageRecord,
-  PolicyRecord,
-  type ReceiptInputs,
-  ReceiptInputsRecord,
-  type ReceiptInputsRef,
-} from './types';
+import { BatchCoverageRecord, type ReceiptInputs, ReceiptInputsRecord, type ReceiptInputsRef } from './types';
+import { PolicyRecord } from './policy-record';
 
 export type ReceiptInputsInput = z.input<typeof ReceiptInputs>;
 

@@ -1,10 +1,11 @@
 /**
- * What the pages read from the ledger (sprint_4 4.0): the popup, the side panel and the options page's settings and
- * grants read through these. Two pages read ledger modules of their own, readers only (the lint fence holds pages to
- * readers; sprint_4 close, tech review TECH-1): the digest page its stored digests (src/ledger/digest.ts `getDigest`,
- * `digestWeeks`), and the options page's export its file a page at a time (src/ledger/export-file.ts, export-csv.ts).
- * Each call reads the page's own connection to the ledger (src/ledger/shared.ts `getLedger`, opened once
- * per page) through src/ledger/views.ts: indexed reads, a page at a time, nothing computed beyond joins and sorting.
+ * What the pages read from the ledger (sprint_4 4.0): the popup and the side panel read through these. The other reads
+ * are readers only too (the lint fence holds pages to readers; sprint_4 close, tech review TECH-1), each in a module of
+ * its own so the popup's start loads none of them (TECH-5): the options page's settings and grants
+ * (./settings-data.ts), the digest page's stored digests (src/ledger/digest.ts `getDigest`, `digestWeeks`), and the
+ * options page's export, a page at a time (src/ledger/export-file.ts, export-csv.ts). Each call reads the page's own
+ * connection to the ledger (src/ledger/shared.ts `getLedger`, opened once per page) through src/ledger/views.ts:
+ * indexed reads, a page at a time, nothing computed beyond joins and sorting.
  * Reading in the page, not through the service worker, keeps the popup from waiting for a stopped worker to start. A
  * page never writes the ledger: what a person changes goes to the service worker over the bus, and `onLedgerChanged`
  * says when the service worker changed a table the page shows, so the page reads it again.
@@ -12,21 +13,15 @@
  * The popup must paint in under 100 ms (sprint_4 4.2), so what it loads at its start is only what it reads: a
  * receipt's detail (src/ledger/detail.ts) and the bus listener load when first used, never at the start.
  */
-import type { ReaderId } from '../config';
-import { type Flags, readersOff, readFlags } from '../ledger/consent';
 import type { LedgerTable } from '../bus/messages';
 import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../config';
 import type { ReceiptDetail } from '../ledger/detail';
-import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
 import { log } from '../log';
-import { AgentId, type AdapterHealth, type Grade } from '../ledger/types';
+import { AgentId, type Grade } from '../ledger/types';
 import {
-  grantSettings,
-  type GrantSettings,
   sidePanelOverview,
   type SidePanelOverview,
-  healthReports,
   popupView,
   type PopupView,
   type ReceiptCursor,
@@ -37,7 +32,6 @@ import {
 export type { ReceiptDetail } from '../ledger/detail';
 export type {
   CoverageSummary,
-  GrantSettings,
   PopupView,
   ReceiptCursor,
   ReceiptItem,
@@ -116,27 +110,6 @@ export async function loadOverview(): Promise<SidePanelOverview> {
 export async function loadReceipt(id: string): Promise<ReceiptDetail | undefined> {
   const [{ receiptDetail }, db] = await Promise.all([import('../ledger/detail'), getLedger()]);
   return receiptDetail(db, id);
-}
-
-/** The latest health report of every adapter and observer. */
-export async function loadHealth(): Promise<AdapterHealth[]> {
-  return healthReports(await getLedger());
-}
-
-/** The options page's Grants: every agent's grant, and each agent whose alerts are muted. */
-export async function loadGrantSettings(): Promise<GrantSettings> {
-  return grantSettings(await getLedger());
-}
-
-/** The retention window in force (sprint_4 4.5): what the options page's Privacy shows. */
-export async function loadRetentionDays(): Promise<RetentionChoice> {
-  return readRetentionDays(await getLedger());
-}
-
-/** The person's choices the options page shows (src/ledger/consent.ts): the readers that are off, and the flags. */
-export async function loadConsent(): Promise<{ readersOff: ReadonlySet<ReaderId>; flags: Flags }> {
-  const db = await getLedger();
-  return { readersOff: await readersOff(db), flags: await readFlags(db) };
 }
 
 /**

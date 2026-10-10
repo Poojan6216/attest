@@ -79,6 +79,24 @@ jobs:
       - name: Observer coverage
         run: pnpm test:coverage:observers
 
+  ui:
+    name: ui coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The job token is not left in .git/config for later steps (dependency install scripts included).
+          persist-credentials: false
+
+      - name: Setup (pnpm, Node, install)
+        uses: ./.github/actions/setup
+
+      # qa_tester rule 8 (sprint_4 close, QA review GAP 14): src/ui and the four pages stay at or above 70% of lines,
+      # measured over the suites that render them (extension/vitest.ui.config.ts).
+      - name: UI coverage
+        run: pnpm test:coverage:ui
+
   guard:
     name: runtime guard · time zones
     runs-on: ubuntu-latest

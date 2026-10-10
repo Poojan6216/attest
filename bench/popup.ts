@@ -8,7 +8,8 @@
  * max of the runs. The gate is the end-to-end test's: the
  * median first paint under 100 ms (Decisions [4.2] says why the first paint). A paint is a moment the person sees, so
  * this gate is wall time, not CPU: the statistic its gate test takes. The Playwright trace of the runs is written to
- * bench/traces/popup-paint.zip and committed with the results.
+ * bench/traces/popup-paint.zip, with this machine's paths written as placeholders (./trace-scrub.ts), and committed with
+ * the results.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -25,6 +26,7 @@ import {
 import { UI_RECEIPTS } from '../extension/tests/perf/ui-rows';
 import type { MetricValue } from './results';
 import { round } from './timing';
+import { machinePlaces, scrubTrace } from './trace-scrub';
 
 /** The popup's paint budget (sprint_4 4.2; agents/ux_engineer.md rule 9). */
 export const POPUP_PAINT_GATE_MS = 100;
@@ -51,7 +53,9 @@ export async function runPopupBench(): Promise<Readonly<Record<string, MetricVal
     await extension.context.tracing.start({ screenshots: false, snapshots: false, title: 'popup paint' });
     const runs = await measurePopupPaint(extension, RUNS);
     mkdirSync(path.join(BENCH_DIR, 'traces'), { recursive: true });
-    await extension.context.tracing.stop({ path: path.join(BENCH_DIR, '..', POPUP_TRACE) });
+    const trace = path.join(BENCH_DIR, '..', POPUP_TRACE);
+    await extension.context.tracing.stop({ path: trace });
+    scrubTrace(trace, machinePlaces(path.join(BENCH_DIR, '..')));
     const agent = await (await extension.serviceWorker()).evaluate(() => navigator.userAgent);
     const first = spread(runs, 'firstPaintMs');
     const day = spread(runs, 'dayPaintMs');
