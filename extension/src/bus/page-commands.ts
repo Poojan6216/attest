@@ -134,6 +134,22 @@ export const ByoForgetMessage = z.strictObject({ type: z.literal('byo.forget') }
  */
 export const LedgerWipeMessage = z.strictObject({ type: z.literal('ledger.wipe') });
 
+/**
+ * Sends the opt-in telemetry's last whole day now, if it is on and that day was not sent (sprint_5 5.7; the options
+ * page's "Send a test payload now"): the same one call as the hourly alarm's (src/telemetry/send.ts).
+ */
+export const TelemetrySendMessage = z.strictObject({ type: z.literal('telemetry.send') });
+
+/** What a `telemetry.send` did (src/telemetry/send.ts `TelemetryOutcome`) and the day it was about; or failed. */
+export const TelemetrySendResult = z.discriminatedUnion('ok', [
+  z.strictObject({
+    ok: z.literal(true),
+    outcome: z.enum(['off', 'already_sent', 'not_built', 'sent', 'failed']),
+    day: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u),
+  }),
+  z.strictObject({ ok: z.literal(false), code: z.enum(['failed']) }),
+]);
+
 /** The answer to a `retention.save`, a `reader.toggle`, a `flag.set`, a `byo.save`, a `byo.forget` or a `ledger.wipe`: done, or failed. */
 export const SettingResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true) }),
@@ -153,3 +169,5 @@ export type LedgerWipeMessage = z.infer<typeof LedgerWipeMessage>;
 export type ByoSaveMessage = z.infer<typeof ByoSaveMessage>;
 export type ByoForgetMessage = z.infer<typeof ByoForgetMessage>;
 export type SettingResult = z.infer<typeof SettingResult>;
+export type TelemetrySendMessage = z.infer<typeof TelemetrySendMessage>;
+export type TelemetrySendResult = z.infer<typeof TelemetrySendResult>;

@@ -3,7 +3,8 @@ import 'fake-indexeddb/auto';
  * The person's choices about what Attest may read or open (src/ledger/consent.ts; sprint_4 close, security review
  * SEC-3): every reader on and every flag off until set; each kept in ledger meta, where no script on a vendor page can
  * write it; a stored value that cannot be read reads as that reader off or that flag off, logged by key; and a flag no
- * page may set reads as its default whatever is stored, so a stored `ATTEST_TELEMETRY: true` never turns telemetry on.
+ * page may set reads as its default whatever is stored, so a stored `ATTEST_DOTS: true` never turns Dots on. Telemetry
+ * is the person's choice since sprint_5 5.7: it turns on only by `flag.set`, which only an extension page may send.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -69,10 +70,8 @@ describe('the flags', () => {
     expect((await readFlags(db)).ATTEST_AUTO_CHECK_GMAIL).toBe(false);
   });
 
-  it('read a flag no page may set as its default, whatever is stored (SEC-3: no telemetry by a stray write)', async () => {
-    for (const flag of ['ATTEST_TELEMETRY', 'ATTEST_DOTS']) {
-      await db.meta.put({ key: `${FLAG_PREFIX}${flag}`, value: true });
-    }
+  it('read a flag no page may set as its default, whatever is stored (SEC-3: no feature by a stray write)', async () => {
+    await db.meta.put({ key: `${FLAG_PREFIX}ATTEST_DOTS`, value: true });
     expect(await readFlags(db)).toEqual(FEATURE_FLAG_DEFAULTS);
   });
 
@@ -94,6 +93,7 @@ describe('the keys', () => {
       'flag.ATTEST_AUTO_CHECK_GMAIL',
       'flag.ATTEST_MODEL',
       'flag.ATTEST_MODEL_BYO',
+      'flag.ATTEST_TELEMETRY',
     ]);
     expect(META_KEYS).toEqual(expect.arrayContaining([READER_OFF_PREFIX, FLAG_PREFIX]));
   });

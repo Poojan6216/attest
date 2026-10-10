@@ -18,6 +18,8 @@ import {
   GRADE_STARTUP_DELAY_MINUTES,
   PURGE_ALARM_PERIOD_MINUTES,
   PURGE_STARTUP_DELAY_MINUTES,
+  TELEMETRY_ALARM_PERIOD_MINUTES,
+  TELEMETRY_STARTUP_DELAY_MINUTES,
 } from '../config';
 import { pendingAlertCount } from '../ledger/alerts';
 import { nextDigestMs } from '../ledger/digest-week';
@@ -29,6 +31,7 @@ import { browserDigest, runWeeklyDigest } from './digest';
 import { syncReaders } from './readers';
 import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
 import { askTheModel } from './intel';
+import { runTelemetryAlarm } from './telemetry';
 import type { LedgerDb } from '../ledger/db';
 import { announce } from './router';
 import { purgeAtTrustedClock } from '../ledger/retention-clock';
@@ -101,12 +104,14 @@ const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
   [ALARM_NAMES.PURGE]: runRetentionPurge,
   [ALARM_NAMES.GRADE]: runGraceBatch,
   [ALARM_NAMES.DIGEST]: runDigestAlarm,
+  [ALARM_NAMES.TELEMETRY]: () => runTelemetryAlarm(),
 };
 
 /**
  * How each alarm is created, at `nowMs`: on install or update, each periodic one first fires a whole period out; one
  * recreated at a browser start (`startup`) fires a short delay after it, the period following. The digest is a one-shot
- * alarm at the next Monday 09:00 (src/ledger/digest-week.ts), set again each time it fires.
+ * alarm at the next Monday 09:00 (src/ledger/digest-week.ts), set again each time it fires. The telemetry alarm looks
+ * each hour for a day to send, and sends nothing while telemetry is off (sprint_5 5.7, ./telemetry.ts).
  */
 function createInfo(name: AlarmName, nowMs: number, startup: boolean): Browser.alarms.AlarmCreateInfo {
   switch (name) {
@@ -122,6 +127,11 @@ function createInfo(name: AlarmName, nowMs: number, startup: boolean): Browser.a
       };
     case ALARM_NAMES.DIGEST:
       return { when: nextDigestMs(nowMs) };
+    case ALARM_NAMES.TELEMETRY:
+      return {
+        delayInMinutes: startup ? TELEMETRY_STARTUP_DELAY_MINUTES : TELEMETRY_ALARM_PERIOD_MINUTES,
+        periodInMinutes: TELEMETRY_ALARM_PERIOD_MINUTES,
+      };
   }
 }
 

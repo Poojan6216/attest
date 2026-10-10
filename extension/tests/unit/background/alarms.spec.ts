@@ -10,6 +10,8 @@ import {
   ALARM_NAMES,
   GRADE_ALARM_PERIOD_MINUTES,
   GRADE_STARTUP_DELAY_MINUTES,
+  TELEMETRY_ALARM_PERIOD_MINUTES,
+  TELEMETRY_STARTUP_DELAY_MINUTES,
   PURGE_ALARM_PERIOD_MINUTES,
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../../../src/config';
@@ -51,6 +53,7 @@ describe('resetAlarms (install/update)', () => {
       [ALARM_NAMES.PURGE, PURGE_ALARM_PERIOD_MINUTES],
       [ALARM_NAMES.GRADE, GRADE_ALARM_PERIOD_MINUTES],
       [ALARM_NAMES.DIGEST, undefined],
+      [ALARM_NAMES.TELEMETRY, TELEMETRY_ALARM_PERIOD_MINUTES],
     ]);
     const digest = await browser.alarms.get(ALARM_NAMES.DIGEST);
     expect(digest?.scheduledTime).toBeGreaterThanOrEqual(nextDigestMs(before));
@@ -65,6 +68,7 @@ describe('resetAlarms (install/update)', () => {
       ALARM_NAMES.PURGE,
       ALARM_NAMES.GRADE,
       ALARM_NAMES.DIGEST,
+      ALARM_NAMES.TELEMETRY,
     ]);
   });
 });
@@ -76,6 +80,7 @@ describe('ensureAlarms (browser startup)', () => {
       ALARM_NAMES.PURGE,
       ALARM_NAMES.GRADE,
       ALARM_NAMES.DIGEST,
+      ALARM_NAMES.TELEMETRY,
     ]);
   });
 
@@ -83,6 +88,15 @@ describe('ensureAlarms (browser startup)', () => {
     await ensureAlarms();
     const alarm = await browser.alarms.get(ALARM_NAMES.GRADE);
     expect([alarm?.periodInMinutes, GRADE_STARTUP_DELAY_MINUTES]).toEqual([GRADE_ALARM_PERIOD_MINUTES, 1]);
+  });
+
+  it('a dropped telemetry alarm comes back due two minutes after start, then hourly (sprint_5 5.7)', async () => {
+    await ensureAlarms();
+    const alarm = await browser.alarms.get(ALARM_NAMES.TELEMETRY);
+    expect([alarm?.periodInMinutes, TELEMETRY_STARTUP_DELAY_MINUTES]).toEqual([
+      TELEMETRY_ALARM_PERIOD_MINUTES,
+      2,
+    ]);
   });
 
   it('a dropped purge alarm comes back due shortly after start, then daily (a daily restart still purges)', async () => {

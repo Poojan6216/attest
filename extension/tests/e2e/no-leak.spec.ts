@@ -8,7 +8,8 @@
  * them and real rows reach the ledger before the channels are searched. After a session, no seed value or canary fragment may appear in: the extension's
  * own ledger export, any IndexedDB database, any chrome.storage area, the extension origin's web storage
  * and CacheStorage, the web storage, IndexedDB or cookies of the pages it reads, console output from any
- * context, any network URL or body (telemetry included, from Sprint 5), or the share output (sprint_4 4.7: the weekly
+ * context, any network URL or body, the opt-in telemetry's payloads, sent and shown (sprint_5 5.7: turned on, and the
+ * seeded day's numbers sent from the options page to a stand-in for the API), or the share output (sprint_4 4.7: the weekly
  * digest the session's ledger makes, through its alarm, as the digest page would copy it; searched as written and with
  * its markdown escapes removed). The person's own model key (sprint_5 5.3), saved through the options page, may be in its
  * own slot of chrome.storage.local and in no channel otherwise (./support/byo-key.ts). Later sprints extend the page
@@ -44,6 +45,7 @@ import { injectSeeds } from './support/seed-pages';
 import { plantInConsole, plantInDigest, plantInNetwork, plantInPage } from './support/leak-plants';
 import { readReceiptShares } from './support/share';
 import { BYO_KEY_SEED, plantKey, saveKey, withoutKeySlot } from './support/byo-key';
+import { plantInTelemetry, sendTodaysNumbers, stubTelemetry, turnTelemetryOn } from './support/telemetry';
 import {
   FIXTURE_TIME_ZONE,
   fixtureUrl,
@@ -84,6 +86,8 @@ interface Collected {
   readonly netLogUrls: readonly string[];
   /** Each share the session read, as written and with its markdown escapes removed. */
   readonly share: readonly string[];
+  /** Each telemetry payload sent to the stand-in API, and each the options page showed (sprint_5 5.7). */
+  readonly telemetry: readonly string[];
 }
 
 /** The key's leaks: every channel searched for the invented key, its own storage slot taken out (./support/byo-key.ts). */
@@ -108,6 +112,7 @@ function allLeaks(collected: Collected, seeds: readonly Seed[]): Leak[] {
       seeds,
     ),
     ...findLeaks('share', collected.share, seeds),
+    ...findLeaks('telemetry', collected.telemetry, seeds),
   ];
 }
 
@@ -121,6 +126,8 @@ const seed = (id: string): Seed => {
 interface SessionContext {
   readonly extension: Awaited<ReturnType<typeof launchExtension>>;
   readonly seededUrl: (page: string) => string;
+  /** Where the session puts each telemetry payload the options page showed. */
+  readonly shown: string[];
 }
 
 async function collectAfter(
@@ -144,6 +151,8 @@ async function collectAfter(
   let pages: PageChannels;
   let routeRecords: readonly RouteRecord[];
   let shares: readonly string[];
+  let sent: readonly string[];
+  const shown: string[] = [];
   // One NetLog per browser launch attempt; every one is searched (tests/e2e/support/extension.ts).
   const extension = await launchExtension({
     extraArgs: (attempt) => guardArgs(netLogPathFor(dir, attempt)),
@@ -155,11 +164,13 @@ async function collectAfter(
       fixtureOrigin: server.origin,
       routedFixtures,
     });
+    // A stand-in for the telemetry API, after the guard so it answers first: every body sent to it is kept.
+    sent = await stubTelemetry(extension.context);
     recordConsole(await extension.serviceWorker(), 'service-worker', consoleLines);
     extension.context.on('page', (page) => {
       recordConsole(page, page.url() || 'page', consoleLines);
     });
-    shares = (await act({ extension, seededUrl })) ?? [];
+    shares = (await act({ extension, seededUrl, shown })) ?? [];
     const probe = await extension.openExtensionPage('options.html');
     storage = await collectStorageChannels(probe, extension.context);
     pages = await collectPageChannels(extension.context);
@@ -170,7 +181,7 @@ async function collectAfter(
   const netLogUrls = readNetLogRequests(dir).map((r) => r.url);
   rmSync(dir, { recursive: true, force: true });
   const share = shares.flatMap((text) => [text, unescapeMarkdown(text)]);
-  return { storage, pages, consoleLines, routeRecords, netLogUrls, share };
+  return { storage, pages, consoleLines, routeRecords, netLogUrls, share, telemetry: [...sent, ...shown] };
 }
 
 /**
@@ -238,6 +249,7 @@ const PLANTED = [
   'network:person_name_2',
   'network:ssn_shape',
   'share:person_name_2',
+  'telemetry:token_lowercase',
 ] as const;
 
 /**
@@ -245,7 +257,7 @@ const PLANTED = [
  * seed pasted and imported, then the week's digest made by its alarm with the clock advanced, and its share read as it
  * would be copied (sprint_4 4.7). Returns the share.
  */
-async function seededSession({ extension, seededUrl }: SessionContext): Promise<readonly string[]> {
+async function seededSession({ extension, seededUrl, shown }: SessionContext): Promise<readonly string[]> {
   for (const page of SEEDED_PAGES) {
     const tab = await extension.context.newPage();
     await tab.goto(seededUrl(page));
@@ -269,6 +281,10 @@ async function seededSession({ extension, seededUrl }: SessionContext): Promise<
   // The week's digest, made by its alarm with the clock advanced, and its share as it would be copied (4.7), then
   // each receipt's share as it would be copied (4.8).
   await makeDigestNow(extension, await extension.openExtensionPage('options.html'));
+  // The opt-in telemetry (sprint_5 5.7), turned on, and the seeded day's numbers sent: what went, and what the
+  // options page showed, are the `telemetry` channel.
+  await turnTelemetryOn(extension);
+  shown.push(await sendTodaysNumbers(extension));
   return [(await readShare(extension)).share, ...(await readReceiptShares(extension))];
 }
 
@@ -314,6 +330,10 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       await plantInNetwork(await extension.openExtensionPage('options.html'));
       await plantInDigest(await extension.openExtensionPage('options.html'));
       await plantKey(await extension.openExtensionPage('options.html'), await extension.serviceWorker());
+      await plantInTelemetry(
+        await extension.openExtensionPage('options.html'),
+        seed('token_lowercase').value,
+      );
       return [(await readShare(extension)).share];
     });
     const caught = new Set(

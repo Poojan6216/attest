@@ -73,8 +73,10 @@ describe('flag.set', () => {
     expect(await handler(AUTO_ON, extensionPage('/options.html'))).toEqual({ ok: true });
     const db: LedgerDb = await getLedger();
     expect((await readFlags(db)).ATTEST_AUTO_CHECK_GMAIL).toBe(true);
-    for (const flag of ['ATTEST_TELEMETRY', 'ATTEST_DOTS', 'ATTEST_ANYTHING']) {
+    for (const flag of ['ATTEST_DOTS', 'ATTEST_ANYTHING']) {
       expect(BusMessage.safeParse({ ...AUTO_ON, flag }).success).toBe(false);
     }
+    // The person's choice since sprint_5 5.7, sent by the options page alone.
+    expect(BusMessage.safeParse({ ...AUTO_ON, flag: 'ATTEST_TELEMETRY' }).success).toBe(true);
   });
 });

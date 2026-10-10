@@ -66,6 +66,7 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'flag.set': () => extensionPage('/options.html'),
   'byo.save': () => extensionPage('/options.html'),
   'byo.forget': () => extensionPage('/options.html'),
+  'telemetry.send': () => extensionPage('/options.html'),
   'ledger.wipe': () => extensionPage('/options.html'),
 };
 

@@ -26,6 +26,7 @@ import {
   type BusMessageType,
   type ByoForgetMessage,
   type ByoSaveMessage,
+  type TelemetrySendResult,
   type ClaimsImportResult,
   type FlagSetMessage,
   type GrantSaveMessage,
@@ -176,6 +177,11 @@ export async function sendSetting(
     | LedgerWipeMessage,
 ): Promise<SettingResult> {
   return sendCommand(message);
+}
+
+/** Asks the service worker to send the opt-in telemetry's last whole day now, if it is due (sprint_5 5.7; `sendCommand`). */
+export async function sendTelemetryNow(): Promise<TelemetrySendResult> {
+  return sendCommand({ type: 'telemetry.send' });
 }
 
 /**

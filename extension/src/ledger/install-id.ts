@@ -96,6 +96,12 @@ export async function getInstallId(): Promise<InstallId> {
   return id;
 }
 
+/** The stored id, or null when none is stored or what is stored is not one; never writes (a page's read). */
+export async function readInstallId(): Promise<InstallId | null> {
+  const stored = await readStored();
+  return stored.kind === 'valid' ? stored.id : null;
+}
+
 /** Replaces the id with a new random one. Past and future telemetry reports can no longer be linked. */
 export async function resetInstallId(): Promise<InstallId> {
   const id = await writeFreshId();

@@ -29,13 +29,16 @@ import { OBSERVER_HARNESS_MARKER } from './support/observer-harness-marker';
  *  - Zod 4's eval probe, skipped when `jitless` is set (src/setup.ts sets it before any schema is built), in every
  *    chunk that bundles Zod;
  *  - the person's own model key's one call (src/intel/providers/byo.ts `post`; sprint_5 5.4, Decisions [5.4]): a fetch
- *    of a vendor's `endpoint` in BYO_VENDORS, nowhere else, once, in the service worker alone.
- * Sprint 5.7 adds the one fetch in src/telemetry/send.ts here, with a Decisions.md entry.
+ *    of a vendor's `endpoint` in BYO_VENDORS, nowhere else, once, in the service worker alone;
+ *  - the opt-in telemetry's one call (src/telemetry/send.ts `post`; sprint_5 5.7, Decisions [5.7]): a POST of a body
+ *    with exactly its options, once, in the service worker alone.
  */
 const ZOD_PROBE =
   /if\([\w$]+\.jitless\|\|[^;]{0,120}Cloudflare`\)\)return!1;try\{return Function\(``\),!0\}catch\{return!1\}/g;
 const BYO_CALL = /\breturn fetch\([\w$]+\[[\w$]+\]\.endpoint,[\w$]+\)/g;
-const ALLOWED = [ZOD_PROBE, BYO_CALL];
+const TELEMETRY_CALL =
+  /\breturn fetch\([\w$]+,\{method:`POST`,headers:\{"content-type":`application\/json`\},body:[\w$]+,credentials:`omit`,referrerPolicy:`no-referrer`,cache:`no-store`\}\)/g;
+const ALLOWED = [ZOD_PROBE, BYO_CALL, TELEMETRY_CALL];
 
 const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ['fetch(', /\bfetch\s*\(/],
@@ -155,9 +158,11 @@ test('no shipped script reaches the network, evaluates code, or injects into a t
   }
   expect(hits).toEqual([]);
   // The allowlist is not stale: the Zod probe is really there (once per chunk that bundles Zod), and the one call a
-  // person's own key makes is there once, in the service worker, and in no page or content script.
+  // person's own key makes and the telemetry's one call are each there once, in the service worker, and in no page or
+  // content script.
   expect(allowedIn.get(ZOD_PROBE)?.length ?? 0).toBeGreaterThanOrEqual(1);
   expect(allowedIn.get(BYO_CALL)).toEqual(['background.js']);
+  expect(allowedIn.get(TELEMETRY_CALL)).toEqual(['background.js']);
 });
 
 /**

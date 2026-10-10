@@ -27,12 +27,12 @@ describe('BUS_MESSAGE_TYPES', () => {
   it('is frozen, so no consumer can reorder or extend it', () => {
     expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
     expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.erase'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(18);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(19);
   });
 });
 
 describe('BusMessage', () => {
-  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3, the grant of 4.4, the three settings of 4.5, the flag of 4.9 and the key commands of 5.3', () => {
+  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3, the grant of 4.4, the three settings of 4.5, the flag of 4.9, the key commands of 5.3 and the telemetry’s test send of 5.7', () => {
     expect([...BUS_MESSAGE_TYPES].sort()).toEqual(
       [
         'adapter.claims',
@@ -51,6 +51,7 @@ describe('BusMessage', () => {
         'reader.toggle',
         'receipt.event',
         'retention.save',
+        'telemetry.send',
         'ui.query',
         'ui.result',
       ].sort(),

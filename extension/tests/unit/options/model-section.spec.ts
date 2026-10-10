@@ -37,6 +37,7 @@ beforeEach(() => {
     modelOn: false,
     modelByoOn: false,
     byoVendor: null,
+    telemetryOn: false,
     health: [],
   };
   send = vi.fn<(command: SettingCommand) => Promise<SettingResult>>(() => Promise.resolve({ ok: true }));

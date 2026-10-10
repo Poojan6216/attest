@@ -31,6 +31,7 @@ import {
   GRADE_ALARM_PERIOD_MINUTES,
   PURGE_ALARM_PERIOD_MINUTES,
   STORAGE_KEYS,
+  TELEMETRY_ALARM_PERIOD_MINUTES,
 } from '../../src/config';
 import { plantIndexedDbProbe } from './support/channels';
 import { launchExtension, type LaunchedExtension } from './support/extension';
@@ -122,6 +123,8 @@ test.describe('service worker lifecycle', () => {
         [ALARM_NAMES.PURGE, PURGE_ALARM_PERIOD_MINUTES],
         [ALARM_NAMES.GRADE, GRADE_ALARM_PERIOD_MINUTES],
         [ALARM_NAMES.DIGEST, undefined],
+        // The opt-in telemetry's hourly look for a day to send (sprint_5 5.7): it sends nothing while telemetry is off.
+        [ALARM_NAMES.TELEMETRY, TELEMETRY_ALARM_PERIOD_MINUTES],
       ].sort(),
     );
     // Its time on the worker's own clock: Monday at 09:00.

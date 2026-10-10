@@ -3,8 +3,8 @@
  *
  * Runs the real build through a scripted session (three fixture pages, the Gmail and Calendar fixtures with their
  * content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing) with Chromium's NetLog on,
- * then asserts that every request the extension or a page initiated went to an allowlisted host. In this sprint the
- * allowlist is empty. Sprint 4's surfaces run first (sprint_4 close, QA review GAP 7; ./support/sprint4-surfaces.ts):
+ * then asserts that every request the extension or a page initiated went to an allowlisted host. With the opt-in
+ * telemetry and the person's own model key off, as here, the allowlist is empty. Sprint 4's surfaces run first (sprint_4 close, QA review GAP 7; ./support/sprint4-surfaces.ts):
  * Check Gmail for me opening its tab, alerts, a receipt's share and image, the weekly digest with its page and share,
  * a grant saved, both exports, a reader turned off and on, and Delete all data. Then every page is reloaded in turn
  * for 5 minutes.
@@ -20,7 +20,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { NETWORK_ALLOWLIST } from '../../src/config';
+import { allowedHosts, NETWORK_ALLOWLIST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
 import { datedClock, pasteActivity } from './support/paste';
@@ -39,7 +39,11 @@ import {
 
 declare const chrome: WxtBrowser;
 
-/** Sprint 0: empty. Sprint 5 adds exactly the telemetry host, and only while telemetry is on. */
+/**
+ * Empty: the session runs with the opt-in telemetry and the person's own model key off, so the extension may contact
+ * no host (src/config.ts `allowedHosts` with both off). With either on, exactly its one host is allowed, and
+ * tests/e2e/telemetry.spec.ts and tests/e2e/intel.spec.ts hold the extension to that (sprint_5 5.4, 5.7).
+ */
 const ALLOWLIST: readonly string[] = [];
 const SESSION_MS = 5 * 60_000;
 // One reload every STEP_MS: with the observer fixtures (sprint_2 2.7) nine pages, each reloaded at least twice.
@@ -218,6 +222,7 @@ async function plantCanaries(session: GuardedSession): Promise<void> {
 test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
   test('the allowlist asserted here is the allowlist the extension ships', () => {
     expect([...NETWORK_ALLOWLIST]).toEqual([...ALLOWLIST]);
+    expect(allowedHosts({ telemetry: false, byo: null })).toEqual([...ALLOWLIST]);
   });
 
   test('a 5-minute scripted session makes no request outside the allowlist', async () => {

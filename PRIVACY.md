@@ -1,10 +1,10 @@
 # Attest privacy policy
 
-Version 0.4. Effective 9 October 2026 (version 0.3, of the same day, still listed three permissions and described the retention choice, deleting all data and the receipts' export as coming later, and said nothing of alerts, the weekly digest, shares, turning a reader off or Check Gmail for me; version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
+Version 0.5. Effective 10 October 2026 (version 0.4, of 9 October 2026, said nothing ever leaves your browser and that telemetry would come later, before your own model key and the usage numbers existed; version 0.3, of 9 October 2026, still listed three permissions and described the retention choice, deleting all data and the receipts' export as coming later, and said nothing of alerts, the weekly digest, shares, turning a reader off or Check Gmail for me; version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
-Nothing leaves your browser. Attest reads only pages you have open, plus, if you turn on Check Gmail for me, the one Gmail tab it opens in front of you. It keeps what it finds in your browser and sends nothing to any server. It has no accounts, no ads and no analytics. It never clicks, types, sends or buys anything on any page.
+Nothing leaves your browser unless you turn it on. Attest reads only pages you have open, plus, if you turn on Check Gmail for me, the one Gmail tab it opens in front of you. It keeps what it finds in your browser. It sends something only if you turn on one of two options, both off by default: your own model key, which sends a few facts about a claim to the AI company your key is for, and anonymous usage numbers, which send counts once a day. It has no accounts and no ads. It never clicks, types, sends or buys anything on any page.
 
 ## Where things stand today
 
@@ -86,9 +86,11 @@ A later version adds an optional passphrase that encrypts the stored facts. It w
 
 ## What leaves your browser
 
-Nothing. Attest makes no network requests. A test in the source code records every request the extension makes during a scripted session, every feature above included, and fails the build if any host is contacted. Alerts are shown by Chrome and your operating system on this device, and a share leaves your browser only if you paste it somewhere yourself.
+Nothing, unless you turn on one of the two options below. With both off, as they are until you turn them on, Attest makes no network requests: a test in the source code records every request the extension makes during a scripted session, every feature above included, and fails the build if any host is contacted. Alerts are shown by Chrome and your operating system on this device, and a share leaves your browser only if you paste it somewhere yourself.
 
-A later version may offer telemetry to help fix page readers that stop working. It will be off by default and will send nothing unless you turn it on. If you do, it sends one report a day made of counts and yes-or-no values (for example, how many receipts of each grade that day, or whether a page reader is working), the Attest version, the Chrome major version, the date and the random install id. It never sends email addresses, names, subjects, amounts, page content or anything you typed. The exact list of fields will be published in this policy before telemetry ships.
+**Your own model key** (Options, Model). If you save an Anthropic or OpenAI key and turn it on, Attest asks that company's official service (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim it is still checking with a partial match, once per claim: the claim's kind of action, who it was to (an email address or a name), its short subject, its amount and its time, and the same for the one sent email or event it matched. Never a page, never what you asked an agent. Your key goes only to that company, in the request's header; the company keeps what it receives under its own terms, and bills your key. If Chrome's own on-device model is on and ready, Attest uses it instead, and nothing is sent.
+
+**Anonymous usage numbers** (Options, Privacy), to help fix page readers that stop working. If you turn them on, Attest sends one report a day, about the day before, to Attest's own telemetry server (this pre-release has none running, so nothing arrives anywhere yet). The report holds only counts and yes-or-no values: how many receipts each agent got of each grade that day, which page readers were on, how many hours of the day they covered and whether they worked; and the Attest version, the Chrome major version, the date and the random install id. It never holds an email address, a name, a subject, an amount, page content or anything you typed: its format allows no other text. The options page shows exactly what the next report holds, and a test checks that what is sent is exactly what is shown.
 
 Any other feature that would send something off your computer will be off by default, described here first, and need you to turn it on.
 
@@ -98,7 +100,7 @@ Attest does not sell or share data. No data reaches us.
 
 When Attest is installed it creates a random id (a version 4 UUID). It is not made from anything about you, your accounts or your computer. It is kept in the extension's local storage.
 
-Its only use is the opt-in telemetry described above, which does not exist yet. You can see the id and reset it in Attest's options, under Danger zone. After a reset, reports sent before and after can no longer be linked to each other.
+Its only use is the opt-in usage numbers described above. You can see the id and reset it in Attest's options, under Danger zone. After a reset, reports sent before and after can no longer be linked to each other.
 
 ## How long data is kept
 

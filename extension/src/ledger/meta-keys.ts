@@ -12,6 +12,7 @@ import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
 import { CLOCK_REPAIR_PREFIX } from './clock-repairs';
 import { PURGE_TRUSTED_AT } from './retention-clock';
 import { RETENTION_DAYS_KEY } from './settings';
+import { TELEMETRY_SENT_DAY } from './telemetry-sent';
 
 import { ALERTS_MUTED_PREFIX, LAST_IMPORT_PREFIX } from './agent-keys';
 
@@ -37,4 +38,5 @@ export const META_KEYS: readonly string[] = Object.freeze([
   AUTO_CHECK_AGENTS,
   READER_OFF_PREFIX,
   FLAG_PREFIX,
+  TELEMETRY_SENT_DAY,
 ]);

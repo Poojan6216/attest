@@ -29,6 +29,7 @@ import { onLedgerWipe, onRetentionSave } from './settings';
 import { onReceiptEvent } from './user-events';
 import { type GradingDeps, SHIPPED_GRADING } from './grading';
 import { askTheModel } from './intel';
+import { onTelemetrySend } from './telemetry';
 import { type ObserverContext, onCoveragePing, onHealth, onObservations } from './observer-messages';
 import { createPassState } from './observer-state';
 import { wrongSite } from './sender-site';
@@ -100,6 +101,7 @@ export function createHandlers(
     'flag.set': (message) => onFlagSet(message, settings),
     'byo.save': (message) => onByoSave(message, settings),
     'byo.forget': () => onByoForget(settings),
+    'telemetry.send': () => onTelemetrySend(),
     'ledger.wipe': () => onLedgerWipe({ notify: imports.notify, syncReaders: () => syncReaders(readers) }),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??

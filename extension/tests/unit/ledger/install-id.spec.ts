@@ -8,6 +8,7 @@ import {
   getInstallId,
   InstallIdError,
   onInstallIdChanged,
+  readInstallId,
   resetInstallId,
 } from '../../../src/ledger/install-id';
 import { type LogRecord, setLogSink } from '../../../src/log';
@@ -138,6 +139,20 @@ describe('getInstallId', () => {
     records = [];
 
     expect(await getInstallId()).toBe(existing);
+    expect(records).toEqual([]);
+  });
+});
+
+describe("readInstallId (a page's read: sprint_5 5.7, the telemetry preview)", () => {
+  it('returns a valid stored id, and null for a missing or corrupt one, never writing', async () => {
+    expect(await readInstallId()).toBeNull();
+    expect(await stored()).toBeUndefined();
+    await browser.storage.local.set({ [KEY]: 'hello' });
+    expect(await readInstallId()).toBeNull();
+    expect(await stored()).toBe('hello');
+    const existing = await resetInstallId();
+    records = [];
+    expect(await readInstallId()).toBe(existing);
     expect(records).toEqual([]);
   });
 });

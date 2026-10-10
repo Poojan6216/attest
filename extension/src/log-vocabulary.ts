@@ -27,6 +27,10 @@ export const LOG_EVENTS = [
   'intel.ask_failed',
   'intel.failed',
   'intel.timeout',
+  'telemetry.not_built',
+  'telemetry.refused',
+  'telemetry.send_failed',
+  'telemetry.sent',
   'byo.forget_failed',
   'byo.forgotten',
   'byo.save_failed',
@@ -89,6 +93,7 @@ export const LOG_EVENTS = [
   'observer.snapshot_skipped',
   'observer.wrong_site',
   'options.byo_save_failed',
+  'options.telemetry_preview_failed',
   'options.byo_toggle_failed',
   'options.model_download_failed',
   'options.model_toggle_failed',
@@ -160,6 +165,7 @@ export const LOG_VALUES = [
   'flag.set',
   'byo.save',
   'byo.forget',
+  'telemetry.send',
   'ledger.wipe',
   // A person's receipt events (src/background/user-events.ts): the kind and the refusal codes.
   'override',
@@ -307,6 +313,7 @@ export const LOG_VALUES = [
   'attest.purge',
   'attest.grade',
   'attest.digest',
+  'attest.telemetry',
   // Agents and observers: our own adapter and observer ids.
   'muse',
   'chatgpt',
@@ -341,6 +348,7 @@ export const LOG_VALUES = [
   'ATTEST_AUTO_CHECK_GMAIL',
   'ATTEST_MODEL',
   'ATTEST_MODEL_BYO',
+  'ATTEST_TELEMETRY',
 ] as const;
 
 /** Error class names that may be printed (./log-error-names.ts, apart so this file stays one page). */

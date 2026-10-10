@@ -30,6 +30,8 @@ interface Surface {
   readonly walk: boolean;
   /** The fewest UNASKED rows it shows: the demo's one wherever receipts are listed. */
   readonly unaskedRows: number;
+  /** How many verbatim blocks it shows (./support/a11y.ts `CopyReport`): the telemetry preview, on the options page alone. */
+  readonly verbatim?: number;
 }
 
 const firstRow = async (page: Page): Promise<void> => {
@@ -68,6 +70,7 @@ const SURFACES: readonly Surface[] = [
     },
     walk: false,
     unaskedRows: 0,
+    verbatim: 1,
   },
   { name: 'digest', path: 'digest.html', ready: digestShared, walk: true, unaskedRows: 1 },
 ];
@@ -110,6 +113,7 @@ for (const theme of ['light', 'dark'] as const) {
         expect(await seriousViolations(page), surface.name).toEqual([]);
         const copy = await copyReport(page);
         expect(copy.faults, surface.name).toEqual([]);
+        expect(copy.verbatim, surface.name).toBe(surface.verbatim ?? 0);
         expect(copy.unaskedRows, surface.name).toBeGreaterThanOrEqual(surface.unaskedRows);
         if (surface.unaskedRows > 0) expect(copy.chips, surface.name).toBeGreaterThan(0);
         expect(await runningAnimations(page), surface.name).toEqual([]);

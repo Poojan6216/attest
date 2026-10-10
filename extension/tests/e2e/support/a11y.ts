@@ -46,6 +46,12 @@ export async function seriousViolations(page: Page): Promise<string[]> {
 export interface CopyReport {
   /** What breaks the copy rules, in words. */
   readonly faults: readonly string[];
+  /**
+   * How many verbatim blocks (`[data-verbatim]`) the page showed: data shown exactly as it is sent (the telemetry
+   * payload the options page previews, sprint_5 5.7), whose keys are the schema's (`NOT_FOUND`), not prose. Their text
+   * is left out of the copy rules, and each surface says how many it may show.
+   */
+  readonly verbatim: number;
   /** How many grade chips, and how many UNASKED rows, the page showed: a check over none proves nothing. */
   readonly chips: number;
   readonly unaskedRows: number;
@@ -56,8 +62,11 @@ export async function copyReport(page: Page): Promise<CopyReport> {
   return page.evaluate((names: readonly string[]) => {
     const faults: string[] = [];
     const attributes = ['aria-label', 'title', 'alt', 'placeholder'];
+    const verbatim = [...document.querySelectorAll<HTMLElement>('[data-verbatim]')];
+    let prose = document.body.innerText;
+    for (const block of verbatim) prose = prose.replace(block.innerText, '');
     const pieces = [
-      document.body.innerText,
+      prose,
       ...[...document.querySelectorAll('[aria-label], [title], [alt], [placeholder]')].flatMap((element) =>
         attributes.map((name) => element.getAttribute(name) ?? '').filter((value) => value !== ''),
       ),
@@ -82,7 +91,7 @@ export async function copyReport(page: Page): Promise<CopyReport> {
       unaskedRows += 1;
       if (!row.textContent.includes('Likely agent:')) faults.push('an UNASKED row without "Likely agent"');
     }
-    return { faults, chips, unaskedRows };
+    return { faults, verbatim: verbatim.length, chips, unaskedRows };
   }, GRADE_NAMES);
 }
 

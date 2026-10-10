@@ -44,6 +44,8 @@ import { CalendarSnapshot } from '../observers/gcal/snapshot';
 import {
   ByoForgetMessage,
   ByoSaveMessage,
+  TelemetrySendMessage,
+  TelemetrySendResult,
   FlagSetMessage,
   GrantSaveMessage,
   GrantSaveResult,
@@ -96,6 +98,7 @@ export const BusMessageType = z.enum([
   'flag.set',
   'byo.save',
   'byo.forget',
+  'telemetry.send',
   'ledger.wipe',
 ]);
 
@@ -308,6 +311,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   FlagSetMessage,
   ByoSaveMessage,
   ByoForgetMessage,
+  TelemetrySendMessage,
   LedgerWipeMessage,
 ]);
 
@@ -350,6 +354,7 @@ export const PAGE_COMMAND_RESULTS = Object.freeze({
   'flag.set': SettingResult,
   'byo.save': SettingResult,
   'byo.forget': SettingResult,
+  'telemetry.send': TelemetrySendResult,
   'ledger.wipe': SettingResult,
 } as const satisfies Partial<Record<BusMessageType, z.ZodType>>);
 

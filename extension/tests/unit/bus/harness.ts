@@ -21,6 +21,7 @@ import {
   CoveragePingMessage,
   ByoForgetMessage,
   ByoSaveMessage,
+  TelemetrySendMessage,
   FlagSetMessage,
   GrantSaveMessage,
   LedgerWipeMessage,
@@ -300,6 +301,7 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     key: 'sk-ant-invented-0000000000',
   }),
   'byo.forget': ByoForgetMessage.parse({ type: 'byo.forget' }),
+  'telemetry.send': TelemetrySendMessage.parse({ type: 'telemetry.send' }),
   'ledger.wipe': LedgerWipeMessage.parse({ type: 'ledger.wipe' }),
 };
 
@@ -337,8 +339,9 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'grant.save': { ...VALID['grant.save'], grant: { ...VALID['grant.save'].grant, notes: SECRET } },
   'retention.save': { type: 'retention.save', days: 7 },
   'reader.toggle': { ...VALID['reader.toggle'], reader: 'muse' },
-  'flag.set': { ...VALID['flag.set'], flag: 'ATTEST_TELEMETRY' },
+  'flag.set': { ...VALID['flag.set'], flag: 'ATTEST_DOTS' },
   'byo.save': { ...VALID['byo.save'], key: SECRET },
   'byo.forget': { type: 'byo.forget', key: SECRET },
+  'telemetry.send': { type: 'telemetry.send', payload: SECRET },
   'ledger.wipe': { type: 'ledger.wipe', confirm: SECRET },
 };

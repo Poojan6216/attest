@@ -42,6 +42,7 @@ beforeEach(() => {
     modelOn: false,
     modelByoOn: false,
     byoVendor: null,
+    telemetryOn: false,
     health: [
       AdapterHealth.parse({
         adapterId: 'gmail.sent',
@@ -166,8 +167,9 @@ describe('Adapters: Check Gmail for me (sprint_4 4.9)', () => {
 });
 
 describe('Privacy', () => {
-  it('links the privacy architecture, saves the retention window explicitly, and shows telemetry off and disabled', async () => {
-    await show(h(PrivacySection, { sources }));
+  it('links the privacy architecture, saves the retention window explicitly, and shows telemetry off', async () => {
+    const telemetry = { preview: () => Promise.resolve(null), sendNow: vi.fn() };
+    await show(h(PrivacySection, { sources, telemetry }));
     const link = [...root.querySelectorAll('a')].find(({ href }) => href === PRIVACY_DOC_URL);
     expect(link?.target).toBe('_blank');
     const radios = [...root.querySelectorAll<HTMLInputElement>('input[name="retention"]')];
@@ -188,9 +190,12 @@ describe('Privacy', () => {
     expect(root.querySelector('[role="status"]')?.textContent).toBe(
       'Saved. Attest keeps 30 days of history.',
     );
-    const telemetry = root.querySelector<HTMLInputElement>('input[aria-describedby="telemetry-note"]');
-    expect([telemetry?.disabled, telemetry?.checked]).toEqual([true, false]);
-    expect(root.querySelector('#telemetry-note')?.textContent).toContain('Coming in a later version.');
+    // The opt-in telemetry (sprint_5 5.7; tests/unit/options/telemetry.spec.ts): off, and nothing to send while off.
+    const group = root.querySelector('[aria-labelledby="telemetry-heading"]');
+    expect(group?.querySelector('[role="status"]')?.textContent).toBe('Usage numbers are off.');
+    expect(button('Turn on usage numbers')?.disabled).toBe(false);
+    expect(button('Send a test payload now')?.disabled).toBe(true);
+    expect(telemetry.sendNow).not.toHaveBeenCalled();
   });
 
   it('says when the window was not saved', async () => {

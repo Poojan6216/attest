@@ -43,38 +43,7 @@ export const SESSION_KEYS = {
  */
 export const importExtractorId = (agent: string): string => `import.${agent}`;
 
-/**
- * Hard Rule 1: hosts the extension may contact. Empty: nothing leaves the browser.
- * Sprint 5 adds exactly one telemetry host here, and only when the user opts in.
- */
-export const NETWORK_ALLOWLIST: readonly string[] = [];
-
-/**
- * The model vendors a person may bring their own key for (sprint_5 5.3; agents/intel_engineer.md rule 6): each one's
- * official API host, the one endpoint Attest posts to, and the model it asks. A vendor's host may be contacted only
- * while the person has their own key on with that vendor (src/intel/providers/byo.ts); it is never in
- * NETWORK_ALLOWLIST, which holds what may be contacted whatever the person chose.
- */
-export const BYO_VENDORS = Object.freeze({
-  anthropic: {
-    host: 'api.anthropic.com',
-    endpoint: 'https://api.anthropic.com/v1/messages',
-    model: 'claude-haiku-4-5-20251001',
-  },
-  openai: {
-    host: 'api.openai.com',
-    endpoint: 'https://api.openai.com/v1/chat/completions',
-    model: 'gpt-4o-mini',
-  },
-} as const);
-
-export type ByoVendor = keyof typeof BYO_VENDORS;
-
-/** The vendors in a fixed order, for their schema and the options page (tests/unit/config.spec.ts pins it to BYO_VENDORS). */
-export const BYO_VENDOR_NAMES = Object.freeze([
-  'anthropic',
-  'openai',
-] as const satisfies readonly ByoVendor[]);
+export * from './config-network';
 
 /**
  * Width of the time buckets used by the `[type+timeBucket]` ledger index (storage plumbing, not a
@@ -154,12 +123,14 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
 
 /**
  * The flags a person turns on or off in the options page: the Gmail auto-check (sprint_4 4.9), Chrome's on-device
- * model (sprint_5 5.2) and their own model key (5.3). Each other flag comes with its feature.
+ * model (sprint_5 5.2), their own model key (5.3) and the opt-in telemetry (5.7). Each other flag comes with its
+ * feature.
  */
 export const SETTABLE_FLAGS = Object.freeze([
   'ATTEST_AUTO_CHECK_GMAIL',
   'ATTEST_MODEL',
   'ATTEST_MODEL_BYO',
+  'ATTEST_TELEMETRY',
 ] as const satisfies readonly FeatureFlag[]);
 
 export type SettableFlag = (typeof SETTABLE_FLAGS)[number];
@@ -185,14 +156,24 @@ export const AUTO_CHECK_URL = 'https://mail.google.com/mail/u/0/#sent';
 
 /**
  * Service-worker alarm names (extension_engineer: alarm names are constants; duplicates are cleared on
- * install/update): the retention purge (Sprint 2.6), the grace alarm that runs a grading batch (sprint_3 3.13) and the
- * weekly digest (sprint_4 4.7).
+ * install/update): the retention purge (Sprint 2.6), the grace alarm that runs a grading batch (sprint_3 3.13), the
+ * weekly digest (sprint_4 4.7) and the opt-in telemetry's daily send (sprint_5 5.7).
  */
 export const ALARM_NAMES = Object.freeze({
   PURGE: 'attest.purge',
   GRADE: 'attest.grade',
   DIGEST: 'attest.digest',
+  TELEMETRY: 'attest.telemetry',
 } as const);
+
+/**
+ * How often the opt-in telemetry's alarm looks for a day to send (sprint_5 5.7; src/background/telemetry.ts): each
+ * hour, so a day is sent soon after it ends even when Chrome was closed at midnight; each day at most once.
+ */
+export const TELEMETRY_ALARM_PERIOD_MINUTES = 60;
+
+/** How soon a recreated telemetry alarm first fires after a browser start. */
+export const TELEMETRY_STARTUP_DELAY_MINUTES = 2;
 
 /**
  * When the weekly digest is made (sprint_4 4.7; src/background/digest.ts): Monday (`Date.getDay()` 1) at 09:00 on the

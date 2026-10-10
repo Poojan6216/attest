@@ -34,6 +34,8 @@ export interface SettingsView {
   readonly modelByoOn: boolean;
   /** The vendor of the person's saved key, or null when none is saved; never the key (src/background/byo.ts). */
   readonly byoVendor: ByoVendor | null;
+  /** Whether the opt-in telemetry is on (flag ATTEST_TELEMETRY; sprint_5 5.7). */
+  readonly telemetryOn: boolean;
   readonly health: readonly AdapterHealth[];
 }
 
@@ -62,6 +64,7 @@ export const LIVE_SETTINGS: SettingsSources = {
       modelOn: consent.flags.ATTEST_MODEL,
       modelByoOn: consent.flags.ATTEST_MODEL_BYO,
       byoVendor: await loadByoVendor(),
+      telemetryOn: consent.flags.ATTEST_TELEMETRY,
       health: await loadHealth(),
     };
   },

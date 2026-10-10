@@ -4,18 +4,20 @@ import { LIVE_SETTINGS, type SettingsSources, useSettings } from '../use-setting
 import { AwayDetection } from './AwayDetection';
 import { RetentionControl } from './RetentionControl';
 import { Section } from './Section';
-import { TelemetryToggle } from './TelemetryToggle';
+import { LIVE_TELEMETRY, type TelemetrySources, TelemetryToggle } from './TelemetryToggle';
 
 export interface PrivacySectionProps {
   /** Where the section reads and saves; the ledger, storage and the bus when absent. */
   readonly sources?: SettingsSources;
+  /** Where the telemetry's preview and test send come from; this page's ledger and the bus when absent. */
+  readonly telemetry?: TelemetrySources;
 }
 
 /**
  * What Attest keeps and where (build_spec §4, Hard Rules 1 and 2), in plain words, with a link to the privacy
- * architecture; how long it keeps history; telemetry, not yet built; and away detection (sprint_4 4.5).
+ * architecture; how long it keeps history; the opt-in telemetry (sprint_5 5.7); and away detection (sprint_4 4.5).
  */
-export function PrivacySection({ sources = LIVE_SETTINGS }: PrivacySectionProps) {
+export function PrivacySection({ sources = LIVE_SETTINGS, telemetry = LIVE_TELEMETRY }: PrivacySectionProps) {
   const state = useSettings(sources);
   return (
     <Section id="privacy">
@@ -42,12 +44,18 @@ export function PrivacySection({ sources = LIVE_SETTINGS }: PrivacySectionProps)
         </p>
       ) : null}
       {state.status === 'ready' ? (
-        <RetentionControl
-          stored={state.view.retentionDays}
-          save={(days) => sources.send({ type: 'retention.save', days })}
-        />
+        <>
+          <RetentionControl
+            stored={state.view.retentionDays}
+            save={(days) => sources.send({ type: 'retention.save', days })}
+          />
+          <TelemetryToggle
+            on={state.view.telemetryOn}
+            toggle={(on) => sources.send({ type: 'flag.set', flag: 'ATTEST_TELEMETRY', on })}
+            sources={telemetry}
+          />
+        </>
       ) : null}
-      <TelemetryToggle />
       <AwayDetection />
     </Section>
   );
