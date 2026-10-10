@@ -76,40 +76,40 @@ export const SERVICE_WORKER_TIMEOUT_MS = 30_000;
  * alone.
  */
 export async function waitForReaders(worker: Worker): Promise<void> {
+  // No named function inside the callback: `pnpm bench` runs this file under tsx, which wraps a named function in a
+  // `__name` helper that the worker, evaluating the callback alone, does not have.
   await worker.evaluate(async () => {
-    const off = async (): Promise<string[]> => {
-      if (!(await indexedDB.databases()).some(({ name }) => name === 'attest')) return [];
-      return new Promise<string[]>((resolve) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          resolve([]);
-        };
-        open.onsuccess = () => {
-          const db = open.result;
-          if (!db.objectStoreNames.contains('meta')) {
-            db.close();
-            resolve([]);
-            return;
-          }
-          const store = db.transaction('meta').objectStore('meta');
-          const found: string[] = [];
-          for (const reader of ['gmail', 'gcal']) {
-            const get = store.get(`readerOff.${reader}`);
-            get.onsuccess = () => {
-              const row: unknown = get.result;
-              if (typeof row === 'object' && row !== null && Reflect.get(row, 'value') !== false)
-                found.push(reader);
-            };
-          }
-          store.transaction.oncomplete = () => {
-            db.close();
-            resolve(found);
-          };
-        };
-      });
-    };
     for (let tries = 0; tries < 400; tries += 1) {
-      const readersOff = await off();
+      const readersOff = (await indexedDB.databases()).some(({ name }) => name === 'attest')
+        ? await new Promise<string[]>((resolve) => {
+            const open = indexedDB.open('attest');
+            open.onerror = () => {
+              resolve([]);
+            };
+            open.onsuccess = () => {
+              const db = open.result;
+              if (!db.objectStoreNames.contains('meta')) {
+                db.close();
+                resolve([]);
+                return;
+              }
+              const store = db.transaction('meta').objectStore('meta');
+              const found: string[] = [];
+              for (const reader of ['gmail', 'gcal']) {
+                const get = store.get(`readerOff.${reader}`);
+                get.onsuccess = () => {
+                  const row: unknown = get.result;
+                  if (typeof row === 'object' && row !== null && Reflect.get(row, 'value') !== false)
+                    found.push(reader);
+                };
+              }
+              store.transaction.oncomplete = () => {
+                db.close();
+                resolve(found);
+              };
+            };
+          })
+        : [];
       const ids = (await chrome.scripting.getRegisteredContentScripts()).map((script) => script.id);
       if (['gmail', 'gcal'].every((reader) => readersOff.includes(reader) !== ids.includes(reader))) return;
       await new Promise((resolve) => setTimeout(resolve, 25));
