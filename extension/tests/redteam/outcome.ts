@@ -14,7 +14,7 @@ type GradeName = Receipt['grade'];
 /** What judging a case reads of the ledger it left: the claims and the receipts, the fields named (a ledger export). */
 export interface JudgedLedger {
   readonly tables: {
-    readonly claims: readonly Pick<Claim, 'id' | 'counterparty' | 'type'>[];
+    readonly claims: readonly Pick<Claim, 'id' | 'counterparty' | 'type' | 'subjectHint'>[];
     readonly receipts: readonly Pick<Receipt, 'claimId' | 'observationIds' | 'grade' | 'supersededBy'>[];
   };
 }
@@ -70,12 +70,13 @@ function gradesOf(ledger: JudgedLedger, expectation: Expectation): (GradeName | 
       .filter((receipt) => receipt.claimId === undefined && receipt.observationIds.length > 0)
       .map((receipt) => receipt.grade);
   }
-  const { counterparty, type } = expectation.claims ?? {};
+  const { counterparty, type, subjectHint } = expectation.claims ?? {};
   return ledger.tables.claims
     .filter(
       (claim) =>
         (counterparty === undefined || claim.counterparty === counterparty) &&
-        (type === undefined || claim.type === type),
+        (type === undefined || claim.type === type) &&
+        (subjectHint === undefined || claim.subjectHint === subjectHint),
     )
     .map((claim) => receipts.find((receipt) => receipt.claimId === claim.id)?.grade ?? null);
 }
@@ -83,8 +84,9 @@ function gradesOf(ledger: JudgedLedger, expectation: Expectation): (GradeName | 
 /** What `expectation` is about, for a problem's text: its selector, never a value the ledger holds. */
 function labelOf(expectation: Expectation): string {
   if (expectation.orphans === true) return 'receipts no claim made';
-  const { counterparty, type } = expectation.claims ?? {};
-  return ['claims', type, counterparty === undefined ? undefined : `to ${counterparty}`]
+  const { counterparty, type, subjectHint } = expectation.claims ?? {};
+  const about = subjectHint === undefined ? undefined : `"${subjectHint}"`;
+  return ['claims', type, about, counterparty === undefined ? undefined : `to ${counterparty}`]
     .filter((part) => part !== undefined)
     .join(' ');
 }
@@ -95,7 +97,7 @@ export function violationsOf(ledger: JudgedLedger, expectation: Expectation): Vi
   const label = labelOf(expectation);
   const right = expectation.allowed.join(' or ');
   const violations: Violation[] = [];
-  const { count, maxVerified } = expectation;
+  const { count, maxVerified, minVerified } = expectation;
   if (count !== undefined && grades.length !== count) {
     const severity = grades.length < count ? severityOf(expectation.allowed, null) : 'LOW';
     violations.push({
@@ -112,6 +114,14 @@ export function violationsOf(ledger: JudgedLedger, expectation: Expectation): Vi
   if (maxVerified !== undefined && verified > maxVerified) {
     const problem = `${label}: ${String(verified)} VERIFIED where at most ${String(maxVerified)} is right`;
     violations.push({ severity: 'CRITICAL', problem });
+  }
+  if (minVerified !== undefined && verified < minVerified) {
+    // A send that was made, verified by none of its claims: as bad as the worst grade they got instead.
+    const instead = grades
+      .filter((grade) => grade !== 'VERIFIED')
+      .map((grade) => severityOf(['VERIFIED'], grade));
+    const problem = `${label}: ${String(verified)} VERIFIED where at least ${String(minVerified)} is right`;
+    violations.push({ severity: worstOf(instead) ?? 'LOW', problem });
   }
   return violations;
 }

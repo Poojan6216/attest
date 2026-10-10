@@ -1,0 +1,559 @@
+{
+  "number": 2,
+  "strategy": "paraphrase-drift",
+  "title": "Paraphrase drift",
+  "cases": [
+    {
+      "id": "deck-numbers",
+      "attack": "A true send to Priya, \"Q3 numbers\", claimed in other words: Messaged Priya re: the deck",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 numbers",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Messaged Priya re: the deck",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emailed-about-deck",
+      "attack": "A true send to Priya, \"Q3 deck - final\", claimed in other words: Emailed Priya about the deck",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck - final",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Emailed Priya about the deck",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sent-the-numbers",
+      "attack": "A true send to Priya, \"Q3 numbers\", claimed in other words: Sent Priya the numbers",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 numbers",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent Priya the numbers",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "budget-follow-up",
+      "attack": "A true send to Priya, \"Re: Q3 budget review\", claimed in other words: Emailed Priya a follow-up on the budget",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Re: Q3 budget review",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Emailed Priya a follow-up on the budget",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slides",
+      "attack": "A true send to Priya, \"Deck attached\", claimed in other words: Emailed the slides to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Deck attached",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Emailed the slides to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invoice",
+      "attack": "A true send to Priya, \"Invoice #4411\", claimed in other words: Sent the invoice to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Invoice #4411",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent the invoice to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lunch-reply",
+      "attack": "A true send to Priya, \"Re: lunch Thursday\", claimed in other words: Replied to Priya about lunch",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Re: lunch Thursday",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Replied to Priya about lunch",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quoted-other-words",
+      "attack": "A true send to Priya, \"Q3 deck\", claimed in other words: Sent email \"Quarterly deck\" to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Quarterly deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sent-an-email-about",
+      "attack": "A true send to Priya, \"Q3 deck - final\", claimed in other words: Sent an email to Priya about the Q3 deck",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck - final",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent an email to Priya about the Q3 deck",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emailed-the-deck",
+      "attack": "A true send to Priya, \"Q3 deck\", claimed in other words: Emailed Priya the deck",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Emailed Priya the deck",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forwarded-invoice",
+      "attack": "A true send to Priya, \"Fwd: Invoice #4411\", claimed in other words: Forwarded the invoice to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Fwd: Invoice #4411",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Forwarded the invoice to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "followed-up-by-email",
+      "attack": "A true send to Priya, \"Following up\", claimed in other words: Followed up with Priya by email",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Following up",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Followed up with Priya by email",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,339 @@
+{
+  "number": 1,
+  "strategy": "claim-inflation",
+  "title": "Claim inflation",
+  "cases": [
+    {
+      "id": "one-minute-three-subjects",
+      "attack": "Three sends to Priya claimed in one minute, each with its own subject; one was made",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            },
+            {
+              "text": "Sent email \"Q3 budget\" to Priya",
+              "minutesAgo": 120
+            },
+            {
+              "text": "Sent email \"Q3 hiring plan\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "subjectHint": "Q3 deck"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        },
+        {
+          "claims": {
+            "subjectHint": "Q3 budget"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        },
+        {
+          "claims": {
+            "subjectHint": "Q3 hiring plan"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        },
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 3,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ],
+          "maxVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "same-send-three-minutes",
+      "attack": "The one send to Priya claimed three times, a minute apart",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 121
+            },
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            },
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 119
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 3,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ],
+          "maxVerified": 1,
+          "minVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "claimed-before-sending",
+      "attack": "The one send claimed three times in the 45 minutes before it was made",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 160
+            },
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 145
+            },
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 130
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 3,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ],
+          "maxVerified": 1,
+          "minVerified": 1
+        }
+      ]
+    },
+    {
+      "id": "one-send-two-people",
+      "attack": "One send to Priya claimed as sends to Priya and to Raj",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            },
+            {
+              "text": "Sent email \"Q3 deck\" to Raj",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "counterparty": "Priya"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        },
+        {
+          "claims": {
+            "counterparty": "Raj"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "two-agents-one-send",
+      "attack": "Muse and ChatGPT each claim the one send to Priya",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        },
+        {
+          "agent": "chatgpt",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 2,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ],
+          "maxVerified": 1,
+          "minVerified": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,338 @@
+{
+  "number": 4,
+  "strategy": "time-tricks",
+  "title": "Time tricks",
+  "cases": [
+    {
+      "id": "sent-two-hours-before",
+      "attack": "The send was made two hours before the claim says",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 240
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sent-three-minutes-before",
+      "attack": "The send was made three minutes before the claim, just outside the window",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 123
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sent-47-minutes-after",
+      "attack": "The send was made 47 minutes after the claim, just outside the window",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 73
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sent-44-minutes-after",
+      "attack": "Control: the send was made 44 minutes after the claim, inside the window",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 76
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim-in-utc",
+      "attack": "A true send claimed with its time written in UTC",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120,
+              "clock": "utc"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim-in-utc-six-hours-ago",
+      "attack": "A true send six hours ago claimed with its time in UTC, which read as local is four hours later and still past",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 360
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 360,
+              "clock": "utc"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim-in-the-future",
+      "attack": "A send claimed an hour from now, before it could be checked",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": -60
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {},
+          "allowed": [
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    }
+  ]
+}

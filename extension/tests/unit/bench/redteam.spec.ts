@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { prefixOf, reportMetrics, runRedteamBench } from '../../../../bench/redteam';
+import { ATTACKS_DIR, prefixOf, reportMetrics, runRedteamBench } from '../../../../bench/redteam';
 import { BENCHES, selectedBenches } from '../../../../bench/run_bench';
 import { Ulid } from '../../../src/core/schema';
 import { loadAttacks } from '../../redteam/attack-schema';
@@ -34,7 +34,7 @@ const CASE = {
       ],
     },
   ],
-  log: { agent: 'muse', lines: [{ text: 'Sent email "Deck" to Priya', minutesAgo: 120 }] },
+  logs: [{ agent: 'muse', lines: [{ text: 'Sent email "Deck" to Priya', minutesAgo: 120 }] }],
   expect: [
     {
       claims: { counterparty: 'Priya' },
@@ -229,6 +229,14 @@ const BAD_FIXTURES: readonly (readonly [string, () => void, RegExp])[] = [
     /two strategies share a number/u,
   ],
 ];
+
+describe('the committed strategies', () => {
+  it('each parse, one folder per number, so a broken fixture fails here and not first in a bench run', () => {
+    const strategies = loadAttacks(ATTACKS_DIR);
+    expect(strategies.length).toBeGreaterThan(0);
+    for (const strategy of strategies) expect(strategy.cases.length).toBeGreaterThan(0);
+  });
+});
 
 describe('a bad fixture fails naming its file', () => {
   it('refuses a missing attacks folder, so a mistyped path is never an empty report', () => {

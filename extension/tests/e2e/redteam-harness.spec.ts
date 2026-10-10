@@ -45,7 +45,7 @@ const CONTROL = {
           ],
         },
       ],
-      log: { agent: 'muse', lines: [{ text: 'Sent email "Q3 deck" to Priya', minutesAgo: 120 }] },
+      logs: [{ agent: 'muse', lines: [{ text: 'Sent email "Q3 deck" to Priya', minutesAgo: 120 }] }],
       expect: [{ claims: { type: 'email.sent' }, count: 1, allowed: ['VERIFIED'] }],
     },
   ],

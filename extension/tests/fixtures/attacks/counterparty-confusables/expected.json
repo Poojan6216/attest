@@ -1,0 +1,837 @@
+{
+  "number": 3,
+  "strategy": "counterparty-confusables",
+  "title": "Counterparty confusables",
+  "cases": [
+    {
+      "id": "dotless-i",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, pr\u0131ya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pr\u0131ya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cyrillic-p",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, \u0440riya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "\u0440riya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plus-tag",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priya+x@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya+x@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "subdomain-suffix",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priya@company.example.evil.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.example.evil.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zero-width",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, pri\u200bya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pri\u200bya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "extra-letter",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priyaa@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priyaa@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fullwidth-p",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, \uff50riya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "\uff50riya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "soft-hyphen",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, pri\u00adya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pri\u00adya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "word-joiner",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, pri\u2060ya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pri\u2060ya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "greek-omicron-domain",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priya@c\u03bfmpany.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@c\u03bfmpany.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "punycode-domain",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priya@xn--cmpany-1ve.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@xn--cmpany-1ve.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dotted-local-part",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, pri.ya@company.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pri.ya@company.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rn-for-m",
+      "attack": "The claim names priya@company.example; the send went to a look-alike, priya@cornpany.example",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@cornpany.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "uppercase-control",
+      "attack": "Control: the send went to PRIYA@COMPANY.EXAMPLE, the same mailbox",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "PRIYA@COMPANY.EXAMPLE",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.example",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gmail-dots-same-mailbox",
+      "attack": "The claim names priya@gmail.com; the send went to pri.ya@gmail.com, which Gmail delivers to the same mailbox",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "pri.ya@gmail.com",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@gmail.com",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "VERIFIED",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "other-tld",
+      "attack": "The claim names priya@company.com; the send went to priya@company.co",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "priya@company.co",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to priya@company.com",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "display-name-spoof",
+      "attack": "The claim names Priya; the send went to \"Priya\" at an attacker's address",
+      "pages": [
+        {
+          "kind": "gmail.sent",
+          "rows": [
+            {
+              "name": "Priya",
+              "email": "attacker@evil.example",
+              "subject": "Q3 deck",
+              "snippet": "Here it is.",
+              "minutesAgo": 120
+            },
+            {
+              "name": "Lee",
+              "email": "lee@company.example",
+              "subject": "Lunch",
+              "snippet": "Noon works.",
+              "minutesAgo": 600
+            }
+          ]
+        }
+      ],
+      "logs": [
+        {
+          "agent": "muse",
+          "lines": [
+            {
+              "text": "Sent email \"Q3 deck\" to Priya",
+              "minutesAgo": 120
+            }
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "claims": {
+            "type": "email.sent"
+          },
+          "count": 1,
+          "allowed": [
+            "PARTIAL",
+            "NOT_FOUND",
+            "UNVERIFIABLE"
+          ]
+        }
+      ]
+    }
+  ]
+}

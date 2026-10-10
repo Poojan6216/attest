@@ -12,7 +12,7 @@ import type { Page } from '@playwright/test';
 
 import type { LedgerExport } from '../../../src/ledger/export';
 import { AGENT_NAMES } from '../../../src/ui/labels';
-import type { AttackCase, AttackPage, Strategy } from '../../redteam/attack-schema';
+import type { AttackCase, AttackLog, AttackPage, Strategy } from '../../redteam/attack-schema';
 import { demoSentPage } from './demo';
 import { type LaunchedExtension, launchExtension } from './extension';
 import { installRouteGuard } from './network-guard';
@@ -95,26 +95,39 @@ async function openPage(
   );
 }
 
-/** Pastes `attackCase`'s log in the side panel, each line followed by its time, and imports what it finds. */
-async function pasteLog(extension: LaunchedExtension, attackCase: AttackCase, nowMs: number): Promise<void> {
-  const { log } = attackCase;
-  if (log === undefined) return;
-  const text = log.lines
-    .flatMap(({ text: line, minutesAgo }) => [
-      line,
-      clockAt(nowMs - minutesAgo * MINUTE_MS, FIXTURE_TIME_ZONE),
-    ])
+/** `log` as the agent's activity view writes it: each line, then its time (in the browser's zone, or in UTC, saying so). */
+function logText(log: AttackLog, nowMs: number): string {
+  return log.lines
+    .flatMap(({ text, minutesAgo, clock }) => {
+      const at = nowMs - minutesAgo * MINUTE_MS;
+      return [text, clock === 'utc' ? `${clockAt(at, 'UTC')} UTC` : clockAt(at, FIXTURE_TIME_ZONE)];
+    })
     .join('\n');
+}
+
+/**
+ * Pastes `log` in the side panel as a person does and imports what the preview finds. A preview with nothing to import
+ * (every line refused, each with its reason) imports nothing: the case's ledger then holds no claim from it.
+ */
+async function pasteLog(extension: LaunchedExtension, log: AttackLog, nowMs: number): Promise<void> {
   const panel = await extension.openExtensionPage('sidepanel.html');
   await panel.getByRole('button', { name: 'Add agent activity' }).click();
   await panel.getByRole('radio', { name: AGENT_NAMES[log.agent] }).check();
-  await panel.getByLabel('Activity log').fill(text);
+  await panel.getByLabel('Activity log').fill(logText(log, nowMs));
   await panel.getByRole('button', { name: 'Preview' }).click();
-  await panel.getByRole('button', { name: /^Import \d+ claims?$/u }).click();
+  const importButton = panel.getByRole('button', { name: /^Import \d+ claims?$/u });
+  const nothing = panel.getByText(/^Nothing to import from /u);
+  await importButton.or(nothing).first().waitFor({ timeout: READ_TIMEOUT_MS });
+  if (await nothing.isVisible()) {
+    await panel.close();
+    return;
+  }
+  await importButton.click();
   await panel
     .getByRole('status')
     .filter({ hasText: /^(?:Imported \d+|Attest already had)/u })
     .waitFor({ timeout: READ_TIMEOUT_MS });
+  await panel.close();
 }
 
 /** The receipts' grades and states, as one comparable line. */
@@ -157,7 +170,7 @@ export async function runAttackCase(
     const ledgerPage = await extension.openExtensionPage('options.html');
     for (const page of attackCase.pages)
       await openPage(extension, routes, ledgerPage, served(strategy, page, nowMs));
-    await pasteLog(extension, attackCase, nowMs);
+    for (const log of attackCase.logs ?? []) await pasteLog(extension, log, nowMs);
     return await settled(ledgerPage);
   } finally {
     await extension.close();
