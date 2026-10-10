@@ -12,9 +12,11 @@ import { DEFAULT_POLICY, loadPolicy } from '../../../src/core/policy';
 import { compareRatio, ratio, type Ratio } from '../../../src/core/ratio';
 import type { GradeContext, Observation, Ulid } from '../../../src/core/schema';
 import defaultPolicyJson from '../../../../policy/default.json';
-import { makeObservation } from '../ledger/fixtures';
+import { O1 } from './receipt-fixtures';
 
-const observation = makeObservation({}) as Observation;
+// A core-side observation: the ledger's fixtures would load fake-indexeddb and Dexie, which change globals the
+// poisoned run of src/core holds fixed (`pnpm test:poison`).
+const observation: Observation = O1;
 const ID = observation.id;
 
 const best = (score: Ratio): BestCandidate => ({
