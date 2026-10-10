@@ -1,0 +1,22 @@
+{
+  "bench": "intel",
+  "date": "2026-10-10",
+  "command": "pnpm bench",
+  "metrics": {
+    "intelCases": 24,
+    "intelLabelled": 14,
+    "intelAsked": 17,
+    "intelRulesVerifiedTrue": 5,
+    "intelRulesVerifiedFalse": 0,
+    "intelRulesPrecision": 1,
+    "intelRulesRecall": 0.3571,
+    "intelBuiltinMeasured": false,
+    "intelByoAnthropicMeasured": false,
+    "intelByoOpenaiMeasured": false,
+    "intelModelHelps": false,
+    "intelCorpusInvented": true,
+    "commit": "b29275acf988503678726b93ff3f6b03cdc6dd15",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}

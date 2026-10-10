@@ -25,7 +25,7 @@
     "gmailSentSubjectHintMaxCodePoints": 80,
     "gmailSentSubjectHintGatePassed": true,
     "gmailSentSeedsGatePassed": true,
-    "commit": "d71d49ebc3e132ce60d6a3eac6421efd51182049",
+    "commit": "b29275acf988503678726b93ff3f6b03cdc6dd15",
     "commitDirty": false,
     "node": "v22.14.0"
   }
