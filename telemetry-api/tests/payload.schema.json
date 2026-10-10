@@ -1,0 +1,299 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "installId": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "type": "string"
+    },
+    "extVersion": {
+      "pattern": "^(0|[1-9][0-9]{0,3})\\.(0|[1-9][0-9]{0,3})\\.(0|[1-9][0-9]{0,3})$",
+      "type": "string"
+    },
+    "chromeMajor": {
+      "maximum": 999,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "dayBucket": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "type": "string"
+    },
+    "adaptersEnabled": {
+      "additionalProperties": false,
+      "properties": {
+        "muse": {
+          "type": "boolean"
+        },
+        "chatgpt": {
+          "type": "boolean"
+        },
+        "dots": {
+          "type": "boolean"
+        },
+        "claude": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "chatgpt",
+        "claude",
+        "dots",
+        "muse"
+      ],
+      "type": "object"
+    },
+    "observersEnabled": {
+      "additionalProperties": false,
+      "properties": {
+        "gmail": {
+          "type": "boolean"
+        },
+        "gcal": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "gcal",
+        "gmail"
+      ],
+      "type": "object"
+    },
+    "counts": {
+      "additionalProperties": false,
+      "properties": {
+        "muse": {
+          "additionalProperties": false,
+          "properties": {
+            "VERIFIED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "PARTIAL": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "NOT_FOUND": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNASKED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "OVER_SCOPE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNVERIFIABLE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "NOT_FOUND",
+            "OVER_SCOPE",
+            "PARTIAL",
+            "UNASKED",
+            "UNVERIFIABLE",
+            "VERIFIED"
+          ],
+          "type": "object"
+        },
+        "chatgpt": {
+          "additionalProperties": false,
+          "properties": {
+            "VERIFIED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "PARTIAL": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "NOT_FOUND": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNASKED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "OVER_SCOPE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNVERIFIABLE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "NOT_FOUND",
+            "OVER_SCOPE",
+            "PARTIAL",
+            "UNASKED",
+            "UNVERIFIABLE",
+            "VERIFIED"
+          ],
+          "type": "object"
+        },
+        "dots": {
+          "additionalProperties": false,
+          "properties": {
+            "VERIFIED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "PARTIAL": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "NOT_FOUND": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNASKED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "OVER_SCOPE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNVERIFIABLE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "NOT_FOUND",
+            "OVER_SCOPE",
+            "PARTIAL",
+            "UNASKED",
+            "UNVERIFIABLE",
+            "VERIFIED"
+          ],
+          "type": "object"
+        },
+        "claude": {
+          "additionalProperties": false,
+          "properties": {
+            "VERIFIED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "PARTIAL": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "NOT_FOUND": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNASKED": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "OVER_SCOPE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "UNVERIFIABLE": {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "NOT_FOUND",
+            "OVER_SCOPE",
+            "PARTIAL",
+            "UNASKED",
+            "UNVERIFIABLE",
+            "VERIFIED"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "chatgpt",
+        "claude",
+        "dots",
+        "muse"
+      ],
+      "type": "object"
+    },
+    "adapterHealth": {
+      "additionalProperties": {
+        "enum": [
+          "DEGRADED",
+          "OK"
+        ]
+      },
+      "propertyNames": {
+        "enum": [
+          "gcal.event",
+          "gmail.receipt",
+          "gmail.sent",
+          "muse.chat"
+        ]
+      },
+      "type": "object"
+    },
+    "coverageHours": {
+      "additionalProperties": false,
+      "properties": {
+        "gmail": {
+          "maximum": 24,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gcal": {
+          "maximum": 24,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gcal",
+        "gmail"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "adapterHealth",
+    "adaptersEnabled",
+    "chromeMajor",
+    "counts",
+    "coverageHours",
+    "dayBucket",
+    "extVersion",
+    "installId",
+    "observersEnabled"
+  ],
+  "type": "object"
+}

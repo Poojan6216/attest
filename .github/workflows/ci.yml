@@ -19,7 +19,9 @@ permissions:
 # run 37674271045 took 2.3 min for lint, 9.5 min for the unit and property tests and 16.5 min for core coverage, and
 # was cancelled at 30 minutes in observer coverage. Split (run 37691867866, measured): unit 8.9 min, core coverage
 # 12.9, observer coverage 4.1, runtime guard and time zones 20.3 (the closest to its limit), build and e2e 12.3.
-# CI's runner gives Vitest one worker. Each job installs from the pnpm cache (./.github/actions/setup).
+# CI's runner gives Vitest one worker. Each job installs from the pnpm cache (./.github/actions/setup). A sixth job
+# checks the telemetry API (sprint_5 5.6): its own lockfile, lint, strict types and tests, the payload schema's parity
+# with the extension's among them.
 jobs:
   unit:
     name: lint · typecheck · unit
@@ -118,6 +120,38 @@ jobs:
       # src/core must not depend on the host time zone (Hard Rule 4): run the core suites in two more zones.
       - name: Core tests in other time zones
         run: pnpm --dir extension run test:tz
+
+  telemetry-api:
+    name: telemetry-api · ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: telemetry-api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The job token is not left in .git/config for later steps (dependency install scripts included).
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.11.1'
+
+      # Exactly the locked versions (telemetry-api/uv.lock): an install that would change the lock fails.
+      - name: Install
+        run: uv sync --locked
+
+      - name: Ruff
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Mypy (strict)
+        run: uv run mypy app tests
+
+      # Includes the payload schema's parity with the extension's (tests/test_schema_parity.py).
+      - name: Tests
+        run: uv run pytest
 
   e2e:
     name: build · e2e

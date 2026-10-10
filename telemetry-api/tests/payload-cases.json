@@ -1,0 +1,286 @@
+{
+  "note": "Payloads both schemas must judge alike (sprint_5 5.6): the valid one, the changes that keep it valid, and the changes that make it invalid, each with why. Read by telemetry-api/tests/test_schema.py and extension/tests/unit/telemetry/schema.spec.ts. Every value is invented.",
+  "valid": {
+    "installId": "4f1c2b3a-5d6e-4f70-8a9b-0c1d2e3f4a5b",
+    "extVersion": "0.1.0",
+    "chromeMajor": 154,
+    "dayBucket": "2026-10-09",
+    "adaptersEnabled": {
+      "muse": false,
+      "chatgpt": false,
+      "dots": false,
+      "claude": false
+    },
+    "observersEnabled": {
+      "gmail": true,
+      "gcal": true
+    },
+    "counts": {
+      "muse": {
+        "VERIFIED": 3,
+        "PARTIAL": 1,
+        "NOT_FOUND": 0,
+        "UNASKED": 0,
+        "OVER_SCOPE": 0,
+        "UNVERIFIABLE": 2
+      },
+      "chatgpt": {
+        "VERIFIED": 3,
+        "PARTIAL": 1,
+        "NOT_FOUND": 0,
+        "UNASKED": 0,
+        "OVER_SCOPE": 0,
+        "UNVERIFIABLE": 2
+      },
+      "dots": {
+        "VERIFIED": 3,
+        "PARTIAL": 1,
+        "NOT_FOUND": 0,
+        "UNASKED": 0,
+        "OVER_SCOPE": 0,
+        "UNVERIFIABLE": 2
+      },
+      "claude": {
+        "VERIFIED": 3,
+        "PARTIAL": 1,
+        "NOT_FOUND": 0,
+        "UNASKED": 0,
+        "OVER_SCOPE": 0,
+        "UNVERIFIABLE": 2
+      }
+    },
+    "adapterHealth": {
+      "gmail.sent": "OK",
+      "gcal.event": "DEGRADED"
+    },
+    "coverageHours": {
+      "gmail": 6,
+      "gcal": 2
+    }
+  },
+  "alsoValid": [
+    {
+      "why": "no health report that day",
+      "set": [
+        "adapterHealth"
+      ],
+      "value": {}
+    },
+    {
+      "why": "a count at its bound",
+      "set": [
+        "counts",
+        "claude",
+        "VERIFIED"
+      ],
+      "value": 100000
+    },
+    {
+      "why": "a whole day covered",
+      "set": [
+        "coverageHours",
+        "gcal"
+      ],
+      "value": 24
+    },
+    {
+      "why": "the highest Chrome version the schema reads",
+      "set": [
+        "chromeMajor"
+      ],
+      "value": 999
+    }
+  ],
+  "invalid": [
+    {
+      "why": "a key the schema does not name, at the top",
+      "set": [
+        "email"
+      ],
+      "value": "someone@example.com"
+    },
+    {
+      "why": "a key the schema does not name, nested",
+      "set": [
+        "adaptersEnabled",
+        "slack"
+      ],
+      "value": true
+    },
+    {
+      "why": "an install id in upper case",
+      "set": [
+        "installId"
+      ],
+      "value": "4F1C2B3A-5D6E-4F70-8A9B-0C1D2E3F4A5B"
+    },
+    {
+      "why": "a UUID that is not version 4",
+      "set": [
+        "installId"
+      ],
+      "value": "4f1c2b3a-5d6e-1f70-8a9b-0c1d2e3f4a5b"
+    },
+    {
+      "why": "an install id that is not a UUID",
+      "set": [
+        "installId"
+      ],
+      "value": "attest-install-1"
+    },
+    {
+      "why": "a version with letters",
+      "set": [
+        "extVersion"
+      ],
+      "value": "0.1.0-beta"
+    },
+    {
+      "why": "a version with a prefix",
+      "set": [
+        "extVersion"
+      ],
+      "value": "v0.1.0"
+    },
+    {
+      "why": "a number written as a string",
+      "set": [
+        "chromeMajor"
+      ],
+      "value": "154"
+    },
+    {
+      "why": "a Chrome version below 1",
+      "set": [
+        "chromeMajor"
+      ],
+      "value": 0
+    },
+    {
+      "why": "a Chrome version that is not an integer",
+      "set": [
+        "chromeMajor"
+      ],
+      "value": 154.5
+    },
+    {
+      "why": "a day the calendar does not have",
+      "set": [
+        "dayBucket"
+      ],
+      "value": "2026-02-30"
+    },
+    {
+      "why": "a day with a time",
+      "set": [
+        "dayBucket"
+      ],
+      "value": "2026-10-09T00:00:00Z"
+    },
+    {
+      "why": "a day as words",
+      "set": [
+        "dayBucket"
+      ],
+      "value": "Friday"
+    },
+    {
+      "why": "a negative count",
+      "set": [
+        "counts",
+        "muse",
+        "VERIFIED"
+      ],
+      "value": -1
+    },
+    {
+      "why": "a count that is not an integer",
+      "set": [
+        "counts",
+        "muse",
+        "VERIFIED"
+      ],
+      "value": 1.5
+    },
+    {
+      "why": "a count above the bound",
+      "set": [
+        "counts",
+        "muse",
+        "VERIFIED"
+      ],
+      "value": 100001
+    },
+    {
+      "why": "an agent missing from the counts",
+      "delete": [
+        "counts",
+        "dots"
+      ]
+    },
+    {
+      "why": "a grade the schema does not name",
+      "set": [
+        "counts",
+        "muse",
+        "MAYBE"
+      ],
+      "value": 1
+    },
+    {
+      "why": "a component the schema does not name",
+      "set": [
+        "adapterHealth",
+        "slack.chat"
+      ],
+      "value": "OK"
+    },
+    {
+      "why": "a health status the schema does not name",
+      "set": [
+        "adapterHealth",
+        "gmail.sent"
+      ],
+      "value": "IDLE"
+    },
+    {
+      "why": "a health status in lower case",
+      "set": [
+        "adapterHealth",
+        "gmail.sent"
+      ],
+      "value": "ok"
+    },
+    {
+      "why": "more hours than a day has",
+      "set": [
+        "coverageHours",
+        "gmail"
+      ],
+      "value": 25
+    },
+    {
+      "why": "a boolean written as a number",
+      "set": [
+        "adaptersEnabled",
+        "muse"
+      ],
+      "value": 1
+    },
+    {
+      "why": "a boolean written as words",
+      "set": [
+        "observersEnabled",
+        "gmail"
+      ],
+      "value": "yes"
+    },
+    {
+      "why": "a reader missing from the readers",
+      "delete": [
+        "observersEnabled",
+        "gcal"
+      ]
+    }
+  ]
+}
