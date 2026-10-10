@@ -39,6 +39,11 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 - [x] **Done 2026-10-09: the Sprint 3 gate is kept as written** (your choice). Sprint 3 stays open, with 3.0, 3.1 and 3.3 to 3.9 waiting on the vendors' permission, and the project goes on as if they never give it: everything after Sprint 3 is built on pasted logs and your own Gmail and Calendar tabs (Decisions `[3.gate]`). If a vendor says yes later, its reader tasks come back.
 - [x] **Done 2026-10-09:** you pushed the Sprint 3 commits.
 
+## Sprint 4 close (2026-10-10)
+- [ ] **Decide whether the popup's "day's paint" gets its own 100 ms gate (tech review TECH-5).** The Sprint 4 gate holds the popup's first paint (the loading rows) under 100 ms, as Decisions `[4.2]` chose; the list you actually read, today's receipts, is measured and recorded in `RESULTS.md` but not gated. At the close it measured a median of 92 ms (84 to 108) in the perf gate. A new gate is your call. **Recommended default: leave it as is** (first paint gated, the day's paint recorded); say "gate the day's paint" and the agent adds it to `pnpm test:perf` and `pnpm bench`.
+- [ ] **The old bench trace in git history (security review checklist).** `bench/traces/popup-paint.zip` as committed before `25a2d8f` records this Mac's folder paths, your home folder's name among them; it holds no page data. The current trace is scrubbed, and the bench now scrubs every new one. Removing the old one from history needs a history rewrite. **Recommended default: leave history as is while the repository is private**, and decide before making it public (then turn auto mode off and approve the rewrite, as on 2026-10-08).
+- [ ] **Push the Sprint 4 commits** (`git push origin main` from the repository root) and check that CI is green, the new "ui coverage" job included. The agent cannot push from here.
+
 ## During Sprint 5 (telemetry)
 - [ ] Create a Railway project + MongoDB, set `MONGO_URL` and `ALLOWED_EXT_IDS` env vars; give the agent the public URL for `config.TELEMETRY_HOST`. Unblocks 5.8 deploy (docker-compose proves it locally meanwhile).
 
