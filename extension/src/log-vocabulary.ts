@@ -148,6 +148,7 @@ export const LOG_EVENTS = [
   'ui.listen_failed',
   'ui.root_missing',
   // Encryption at rest (sprint_6 6.5; src/background/crypto.ts, keep-awake.ts). Never a passphrase or a key.
+  'crypto.catch_up_failed',
   'crypto.changed',
   'crypto.command_failed',
   'crypto.disabling',

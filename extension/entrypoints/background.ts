@@ -6,7 +6,8 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { onAlertClicked } from '../src/background/alerts';
 import { ensureAlarms, handleAlarm } from '../src/background/alarms';
 import { closeStorage } from '../src/background/byo';
-import { holdKeysHere } from '../src/background/crypto';
+import { catchUpAfterUnlock } from '../src/background/catch-up';
+import { holdKeysHere, onUnlocked } from '../src/background/crypto';
 import { type IdleApi, onPermissionsRemoved, watchIdle } from '../src/background/idle';
 import { onInstalled } from '../src/background/install';
 import { syncReaders } from '../src/background/readers';
@@ -22,6 +23,7 @@ export default defineBackground({
     // First, before anything opens the ledger: the keys of an encrypted ledger live in this worker's memory only, so a
     // restart of the worker starts locked (sprint_6 6.5, src/background/crypto.ts).
     holdKeysHere();
+    onUnlocked(catchUpAfterUnlock);
     listen(createHandlers());
 
     // At every start of the worker, idempotent: `chrome.storage.local`, where the person's own model key is kept, is

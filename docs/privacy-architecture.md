@@ -389,9 +389,12 @@ Dated history is kept for the window you choose in the options page's Privacy se
 - **Model answers** ([§5.17](#517-modelanswers)) go with their claims.
 - **Weekly digests** ([§5.16](#516-digests)) go once their week started before the cutoff: up to a week before the receipts they copy, never after (security review SEC-7). They are deleted by their key, unread, so a digest that no longer reads goes too.
 - **Kept:** `grants`, `adapterHealth` and the rest of `meta` are not dated history.
+- **While the ledger is encrypted and locked** ([§12](#12-encryption-at-rest)) the purge waits, and runs again as soon as you unlock it, whatever the hour ([`src/background/catch-up.ts`](../extension/src/background/catch-up.ts)), so history never outlives the window because the purge kept finding it locked.
 - **Turning away detection off** deletes every time away at once, and the `idleOpen` key with them. Receipts already made keep their reasons: an UNASKED receipt that counted a time away keeps the reason `unasked.idle`, and its replay inputs the signal, until the receipt itself goes.
 
 **Delete all data** (the options page's Danger zone, from Sprint 4.5; asked twice: a question, then a box you tick before Delete everything) deletes the IndexedDB database and clears `chrome.storage.local` and `chrome.storage.session` at once, and takes down every notification Attest shows ([`src/background/settings.ts`](../extension/src/background/settings.ts)): every table, the install id, the settings and the flags (Check Gmail for me is off again). No copy is kept anywhere. One choice is kept, never data: a page reader you turned off stays off, so a wipe never makes Attest read more (security review SEC-6); the confirmation says so. Attest keeps running, and pages you open afterwards are read into a new, empty ledger. Removing the extension removes its IndexedDB database and `chrome.storage.local` with it; Attest keeps nothing anywhere else.
+
+**Uninstalling Attest** removes everything it keeps: Chrome deletes the extension's IndexedDB database, `chrome.storage.local` and `chrome.storage.session`, its alarms and its registered content scripts with it, and takes down its notifications. Outside the browser there is only what an option you turned on sent ([§1](#1-what-leaves-the-browser)): the usage numbers' daily counts on Attest's server, under an install id that then exists nowhere else ([§11](#11-anonymous-usage-numbers)), and what your own model key's company keeps under its own terms ([§10](#10-the-optional-model)).
 
 ## 8. The export
 
@@ -595,4 +598,4 @@ So a recipient's address, a merchant, an amount, a subject, an event's title and
 - **An export.** It is written opened, as the unlocked ledger reads ([§8](#8-the-export)): treat an export file like the unlocked ledger.
 - **A guessed passphrase.** 600,000 rounds slow each guess, but a short or common passphrase can still be guessed from a copy. Use a long one.
 - **A forgotten passphrase.** Nobody can open the records, Attest included. Delete all data is the only way back.
-- **Memory.** While Attest is unlocked, the key is in the browser's memory, as any unlocked secret is.
+- **Memory, and a compromised browser or computer.** While Attest is unlocked, the key is in the browser's memory, as any unlocked secret is. Malware on the computer, or another extension or program able to read Chrome's memory or your typing, can read the records while they are unlocked, or take the passphrase as you type it. Encryption at rest guards a copy of the profile, not a running browser that is no longer yours.

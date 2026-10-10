@@ -21,6 +21,7 @@ import {
   saveFile,
 } from '../../../entrypoints/options/export-ledger';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { clearKeyring, setKeyring } from '../../../src/crypto/keyring';
 import { exportLedger } from '../../../src/ledger/export';
 import { receiptsCsvBlob } from '../../../src/ledger/export-csv';
 import { closeLedger, getLedger, upsertObservation } from '../../../src/ledger/repo';
@@ -96,6 +97,35 @@ describe('exportFile', () => {
     });
     expect(refused).toBeNull();
     expect(failures()).toEqual(['error', 'error']);
+  });
+});
+
+describe('an encrypted ledger, locked (sprint_6 6.5)', () => {
+  it('exports nothing, resolves `locked`, logs no failure, and the page says to unlock first', async () => {
+    await seedOneSend();
+    setKeyring({ sealing: true, guarded: true });
+    try {
+      const { save, saved } = collect();
+      expect(await exportFile('ledger', save, clock)).toBe('locked');
+      expect(await exportFile('receipts', save, clock)).toBe('locked');
+      expect(saved).toEqual([]);
+      expect(failures()).toEqual([]);
+      await act(() => {
+        render(h(ExportSection, { save, clock }), root);
+      });
+      const button = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Export ledger');
+      await act(async () => {
+        button?.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await vi.waitFor(() => {
+        expect(root.querySelector('[role="status"]')?.textContent).toBe(
+          'Your records are encrypted and locked. Unlock them under Encryption, then export.',
+        );
+      });
+    } finally {
+      clearKeyring();
+    }
   });
 });
 

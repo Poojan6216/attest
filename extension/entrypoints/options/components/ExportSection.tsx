@@ -15,7 +15,8 @@ type Outcome =
   | { readonly kind: 'none' }
   | { readonly kind: 'exporting' }
   | { readonly kind: 'exported'; readonly fileName: string }
-  | { readonly kind: 'failed'; readonly what: ExportKind };
+  | { readonly kind: 'failed'; readonly what: ExportKind }
+  | { readonly kind: 'locked' };
 
 const FAILED: Readonly<Record<ExportKind, string>> = {
   ledger: 'Could not export the ledger. Try again.',
@@ -32,6 +33,8 @@ function statusOf(outcome: Outcome): string {
       return `Exported ${outcome.fileName}.`;
     case 'failed':
       return FAILED[outcome.what];
+    case 'locked':
+      return 'Your records are encrypted and locked. Unlock them under Encryption, then export.';
   }
 }
 
@@ -50,7 +53,11 @@ export function ExportSection({ save = saveFile, clock }: ExportSectionProps) {
     void exportFile(what, save, clock).then((result) => {
       busy.current = false;
       setOutcome(
-        result === null ? { kind: 'failed', what } : { kind: 'exported', fileName: result.fileName },
+        result === 'locked'
+          ? { kind: 'locked' }
+          : result === null
+            ? { kind: 'failed', what }
+            : { kind: 'exported', fileName: result.fileName },
       );
     });
   };

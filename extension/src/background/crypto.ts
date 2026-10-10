@@ -53,6 +53,15 @@ const refused = (code: CryptoCode): CryptoResult => ({ ok: false, code });
 let held: HeldKeys = {};
 let commands: Promise<unknown> = Promise.resolve();
 let job: Promise<void> | undefined;
+let afterUnlock: () => Promise<void> = () => Promise.resolve();
+
+/**
+ * What runs after each unlock, set by the worker's start (./catch-up.ts: the alarms that wait while the ledger is
+ * locked, each once), so this module needs none of them.
+ */
+export function onUnlocked(run: () => Promise<void>): void {
+  afterUnlock = run;
+}
 
 /**
  * At every start of the worker, before anything opens the ledger: this worker's memory is its key source, and the
@@ -152,6 +161,9 @@ export function onCryptoUnlock(message: CryptoUnlockMessage, deps: CryptoDeps): 
     await hold({ current: key, ...(previous === undefined ? {} : { previous }) }, deps);
     log.info('crypto.unlocked');
     void resumeCryptoJob(deps);
+    afterUnlock().catch((error: unknown) => {
+      log.error('crypto.catch_up_failed', { error });
+    });
     return OK;
   });
 }
