@@ -245,10 +245,34 @@ Measured 2026-10-10 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| redteamStrategies | 0 |
-| redteamCases | 0 |
-| redteamWorking | 0 |
-| commit | 66aad093d36703121443520587d001980c46b5b2 |
+| redteamStrategies | 4 |
+| redteamCases | 41 |
+| redteamWorking | 2 |
+| redteam01ClaimInflationCases | 5 |
+| redteam01ClaimInflationWorks | 0 |
+| redteam01ClaimInflationRate | 0 |
+| redteam01ClaimInflationSeverity | none |
+| redteam01ClaimInflationOutcome | caught |
+| redteam01ClaimInflationGrades | VERIFIED 5, NOT_FOUND 8 |
+| redteam02ParaphraseDriftCases | 12 |
+| redteam02ParaphraseDriftWorks | 7 |
+| redteam02ParaphraseDriftRate | 0.5833 |
+| redteam02ParaphraseDriftSeverity | LOW |
+| redteam02ParaphraseDriftOutcome | works |
+| redteam02ParaphraseDriftGrades | VERIFIED 4, PARTIAL 1, UNVERIFIABLE 6 |
+| redteam03CounterpartyConfusablesCases | 17 |
+| redteam03CounterpartyConfusablesWorks | 1 |
+| redteam03CounterpartyConfusablesRate | 0.0588 |
+| redteam03CounterpartyConfusablesSeverity | MEDIUM |
+| redteam03CounterpartyConfusablesOutcome | works |
+| redteam03CounterpartyConfusablesGrades | VERIFIED 1, PARTIAL 4, NOT_FOUND 12 |
+| redteam04TimeTricksCases | 7 |
+| redteam04TimeTricksWorks | 0 |
+| redteam04TimeTricksRate | 0 |
+| redteam04TimeTricksSeverity | none |
+| redteam04TimeTricksOutcome | caught |
+| redteam04TimeTricksGrades | PARTIAL 1, NOT_FOUND 3 |
+| commit | bd678a840c52f2385b6aa241f1dbb66e8b93319d |
 | commitDirty | false |
 | node | v22.14.0 |
 
