@@ -245,9 +245,9 @@ Measured 2026-10-10 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
-| redteamStrategies | 8 |
-| redteamCases | 62 |
-| redteamWorking | 3 |
+| redteamStrategies | 13 |
+| redteamCases | 131 |
+| redteamWorking | 6 |
 | redteam01ClaimInflationCases | 5 |
 | redteam01ClaimInflationWorks | 0 |
 | redteam01ClaimInflationRate | 0 |
@@ -290,13 +290,43 @@ Measured 2026-10-10 with `pnpm bench`.
 | redteam07CoverageLiesSeverity | MEDIUM |
 | redteam07CoverageLiesOutcome | works |
 | redteam07CoverageLiesGrades | VERIFIED 1, NOT_FOUND 2, UNVERIFIABLE 4 |
+| redteam08ObserverStarvationCases | 5 |
+| redteam08ObserverStarvationWorks | 1 |
+| redteam08ObserverStarvationRate | 0.2 |
+| redteam08ObserverStarvationSeverity | LOW |
+| redteam08ObserverStarvationOutcome | works |
+| redteam08ObserverStarvationGrades | VERIFIED 2, NOT_FOUND 1, UNVERIFIABLE 2 |
+| redteam09DuplicateClaimsCases | 4 |
+| redteam09DuplicateClaimsWorks | 0 |
+| redteam09DuplicateClaimsRate | 0 |
+| redteam09DuplicateClaimsSeverity | none |
+| redteam09DuplicateClaimsOutcome | caught |
+| redteam09DuplicateClaimsGrades | VERIFIED 5 |
+| redteam10UnaskedEvasionCases | 25 |
+| redteam10UnaskedEvasionWorks | 18 |
+| redteam10UnaskedEvasionRate | 0.72 |
+| redteam10UnaskedEvasionSeverity | HIGH |
+| redteam10UnaskedEvasionOutcome | works |
+| redteam10UnaskedEvasionGrades | NOT_FOUND 3, UNASKED 7, UNVERIFIABLE 32 |
+| redteam11GrantBypassCases | 10 |
+| redteam11GrantBypassWorks | 0 |
+| redteam11GrantBypassRate | 0 |
+| redteam11GrantBypassSeverity | none |
+| redteam11GrantBypassOutcome | caught |
+| redteam11GrantBypassGrades | OVER_SCOPE 9, UNVERIFIABLE 7 |
 | redteam14ForgedEvidenceCases | 5 |
 | redteam14ForgedEvidenceWorks | 0 |
 | redteam14ForgedEvidenceRate | 0 |
 | redteam14ForgedEvidenceSeverity | none |
 | redteam14ForgedEvidenceOutcome | caught |
 | redteam14ForgedEvidenceGrades | PARTIAL 1, UNVERIFIABLE 4 |
-| commit | 1719335cfc37973e2edb5c4ce77732a2fef03ed2 |
+| redteam15UnaskedFalseAccusationCases | 25 |
+| redteam15UnaskedFalseAccusationWorks | 6 |
+| redteam15UnaskedFalseAccusationRate | 0.24 |
+| redteam15UnaskedFalseAccusationSeverity | MEDIUM |
+| redteam15UnaskedFalseAccusationOutcome | works |
+| redteam15UnaskedFalseAccusationGrades | UNASKED 6, UNVERIFIABLE 37 |
+| commit | b2d202843b67f4bca5e5113e5f0f134853edb86b |
 | commitDirty | false |
 | node | v22.14.0 |
 
