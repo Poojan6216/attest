@@ -1,6 +1,6 @@
 # Attest privacy policy
 
-Version 0.5. Effective 10 October 2026 (version 0.4, of 9 October 2026, said nothing ever leaves your browser and that telemetry would come later, before your own model key and the usage numbers existed; version 0.3, of 9 October 2026, still listed three permissions and described the retention choice, deleting all data and the receipts' export as coming later, and said nothing of alerts, the weekly digest, shares, turning a reader off or Check Gmail for me; version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
+Version 0.6. Effective 10 October 2026 (version 0.5, of 10 October 2026, said what the model and the usage numbers send but not where the model runs, what it can change, what is kept of its answers, what the telemetry server keeps, or how often reports go; version 0.4, of 9 October 2026, said nothing ever leaves your browser and that telemetry would come later, before your own model key and the usage numbers existed; version 0.3, of 9 October 2026, still listed three permissions and described the retention choice, deleting all data and the receipts' export as coming later, and said nothing of alerts, the weekly digest, shares, turning a reader off or Check Gmail for me; version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
@@ -62,7 +62,8 @@ It also keeps:
 - for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, its first guest's email address, and a one-way fingerprint of each guest's address (never the address), so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
 - for each receipt that alerted you: which receipt, the agent, the grade, and when the alert was handled
 - the weekly digests described below
-- your choices: which readers are off, whether Check Gmail for me is on, and how long to keep your history
+- only if you turn on a model (below): for each claim Attest asked it about, which model, when, and the scores it gave; never what the model was given, its words or your key
+- your choices: which readers are off, whether Check Gmail for me, a model and the usage numbers are on, and how long to keep your history
 
 It never stores email bodies, attachments, chat transcripts or full pages. The full list, table by table and field by field, is in docs/privacy-architecture.md.
 
@@ -84,13 +85,24 @@ In your browser, on this computer: in the browser's own database (IndexedDB), an
 
 A later version adds an optional passphrase that encrypts the stored facts. It will be off by default.
 
+## The optional model
+
+Attest can ask an AI model for a second opinion on one kind of receipt, only if you turn it on (Options, Model). It is off by default, because whether it helps has not been measured yet. It can change one thing: when an agent's claim matches a sent email or calendar event only partly, a strong answer can lift that receipt from Partial to Verified. It never lowers a grade, never picks which email or event matches, and never verifies a weak match on its own: Attest's own rules decide every grade. An answer that is late (after 2 seconds), malformed or missing is ignored, and the receipt is graded by the rules alone. Each claim is asked once.
+
+You choose where it runs:
+
+- Chrome's on-device model runs on this computer, so nothing is sent anywhere. Attest asks Chrome whether it has the model only when you click "Check Chrome's on-device model", and Chrome downloads it only if you click to. When it is on and ready, Attest uses it, never your key.
+- Your own Anthropic or OpenAI key sends a few facts to that company (below). The key is kept where no script on a Gmail or Calendar page can read it, is never logged or exported, and is deleted when you click Forget my key or delete all data.
+
+The model is given only the claim's kind of action, who it was to (an email address or a name), its short subject, its amount and its time, and the same for the one sent email or event it matched. Never a page, never what you asked an agent.
+
 ## What leaves your browser
 
 Nothing, unless you turn on one of the two options below. With both off, as they are until you turn them on, Attest makes no network requests: a test in the source code records every request the extension makes during a scripted session, every feature above included, and fails the build if any host is contacted. Alerts are shown by Chrome and your operating system on this device, and a share leaves your browser only if you paste it somewhere yourself.
 
-**Your own model key** (Options, Model). If you save an Anthropic or OpenAI key and turn it on, Attest asks that company's official service (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim it is still checking with a partial match, once per claim: the claim's kind of action, who it was to (an email address or a name), its short subject, its amount and its time, and the same for the one sent email or event it matched. Never a page, never what you asked an agent. Your key goes only to that company, in the request's header; the company keeps what it receives under its own terms, and bills your key. If Chrome's own on-device model is on and ready, Attest uses it instead, and nothing is sent.
+**Your own model key** (Options, Model). If you save an Anthropic or OpenAI key and turn it on, Attest asks that company's official service (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim it is still checking with a partial match, once per claim: the claim's kind of action, who it was to (an email address or a name), its short subject, its amount and its time, and the same for the one sent email or event it matched. Never a page, never what you asked an agent. Your key goes only to that company, in the request's header; the company keeps what it receives under its own terms, and bills your key. If Chrome's own on-device model is on and ready, Attest uses it instead, and nothing is sent. Turning the key off, or Forget my key, stops it at once.
 
-**Anonymous usage numbers** (Options, Privacy), to help fix page readers that stop working. If you turn them on, Attest sends one report a day, about the day before, to Attest's own telemetry server (this pre-release has none running, so nothing arrives anywhere yet). The report holds only counts and yes-or-no values: how many receipts each agent got of each grade that day, which page readers were on, how many hours of the day they covered and whether they worked; and the Attest version, the Chrome major version, the date and the random install id. It never holds an email address, a name, a subject, an amount, page content or anything you typed: its format allows no other text. The options page shows exactly what the next report holds, and a test checks that what is sent is exactly what is shown.
+**Anonymous usage numbers** (Options, Privacy), to help fix page readers that stop working. If you turn them on, Attest checks once an hour and sends one report a day, about the day before, to Attest's own telemetry server (this pre-release has none running, so nothing arrives anywhere yet). A day is never sent twice, and a missed day is never sent later. The report holds only counts and yes-or-no values: how many receipts each agent got of each grade that day, which page readers were on, how many hours of the day they covered and whether they worked; and the Attest version, the Chrome major version, the date and the random install id. It never holds an email address, a name, a subject, an amount, page content or anything you typed: its format allows no other text. The options page shows exactly what the next report holds, and a test checks that what is sent is exactly what is shown. The server keeps each report as it came and the time it arrived, and nothing else. Like any server it sees your network address when a report arrives; it uses it only to limit how many reports one network sends a day, as a fingerprint kept in memory, and never stores or logs it. Turn off usage numbers, in the same place, stops them at once.
 
 Any other feature that would send something off your computer will be off by default, described here first, and need you to turn it on.
 
@@ -100,7 +112,7 @@ Attest does not sell or share data. No data reaches us.
 
 When Attest is installed it creates a random id (a version 4 UUID). It is not made from anything about you, your accounts or your computer. It is kept in the extension's local storage.
 
-Its only use is the opt-in usage numbers described above. You can see the id and reset it in Attest's options, under Danger zone. After a reset, reports sent before and after can no longer be linked to each other.
+Its only use is the opt-in usage numbers described above. Until you reset it, the server can tell that two days' reports came from the same install, though not whose. You can see the id and reset it in Attest's options, under Danger zone. After a reset, reports sent before and after can no longer be linked to each other.
 
 ## How long data is kept
 

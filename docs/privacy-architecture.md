@@ -1,9 +1,9 @@
 # Privacy architecture
 
 **Who this is for:** anyone deciding whether to trust Attest with their Gmail and Calendar, and anyone changing what Attest stores: reviewers, contributors, the privacy and security reviews.
-**What you'll know after:** what leaves the browser (nothing), what each observer reads and what it keeps, every ledger table and field, what each stored fact means, what is hashed and what that does and does not hide, how long things are kept, and what the export holds.
+**What you'll know after:** what leaves the browser (nothing, unless you turn on an option that sends), what each observer reads and what it keeps, every ledger table and field, what each stored fact means, what is hashed and what that does and does not hide, how long things are kept, what the export holds, what the optional model sees and where it runs, and what the opt-in usage numbers send.
 
-> Status: **v1** (Sprint 2, task 2.9). It describes Attest as of Sprint 2: the Gmail and Calendar observers write to the ledger; nothing grades yet. The agent adapters (Sprint 3) will fill the `requests`, `claims` and `receipts` tables, the options page (Sprint 4) the `grants` table. The optional local model and the opt-in telemetry (Sprint 5) do not exist yet: their sections are placeholders, and today the extension makes no network request at all. The store-facing summary is [`PRIVACY.md`](../PRIVACY.md).
+> Status: **v2** (Sprint 5, task 5.9; v1 was Sprint 2, task 2.9). It describes Attest as of Sprint 5: the Gmail and Calendar readers, pasted agent activity logs (the agent readers are off, [§1](#1-what-leaves-the-browser)), grading, the options page, the optional model ([§10](#10-the-optional-model)) and the opt-in usage numbers ([§11](#11-anonymous-usage-numbers)). With both of those off, the extension makes no network request at all. The store-facing summary is [`PRIVACY.md`](../PRIVACY.md).
 
 ## Contents
 
@@ -16,16 +16,18 @@
 7. [Retention and purge](#7-retention-and-purge)
 8. [The export](#8-the-export)
 9. [Logs](#9-logs)
-10. [Not built yet](#10-not-built-yet)
+10. [The optional model](#10-the-optional-model): what it sees, where it runs, your own key
+11. [Anonymous usage numbers](#11-anonymous-usage-numbers): what is sent, where, how often, how to stop, with a real payload
+12. [Not built yet](#12-not-built-yet)
 
 ## 1. What leaves the browser
 
 Nothing, unless you turn on your own model key or the anonymous usage numbers (below). Attest has no account and no remote code (Hard Rules 1, 9).
 
 - **No network allowlist.** `NETWORK_ALLOWLIST` in [`extension/src/config.ts`](../extension/src/config.ts) is empty: no host may be contacted whatever you chose. `allowedHosts` adds exactly one host for each option you turn on: the telemetry host while the usage numbers are on, the model company's while your own key is on. With both off it is empty.
-- **Anonymous usage numbers, off unless you turn them on (since Sprint 5.7).** Turned on in the options page's Privacy section, the service worker sends one payload a day, about the day before, to the one telemetry host (`TELEMETRY_HOST`), and records the day so it never goes twice ([`src/telemetry/send.ts`](../extension/src/telemetry/send.ts)). The payload is counts, yes-or-no values, enum words, the install id, the versions and the date, and its schema allows no other string ([`src/telemetry/schema.ts`](../extension/src/telemetry/schema.ts), held equal to the server's). The options page shows exactly what the next send holds. Until the server is deployed, the host is a name under `.invalid`, which never resolves, and the store build refuses to be made with it. The full description, with a payload generated from the real builder, comes with Sprint 5.9.
+- **Anonymous usage numbers, off unless you turn them on (since Sprint 5.7).** Turned on in the options page's Privacy section, the service worker sends one payload a day, about the day before, to the one telemetry host (`TELEMETRY_HOST`), and records the day so it never goes twice ([`src/telemetry/send.ts`](../extension/src/telemetry/send.ts)). The payload is counts, yes-or-no values, enum words, the install id, the versions and the date, and its schema allows no other string ([`src/telemetry/schema.ts`](../extension/src/telemetry/schema.ts), held equal to the server's). The options page shows exactly what the next send holds. Until the server is deployed, the host is a name under `.invalid`, which never resolves, and the store build refuses to be made with it. [§11](#11-anonymous-usage-numbers) describes it in full, with a payload the real builder made.
 - **Two host permissions, both read-only.** The manifest ([`extension/wxt.config.ts`](../extension/wxt.config.ts)) asks for `https://mail.google.com/*` and `https://calendar.google.com/*`, so the content scripts can read those pages in tabs the user opened, plus `storage`, `alarms`, `scripting` (since Sprint 4.5: the readers' content scripts are registered at runtime, so one you turn off is unregistered; it reaches no other host), `notifications` (since Sprint 4.6: an alert when a receipt ends NOT_FOUND, UNASKED or OVER_SCOPE, shown on this device by Chrome and your operating system, naming no counterparty, amount or subject: [§5.15](#515-alerts)) and `sidePanel` (the build adds the last one for the side panel). No AI agent's site is asked for: Meta's, OpenAI's and Anthropic's terms forbid collecting data from their sites by automated means, so those readers are off (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts); Decisions [3.10]). Attest never fetches from those hosts or any other: no Gmail API, no OAuth, no background tab. The one tab Attest may open is your Gmail Sent folder, pinned and in front of you, and only if you turn on Check Gmail for me ([§3](#3-what-is-read-and-what-is-kept)); it needs no `tabs` permission, and the manifest has none.
-- **Your own model key, off unless you turn it on (since Sprint 5.4).** With an Anthropic or OpenAI key saved and turned on in the options page's Model section, and Chrome's on-device model not on and ready, Attest asks that company's official endpoint (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim still checking with a partial match: the claim's kind, counterparty, short subject, amount and time, and the same for the one sent email or event it matched ([`src/intel/input.ts`](../extension/src/intel/input.ts)), with your key in the request's header. Never a page, never what you asked an agent. The company keeps what it receives under its own terms. Each claim is asked once ([§5.17](#517-modelanswers)); the answer can only move a partial match toward verified ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119)). Chrome's on-device model, when on, runs on this computer and sends nothing.
+- **Your own model key, off unless you turn it on (since Sprint 5.4).** With an Anthropic or OpenAI key saved and turned on in the options page's Model section, and Chrome's on-device model not on and ready, Attest asks that company's official endpoint (`api.anthropic.com` or `api.openai.com`, nothing else) about each claim still checking with a partial match: the claim's kind, counterparty, short subject, amount and time, and the same for the one sent email or event it matched ([`src/intel/input.ts`](../extension/src/intel/input.ts)), with your key in the request's header. Never a page, never what you asked an agent. The company keeps what it receives under its own terms. Each claim is asked once ([§5.17](#517-modelanswers)); the answer can only move a partial match toward verified ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119)). Chrome's on-device model, when on, runs on this computer and sends nothing. [§10](#10-the-optional-model) has what each sees and where it runs.
 - **A test enforces it.** [`extension/tests/e2e/network-intercept.spec.ts`](../extension/tests/e2e/network-intercept.spec.ts) (`@mandatory`) loads the built extension, opens the Gmail Sent, receipt and Calendar fixtures with the shipped content scripts running, reloads them for five minutes, and fails on any request from the extension outside the allowlist. Its negative control proves it catches a request from the service worker, an extension page and a page.
 - **A second test hunts for leaks.** [`extension/tests/e2e/no-leak.spec.ts`](../extension/tests/e2e/no-leak.spec.ts) (`@mandatory`) plants three known secrets in the fixture pages (in message bodies, snippets, event locations) and checks that none reaches the ledger export, IndexedDB, extension storage, the console or the network.
 
@@ -430,11 +432,132 @@ Attest logs to the browser's console only, through one logger ([`src/log.ts`](..
 
 The ledger and the observers' service-worker side log, among others: `observer.calendar_restarted` (a Calendar range compared with nothing next time: the observer id and the reason, `refused`); `observer.clock_behind` (a message read after the clock's time, not stored: the observer id and the message type); `ledger.clock_regressed` (the clock went back: how many intervals, latest pings, snapshot records and Calendar rows were deleted, as counts only).
 
-## 10. Not built yet
+## 10. The optional model
+
+Limitations first. The model can be wrong, and whether it helps is not measured yet: the bench's numbers for Chrome's model and for your own key wait for their real answers to be recorded ([`RESULTS.md`](../RESULTS.md); Decisions `[5.5]`). So it is off by default. With your own key on, the facts below leave your computer for that company, which keeps them under its own terms.
+
+It may change one thing. When a claim matches a sent email or event only partly and its receipt is still checking, the model's score for that one match may lift PARTIAL toward VERIFIED. It never lowers a grade, never lifts a match below the partial line, never picks which email or event a claim takes, and never verifies a partial match on its own ([`docs/grading.md` §5.4](grading.md#54-the-models-score-model-raisets-v119); Hard Rule 4).
+
+**What it sees.** One claim and the one match it took, each as a few allowlisted facts ([`src/intel/input.ts`](../extension/src/intel/input.ts)). Strict schemas parse both, so one field more is an error, not a passenger.
+
+| Of | Fields |
+|---|---|
+| The claim | `type` (the kind of action), `counterparty` (normalised), `subjectHint` (at most 80 characters), `amountCents`, `occurredAt` (a calendar claim's event start, else when the agent says it acted) |
+| The match | `id`, `type`, `counterparty` (normalised), `merchant` (normalised), `subjectHint`, `amountCents`, `occurredAt` |
+
+Never page text, never what you asked an agent, never any other field a stored row holds. A field the row lacks is left out, never filled in. [`extension/tests/unit/intel/input.spec.ts`](../extension/tests/unit/intel/input.spec.ts) checks the exact input for 20 claims, one of them made from a request that said "ignore previous instructions": those words never reach the model.
+
+**How it is asked.** The instructions are a constant in code ([`src/intel/prompt.ts`](../extension/src/intel/prompt.ts)). The facts go in one delimited block, which the model is told is data and never instructions; every `<` in it is escaped, so no text inside can close the block. An answer counts only if it is exactly one score from 0 to 1 for each candidate of this input ([`src/intel/schema.ts`](../extension/src/intel/schema.ts)). Anything else, an error, or no answer within 2 seconds (`INTEL_TIMEOUT_MS`) gives no score, and the claim is graded by the rules alone ([`src/intel/index.ts`](../extension/src/intel/index.ts)).
+
+**When.** After a grading batch, never inside it: every receipt is graded by the rules first and never waits for the model ([`src/background/intel.ts`](../extension/src/background/intel.ts)). Only a claim whose receipt is still checking with a partial match is asked, about the one match it took. Each claim is asked once, ever: its row ([§5.17](#517-modelanswers)) is written before the call. At most 10 claims per batch (`MODEL_ASKS_PER_RUN`), one at a time. When the same model was given the same facts before, its answer is reused and nothing is sent. Once an answer is stored, the batch grades again with it; a receipt already final is never graded again.
+
+**Where it runs.** You choose in the options page's Model section. Both choices are off until you turn them on (`flag.ATTEST_MODEL` and `flag.ATTEST_MODEL_BYO`, [`src/ledger/consent.ts`](../extension/src/ledger/consent.ts)).
+
+- **Chrome's on-device model** (Chrome's Prompt API) runs on this computer: nothing is sent anywhere ([`src/intel/providers/builtin.ts`](../extension/src/intel/providers/builtin.ts)). The options page asks Chrome about it only when you click "Check Chrome's on-device model", and Chrome downloads it only when you click to. When it is on and ready, Attest uses it and not your key: the choice that keeps the facts on this computer wins.
+- **Your own key** (Anthropic or OpenAI) sends the facts above to that company's official endpoint, `api.anthropic.com` or `api.openai.com` and nothing else, with your key in the request's header ([`src/intel/providers/byo.ts`](../extension/src/intel/providers/byo.ts)). Before you turn it on, the options page says what is sent, to which host, that the company keeps it under its own terms, and that each check is billed to your key. The key is kept in `chrome.storage.local`, closed to content scripts, so no script on a Gmail or Calendar page can read it. It is never logged, never in the ledger, so never in an export, and it is deleted when you click Forget my key or Delete all data ([`src/background/byo.ts`](../extension/src/background/byo.ts)). While it is on, `allowedHosts` adds exactly that company's host ([§1](#1-what-leaves-the-browser)).
+
+**What is kept.** One row per claim asked: ids, a hash of the input, the provider, when, and the scores ([§5.17](#517-modelanswers)). Never the facts given, the model's words or your key. A model turned off makes its stored scores count no more; the rows go with their claims ([§7](#7-retention-and-purge)).
+
+**Tests.** [`extension/tests/e2e/intel.spec.ts`](../extension/tests/e2e/intel.spec.ts) runs it on the built extension against a stand-in for Anthropic: a paraphrased email claim goes from PARTIAL to VERIFIED, a not-found claim is never sent, and the only host contacted is Anthropic's. [`extension/tests/property/monotonicity-batch.property.spec.ts`](../extension/tests/property/monotonicity-batch.property.spec.ts) grades random batches through the real grading path with every model score 0 and then 1: no grade changes but PARTIAL to VERIFIED.
+
+## 11. Anonymous usage numbers
+
+Limitations first. The install id joins your days: the server can tell that two days came from one install, though not whose, until you reset it (below). The server sees your network address when a payload arrives, as any server does. It uses the address only to limit how many payloads one client sends, as a salted hash kept in memory, and never stores or logs it ([`telemetry-api/README.md`](../telemetry-api/README.md)). Counts still say something: a day of many NOT FOUND receipts for one agent says that agent's claims did not check out that day.
+
+**Off unless you turn it on.** In the options page's Privacy section, Anonymous usage numbers: "Turn on usage numbers". "Turn off usage numbers" stops it at once, and the next alarm sends nothing (flag `ATTEST_TELEMETRY`, [`src/ledger/consent.ts`](../extension/src/ledger/consent.ts)).
+
+**Where it goes.** One host, `TELEMETRY_HOST` ([`src/config-network.ts`](../extension/src/config-network.ts)), at one endpoint, `POST /v1/aggregate`, posted from the service worker ([`src/telemetry/send.ts`](../extension/src/telemetry/send.ts)). Until the server is deployed, the host is `telemetry.attest.invalid`, a name that never resolves (RFC 6761), and `pnpm build:release` refuses to make a store build with it (Decisions `[5.7]`). While the numbers are on, `allowedHosts` adds exactly that host ([§1](#1-what-leaves-the-browser)).
+
+**How often.** An alarm, `attest.telemetry`, looks every hour and sends the last whole day on your computer's clock, yesterday, once. `meta` `telemetrySentDay` records the day when the server took it ([§5.6](#56-meta)), so no day is sent twice, and a send that failed is tried again at the next alarm. A missed day is never sent later: only yesterday is ever sent. "Send a test payload now" sends that day at once and says in one line what happened; it never sends a day twice either.
+
+**What it holds.** Counts, yes-or-no values, fixed words, the install id, two versions and the date. [`src/telemetry/aggregate.ts`](../extension/src/telemetry/aggregate.ts) builds it from the ledger and [`src/telemetry/schema.ts`](../extension/src/telemetry/schema.ts) parses it; the schema allows no other string, and the server's is held equal to it ([`telemetry-api/tests/payload.schema.json`](../telemetry-api/tests/payload.schema.json)). The options page shows exactly what the next send holds. Below is the payload the real builder made of an invented day: [`extension/tests/tools/telemetry-example.ts`](../extension/tests/tools/telemetry-example.ts) seeded a ledger with that day and wrote the block, and [`extension/tests/unit/docs/telemetry-example.spec.ts`](../extension/tests/unit/docs/telemetry-example.spec.ts) fails when the block is not exactly what the builder makes today. Its install id is invented, and Chrome's version comes from an example user agent.
+
+<!-- telemetry-example: generated by extension/tests/tools/telemetry-example.ts, never edited by hand -->
+
+```json
+{
+  "installId": "0b7e1c52-9d4a-4f3e-8a61-5c2d7e9f1a3b",
+  "extVersion": "0.0.1",
+  "chromeMajor": 141,
+  "dayBucket": "2026-10-09",
+  "adaptersEnabled": {
+    "muse": false,
+    "chatgpt": false,
+    "dots": false,
+    "claude": false
+  },
+  "observersEnabled": {
+    "gmail": true,
+    "gcal": true
+  },
+  "counts": {
+    "muse": {
+      "VERIFIED": 3,
+      "PARTIAL": 1,
+      "NOT_FOUND": 2,
+      "UNASKED": 0,
+      "OVER_SCOPE": 0,
+      "UNVERIFIABLE": 0
+    },
+    "chatgpt": {
+      "VERIFIED": 0,
+      "PARTIAL": 0,
+      "NOT_FOUND": 0,
+      "UNASKED": 0,
+      "OVER_SCOPE": 0,
+      "UNVERIFIABLE": 0
+    },
+    "dots": {
+      "VERIFIED": 0,
+      "PARTIAL": 0,
+      "NOT_FOUND": 0,
+      "UNASKED": 0,
+      "OVER_SCOPE": 0,
+      "UNVERIFIABLE": 0
+    },
+    "claude": {
+      "VERIFIED": 1,
+      "PARTIAL": 0,
+      "NOT_FOUND": 0,
+      "UNASKED": 0,
+      "OVER_SCOPE": 0,
+      "UNVERIFIABLE": 1
+    }
+  },
+  "adapterHealth": {
+    "gcal.event": "OK",
+    "gmail.receipt": "DEGRADED",
+    "gmail.sent": "OK"
+  },
+  "coverageHours": {
+    "gmail": 7,
+    "gcal": 9
+  }
+}
+```
+
+<!-- /telemetry-example -->
+
+| Field | Meaning |
+|---|---|
+| `installId` | A random UUID made at install ([`src/ledger/install-id.ts`](../extension/src/ledger/install-id.ts)). Nothing else ties it to you. |
+| `extVersion`, `chromeMajor` | Attest's version, and Chrome's major version read from its user agent ([`src/telemetry/facts.ts`](../extension/src/telemetry/facts.ts)). With Chrome's version unknown, nothing is sent. |
+| `dayBucket` | The day reported, `YYYY-MM-DD` on your computer's clock. |
+| `adaptersEnabled` | Whether each agent reader is on. All are off ([§1](#1-what-leaves-the-browser)). |
+| `observersEnabled` | Whether the Gmail and Calendar readers are on. |
+| `counts` | Per agent, the receipts graded that day, by grade: a final receipt by its grade, one you marked by your mark. Those still checking are left out. |
+| `adapterHealth` | Each reader's last health report that day, `OK` or `DEGRADED`; nothing for a reader that read no page. |
+| `coverageHours` | How many whole hours of the day the Gmail Sent lists and the Calendar views Attest read covered, overlaps counted once. |
+
+**Resetting the install id.** In the options page's Danger zone, "Reset install id", then "Reset id". Attest makes a new random id, and payloads after it cannot be linked to those before ([`src/ledger/install-id.ts`](../extension/src/ledger/install-id.ts) `resetInstallId`). Delete all data removes it too ([§7](#7-retention-and-purge)).
+
+**On the server.** It stores each payload as it came, with the time it arrived, and nothing else: never the address, never a header. It takes at most 24 payloads per install id and 240 per client a day; the rest are refused and never stored ([`telemetry-api/README.md`](../telemetry-api/README.md)).
+
+**Tests.** [`extension/tests/e2e/telemetry.spec.ts`](../extension/tests/e2e/telemetry.spec.ts) runs it on the built extension: off, nothing is sent; on, one payload a day, exactly the one the options page showed, to its one host. The secret-seed test ([§1](#1-what-leaves-the-browser)) searches what telemetry sends, and what the page showed, for every seeded secret.
+
+## 12. Not built yet
 
 Each of these will be described here, with the code and the test that enforce it, before it ships:
 
-- **Telemetry (Sprint 5):** built (Sprint 5.7, [§1](#1-what-leaves-the-browser)); its full description, with a payload example generated from the real builder, comes with Sprint 5.9.
-- **The optional model (Sprint 5):** Chrome's on-device model and your own key are built (Sprints 5.2 to 5.4: [§1](#1-what-leaves-the-browser), [§5.17](#517-modelanswers)); their full description, what each sees and where it runs, comes with Sprint 5.9. It may propose a match score; it never sets a grade (Hard Rule 4).
 - **Encryption at rest (Sprint 6.5):** optional; what it does and does not protect.
 - **The scroll-depth limit (Sprint 6.3):** how far down a list the observers can see is a coverage limit, measured by the red team.
