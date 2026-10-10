@@ -14,10 +14,10 @@
  */
 import { reasonText } from '../core/reason-text';
 import type { Claim, Observation, Receipt } from '../core/schema';
-import { domainOf } from '../ledger/domain';
+import { addressDomain, merchantDomain, withoutAddresses } from '../ledger/domain';
 import { dateLabel, instantLabel } from './digest-labels';
 import { escapeMarkdown } from './digest-share';
-import { formatMoney } from './format';
+import { formatAmount } from './format';
 import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
 import { gradeLabel, sourceName } from './receipt-labels';
 
@@ -31,13 +31,16 @@ type Facts = Pick<Observation, 'counterparty' | 'amountCents' | 'currency' | 'su
   readonly merchant?: string | undefined;
 };
 
-/** The redacted facts of a claim or an observation: domain, amount and hint, each when there is one. */
+/**
+ * The redacted facts of a claim or an observation: the counterparty's domain (from an address only) or the merchant's,
+ * the amount, and the hint with any address in it written as its domain (../ledger/domain.ts), each when there is one.
+ */
 function facts({ counterparty, merchant, amountCents, currency, subjectHint }: Facts): string[] {
-  const domain = domainOf(counterparty) ?? domainOf(merchant);
+  const domain = addressDomain(counterparty) ?? merchantDomain(merchant);
   return [
     ...(domain === undefined ? [] : [escapeMarkdown(domain)]),
-    ...(amountCents === undefined || currency === undefined ? [] : [formatMoney(amountCents, currency)]),
-    ...(subjectHint === undefined ? [] : [`“${escapeMarkdown(subjectHint)}”`]),
+    ...(amountCents === undefined ? [] : [formatAmount(amountCents, currency)]),
+    ...(subjectHint === undefined ? [] : [`“${escapeMarkdown(withoutAddresses(subjectHint))}”`]),
   ];
 }
 

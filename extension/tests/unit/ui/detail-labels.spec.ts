@@ -117,7 +117,7 @@ describe('coverageEntryLine and inputFields', () => {
       ['Declared access', 'gmail.send'],
       ['Accounts', 'Not set'],
       ['Grant from', clockTime(at(8), NOW)],
-      ['Spent before, in the window', '1200'],
+      ['Spent before, in the window', '$12.00'],
       ['Coverage read at', '10:31'],
     ]);
   });

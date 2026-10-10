@@ -23,8 +23,8 @@ export function DeleteAllConfirm({ onConfirm, onCancel, cancelRef }: DeleteAllCo
       class="space-y-3 rounded-md border border-red-600 px-4 py-3 dark:border-red-500"
     >
       <p id="delete-all-question" class="font-medium">
-        Delete every receipt, claim and fact Attest keeps in this browser, its grants and its settings? This
-        cannot be undone.
+        Delete every receipt, claim and fact Attest keeps in this browser, its grants and its settings? A
+        reader you turned off stays off. This cannot be undone.
       </p>
       <label class="flex items-center gap-2 text-sm">
         <input

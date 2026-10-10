@@ -18,6 +18,7 @@ export {
   AUTO_CHECK_CLAIMS,
   AUTO_CHECK_UNTIL,
   type AutoCheckRecord,
+  autoCheckWaitMs,
   readAutoCheck,
   recordAutoCheck,
 } from './auto-check-record';

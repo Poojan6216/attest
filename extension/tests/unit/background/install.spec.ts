@@ -1,3 +1,5 @@
+import 'fake-indexeddb/auto';
+
 import { browser } from 'wxt/browser';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -117,13 +119,14 @@ describe('onInstalled: the install id and the alarms are independent (QA-3, TECH
     expect(errors()).toEqual([]);
   });
 
-  it('an install-id storage failure is logged as install.failed and the alarms are still scheduled', async () => {
+  it('a storage failure is logged as install.failed (and the old choices not moved), the alarms still scheduled and the readers registered', async () => {
     vi.spyOn(fakeBrowser.storage.local, 'get').mockRejectedValue(new Error('io'));
 
     await expect(onInstalled({ reason: 'install' })).resolves.toBeUndefined();
 
-    expect(errors()).toEqual(['install.failed']);
+    expect(errors().sort()).toEqual(['consent.move_failed', 'install.failed']);
     expect(await browser.alarms.get(ALARM_NAMES.PURGE)).toBeDefined();
+    expect(records.map((r) => r.event)).toContain('readers.synced');
   });
 
   it('an alarm failure is logged as alarm.reset_failed, not install.failed, and the id is still created', async () => {

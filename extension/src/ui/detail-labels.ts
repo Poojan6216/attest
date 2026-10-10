@@ -7,7 +7,7 @@
 import { MATCH_FEATURES } from '../core/schema-checks';
 import { reasonText } from '../core/reason-text';
 import type { Claim, Coverage, Receipt, ReceiptInputs } from '../ledger/types';
-import { clockTime, formatMoney } from './format';
+import { clockTime, formatAmount } from './format';
 import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
 import { gradeLabel, sourceName } from './receipt-labels';
 
@@ -47,9 +47,8 @@ export function claimFields(claim: Claim, nowMs: number): Field[] {
   if (claim.counterparty !== undefined)
     fields.push([claim.type === 'email.sent' ? 'To' : 'With', claim.counterparty]);
   if (claim.subjectHint !== undefined) fields.push(['Subject', claim.subjectHint]);
-  if (claim.amountCents !== undefined && claim.currency !== undefined) {
-    fields.push(['Amount', formatMoney(claim.amountCents, claim.currency)]);
-  }
+  if (claim.amountCents !== undefined)
+    fields.push(['Amount', formatAmount(claim.amountCents, claim.currency)]);
   fields.push([
     'When it says',
     `${clockTime(claim.claimedAt, nowMs)}, ${PRECISION[claim.claimedAtPrecision]}`,
@@ -113,10 +112,7 @@ export function inputFields(inputs: ReceiptInputs, nowMs: number): Field[] {
   ];
   const ceiling = grant.spendCeilingCents;
   const currency = grant.spendCurrency;
-  fields.push([
-    'Spend ceiling',
-    ceiling === null ? 'None' : currency === undefined ? String(ceiling) : formatMoney(ceiling, currency),
-  ]);
+  fields.push(['Spend ceiling', ceiling === null ? 'None' : formatAmount(ceiling, currency)]);
   fields.push(['Declared access', grant.declaredScopes.join(', ') || 'None declared']);
   const accounts = Object.entries(grant.accounts ?? {}).map(
     ([source, hashes]) =>
@@ -124,7 +120,7 @@ export function inputFields(inputs: ReceiptInputs, nowMs: number): Field[] {
   );
   fields.push(['Accounts', accounts.join('; ') || 'Not set']);
   fields.push(['Grant from', clockTime(grant.updatedAt, nowMs)]);
-  fields.push(['Spent before, in the window', String(context.priorSpendCents)]);
+  fields.push(['Spent before, in the window', formatAmount(context.priorSpendCents, grant.spendCurrency)]);
   if (context.attribution !== undefined) {
     const { agent, scoreBp, signals } = context.attribution;
     fields.push(['Likely agent', `${AGENT_NAMES[agent]}, ${String(scoreBp / 100)}%`]);

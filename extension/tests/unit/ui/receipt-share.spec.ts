@@ -1,14 +1,14 @@
 /**
  * A receipt shared (sprint_4 4.8; src/ui/receipt-share.ts, src/ui/share-png.ts), held to the done-when "output for every
  * golden scenario passes the redaction assertions": every receipt of every golden scenario (tests/golden), as its
- * markdown, holds no address; a counterparty only as its domain, and a name not at all; every amount and every time it
- * has, as written; a subject only as its hint; "Likely agent" on an UNASKED receipt; and never what a request asked or
- * why a mark was made. The image draws exactly those lines, escapes removed. Every value is invented.
+ * markdown, holds no `@`; a counterparty only as its domain, judged by a fixed rule (an address's domain, a merchant
+ * written as a domain; security review SEC-1), and a name not at all; every amount and every time it has, as written; a
+ * subject only as its hint, every word of it but an address; "Likely agent" on an UNASKED receipt; and never what a
+ * request asked or why a mark was made. The image draws exactly those lines, escapes removed. Every value is invented.
  */
 import { describe, expect, it } from 'vitest';
 
 import type { Claim, Observation, Receipt } from '../../../src/core/schema';
-import { domainOf } from '../../../src/ledger/domain';
 import { dateLabel, instantLabel } from '../../../src/ui/digest-labels';
 import { formatMoney } from '../../../src/ui/format';
 import { receiptMarkdown, type ShareInput } from '../../../src/ui/receipt-share';
@@ -18,29 +18,51 @@ import { runScenario } from '../../golden/runner';
 
 const unescaped = (text: string): string => text.replace(/\\(.)/gu, '$1');
 
+/**
+ * The domain a share may show of `party`, by a fixed rule, never the code under test (security review SEC-1): the text
+ * after the last `@` of an address, lower case; a merchant written as a domain, lower case; nothing else.
+ */
+function expectedDomain(party: string, merchant: boolean): string | undefined {
+  const domainShape = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/u;
+  const at = party.lastIndexOf('@');
+  const host = (at > 0 ? party.slice(at + 1) : merchant ? party : '').trim().toLowerCase();
+  return domainShape.test(host) ? host : undefined;
+}
+
 /** The redaction assertions on one receipt's share: each failed one as a sentence. */
 function redactionProblems({ receipt, claim, observations }: ShareInput, text: string): string[] {
   const plain = unescaped(text);
   const problems: string[] = [];
-  if (plain.includes('@')) problems.push('holds an address');
+  if (plain.includes('@')) problems.push('holds an @');
   const hints = [claim?.subjectHint, ...observations.map((o) => o.subjectHint)].filter(
     (h) => h !== undefined,
   );
-  const inHint = (value: string): boolean => hints.some((hint) => hint.includes(value));
+  const inHint = (value: string): boolean =>
+    hints.some((hint) => hint.toLowerCase().includes(value.toLowerCase()));
   for (const item of [claim, ...observations]) {
     if (item === undefined) continue;
-    for (const party of [item.counterparty, 'merchant' in item ? item.merchant : undefined]) {
+    const parties: [string | undefined, boolean][] = [
+      [item.counterparty, false],
+      ['merchant' in item ? item.merchant : undefined, true],
+    ];
+    for (const [party, merchant] of parties) {
       if (party === undefined) continue;
-      const domain = domainOf(party);
+      const domain = expectedDomain(party, merchant);
       if (domain !== undefined && !plain.includes(domain)) problems.push(`drops the domain ${domain}`);
-      if (domain === undefined && plain.includes(party) && !inHint(party)) problems.push(`names ${party}`);
+      if (domain === undefined && plain.toLowerCase().includes(party.toLowerCase()) && !inHint(party))
+        problems.push(`names ${party}`);
     }
-    if (item.amountCents !== undefined && item.currency !== undefined) {
-      const amount = formatMoney(item.amountCents, item.currency);
+    if (item.amountCents !== undefined) {
+      const amount =
+        item.currency === undefined
+          ? `${(item.amountCents / 100).toFixed(2)} (currency not stated)`
+          : formatMoney(item.amountCents, item.currency);
       if (!plain.includes(amount)) problems.push(`drops the amount ${amount}`);
     }
-    if (item.subjectHint !== undefined && !plain.includes(`“${item.subjectHint}”`))
-      problems.push('drops a hint');
+    for (const word of (item.subjectHint ?? '').split(/\s+/u)) {
+      if (word !== '' && !word.includes('@') && !plain.includes(word))
+        problems.push('drops a word of a hint');
+    }
   }
   if (claim !== undefined) {
     const when =

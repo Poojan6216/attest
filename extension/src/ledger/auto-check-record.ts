@@ -11,6 +11,8 @@
  */
 import { z } from 'zod';
 
+import type { Policy } from '../core/policy';
+import { MS_PER_MINUTE } from '../core/units';
 import { readRow, type LedgerDb } from './db';
 import { AgentId, IsoTs } from './types';
 
@@ -26,6 +28,14 @@ export interface AutoCheckRecord {
   readonly claims: number;
   readonly agents: readonly AgentId[];
 }
+
+/**
+ * How long an `email.sent` claim is PENDING before the auto-check is due to open Gmail for it: half its grace
+ * (`graceMin` / 2; sprint_4 4.9). Here, beside the record, so the options page's text and the service worker read one
+ * rule, and no page imports the worker's module (sprint_4 close, tech review TECH-1).
+ */
+export const autoCheckWaitMs = (policy: Pick<Policy, 'windows'>): number =>
+  (policy.windows.graceMin * MS_PER_MINUTE) / 2;
 
 const entry = <K extends string, V extends z.ZodType>(key: K, value: V) =>
   z.strictObject({ key: z.literal(key), value });

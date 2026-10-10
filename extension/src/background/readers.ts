@@ -6,18 +6,27 @@
  * after that runs it. A tab already open keeps the script it has, but the service worker answers what that script
  * sends with `reader_off` (./router.ts): nothing of it is stored, and the script stops (src/observers/base.ts).
  *
- * The choice is kept in `chrome.storage.local` (`STORAGE_KEYS.READERS_OFF`: the readers that are off). Every reader is
- * on until the person turns it off, and again after Delete all data. A stored value that is not a list of readers
- * reads as every reader off (logged): a choice that cannot be read is never taken as consent to read. The
- * registrations follow the choice: at every start of the service worker, after each toggle and after a wipe,
- * `syncReaders` registers each reader that is on and not registered (or registered with other details, after an
- * update), and removes each that is off. One sync runs at a time.
+ * The choice is kept in ledger meta (src/ledger/consent.ts; sprint_4 close, security review SEC-3), where no script on
+ * a vendor page can write it. Every reader is on until the person turns it off; one turned off stays off across Delete
+ * all data (./settings.ts). A stored value that cannot be read reads as that reader off (logged): a choice that cannot be
+ * read is never taken as consent to read. The registrations follow the choice: after an install or update, at a browser
+ * start, after each toggle and after a wipe (entrypoints/background.ts), `syncReaders` registers each reader that is on
+ * and not registered (or registered with other details, after an update), and removes each that is off. One sync runs
+ * at a time.
  */
 import { browser, type Browser } from 'wxt/browser';
-import { z } from 'zod';
 
-import { ackRefused, type BusAck, type ReaderToggleMessage, type SettingResult } from '../bus/messages';
-import { OBSERVER_HOSTS, OBSERVER_SITES, type ReaderId, READERS, STORAGE_KEYS } from '../config';
+import {
+  ackRefused,
+  type BusAck,
+  type LedgerTable,
+  type ReaderToggleMessage,
+  type SettingResult,
+} from '../bus/messages';
+import { OBSERVER_HOSTS, OBSERVER_SITES, type ReaderId, READERS } from '../config';
+import { readersOff, saveReaderOff } from '../ledger/consent';
+import type { LedgerDb } from '../ledger/db';
+import { getLedger } from '../ledger/shared';
 import { log } from '../log';
 
 type RegisteredScript = Browser.scripting.RegisteredContentScript;
@@ -30,25 +39,18 @@ export interface ScriptingApi {
   unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
 }
 
-/** The part of `chrome.storage.local` the readers use. */
-export interface ReaderStorage {
-  get(key: string): Promise<Record<string, unknown>>;
-  set(items: Record<string, unknown>): Promise<void>;
-}
-
 export interface ReaderDeps {
   readonly scripting: ScriptingApi;
-  readonly storage: ReaderStorage;
+  /** The ledger, where the choice is kept. */
+  readonly db: () => Promise<LedgerDb>;
 }
 
-/** Chrome's own, in the service worker. */
+/** Chrome's own, in the service worker, and the shared ledger. */
 export const BROWSER_READERS: ReaderDeps = {
   get scripting(): ScriptingApi {
     return browser.scripting;
   },
-  get storage(): ReaderStorage {
-    return browser.storage.local;
-  },
+  db: getLedger,
 };
 
 /** The registration of `reader`'s content script: WXT builds it at `content-scripts/<name>.js`. */
@@ -63,18 +65,6 @@ export function scriptOf(reader: ReaderId): RegisteredScript {
   };
 }
 
-const ReadersOff = z.array(z.enum(READERS)).max(READERS.length);
-
-/** The readers that are off (header): none when nothing is stored, every one when what is stored is not a list. */
-export async function readersOff(storage: ReaderStorage): Promise<ReadonlySet<ReaderId>> {
-  const stored = (await storage.get(STORAGE_KEYS.READERS_OFF))[STORAGE_KEYS.READERS_OFF];
-  if (stored === undefined) return new Set();
-  const parsed = ReadersOff.safeParse(stored);
-  if (parsed.success) return new Set(parsed.data);
-  log.error('readers.choice_invalid');
-  return new Set(READERS);
-}
-
 /** Whether `script` is registered as `scriptOf` would register it. */
 function current(script: RegisteredScript, reader: ReaderId): boolean {
   const wanted = scriptOf(reader);
@@ -87,8 +77,8 @@ function current(script: RegisteredScript, reader: ReaderId): boolean {
 }
 
 /** One sync (header). */
-async function syncOnce({ scripting, storage }: ReaderDeps): Promise<void> {
-  const off = await readersOff(storage);
+async function syncOnce({ scripting, db }: ReaderDeps): Promise<void> {
+  const off = await readersOff(await db());
   const registered = new Map(
     (await scripting.getRegisteredContentScripts()).map((script) => [script.id, script]),
   );
@@ -115,23 +105,29 @@ export function syncReaders(deps: ReaderDeps = BROWSER_READERS): Promise<void> {
   return run;
 }
 
-/** Turns `reader` on or off: the choice is stored, then the registrations follow it. */
+/**
+ * Turns `reader` on or off: the choice is stored, then the registrations follow it, and open pages are told (`meta`).
+ */
 export async function onReaderToggle(
   message: ReaderToggleMessage,
   deps: ReaderDeps = BROWSER_READERS,
+  notify: (tables: readonly LedgerTable[]) => void = () => undefined,
 ): Promise<SettingResult> {
   try {
-    const off = new Set(await readersOff(deps.storage));
-    if (message.on) off.delete(message.reader);
-    else off.add(message.reader);
-    await deps.storage.set({ [STORAGE_KEYS.READERS_OFF]: READERS.filter((reader) => off.has(reader)) });
-    await syncReaders(deps);
-    log.info('readers.toggled', { reader: message.reader, on: message.on });
-    return { ok: true };
+    await saveReaderOff(await deps.db(), message.reader, !message.on);
   } catch (error) {
     log.error('readers.toggle_failed', { reader: message.reader, error });
     return { ok: false, code: 'failed' };
   }
+  notify(['meta']);
+  try {
+    await syncReaders(deps);
+  } catch (error) {
+    log.error('readers.toggle_failed', { reader: message.reader, error });
+    return { ok: false, code: 'failed' };
+  }
+  log.info('readers.toggled', { reader: message.reader, on: message.on });
+  return { ok: true };
 }
 
 /**
@@ -145,7 +141,7 @@ export async function readerOff(
 ): Promise<BusAck | null> {
   if (!Object.hasOwn(OBSERVER_SITES, observerId)) return null;
   const site = OBSERVER_SITES[observerId as keyof typeof OBSERVER_SITES];
-  if (!(await readersOff(deps.storage)).has(site)) return null;
+  if (!(await readersOff(await deps.db())).has(site)) return null;
   log.debug('observer.reader_off', { observer: observerId });
   return ackRefused('reader_off');
 }

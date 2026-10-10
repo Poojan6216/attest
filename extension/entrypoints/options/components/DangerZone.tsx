@@ -24,8 +24,9 @@ export function DangerZone({ send = sendSetting }: DangerZoneProps) {
         </h3>
         <p>
           Delete everything Attest keeps in this browser without uninstalling it: every receipt, the facts
-          behind them, the grants, the install id and the settings. Attest keeps running and reads the pages
-          you open from then on.
+          behind them, the grants, the install id, the settings and its notifications. A reader you turned off
+          stays off, and Check Gmail for me is off again. Attest keeps running and reads the pages you open
+          from then on.
         </p>
         <DeleteAllControl wipe={() => send({ type: 'ledger.wipe' })} />
         <p>Uninstalling Attest also removes everything it stored.</p>

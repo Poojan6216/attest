@@ -19,11 +19,14 @@ import {
   PURGE_ALARM_PERIOD_MINUTES,
   PURGE_STARTUP_DELAY_MINUTES,
 } from '../config';
+import { pendingAlertCount } from '../ledger/alerts';
 import { nextDigestMs } from '../ledger/digest-week';
 import { getLedger } from '../ledger/repo';
 import type { LedgerTable } from '../bus/messages';
+import { BROWSER_ALERTS, deliverAlerts } from './alerts';
 import { autoCheckGmail, browserAutoCheck } from './auto-check';
 import { browserDigest, runWeeklyDigest } from './digest';
+import { syncReaders } from './readers';
 import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
 import { announce } from './router';
 import { purgeAtTrustedClock } from '../ledger/retention-clock';
@@ -47,13 +50,38 @@ export async function runRetentionPurge(): Promise<void> {
  * PENDING receipt whose grace has elapsed and grades whatever arrived since the last batch. Everything it needs is in
  * the ledger, so a service worker stopped mid-grace finalises at the next alarm after it restarts. When it wrote,
  * deleted or superseded a receipt, open pages are told, as after an import (tech review TECH-8). Then the Gmail
- * auto-check, which does nothing unless the person turned it on (sprint_4 4.9, ./auto-check.ts).
+ * auto-check, which does nothing unless the person turned it on (sprint_4 4.9, ./auto-check.ts), and the upkeep below.
  */
 export async function runGraceBatch(
   notify: (tables: readonly LedgerTable[]) => void = announce(nowIso),
+  upkeep: () => Promise<void> = graceUpkeep,
 ): Promise<void> {
-  if (changedReceipts(await runGradingBatch(await getLedger(), SHIPPED_GRADING))) notify(['receipts']);
-  await autoCheckGmail(browserAutoCheck(notify));
+  try {
+    if (changedReceipts(await runGradingBatch(await getLedger(), SHIPPED_GRADING))) notify(['receipts']);
+    await autoCheckGmail(browserAutoCheck(notify));
+  } finally {
+    await upkeep();
+  }
+}
+
+/**
+ * What each grace alarm keeps in order after its batch, whether the batch ran or failed (sprint_4 close): alerts a
+ * stopped worker left pending are shown, found by the `state` index (tech review TECH-6: never at every start of the
+ * worker); an alarm Chrome dropped or a failed reschedule lost is set again, the weekly digest's above all, which is set
+ * one at a time (QA review GAP 12); and the readers' registrations are brought in line with the person's choice. Each
+ * runs on its own, and a failure is logged under its own event; the next alarm tries again.
+ */
+export async function graceUpkeep(): Promise<void> {
+  const [alerts, alarms, readers] = await Promise.allSettled([
+    getLedger().then(async (db) =>
+      (await pendingAlertCount(db)) > 0 ? deliverAlerts(db, BROWSER_ALERTS) : 0,
+    ),
+    ensureAlarms(),
+    syncReaders(),
+  ]);
+  if (alerts.status === 'rejected') log.error('alerts.deliver_failed', { error: alerts.reason });
+  if (alarms.status === 'rejected') log.error('alarm.ensure_failed', { error: alarms.reason });
+  if (readers.status === 'rejected') log.error('readers.sync_failed', { error: readers.reason });
 }
 
 /** The weekly digest (sprint_4 4.7; ./digest.ts), whose handler sets the next one. */

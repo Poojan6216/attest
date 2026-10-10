@@ -3,8 +3,8 @@ import 'fake-indexeddb/auto';
  * The Gmail auto-check across a stopped service worker (sprint_4 4.9: "exactly one pinned visible tab per window", "once
  * per grace window"; Decisions [4.9]; Sprint 4 QA review, qa_tester priority 7). Every open is recorded in the ledger,
  * never in memory, so a worker Chrome stops and starts again keeps the window: modelled as Chrome makes it
- * (tests/unit/background/grace-alarm.spec.ts), the ledger and `chrome.storage.local` stay, the connection and every
- * module's memory go (a fresh import). Then:
+ * (tests/unit/background/grace-alarm.spec.ts), the ledger stays, with the person's choice in it (src/ledger/consent.ts),
+ * the connection and every module's memory go (a fresh import). Then:
  *  - within the open's window, the next worker opens nothing;
  *  - after it, a claim that was due at the open never opens another tab; a claim due later opens one;
  *  - a worker stopped after the tab opened and before the open was recorded may open one more tab at its next check,
@@ -12,11 +12,11 @@ import 'fake-indexeddb/auto';
  * Every value is invented.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { browser } from 'wxt/browser';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import type { AutoCheckBrowser, AutoCheckDeps } from '../../../src/background/auto-check';
-import { AUTO_CHECK_URL, STORAGE_KEYS } from '../../../src/config';
+import { AUTO_CHECK_URL } from '../../../src/config';
+import { saveFlag } from '../../../src/ledger/consent';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
@@ -78,8 +78,15 @@ beforeEach(async () => {
   name = uniqueDbName('auto-check-restart');
   opened = [];
   restoreSink = setLogSink(() => undefined);
-  await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { ATTEST_AUTO_CHECK_GMAIL: true } });
+  await setAutoCheck(true);
 });
+
+/** The person's choice, Check Gmail for me on or off, in the ledger named `name`. */
+async function setAutoCheck(on: boolean): Promise<void> {
+  const db = await openLedger(name);
+  await saveFlag(db, 'ATTEST_AUTO_CHECK_GMAIL', on);
+  db.close();
+}
 
 afterEach(() => {
   restoreSink();
@@ -95,8 +102,8 @@ async function storeClaim(n: number, observedAt: string): Promise<void> {
 }
 
 /**
- * One auto-check by a service worker started afresh at `nowMs`: new module instances, the ledger reopened by name,
- * `chrome.storage.local` as it was. Resolves how many claims it opened Gmail for.
+ * One auto-check by a service worker started afresh at `nowMs`: new module instances, the ledger reopened by name. Resolves
+ * how many claims it opened Gmail for.
  */
 async function checkAfterRestart(nowMs: number, browserTabs: AutoCheckBrowser = tabs): Promise<number> {
   vi.resetModules();
@@ -109,7 +116,6 @@ async function checkAfterRestart(nowMs: number, browserTabs: AutoCheckBrowser = 
   const db: LedgerDb = await migrations.openLedger(name);
   const deps: AutoCheckDeps = {
     db: () => Promise.resolve(db),
-    storage: browser.storage.local,
     policy: DEFAULT_POLICY,
     nowMs: () => nowMs,
     browser: browserTabs,
@@ -162,7 +168,7 @@ describe('the auto-check after the service worker restarts', () => {
   });
 
   it('opens nothing after a restart while the person keeps it off', async () => {
-    await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { ATTEST_AUTO_CHECK_GMAIL: false } });
+    await setAutoCheck(false);
     await storeClaim(1, READ_AT);
     for (const after of [WAIT_MS, WAIT_MS + WINDOW_MS, 24 * 60 * MINUTE]) {
       expect(await checkAfterRestart(READ_MS + after)).toBe(0);

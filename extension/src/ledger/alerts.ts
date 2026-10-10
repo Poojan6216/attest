@@ -12,6 +12,7 @@
  *    showing it twice: one per receipt, ever, is at most one.
  * A settled row goes with its receipt in the retention purge (./retention.ts), and with everything in Delete all data.
  */
+import { ALERTS_PER_TAKE } from '../config';
 import { alertsMutedKey } from './agent-keys';
 import { readRow, readRows, type LedgerDb } from './db';
 import {
@@ -27,14 +28,15 @@ import {
   Receipt,
 } from './types';
 
-/** How many pending alerts one `takeAlerts` settles; the rest wait for the next. */
-export const ALERTS_PER_TAKE = 100;
+export { ALERTS_PER_TAKE } from '../config';
 
 const isAlertGrade = (grade: string): grade is AlertGrade => AlertGrade.safeParse(grade).success;
 
 /** Queues an alert for each of `receipts` that alerts and has none (header); returns how many. */
 export async function queueAlerts(db: LedgerDb, receipts: readonly Receipt[]): Promise<number> {
-  const alerting = receipts.flatMap((receipt) => {
+  // One receipt given twice is queued once: a second copy would abort the batch's transaction (QA review GAP 8).
+  const unique = [...new Map(receipts.map((receipt) => [receipt.id, receipt])).values()];
+  const alerting = unique.flatMap((receipt) => {
     const { state, grade, supersededBy, finalAt } = receipt;
     if (state !== 'FINAL' || !isAlertGrade(grade) || supersededBy !== undefined || finalAt === undefined)
       return [];
@@ -87,6 +89,11 @@ async function actionOf(db: LedgerDb, receipt: Receipt): Promise<AlertAction | u
   if (first === undefined) return undefined;
   const observation = readRow('observations', Observation, await db.observations.get(first));
   return observation === undefined ? undefined : { type: observation.type, at: observation.occurredAt };
+}
+
+/** How many alerts are pending, by the `state` index: a grace alarm delivers when there are any (TECH-6). */
+export async function pendingAlertCount(db: LedgerDb): Promise<number> {
+  return db.alerts.where('state').equals('pending').count();
 }
 
 /** Settles up to `ALERTS_PER_TAKE` pending alerts at `handledAt` (header); returns the ones to show. */

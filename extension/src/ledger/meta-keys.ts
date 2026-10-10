@@ -5,6 +5,7 @@
  */
 import { OPEN_IDLE } from './activity';
 import { AUTO_CHECK_AGENTS, AUTO_CHECK_AT, AUTO_CHECK_CLAIMS, AUTO_CHECK_UNTIL } from './auto-check-record';
+import { FLAG_PREFIX, READER_OFF_PREFIX } from './consent';
 import { GRADED_WRITES, LAST_EVALUATED_AT } from './batch-instant';
 import { CLOCK_FLOOR_AT } from './clock-guard';
 import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
@@ -33,4 +34,6 @@ export const META_KEYS: readonly string[] = Object.freeze([
   AUTO_CHECK_UNTIL,
   AUTO_CHECK_CLAIMS,
   AUTO_CHECK_AGENTS,
+  READER_OFF_PREFIX,
+  FLAG_PREFIX,
 ]);

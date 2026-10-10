@@ -14,7 +14,7 @@ import {
   ObservationSource,
 } from '../ledger/types';
 import type { CoverageSummary } from '../ledger/views';
-import { clockTime, formatMoney } from './format';
+import { clockTime, formatAmount } from './format';
 import { AGENT_NAMES, AGENT_ORDER, claimTypeLabel } from './paste-labels';
 
 const GRADE_LABELS: Readonly<Record<Grade, string>> = Object.freeze({
@@ -127,8 +127,8 @@ export function evidenceSummary(observation: Observation, nowMs: number): string
     parts.push(`${observation.type === 'email.sent' ? 'to' : 'with'} ${observation.counterparty}`);
   }
   if (observation.merchant !== undefined) parts.push(observation.merchant);
-  if (observation.amountCents !== undefined && observation.currency !== undefined) {
-    parts.push(formatMoney(observation.amountCents, observation.currency));
+  if (observation.amountCents !== undefined) {
+    parts.push(formatAmount(observation.amountCents, observation.currency));
   }
   if (observation.subjectHint !== undefined) parts.push(`“${observation.subjectHint}”`);
   return parts.join(', ');
@@ -149,8 +149,8 @@ export function evidenceFields(observation: Observation, nowMs: number): [string
     fields.push([observation.type === 'email.sent' ? 'To' : 'With', observation.counterparty]);
   }
   if (observation.merchant !== undefined) fields.push(['Merchant', observation.merchant]);
-  if (observation.amountCents !== undefined && observation.currency !== undefined) {
-    fields.push(['Amount', formatMoney(observation.amountCents, observation.currency)]);
+  if (observation.amountCents !== undefined) {
+    fields.push(['Amount', formatAmount(observation.amountCents, observation.currency)]);
   }
   if (observation.subjectHint !== undefined) fields.push(['Subject', observation.subjectHint]);
   fields.push(['First seen', clockTime(observation.sightedAt ?? observation.observedAt, nowMs)]);

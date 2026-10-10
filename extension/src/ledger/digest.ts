@@ -17,7 +17,7 @@
 import { isoWithLocalOffset } from '../clock';
 import { compareText } from '../core/order';
 import { spansEndingIn, readInterval } from './coverage-store';
-import { domainOf } from './domain';
+import { addressDomain, merchantDomain } from './domain';
 import { readRow, readRows, type LedgerDb } from './db';
 import { type DigestWeek, weekDays } from './digest-week';
 import {
@@ -82,7 +82,7 @@ async function notableOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<No
     const orphan = claimId === undefined && first !== undefined ? orphans.get(first) : undefined;
     const action = claim ?? orphan;
     const at = claim?.claimedAt ?? orphan?.occurredAt;
-    const domain = domainOf(action?.counterparty);
+    const domain = addressDomain(action?.counterparty) ?? merchantDomain(orphan?.merchant);
     return {
       receiptId,
       agent,
@@ -166,5 +166,3 @@ export async function digestWeeks(db: LedgerDb): Promise<string[]> {
 export async function getDigest(db: LedgerDb, week: string): Promise<DigestRecord | undefined> {
   return readRow('digests', DigestRecord, await db.digests.get(week));
 }
-
-export { domainOf } from './domain';

@@ -13,6 +13,7 @@
 import type { GrantChoices } from '../bus/messages';
 import { CURRENCY_MINOR_UNITS } from '../core/units';
 import { ActionType, type AgentId, type Grant, SCHEMA_LIMITS } from '../core/schema';
+import { DOMAIN, DOMAIN_LABEL } from '../ledger/domain';
 import { formatMoney } from './format';
 
 /** What the form holds for one agent. */
@@ -37,9 +38,7 @@ export type DraftResult =
 export const CURRENCIES = Object.keys(CURRENCY_MINOR_UNITS) as readonly (keyof typeof CURRENCY_MINOR_UNITS)[];
 
 const L = SCHEMA_LIMITS;
-const LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
-const DOMAIN = new RegExp(`^(?:${LABEL}\\.)+[a-z]{2,63}$`, 'u');
-const ADDRESS = new RegExp(`^[^\\s@]{1,64}@(?:${LABEL}\\.)+[a-z]{2,63}$`, 'iu');
+const ADDRESS = new RegExp(`^[^\\s@]{1,64}@(?:${DOMAIN_LABEL}\\.)+[a-z]{2,63}$`, 'iu');
 
 const isCurrency = (code: string): code is keyof typeof CURRENCY_MINOR_UNITS =>
   Object.hasOwn(CURRENCY_MINOR_UNITS, code);

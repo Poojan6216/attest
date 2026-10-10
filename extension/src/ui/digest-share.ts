@@ -7,9 +7,10 @@
  * markdown. Pure.
  */
 import { dateLabel, gapLine, healthWord, instantLabel } from './digest-labels';
-import { formatMoney } from './format';
+import { formatAmount } from './format';
 import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
 import { adapterName, gradeLabel } from './receipt-labels';
+import { withoutAddresses } from '../ledger/domain';
 import type { AgentWeek, DigestRecord, Grade, NotableReceipt } from '../ledger/types';
 
 const GRADES: readonly Grade[] = [
@@ -44,10 +45,10 @@ function notableLine(receipt: NotableReceipt): string {
     receipt.type === undefined ? undefined : claimTypeLabel(receipt.type),
     receipt.at === undefined ? undefined : instantLabel(receipt.at),
     receipt.domain === undefined ? undefined : escapeMarkdown(receipt.domain),
-    receipt.amountCents === undefined || receipt.currency === undefined
+    receipt.amountCents === undefined ? undefined : formatAmount(receipt.amountCents, receipt.currency),
+    receipt.subjectHint === undefined
       ? undefined
-      : formatMoney(receipt.amountCents, receipt.currency),
-    receipt.subjectHint === undefined ? undefined : `“${escapeMarkdown(receipt.subjectHint)}”`,
+      : `“${escapeMarkdown(withoutAddresses(receipt.subjectHint))}”`,
   ].filter((part) => part !== undefined);
   return `- ${gradeLabel(receipt.grade)}: ${who}${parts.length === 0 ? '' : ` — ${parts.join(', ')}`}`;
 }

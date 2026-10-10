@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { alertsMutedKey } from '../../../src/ledger/agent-keys';
-import { ALERTS_PER_TAKE, queueAlerts, takeAlerts } from '../../../src/ledger/alerts';
+import { ALERTS_PER_TAKE, pendingAlertCount, queueAlerts, takeAlerts } from '../../../src/ledger/alerts';
 import type { LedgerDb } from '../../../src/ledger/db';
 import { openLedger } from '../../../src/ledger/migrations';
 import { putReceipt, setMeta, upsertClaim, upsertObservation } from '../../../src/ledger/repo';
@@ -180,5 +180,15 @@ describe('takeAlerts: what shows nothing', () => {
     await queueAlerts(db, many);
     expect((await takeAlerts(db, HANDLED_AT)).shown).toHaveLength(ALERTS_PER_TAKE);
     expect((await takeAlerts(db, HANDLED_AT)).shown).toHaveLength(2);
+  });
+});
+
+describe('queueAlerts given one receipt twice (QA review GAP 8)', () => {
+  it('queues it once and never aborts its batch; the pending count says one', async () => {
+    const receipt = final(1, 'NOT_FOUND');
+    await expect(queueAlerts(db, [receipt, receipt])).resolves.toBe(1);
+    expect(await pendingAlertCount(db)).toBe(1);
+    await takeAlerts(db, HANDLED_AT);
+    expect(await pendingAlertCount(db)).toBe(0);
   });
 });

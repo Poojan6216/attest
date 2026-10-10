@@ -28,6 +28,7 @@ import {
 } from '../core/schema';
 import { oneLineText } from '../core/schema-text';
 import { coverageProblems, refineWith } from '../core/schema-checks';
+import { Domain } from './domain';
 
 export * from '../core/schema';
 /** The ledger's name for a HealthReport: the latest health per adapter/observer (Hard Rule 6). */
@@ -176,7 +177,8 @@ export const NotableReceipt = z.strictObject({
   grade: AlertGrade,
   type: ActionType.optional(),
   at: IsoTs.optional(),
-  domain: oneLineText(L.COUNTERPARTY).optional(),
+  /** A domain only: an address's, or a merchant's written as one (./domain.ts; security review SEC-1). */
+  domain: Domain.optional(),
   amountCents: AmountCents.optional(),
   currency: Currency.optional(),
   subjectHint: oneLineText(L.SUBJECT_HINT).optional(),

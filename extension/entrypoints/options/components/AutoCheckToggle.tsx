@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 
-import { autoCheckWaitMs } from '../../../src/background/auto-check';
+import { autoCheckWaitMs } from '../../../src/ledger/auto-check-record';
 import type { SettingResult } from '../../../src/bus/messages';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { MS_PER_MINUTE } from '../../../src/core/units';
@@ -47,8 +47,9 @@ export function AutoCheckToggle({ on, gmailOn, toggle }: AutoCheckToggleProps) {
       <p class="text-sm">
         Off unless you turn it on. When an agent says it sent an email and no Gmail tab has shown Attest your
         Sent folder in the {WAIT_MINUTES} minutes since Attest read that claim, Attest opens your Gmail Sent
-        folder itself: one tab, pinned and in front of you, never in the background. It opens at most one tab
-        every {WINDOW_MINUTES} minutes, and never twice for the same claim.
+        folder itself, the next time you are using Chrome: one tab, pinned and in front of you, never in the
+        background. It opens at most one tab every {WINDOW_MINUTES} minutes, and never twice for the same
+        claim.
       </p>
       <p class="text-sm">
         This is the only time Attest opens a page. It reads the folder as it does in any Gmail tab you open,

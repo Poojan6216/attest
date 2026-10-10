@@ -7,7 +7,7 @@
 import type { EntryOutcome } from '../adapters/paste';
 import type { ActionType, AgentId, Claim } from '../core/schema';
 import { HOURS_PER_HALF_DAY } from '../core/units';
-import { formatMoney } from './format';
+import { formatAmount } from './format';
 
 export const AGENT_NAMES: Readonly<Record<AgentId, string>> = Object.freeze({
   muse: 'Muse',
@@ -39,10 +39,7 @@ export const count = (n: number, one: string, many: string): string => `${String
 /** Who or what a claim names: its counterparty or subject hint, then its amount; null when it names none. */
 export function claimWhat(claim: Claim): string | null {
   const named = claim.counterparty ?? claim.subjectHint ?? null;
-  const amount =
-    claim.amountCents !== undefined && claim.currency !== undefined
-      ? formatMoney(claim.amountCents, claim.currency)
-      : null;
+  const amount = claim.amountCents === undefined ? null : formatAmount(claim.amountCents, claim.currency);
   if (named !== null && amount !== null) return `${named}, ${amount}`;
   return named ?? amount;
 }

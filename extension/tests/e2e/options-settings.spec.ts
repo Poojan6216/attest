@@ -2,8 +2,9 @@
  * The options page's settings on the built extension (sprint_4 4.5 done-when). The page readers' content scripts are
  * registered at runtime, each on exactly its hosts: turning Google Calendar off removes its registration
  * (`chrome.scripting.unregisterContentScripts`), so a Calendar page opened then stores nothing while Gmail, still on, is
- * read; turning it on registers it again and the page is read. The retention window is saved in the ledger. Delete
- * all data, asked twice, leaves the ledger and `chrome.storage.local` empty, and every reader on again.
+ * read; turning it on registers it again and the page is read. The choice is in the ledger (security review SEC-3).
+ * The retention window is saved in the ledger. Delete all data, asked twice, leaves the ledger and
+ * `chrome.storage.local` empty but for the one choice it keeps: a reader the person turned off stays off (SEC-6).
  */
 import { readFileSync } from 'node:fs';
 
@@ -72,7 +73,9 @@ test('turning a reader off unregisters it and nothing of its pages is stored; on
     ]);
     await turn(options, 'Turn off Google Calendar');
     await expect.poll(() => ids(worker)).toEqual(['gmail']);
-    expect(await storedLocally(worker)).toMatchObject({ 'attest.readersOff': ['gcal'] });
+    // The choice is in the ledger, where no script on a vendor page can write it (security review SEC-3).
+    expect((await readLedger(options)).tables.meta).toContainEqual({ key: 'readerOff.gcal', value: true });
+    expect(await storedLocally(worker)).not.toHaveProperty('attest.readersOff');
     await expect(options.getByRole('button', { name: 'Turn on Google Calendar' })).toBeVisible();
 
     const week = vendorFixture('gcal', 'synthetic-gcal-week-before.html');
@@ -95,7 +98,7 @@ test('turning a reader off unregisters it and nothing of its pages is stored; on
   });
 });
 
-test('the retention window is saved, and Delete all data leaves the ledger and storage empty, readers on', async () => {
+test('the retention window is saved, and Delete all data leaves the ledger and storage empty but for a reader kept off', async () => {
   test.setTimeout(3 * 60_000);
   await withVendorSession(async ({ extension, ledgerPage: options }) => {
     const worker = await extension.serviceWorker();
@@ -123,13 +126,14 @@ test('the retention window is saved, and Delete all data leaves the ledger and s
     // A grading batch the alarm runs on the new ledger records only its instant; nothing else comes back.
     const { meta, ...tables } = after.tables;
     for (const [name, rows] of Object.entries(tables)) expect(rows, name).toEqual([]);
+    // The one thing kept is a choice, never data: the reader the person turned off stays off (security review SEC-6).
     expect(
       meta.map(({ key }) => key).filter((key) => !['lastEvaluatedAt', 'gradedWrites'].includes(key)),
-    ).toEqual([]);
+    ).toEqual(['readerOff.gmail']);
     expect(after.receiptInputs).toEqual({});
     expect(after.policies).toEqual({});
     expect(await storedLocally(worker)).toEqual({});
-    await expect.poll(() => ids(worker)).toEqual(['gcal', 'gmail']);
-    await expect(options.getByRole('button', { name: 'Turn off Gmail' })).toBeVisible();
+    await expect.poll(() => ids(worker)).toEqual(['gcal']);
+    await expect(options.getByRole('button', { name: 'Turn on Gmail' })).toBeVisible();
   });
 });

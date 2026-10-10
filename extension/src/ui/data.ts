@@ -9,6 +9,8 @@
  * The popup must paint in under 100 ms (sprint_4 4.2), so what it loads at its start is only what it reads: a
  * receipt's detail (src/ledger/detail.ts) and the bus listener load when first used, never at the start.
  */
+import type { ReaderId } from '../config';
+import { type Flags, readersOff, readFlags } from '../ledger/consent';
 import type { LedgerTable } from '../bus/messages';
 import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../config';
 import type { ReceiptDetail } from '../ledger/detail';
@@ -134,6 +136,12 @@ export async function loadGrantSettings(): Promise<GrantSettings> {
 /** The retention window in force (sprint_4 4.5): what the options page's Privacy shows. */
 export async function loadRetentionDays(): Promise<RetentionChoice> {
   return readRetentionDays(await getLedger());
+}
+
+/** The person's choices the options page shows (src/ledger/consent.ts): the readers that are off, and the flags. */
+export async function loadConsent(): Promise<{ readersOff: ReadonlySet<ReaderId>; flags: Flags }> {
+  const db = await getLedger();
+  return { readersOff: await readersOff(db), flags: await readFlags(db) };
 }
 
 /** Every agent's grant. */

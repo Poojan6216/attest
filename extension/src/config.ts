@@ -154,6 +154,16 @@ export const DIGEST_HOUR = 9;
 /** The notification that says a weekly digest is ready (sprint_4 4.7); a click opens it. */
 export const DIGEST_NOTIFICATION_ID = 'attest.digest';
 
+/**
+ * Alerts (sprint_4 4.6; sprint_4 close, tech review TECH-12): one delivery settles at most ALERTS_PER_TAKE pending
+ * alerts, the rest at the next (a grading batch, or the next grace alarm). When more than ALERT_BURST are to be shown at
+ * once (a pasted log whose claims were all past their grace, say), one notice says how many receipts need a look, and a
+ * click opens the timeline (ALERTS_NOTIFICATION_ID), instead of a notification each.
+ */
+export const ALERTS_PER_TAKE = 100;
+export const ALERT_BURST = 3;
+export const ALERTS_NOTIFICATION_ID = 'attest.alerts';
+
 export type AlarmName = (typeof ALARM_NAMES)[keyof typeof ALARM_NAMES];
 
 /** How often the retention purge alarm fires (once a day). */

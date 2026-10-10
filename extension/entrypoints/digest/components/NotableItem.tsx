@@ -1,7 +1,7 @@
 import type { NotableReceipt } from '../../../src/ledger/types';
 import { AgentBadge } from '../../../src/ui/AgentBadge';
 import { instantLabel } from '../../../src/ui/digest-labels';
-import { formatMoney } from '../../../src/ui/format';
+import { formatAmount } from '../../../src/ui/format';
 import { GradeChip } from '../../../src/ui/GradeChip';
 import { claimTypeLabel } from '../../../src/ui/paste-labels';
 
@@ -19,7 +19,7 @@ export function NotableItem({ receipt }: NotableItemProps) {
     type === undefined ? undefined : claimTypeLabel(type),
     at === undefined ? undefined : instantLabel(at),
     domain,
-    amountCents === undefined || currency === undefined ? undefined : formatMoney(amountCents, currency),
+    amountCents === undefined ? undefined : formatAmount(amountCents, currency),
     subjectHint === undefined ? undefined : `“${subjectHint}”`,
   ].filter((part) => part !== undefined);
   return (

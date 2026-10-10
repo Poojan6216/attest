@@ -22,6 +22,18 @@ export function clockTime(iso: string, nowMs: number): string {
   return sameYear ? `${day}, ${time}` : `${day} ${String(at.getFullYear())}, ${time}`;
 }
 
+/**
+ * An amount in minor units: in its currency ("$12.50", "¥1,200"); or, when the claim named none (a bare "$" is read as
+ * hundredths with no currency, Hard Rule 5: src/adapters/claims.ts), as hundredths with that said: "89.99 (currency not
+ * stated)". Every surface writes an amount through this, so none is dropped for want of a currency (sprint_4 close,
+ * QA review GAP 4).
+ */
+export function formatAmount(minor: number, currency: string | undefined): string {
+  return currency === undefined
+    ? `${(minor / 100).toFixed(2)} (currency not stated)`
+    : formatMoney(minor, currency);
+}
+
 /** An amount in minor units, in its currency: "$12.50", "¥1,200". */
 export function formatMoney(minor: number, currency: string): string {
   const digits = Object.hasOwn(CURRENCY_MINOR_UNITS, currency)

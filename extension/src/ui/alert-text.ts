@@ -41,6 +41,14 @@ const SEEN: Readonly<Record<ActionType, string>> = Object.freeze({
   other: 'Something was done',
 });
 
+/** The one notice for a burst of `count` alerts (TECH-12): how many receipts need a look, and where to see them. */
+export function alertBurstText(count: number): AlertText {
+  return {
+    title: `${String(count)} receipts need a look`,
+    message: 'Each ended Not found, Unasked or Over scope. Open the timeline to see them.',
+  };
+}
+
 /** The alert's title and line, the times written on the clock `nowMs` reads (`clockTime`). */
 export function alertText({ agent, grade, action }: AlertToShow, nowMs: number): AlertText {
   const name = AGENT_NAMES[agent];

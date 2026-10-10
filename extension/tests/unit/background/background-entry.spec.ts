@@ -40,11 +40,14 @@ async function storedId(): Promise<unknown> {
 }
 
 describe('background main()', () => {
-  it('logs its start once, and registers every page reader, each on until the person turns it off (sprint_4 4.5)', async () => {
+  it('logs its start once and does no other work then; a browser start registers every page reader (TECH-6)', async () => {
+    expect(events()).toEqual(['info:background.started']);
+    expect([...scripting.registered.keys()]).toEqual([]);
+    await fakeBrowser.runtime.onStartup.trigger();
     await vi.waitFor(() => {
       expect([...scripting.registered.keys()].sort()).toEqual(['gcal', 'gmail']);
     });
-    expect(events()).toEqual(['info:background.started', 'info:readers.synced']);
+    expect(events()).toContain('info:readers.synced');
   });
 
   it('on install: creates the install id, then schedules the purge alarm with its period', async () => {
@@ -55,6 +58,10 @@ describe('background main()', () => {
       });
     });
     expect(await storedId()).toMatch(UUID_V4);
+    // The page readers are registered with the install, each on until the person turns it off (sprint_4 4.5).
+    await vi.waitFor(() => {
+      expect([...scripting.registered.keys()].sort()).toEqual(['gcal', 'gmail']);
+    });
     expect(events().filter((e) => e.startsWith('error:'))).toEqual([]);
   });
 
@@ -69,7 +76,9 @@ describe('background main()', () => {
       ]);
     });
   });
+});
 
+describe('background main(): alarms and failures', () => {
   it('on our alarm: runs its handler', async () => {
     await fakeBrowser.alarms.onAlarm.trigger({
       name: ALARM_NAMES.PURGE,

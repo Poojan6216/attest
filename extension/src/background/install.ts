@@ -2,16 +2,23 @@
  * `runtime.onInstalled` handler. Registered synchronously in `entrypoints/background.ts` (MV3); the work
  * lives here so the entrypoint stays thin.
  *
- * On install and on update it makes sure the install id exists and (re)creates the alarms. The two are
- * independent: a storage failure under the install id must not leave the extension without a scheduler,
- * and an alarm failure must not be reported as an install-id failure. Browser updates and shared-module
- * updates change nothing Attest owns, so they are skipped (the alarms keep their countdown).
+ * On install and on update it makes sure the install id exists, (re)creates the alarms, and settles the page readers:
+ * an older profile's choices moved into the ledger (./consent-move.ts), then the registrations brought in line
+ * (./readers.ts; sprint_4 close, tech review TECH-6: never at every start of the worker). The three are independent: a
+ * storage failure under the install id must not leave the extension without a scheduler or its readers, and each
+ * failure is reported under its own event. Browser updates and shared-module updates change nothing Attest owns, so
+ * they are skipped (the alarms keep their countdown).
  */
 import { z } from 'zod';
 
+import { browser } from 'wxt/browser';
+
 import { ensureInstallId } from '../ledger/install-id';
+import { getLedger } from '../ledger/shared';
 import { log } from '../log';
 import { resetAlarms } from './alarms';
+import { moveStoredChoices } from './consent-move';
+import { syncReaders } from './readers';
 
 export const INSTALL_REASONS = ['install', 'update', 'chrome_update', 'shared_module_update'] as const;
 
@@ -47,14 +54,30 @@ export async function handleInstalled(details: unknown): Promise<InstallOutcome>
 }
 
 /**
- * The whole onInstalled job. Never rejects: the install id and the alarms are settled independently and
- * each failure is logged under its own event (`install.failed`, `alarm.reset_failed`).
+ * The readers settled after an install or an update (header): the old choices moved, then the registrations synced. A
+ * move that fails is logged on its own (`consent.move_failed`), and the registrations still follow what the ledger holds.
+ */
+export async function settleReaders(sync: () => Promise<void> = syncReaders): Promise<void> {
+  try {
+    await moveStoredChoices(await getLedger(), browser.storage.local);
+  } catch (error) {
+    log.error('consent.move_failed', { error });
+  }
+  await sync();
+}
+
+/**
+ * The whole onInstalled job. Never rejects: the install id, the alarms and the readers are settled independently and
+ * each failure is logged under its own event (`install.failed`, `alarm.reset_failed`, `readers.sync_failed`).
  */
 export async function onInstalled(details: unknown): Promise<void> {
-  const [installId, alarms] = await Promise.allSettled([
+  const owns = ownsChange(details);
+  const [installId, alarms, readers] = await Promise.allSettled([
     handleInstalled(details),
-    ownsChange(details) ? resetAlarms() : Promise.resolve(),
+    owns ? resetAlarms() : Promise.resolve(),
+    owns ? settleReaders() : Promise.resolve(),
   ]);
   if (installId.status === 'rejected') log.error('install.failed', { error: installId.reason });
   if (alarms.status === 'rejected') log.error('alarm.reset_failed', { error: alarms.reason });
+  if (readers.status === 'rejected') log.error('readers.sync_failed', { error: readers.reason });
 }

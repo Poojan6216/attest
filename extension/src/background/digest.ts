@@ -63,6 +63,6 @@ export async function runWeeklyDigest(deps: DigestDeps): Promise<void> {
       priority: 0,
     });
   } catch (error) {
-    log.error('alerts.show_failed', { error });
+    log.error('digest.notify_failed', { error });
   }
 }

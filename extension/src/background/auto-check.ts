@@ -6,9 +6,10 @@
  * when it is an `email.sent` claim whose receipt has been PENDING, with no mark of the person's, for half its grace
  * (`graceMin` / 2) since Attest read it, and no Gmail Sent list has been read since Attest read it: no Gmail tab showed
  * Attest the Sent folder since. Then Attest opens AUTO_CHECK_URL, the Sent folder, in one new tab, pinned and active
- * in the window the person last used, never in the background; the Gmail reader reads it there as in any Gmail tab the
- * person opens, and never acts on the page (Hard Rule 3). No tab opens while no window is open or the last one used is
- * minimised (the next batch tries again).
+ * in the window the person is using, never in the background; the Gmail reader reads it there as in any Gmail tab the
+ * person opens, and never acts on the page (Hard Rule 3). No tab opens while Chrome's last focused window does not have
+ * the focus (another app is in front, the screen is locked) or is minimised, nor, when away detection is on, while
+ * Chrome says the person is idle or locked (sprint_4 close, security review SEC-2): the next batch tries again.
  *
  * Once per grace window: after an open, none follows for `graceMin`, and a claim that was due at an open is never due
  * again, so each claim opens at most one tab. A tab opened before the batch's clock means the clock went back: that
@@ -22,7 +23,7 @@ import { browser } from 'wxt/browser';
 
 import type { LedgerTable } from '../bus/messages';
 import { isoWithLocalOffset } from '../clock';
-import { AUTO_CHECK_URL } from '../config';
+import { AUTO_CHECK_URL, IDLE_DETECTION_SECONDS, IDLE_PERMISSION } from '../config';
 import { instantMs } from '../core/normalize';
 import { DEFAULT_POLICY, type Policy } from '../core/policy';
 import { IsoTs } from '../core/schema';
@@ -30,17 +31,16 @@ import { MS_PER_MINUTE } from '../core/units';
 import {
   autoCheckInputs,
   type AutoCheckInputs,
+  autoCheckWaitMs,
   type CheckingEmailClaim,
   recordAutoCheck,
 } from '../ledger/auto-check';
 import type { LedgerDb } from '../ledger/db';
-import { getLedger } from '../ledger/repo';
+import { readersOff, readFlags } from '../ledger/consent';
+import { getLedger } from '../ledger/shared';
 import { log } from '../log';
-import { type FlagStorage, readFlags } from './flags';
-import { readersOff } from './readers';
 
-/** How long a claim is PENDING before it is due: half its grace (header). */
-export const autoCheckWaitMs = (policy: Policy): number => (policy.windows.graceMin * MS_PER_MINUTE) / 2;
+export { autoCheckWaitMs } from '../ledger/auto-check';
 
 /** The claims an auto-check at `nowMs` opens Gmail for (header). Pure. */
 export function claimsDue(inputs: AutoCheckInputs, nowMs: number, policy: Policy): CheckingEmailClaim[] {
@@ -58,31 +58,59 @@ export function claimsDue(inputs: AutoCheckInputs, nowMs: number, policy: Policy
 
 /** The part of Chrome the auto-check uses. */
 export interface AutoCheckBrowser {
-  /** The window the person last used, or null when none is open or it is minimised: no tab there could be seen. */
+  /** The window a tab would be seen in now, or null when there is none (header). */
   readonly visibleWindow: () => Promise<number | null>;
   /** Opens `url` in a new pinned tab, active in window `windowId`. */
   readonly openPinned: (windowId: number, url: string) => Promise<void>;
 }
 
+/** What Chrome says of its windows and of the person. */
+export interface WindowApi {
+  readonly lastFocused: () => Promise<{
+    readonly id?: number | undefined;
+    readonly focused: boolean;
+    readonly state?: string | undefined;
+  }>;
+  /** Chrome's idle state while away detection's permission is held; undefined when Attest cannot know. */
+  readonly idleState: () => Promise<string | undefined>;
+}
+
+/**
+ * The window a tab opened now would be seen in (header): Chrome's last focused normal window, while it has the focus and
+ * is not minimised, and, when Chrome can say, while the person is active; else null. A failure to ask is logged.
+ */
+export async function visibleWindowOf(api: WindowApi): Promise<number | null> {
+  try {
+    const window = await api.lastFocused();
+    if (window.id === undefined || !window.focused || window.state === 'minimized') return null;
+    const idle = await api.idleState();
+    return idle === undefined || idle === 'active' ? window.id : null;
+  } catch (error) {
+    log.warn('autocheck.window_failed', { error });
+    return null;
+  }
+}
+
+/** Chrome's own windows and, while its optional permission is held, its idle state. */
+export const BROWSER_WINDOWS: WindowApi = {
+  lastFocused: () => browser.windows.getLastFocused({ windowTypes: ['normal'] }),
+  idleState: async () =>
+    (await browser.permissions.contains({ permissions: [IDLE_PERMISSION] }))
+      ? browser.idle.queryState(IDLE_DETECTION_SECONDS)
+      : undefined,
+};
+
 /** Chrome's own. */
 export const BROWSER_AUTO_CHECK: AutoCheckBrowser = {
-  visibleWindow: async () => {
-    try {
-      const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-      return window.id === undefined || window.state === 'minimized' ? null : window.id;
-    } catch {
-      return null;
-    }
-  },
+  visibleWindow: () => visibleWindowOf(BROWSER_WINDOWS),
   openPinned: async (windowId, url) => {
     await browser.tabs.create({ windowId, url, pinned: true, active: true });
   },
 };
 
 export interface AutoCheckDeps {
+  /** The ledger: the claims and coverage, the last open, and the person's choices (src/ledger/consent.ts). */
   readonly db: () => Promise<LedgerDb>;
-  /** `chrome.storage.local`: the flags and which readers are off. */
-  readonly storage: FlagStorage;
   readonly policy: Policy;
   readonly nowMs: () => number;
   readonly browser: AutoCheckBrowser;
@@ -93,7 +121,6 @@ export interface AutoCheckDeps {
 export function browserAutoCheck(notify: (tables: readonly LedgerTable[]) => void): AutoCheckDeps {
   return {
     db: getLedger,
-    storage: browser.storage.local,
     policy: DEFAULT_POLICY,
     nowMs: () => Date.now(),
     browser: BROWSER_AUTO_CHECK,
@@ -103,9 +130,9 @@ export function browserAutoCheck(notify: (tables: readonly LedgerTable[]) => voi
 
 /** One auto-check (header); resolves how many claims it opened Gmail for, 0 when it opened nothing. */
 async function checkOnce(deps: AutoCheckDeps): Promise<number> {
-  if (!(await readFlags(deps.storage)).ATTEST_AUTO_CHECK_GMAIL) return 0;
-  if ((await readersOff(deps.storage)).has('gmail')) return 0;
   const db = await deps.db();
+  if (!(await readFlags(db)).ATTEST_AUTO_CHECK_GMAIL) return 0;
+  if ((await readersOff(db)).has('gmail')) return 0;
   const nowMs = deps.nowMs();
   const due = claimsDue(await autoCheckInputs(db), nowMs, deps.policy);
   if (due.length === 0) return 0;

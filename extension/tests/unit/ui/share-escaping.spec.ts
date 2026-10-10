@@ -12,6 +12,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { Claim, Observation, Receipt } from '../../../src/core/schema';
+import { withoutAddresses } from '../../../src/ledger/domain';
 import { DigestRecord } from '../../../src/ledger/types';
 import { digestMarkdown, escapeMarkdown } from '../../../src/ui/digest-share';
 import { receiptMarkdown } from '../../../src/ui/receipt-share';
@@ -131,9 +132,11 @@ describe('a receipt shared, whatever its page text', () => {
           expect(kind(line)).toBe(kind(plainLines[index] ?? ''));
         });
         expect(lines[0]).toBe(plainLines[0]);
+        // A hint is drawn as written, but for any address in it, which a share writes as its domain (SEC-1).
         const drawn = shareLines(markdown).map(({ text }) => text);
-        expect(drawn.some((line) => line.includes(`“${hint}”`))).toBe(true);
-        expect(drawn.some((line) => line.includes(`“${evidenceHint}”`))).toBe(true);
+        expect(drawn.some((line) => line.includes(`“${withoutAddresses(hint)}”`))).toBe(true);
+        expect(drawn.some((line) => line.includes(`“${withoutAddresses(evidenceHint)}”`))).toBe(true);
+        expect(drawn.join('\n')).not.toContain('@');
       }),
       RUNS,
     );
@@ -174,9 +177,9 @@ describe('a week shared, whatever its page text', () => {
     if (plain === null) throw new Error('the plain share did not build');
     const plainLines = plain.split('\n');
     fc.assert(
-      fc.property(oneLine, oneLine, (hint, domain) => {
-        const markdown = weekShare(hint, domain);
-        fc.pre(markdown !== null && hint !== '' && domain !== '');
+      fc.property(oneLine, fc.domain(), (hint, domain) => {
+        const markdown = weekShare(hint, domain.toLowerCase());
+        fc.pre(markdown !== null && hint !== '');
         const lines = markdown.split('\n');
         expect(lines).toHaveLength(plainLines.length);
         expect(lines.filter((line) => line.startsWith('#'))).toEqual(
@@ -184,8 +187,11 @@ describe('a week shared, whatever its page text', () => {
         );
         const item = lines.find((line) => line.startsWith('- Unasked: likely Muse — '));
         expect(item).toBeDefined();
-        expect(item?.endsWith(`“${escapeMarkdown(hint)}”`)).toBe(true);
-        expect(shareLines(markdown).some(({ text }) => text.endsWith(`“${hint}”`))).toBe(true);
+        expect(item?.endsWith(`“${escapeMarkdown(withoutAddresses(hint))}”`)).toBe(true);
+        expect(shareLines(markdown).some(({ text }) => text.endsWith(`“${withoutAddresses(hint)}”`))).toBe(
+          true,
+        );
+        expect(markdown).not.toContain('@');
       }),
       RUNS,
     );

@@ -62,16 +62,48 @@ export const SERVICE_WORKER_TIMEOUT_MS = 30_000;
 /**
  * Waits until the worker's page readers are registered as the profile's choice says (sprint_4 4.5: the content scripts
  * are registered at runtime, src/background/readers.ts): each reader on is registered, each off is not. A test that
- * opened Gmail before then would find no reader. The ids and the storage key are src/config.ts READERS and
- * STORAGE_KEYS.READERS_OFF, written out: the worker evaluates this alone.
+ * opened Gmail before then would find no reader. The choice is in the ledger's meta (`readerOff.<reader>` true while
+ * off; src/ledger/consent.ts), read here without opening the ledger when it does not exist yet (a fresh profile, every
+ * reader on), so the test never creates it. The ids are src/config.ts READERS, written out: the worker evaluates this
+ * alone.
  */
 export async function waitForReaders(worker: Worker): Promise<void> {
   await worker.evaluate(async () => {
+    const off = async (): Promise<string[]> => {
+      if (!(await indexedDB.databases()).some(({ name }) => name === 'attest')) return [];
+      return new Promise<string[]>((resolve) => {
+        const open = indexedDB.open('attest');
+        open.onerror = () => {
+          resolve([]);
+        };
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains('meta')) {
+            db.close();
+            resolve([]);
+            return;
+          }
+          const store = db.transaction('meta').objectStore('meta');
+          const found: string[] = [];
+          for (const reader of ['gmail', 'gcal']) {
+            const get = store.get(`readerOff.${reader}`);
+            get.onsuccess = () => {
+              const row: unknown = get.result;
+              if (typeof row === 'object' && row !== null && Reflect.get(row, 'value') !== false)
+                found.push(reader);
+            };
+          }
+          store.transaction.oncomplete = () => {
+            db.close();
+            resolve(found);
+          };
+        };
+      });
+    };
     for (let tries = 0; tries < 400; tries += 1) {
-      const stored: unknown = (await chrome.storage.local.get('attest.readersOff'))['attest.readersOff'];
-      const off: unknown[] = Array.isArray(stored) ? stored : [];
+      const readersOff = await off();
       const ids = (await chrome.scripting.getRegisteredContentScripts()).map((script) => script.id);
-      if (['gmail', 'gcal'].every((reader) => off.includes(reader) !== ids.includes(reader))) return;
+      if (['gmail', 'gcal'].every((reader) => readersOff.includes(reader) !== ids.includes(reader))) return;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     throw new Error('the page readers were never registered');

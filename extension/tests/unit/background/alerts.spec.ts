@@ -4,7 +4,8 @@ import 'fake-indexeddb/auto';
  * receipt FINAL as OVER_SCOPE shows one notification, named by the receipt's id and worded without counterparty or
  * subject; later batches and a restarted worker show it never again; a muted agent's receipt shows none, then or after
  * unmuting; a notification Chrome refuses is logged and not retried. A click opens the side panel on that receipt in
- * the click's own turn, or the side panel's page in a tab when Chrome refuses. Every value is invented.
+ * the click's own turn, or the side panel's page in a tab when Chrome refuses (logged). More than ALERT_BURST at once
+ * show as one notice that opens the timeline (sprint_4 close, tech review TECH-12). Every value is invented.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +20,7 @@ import {
 import { type ImportContext, onClaimsImport } from '../../../src/background/claims-import';
 import { runGradingBatch } from '../../../src/background/grading';
 import { ClaimsImportMessage } from '../../../src/bus/messages';
+import { ALERT_BURST, ALERTS_NOTIFICATION_ID } from '../../../src/config';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { IsoTs } from '../../../src/core/schema';
 import { alertsMutedKey } from '../../../src/ledger/agent-keys';
@@ -155,6 +157,34 @@ describe('an alert', () => {
   });
 });
 
+describe('a burst of alerts (TECH-12)', () => {
+  it('shows one notice saying how many receipts need a look, and none of them again', async () => {
+    const lines = ['Oct 6'];
+    for (let n = 1; n <= ALERT_BURST + 2; n += 1)
+      lines.push(`Sent an email to a${String(n)}@example.com`, `2:0${String(n)} pm`);
+    const read = readPastedLog(lines.join('\n'), {
+      agent: 'muse',
+      pastedAt: IsoTs.parse(PASTED_AT),
+      offsetAt: () => -240,
+    });
+    if (!read.ok) throw new Error(read.refusal);
+    await onClaimsImport(
+      ctx,
+      ClaimsImportMessage.parse({
+        type: 'claims.import',
+        agent: 'muse',
+        claims: read.log.claims,
+        activeAt: [],
+      }),
+    );
+    expect(created.map(([id, { title }]) => [id, title])).toEqual([
+      [ALERTS_NOTIFICATION_ID, `${String(ALERT_BURST + 2)} receipts need a look`],
+    ]);
+    expect(await deliverAlerts(db, alerts)).toBe(0);
+    expect(created).toHaveLength(1);
+  });
+});
+
 describe('a click on an alert', () => {
   function openDeps(refuse = false) {
     const deps = {
@@ -191,5 +221,21 @@ describe('a click on an alert', () => {
     onAlertClicked('some-other-notification', other);
     expect(other.openSidePanel).not.toHaveBeenCalled();
     expect(other.name).not.toHaveBeenCalled();
+    expect(records.filter(({ event }) => event === 'alerts.side_panel_failed')).toHaveLength(1);
+  });
+
+  it('on the notice of a burst, opens the timeline (the side panel, or its page in a tab), naming no receipt', async () => {
+    const deps = openDeps();
+    onAlertClicked(ALERTS_NOTIFICATION_ID, deps);
+    expect(deps.openSidePanel).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(deps.clear).toHaveBeenCalledWith(ALERTS_NOTIFICATION_ID);
+    });
+    expect(deps.name).not.toHaveBeenCalled();
+    const refused = openDeps(true);
+    onAlertClicked(ALERTS_NOTIFICATION_ID, refused);
+    await vi.waitFor(() => {
+      expect(refused.openTab).toHaveBeenCalledWith('chrome-extension://attest/sidepanel.html');
+    });
   });
 });

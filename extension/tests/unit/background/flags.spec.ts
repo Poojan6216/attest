@@ -1,101 +1,78 @@
 /**
- * The feature flags (sprint_4 4.9; src/background/flags.ts): every flag off until the person turns it on; `flag.set`
- * stores one beside the others, and only an extension page may send it (the bus refuses any flag outside
- * SETTABLE_FLAGS); a stored value that cannot be read is no consent: every flag off, logged; a failed write is said.
+ * The feature flags a person sets (sprint_4 4.9; src/background/flags.ts): `flag.set` stores one in ledger meta (sprint_4
+ * close, security review SEC-3) and tells open pages; a failed write is said and logs no value; the router answers it,
+ * and only an extension page may send it, for a flag in SETTABLE_FLAGS only. How the flags read is
+ * tests/unit/ledger/consent.spec.ts.
  */
 import 'fake-indexeddb/auto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { browser } from 'wxt/browser';
-import { fakeBrowser } from 'wxt/testing/fake-browser';
 
-import { type FlagStorage, onFlagSet, readFlags } from '../../../src/background/flags';
+import { type FlagContext, onFlagSet } from '../../../src/background/flags';
 import { createHandlers } from '../../../src/background/router';
-import { BusMessage } from '../../../src/bus/messages';
-import { FEATURE_FLAG_DEFAULTS, STORAGE_KEYS } from '../../../src/config';
-import { closeLedger } from '../../../src/ledger/repo';
+import { BusMessage, type LedgerTable } from '../../../src/bus/messages';
+import { readFlags } from '../../../src/ledger/consent';
+import type { LedgerDb } from '../../../src/ledger/db';
+import { deleteLedger, getLedger } from '../../../src/ledger/shared';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { extensionPage } from '../bus/harness';
 
 let records: LogRecord[];
 let restore: () => void;
+let announced: (readonly LedgerTable[])[];
+let ctx: FlagContext;
 
 beforeEach(() => {
-  fakeBrowser.reset();
   records = [];
   restore = setLogSink((record) => {
     records.push(record);
   });
+  announced = [];
+  ctx = {
+    db: getLedger,
+    notify: (tables) => {
+      announced.push(tables);
+    },
+  };
 });
 
 afterEach(async () => {
   restore();
-  await closeLedger();
+  await deleteLedger();
 });
 
 const AUTO_ON = { type: 'flag.set', flag: 'ATTEST_AUTO_CHECK_GMAIL', on: true } as const;
 
-describe('readFlags', () => {
-  it('reads every flag off when nothing is stored', async () => {
-    expect(await readFlags(browser.storage.local)).toEqual(FEATURE_FLAG_DEFAULTS);
-    expect(Object.values(await readFlags(browser.storage.local)).every((on) => !on)).toBe(true);
-  });
-
-  it.each([
-    ['a list', ['ATTEST_AUTO_CHECK_GMAIL']],
-    ['a flag that is not one of ours', { ATTEST_AUTO_CHECK_GMAIL: true, ATTEST_EVERYTHING: true }],
-    ['a value that is not true or false', { ATTEST_AUTO_CHECK_GMAIL: 'yes' }],
-    ['text', 'ATTEST_AUTO_CHECK_GMAIL'],
-  ])('reads %s as every flag off, and says so', async (_label, stored) => {
-    await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: stored });
-    expect(await readFlags(browser.storage.local)).toEqual(FEATURE_FLAG_DEFAULTS);
-    expect(records.map(({ event }) => event)).toEqual(['flags.invalid']);
-  });
-});
-
 describe('flag.set', () => {
-  it('turns the auto-check on and off again, keeping every other flag the person set', async () => {
-    await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { ATTEST_DOTS: true } });
-    expect(await onFlagSet(AUTO_ON, browser.storage.local)).toEqual({ ok: true });
-    expect(await readFlags(browser.storage.local)).toMatchObject({
-      ATTEST_DOTS: true,
-      ATTEST_AUTO_CHECK_GMAIL: true,
-    });
-    expect(await onFlagSet({ ...AUTO_ON, on: false }, browser.storage.local)).toEqual({ ok: true });
-    expect((await browser.storage.local.get(STORAGE_KEYS.FLAGS))[STORAGE_KEYS.FLAGS]).toEqual({
-      ATTEST_DOTS: true,
-      ATTEST_AUTO_CHECK_GMAIL: false,
-    });
+  it('turns the auto-check on and off again in the ledger, and tells open pages', async () => {
+    expect(await onFlagSet(AUTO_ON, ctx)).toEqual({ ok: true });
+    expect((await readFlags(await getLedger())).ATTEST_AUTO_CHECK_GMAIL).toBe(true);
+    expect(await onFlagSet({ ...AUTO_ON, on: false }, ctx)).toEqual({ ok: true });
+    expect((await readFlags(await getLedger())).ATTEST_AUTO_CHECK_GMAIL).toBe(false);
+    expect(announced).toEqual([['meta'], ['meta']]);
     expect(records.filter(({ event }) => event === 'flags.set').map(({ fields }) => fields)).toEqual([
       { flag: 'ATTEST_AUTO_CHECK_GMAIL', on: true },
       { flag: 'ATTEST_AUTO_CHECK_GMAIL', on: false },
     ]);
   });
 
-  it('replaces a stored record it cannot read', async () => {
-    await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { anything: true } });
-    expect(await onFlagSet(AUTO_ON, browser.storage.local)).toEqual({ ok: true });
-    expect((await browser.storage.local.get(STORAGE_KEYS.FLAGS))[STORAGE_KEYS.FLAGS]).toEqual({
-      ATTEST_AUTO_CHECK_GMAIL: true,
-    });
-  });
-
-  it('says it failed when the choice cannot be stored, and logs no value', async () => {
-    const broken: FlagStorage = {
-      get: () => Promise.resolve({}),
-      set: () => Promise.reject(new Error('QUOTA_BYTES quota exceeded')),
+  it('says it failed when the choice cannot be stored, tells no page, and logs no value', async () => {
+    const broken: FlagContext = {
+      db: () => Promise.reject(new Error('QuotaExceededError: the quota has been exceeded')),
+      notify: ctx.notify,
     };
     expect(await onFlagSet(AUTO_ON, broken)).toEqual({ ok: false, code: 'failed' });
     expect(records.map(({ event }) => event)).toEqual(['flags.set_failed']);
+    expect(announced).toEqual([]);
     expect(JSON.stringify(records)).not.toContain('quota');
   });
 
   it('is answered by the router, and a flag no page may set never parses', async () => {
-    const handlers = createHandlers();
-    const handler = handlers['flag.set'];
+    const handler = createHandlers()['flag.set'];
     if (handler === undefined) throw new Error('no flag.set handler');
     expect(await handler(AUTO_ON, extensionPage('/options.html'))).toEqual({ ok: true });
-    expect((await readFlags(browser.storage.local)).ATTEST_AUTO_CHECK_GMAIL).toBe(true);
+    const db: LedgerDb = await getLedger();
+    expect((await readFlags(db)).ATTEST_AUTO_CHECK_GMAIL).toBe(true);
     for (const flag of ['ATTEST_TELEMETRY', 'ATTEST_MODEL', 'ATTEST_DOTS', 'ATTEST_ANYTHING']) {
       expect(BusMessage.safeParse({ ...AUTO_ON, flag }).success).toBe(false);
     }

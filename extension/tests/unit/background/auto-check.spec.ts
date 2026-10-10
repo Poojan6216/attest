@@ -9,7 +9,6 @@ import 'fake-indexeddb/auto';
  */
 import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { browser } from 'wxt/browser';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import {
@@ -18,9 +17,12 @@ import {
   autoCheckGmail,
   autoCheckWaitMs,
   claimsDue,
+  visibleWindowOf,
+  type WindowApi,
 } from '../../../src/background/auto-check';
 import type { LedgerTable } from '../../../src/bus/messages';
-import { AUTO_CHECK_URL, STORAGE_KEYS } from '../../../src/config';
+import { AUTO_CHECK_URL } from '../../../src/config';
+import { saveFlag, saveReaderOff } from '../../../src/ledger/consent';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { type AutoCheckInputs, type CheckingEmailClaim, readAutoCheck } from '../../../src/ledger/auto-check';
 import type { LedgerDb } from '../../../src/ledger/db';
@@ -67,7 +69,6 @@ const tabs: AutoCheckBrowser = {
 function deps(overrides: Partial<AutoCheckDeps> = {}): AutoCheckDeps {
   return {
     db: () => Promise.resolve(db),
-    storage: browser.storage.local,
     policy: DEFAULT_POLICY,
     nowMs: () => nowMs,
     browser: tabs,
@@ -98,7 +99,7 @@ afterEach(() => {
   releaseClock();
 });
 
-const turnOn = () => browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { ATTEST_AUTO_CHECK_GMAIL: true } });
+const turnOn = () => saveFlag(db, 'ATTEST_AUTO_CHECK_GMAIL', true);
 
 type ClaimFields = Partial<Parameters<typeof makeClaim>[0]>;
 
@@ -161,7 +162,7 @@ describe('when the person has not turned it on', () => {
 
   it('opens nothing while the Gmail reader is off', async () => {
     await turnOn();
-    await browser.storage.local.set({ [STORAGE_KEYS.READERS_OFF]: ['gmail'] });
+    await saveReaderOff(db, 'gmail', true);
     await claim(1, READ_AT);
     expect(await autoCheckGmail(deps())).toBe(0);
     expect(opened).toEqual([]);
@@ -363,5 +364,32 @@ describe('claimsDue, over random runs of the grace alarm', () => {
   it('waits half the grace', () => {
     expect(autoCheckWaitMs(DEFAULT_POLICY)).toBe((DEFAULT_POLICY.windows.graceMin * MINUTE) / 2);
     expect(autoCheckWaitMs(DEFAULT_POLICY)).toBe(WAIT_MS);
+  });
+});
+
+describe('visibleWindowOf: a tab opens only where it is seen (security review SEC-2)', () => {
+  const api = (
+    window: { id?: number; focused: boolean; state?: string } | Error,
+    idle: string | undefined,
+  ): WindowApi => ({
+    lastFocused: () => (window instanceof Error ? Promise.reject(window) : Promise.resolve(window)),
+    idleState: () => Promise.resolve(idle),
+  });
+
+  it.each([
+    ['the focused window, the person active', { id: 4, focused: true, state: 'normal' }, 'active', 4],
+    ['the focused window, away detection off', { id: 4, focused: true, state: 'normal' }, undefined, 4],
+    ['a window behind another app', { id: 4, focused: false, state: 'normal' }, 'active', null],
+    ['a minimised window', { id: 4, focused: true, state: 'minimized' }, 'active', null],
+    ['a window with no id', { focused: true, state: 'normal' }, 'active', null],
+    ['the person idle', { id: 4, focused: true, state: 'normal' }, 'idle', null],
+    ['the screen locked', { id: 4, focused: true, state: 'normal' }, 'locked', null],
+  ] as const)('%s', async (_label, window, idle, expected) => {
+    expect(await visibleWindowOf(api(window, idle))).toBe(expected);
+  });
+
+  it('opens nowhere, and says so, when Chrome cannot say which window', async () => {
+    expect(await visibleWindowOf(api(new Error('No last-focused window'), 'active'))).toBeNull();
+    expect(records.map(({ event }) => event)).toEqual(['autocheck.window_failed']);
   });
 });

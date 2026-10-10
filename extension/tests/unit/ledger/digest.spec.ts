@@ -12,7 +12,7 @@ import { isoWithLocalOffset } from '../../../src/clock';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { recordCoverage } from '../../../src/ledger/coverage';
 import type { LedgerDb } from '../../../src/ledger/db';
-import { buildDigest, digestWeeks, domainOf, getDigest, saveDigest } from '../../../src/ledger/digest';
+import { buildDigest, digestWeeks, getDigest, saveDigest } from '../../../src/ledger/digest';
 import { lastWeek, weekDays } from '../../../src/ledger/digest-week';
 import { openLedger } from '../../../src/ledger/migrations';
 import { putAdapterHealth, putReceipt, upsertClaim, upsertObservation } from '../../../src/ledger/repo';
@@ -208,15 +208,5 @@ describe('buildDigest', () => {
     await saveDigest(db, await buildDigest(db, WEEK, made));
     expect(await digestWeeks(db)).toEqual(['2026-10-05', '2026-09-28']);
     expect((await getDigest(db, '2026-10-05'))?.agents).toEqual([]);
-  });
-});
-
-describe('domainOf', () => {
-  it('keeps the domain of an address or a domain, and nothing of a name', () => {
-    expect(domainOf('priya@Company.Example')).toBe('company.example');
-    expect(domainOf('supplier.example')).toBe('supplier.example');
-    expect(domainOf('Corner Shop')).toBeUndefined();
-    expect(domainOf('Priya')).toBeUndefined();
-    expect(domainOf(undefined)).toBeUndefined();
   });
 });
