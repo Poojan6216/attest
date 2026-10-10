@@ -1,0 +1,486 @@
+{
+  "note": "The labelled matching corpus of the advisory model's bench (sprint_5 5.5; extension/tests/unit/intel/corpus.ts, bench/intel.ts). Each case is an invented claim, the sends or events around it, and its label: the observation that records the claimed action, or null when none does. Each is graded as the service worker grades, an hour after the claim with every view synced. It mixes matches the rules verify, paraphrases they leave PARTIAL (some in the band the model can lift to VERIFIED, from a floor of about 0.8235, some below it), decoys the rules also leave PARTIAL (another email to the same person, another meeting at the same time), and claims nothing matches. No purchase: the shipped policy names no receipt merchant (receiptMerchants is empty), so it grades no purchase, and the model would never be asked about one. Every name, address and subject is invented.",
+  "cases": [
+    {
+      "id": "email-name-exact",
+      "story": "Muse says it emailed Priya \"Q3 deck\"; the one send to Priya that minute is \"Q3 deck - final\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Q3 deck - final",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-quarterly",
+      "story": "Muse says it emailed Priya \"Quarterly deck\"; the one send to Priya that minute is \"Q3 deck - final\": the same email in other words.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Quarterly deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Q3 deck - final",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-q3",
+      "story": "Muse says it emailed Priya \"Quarterly deck\"; the send to Priya that minute is \"Q3 deck\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Quarterly deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Q3 deck",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-invoice",
+      "story": "Claude says it emailed Marco \"the signed invoice\"; the send to Marco that minute is \"Invoice 4471 signed copy\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Marco",
+        "subjectHint": "Signed invoice for October",
+        "claimedAt": "2026-10-06T09:15:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "marco.rossi@supplier.example",
+          "subjectHint": "Invoice 4471 signed copy",
+          "occurredAt": "2026-10-06T09:15:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-offsite",
+      "story": "Muse says it emailed Dana \"offsite agenda\"; the send to Dana that minute is \"Agenda for the team offsite\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Dana",
+        "subjectHint": "Offsite agenda",
+        "claimedAt": "2026-10-06T11:40:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "dana@company.example",
+          "subjectHint": "Agenda for the team offsite",
+          "occurredAt": "2026-10-06T11:40:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-far",
+      "story": "Muse says it emailed Sam \"budget figures\"; the send to Sam that minute is \"Q4 spend plan\": the same email, no word in common.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Sam",
+        "subjectHint": "Budget figures",
+        "claimedAt": "2026-10-06T16:20:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "sam.chen@company.example",
+          "subjectHint": "Q4 spend plan",
+          "occurredAt": "2026-10-06T16:20:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-paraphrase-late",
+      "story": "Dots says it emailed Ana \"the contract draft\"; the send to Ana is \"Contract draft v2\", 38 minutes after the claim.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Ana",
+        "subjectHint": "Contract draft",
+        "claimedAt": "2026-10-06T10:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "ana@lawfirm.example",
+          "subjectHint": "Contract draft v2",
+          "occurredAt": "2026-10-06T10:40:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-name-decoy-same-person",
+      "story": "Muse says it emailed Priya \"Quarterly deck\"; the only send to Priya that minute is \"Lunch on Friday\": another email, the claimed one was never sent.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Quarterly deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Lunch on Friday",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-name-decoy-one-word",
+      "story": "Muse says it emailed Priya \"Q3 deck\"; the only send to Priya that minute is \"Q3 offsite\": another email sharing a word.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Q3 offsite",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-name-decoy-one-word-of-four",
+      "story": "Claude says it emailed Marco \"the October invoice\"; the only send to Marco that minute is \"October team dinner\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Marco",
+        "subjectHint": "October invoice",
+        "claimedAt": "2026-10-06T09:15:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "marco.rossi@supplier.example",
+          "subjectHint": "October team dinner",
+          "occurredAt": "2026-10-06T09:15:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-name-decoy-other-person",
+      "story": "Muse says it emailed Priya \"Q3 deck\"; the only send that minute is \"Q3 deck\" to Raj: the claim names the wrong person.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Priya",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "raj@company.example",
+          "subjectHint": "Q3 deck",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-name-nothing-sent",
+      "story": "Muse says it emailed Lee \"Venue options\"; nothing was sent near then.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "Lee",
+        "subjectHint": "Venue options",
+        "claimedAt": "2026-10-06T13:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "lee@company.example",
+          "subjectHint": "Venue options",
+          "occurredAt": "2026-10-06T11:00:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-address-exact",
+      "story": "ChatGPT says it emailed vendor@supplier.example \"PO 7781\"; that send is there that minute.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "PO 7781",
+        "claimedAt": "2026-10-06T15:30:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "vendor@supplier.example",
+          "subjectHint": "PO 7781",
+          "occurredAt": "2026-10-06T15:30:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-address-paraphrase",
+      "story": "ChatGPT says it emailed vendor@supplier.example \"purchase order\"; the send to that address that minute is \"PO 7781\": the same email.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Purchase order",
+        "claimedAt": "2026-10-06T15:30:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "vendor@supplier.example",
+          "subjectHint": "PO 7781",
+          "occurredAt": "2026-10-06T15:30:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-address-decoy-same-mailbox",
+      "story": "ChatGPT says it emailed vendor@supplier.example \"purchase order\"; the only send to that address that minute is \"Holiday hours\": another email.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Purchase order",
+        "claimedAt": "2026-10-06T15:30:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "vendor@supplier.example",
+          "subjectHint": "Holiday hours",
+          "occurredAt": "2026-10-06T15:30:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-address-two-sends",
+      "story": "ChatGPT says it emailed vendor@supplier.example \"purchase order\"; two sends to that address that minute, \"PO 7781\" (the one) and \"Holiday hours\".",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "vendor@supplier.example",
+        "subjectHint": "Purchase order",
+        "claimedAt": "2026-10-06T15:30:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "vendor@supplier.example",
+          "subjectHint": "PO 7781",
+          "occurredAt": "2026-10-06T15:30:00-04:00"
+        },
+        {
+          "ref": "o2",
+          "type": "email.sent",
+          "counterparty": "vendor@supplier.example",
+          "subjectHint": "Holiday hours",
+          "occurredAt": "2026-10-06T15:30:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "email-address-colleague",
+      "story": "Muse says it emailed priya@company.example \"Q3 deck\"; the only send that minute is \"Q3 deck\" to raj@company.example: a colleague, not Priya.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "priya@company.example",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "raj@company.example",
+          "subjectHint": "Q3 deck",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "email-address-plus-tag",
+      "story": "Muse says it emailed priya+work@company.example \"Q3 deck\"; the send that minute went to priya@company.example, the same mailbox.",
+      "claim": {
+        "type": "email.sent",
+        "counterparty": "priya+work@company.example",
+        "subjectHint": "Q3 deck",
+        "claimedAt": "2026-10-06T14:02:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "email.sent",
+          "counterparty": "priya@company.example",
+          "subjectHint": "Q3 deck",
+          "occurredAt": "2026-10-06T14:02:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "calendar-exact",
+      "story": "Muse says it created \"Q3 review\" for Thursday 2pm; that event is there.",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Q3 review",
+          "occurredAt": "2026-10-08T14:00:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "calendar-paraphrase-close",
+      "story": "Muse says it created \"Q3 planning review sync call\" for Thursday 2pm; the event then is \"Q3 planning review sync with Raj and Priya\", the same meeting.",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Q3 planning review sync call",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Q3 planning review sync with Raj and Priya",
+          "occurredAt": "2026-10-08T14:00:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "calendar-paraphrase-half",
+      "story": "Muse says it created \"Quarterly review\" for Thursday 2pm; the event then is \"Q3 review\".",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Quarterly review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Q3 review",
+          "occurredAt": "2026-10-08T14:00:00-04:00"
+        }
+      ],
+      "truth": "o1"
+    },
+    {
+      "id": "calendar-decoy-one-word",
+      "story": "Muse says it created \"Q3 review\" for Thursday 2pm; the only event then is \"Design review\", which a colleague made.",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Q3 review",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Design review",
+          "occurredAt": "2026-10-08T14:00:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "calendar-decoy-close-words",
+      "story": "Muse says it created \"Q3 planning review sync call\" for Thursday 2pm; the only event then is \"Q3 planning review sync for marketing team\", another team's meeting.",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Q3 planning review sync call",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-08T14:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Q3 planning review sync for marketing team",
+          "occurredAt": "2026-10-08T14:00:00-04:00"
+        }
+      ],
+      "truth": null
+    },
+    {
+      "id": "calendar-nothing",
+      "story": "Muse says it created \"Dentist\" for Friday 9am; no event then.",
+      "claim": {
+        "type": "calendar.created",
+        "subjectHint": "Dentist",
+        "claimedAt": "2026-10-06T14:02:00-04:00",
+        "targetAt": "2026-10-09T09:00:00-04:00"
+      },
+      "observations": [
+        {
+          "ref": "o1",
+          "type": "calendar.created",
+          "subjectHint": "Board prep",
+          "occurredAt": "2026-10-09T13:00:00-04:00"
+        }
+      ],
+      "truth": null
+    }
+  ]
+}

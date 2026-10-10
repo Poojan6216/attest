@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runPasteBench } from './adapters/paste';
 import { runPatternsBench } from './adapters/patterns';
 import { runCoreBench } from './core';
+import { runIntelBench } from './intel';
 import { runGcalBench } from './observers/gcal';
 import { runGmailBench } from './observers/gmail';
 import { runReceiptsBench } from './observers/receipts';
@@ -57,6 +58,7 @@ export const BENCHES: readonly Bench[] = [
   { name: 'paste', run: runPasteBench },
   { name: 'ui', run: runUiBench },
   { name: 'popup', run: runPopupBench },
+  { name: 'intel', run: () => runIntelBench() },
 ];
 
 /** The calendar date of `now` in the machine's own time zone (the bench may read the clock; core may not). */
