@@ -109,13 +109,16 @@ export interface ExportRun {
 export async function timeExport(extension: LaunchedExtension, button: string): Promise<ExportRun> {
   const page = await extension.openExtensionPage('options.html');
   await page.getByRole('button', { name: button }).waitFor();
+  // No named function inside: the evaluated code runs in the page, where a bundler's name helper does not exist.
   await page.evaluate(() => {
-    const heap = (): number =>
-      Number(Reflect.get(Reflect.get(performance, 'memory') ?? {}, 'usedJSHeapSize') ?? 0);
-    const state = { start: heap(), peak: heap() };
+    const used = Number(Reflect.get(Reflect.get(performance, 'memory') ?? {}, 'usedJSHeapSize') ?? 0);
+    const state = { start: used, peak: used };
     Reflect.set(window, '__attestHeap', state);
     setInterval(() => {
-      state.peak = Math.max(state.peak, heap());
+      state.peak = Math.max(
+        state.peak,
+        Number(Reflect.get(Reflect.get(performance, 'memory') ?? {}, 'usedJSHeapSize') ?? 0),
+      );
     }, 10);
   });
   const started = Date.now();
