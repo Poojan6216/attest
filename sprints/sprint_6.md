@@ -34,7 +34,7 @@
 
 [x] 6.7 | Store policy pre-review. Run `agents/privacy_reviewer.md` in full (this is the one sprint where it runs as a fifth review). Single purpose statement, Limited Use disclosure, data-usage form answers, permission justifications, screenshot rules, privacy policy URL (GitHub Pages for `PRIVACY.md`). Output `reviews/sprint_6/privacy.md` with a READY / NOT READY verdict. | Read: agents/privacy_reviewer.md | Done when: verdict recorded; every NOT READY item is a task for the closer or a MANUAL.md entry.
 
-[ ] 6.8 | Threat model. `docs/threat-model.md` per `agents/docs_writer.md`: what Attest defends, what it does not, trust boundaries, weakest links (DOM fidelity, attribution, coverage), session/account assumptions, and the red-team results summary with links. | Read: agents/docs_writer.md | Done when: every "attacks that work" row is referenced; `check-docs` green.
+[x] 6.8 | Threat model. `docs/threat-model.md` per `agents/docs_writer.md`: what Attest defends, what it does not, trust boundaries, weakest links (DOM fidelity, attribution, coverage), session/account assumptions, and the red-team results summary with links. | Read: agents/docs_writer.md | Done when: every "attacks that work" row is referenced; `check-docs` green.
 
 [ ] 6.9 | Hardening fixes from 6.1–6.3 (closer pass, mid-sprint). Fix all CRITICAL and HIGH red-team findings now, keeping pre-fix numbers in the report; re-run `bench/redteam.ts`; regenerate `RESULTS.md`. | Read: agents/sprint_closer.md | Done when: zero CRITICAL open; HIGH either fixed or accepted with a `Decisions.md` entry and a UI notice where the user could be misled.
 

@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" role="img" aria-labelledby="title desc">
+  <title id="title">Attest's trust boundaries (docs/threat-model.md §4)</title>
+  <desc id="desc">A Gmail or Calendar tab is untrusted page content. Attest's content script reads it read-only in an isolated world and sends derived facts only, over the typed bus, to the service worker, which checks each message's schema and the site it came from. The service worker is the ledger's one writer and grades with a pure core. The ledger is IndexedDB in the extension's own origin, optionally encrypted at rest. The extension's pages read the ledger and show receipts to the person, and send the person's commands and pasted claims to the service worker; a pasted agent log is a claim, never evidence. Only two options, both off by default, send anything out of the browser: the person's own model key, to that model company, and the anonymous usage numbers, to Attest's telemetry server.</desc>
+  <!--
+    Legible on light and dark pages with no media query, as docs/assets/receipt-states.svg: the background is
+    transparent and every colour is a mid-tone with at least 4:1 contrast against both white (#ffffff) and GitHub dark
+    (#0d1117).
+  -->
+  <style>
+    .t { fill: #6e7781; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; }
+    .h { font-size: 15px; font-weight: 700; }
+    .small { font-size: 11px; }
+    .edge { fill: none; stroke: #6e7781; stroke-width: 1.6; }
+    .optin { fill: none; stroke: #a06c00; stroke-width: 1.6; stroke-dasharray: 6 4; }
+    .boundary { fill: none; stroke: #8957e5; stroke-width: 1.4; stroke-dasharray: 3 5; }
+    .box { fill: #6e7781; fill-opacity: 0.08; stroke: #6e7781; stroke-width: 1.6; }
+    .trusted { fill: #238636; fill-opacity: 0.1; stroke: #238636; stroke-width: 1.8; }
+    .outside { fill: #a06c00; fill-opacity: 0.08; stroke: #a06c00; stroke-width: 1.6; stroke-dasharray: 6 4; }
+    .label-boundary { fill: #8957e5; font-weight: 600; }
+    .label-optin { fill: #a06c00; }
+    .dot { fill: #6e7781; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dot" d="M0,0 L10,5 L0,10 z" />
+    </marker>
+  </defs>
+
+  <!-- Boundaries 1 and 2 divide the top row; boundary 3 is the browser's edge. -->
+  <line class="boundary" x1="205" y1="30" x2="205" y2="245" />
+  <text class="t small label-boundary" x="211" y="44">1 · page → extension</text>
+  <line class="boundary" x1="430" y1="30" x2="430" y2="245" />
+  <text class="t small label-boundary" x="436" y="44">2 · content script → worker</text>
+  <line class="boundary" x1="20" y1="488" x2="940" y2="488" />
+  <text class="t small label-boundary" x="485" y="506">3 · browser → network: crossed only by an option the person turned on</text>
+
+  <!-- Row 1 -->
+  <rect class="box" x="20" y="80" width="175" height="150" rx="8" />
+  <text class="t h" x="34" y="106">Vendor page</text>
+  <text class="t" x="34" y="130">a Gmail or Calendar tab,</text>
+  <text class="t" x="34" y="148">as the page draws it:</text>
+  <text class="t" x="34" y="166">untrusted content, and</text>
+  <text class="t" x="34" y="184">the evidence Attest has</text>
+  <text class="t" x="34" y="202">(Hard Rule 11)</text>
+
+  <rect class="box" x="215" y="80" width="200" height="150" rx="8" />
+  <text class="t h" x="229" y="106">Content script</text>
+  <text class="t" x="229" y="130">isolated world, reads only</text>
+  <text class="t" x="229" y="148">(Hard Rule 3, attest/no-act);</text>
+  <text class="t" x="229" y="166">keeps allowlisted facts</text>
+  <text class="t" x="229" y="184">(Hard Rule 2) and sends</text>
+  <text class="t" x="229" y="202">them on the typed bus</text>
+  <path class="edge" d="M195,155 L213,155" marker-end="url(#arrow)" />
+
+  <rect class="trusted" x="445" y="80" width="210" height="150" rx="8" />
+  <text class="t h" x="459" y="106">Service worker</text>
+  <text class="t" x="459" y="130">checks schema and sender site;</text>
+  <text class="t" x="459" y="148">the ledger's one writer;</text>
+  <text class="t" x="459" y="166">grades with the pure core</text>
+  <text class="t" x="459" y="184">(Hard Rule 4); holds the key</text>
+  <text class="t" x="459" y="202">while the ledger is unlocked</text>
+  <path class="edge" d="M415,155 L443,155" marker-end="url(#arrow)" />
+
+  <rect class="trusted" x="690" y="80" width="250" height="150" rx="8" />
+  <text class="t h" x="704" y="106">Ledger</text>
+  <text class="t" x="704" y="130">IndexedDB, the extension's own</text>
+  <text class="t" x="704" y="148">origin; content sealed with a</text>
+  <text class="t" x="704" y="166">passphrase if chosen; kept for</text>
+  <text class="t" x="704" y="184">the window chosen</text>
+  <path class="edge" d="M655,140 L688,140" marker-end="url(#arrow)" />
+  <path class="edge" d="M688,170 L657,170" marker-end="url(#arrow)" />
+
+  <!-- Row 2 -->
+  <rect class="trusted" x="690" y="290" width="250" height="120" rx="8" />
+  <text class="t h" x="704" y="316">Extension pages</text>
+  <text class="t" x="704" y="340">popup, side panel, options,</text>
+  <text class="t" x="704" y="358">digest: read the ledger, send</text>
+  <text class="t" x="704" y="376">commands and pasted claims</text>
+  <path class="edge" d="M815,230 L815,288" marker-end="url(#arrow)" />
+  <path class="edge" d="M700,288 L620,232" marker-end="url(#arrow)" />
+
+  <rect class="box" x="445" y="300" width="210" height="100" rx="8" />
+  <text class="t h" x="459" y="326">You</text>
+  <text class="t" x="459" y="350">read your receipts; paste an</text>
+  <text class="t" x="459" y="368">agent's log: a claim, never</text>
+  <text class="t" x="459" y="386">evidence</text>
+  <path class="edge" d="M657,350 L688,350" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+
+  <!-- Row 3: outside the browser, reached only by an option the person turned on -->
+  <rect class="outside" x="215" y="520" width="200" height="60" rx="8" />
+  <text class="t h label-optin" x="229" y="544">Model company</text>
+  <text class="t small label-optin" x="229" y="564">your own key, opt-in</text>
+  <rect class="outside" x="20" y="520" width="175" height="60" rx="8" />
+  <text class="t h label-optin" x="34" y="544">Telemetry server</text>
+  <text class="t small label-optin" x="34" y="564">counts only, opt-in</text>
+  <path class="optin" d="M470,232 C440,330 330,430 315,518" marker-end="url(#arrow)" />
+  <path class="optin" d="M455,232 C390,300 130,400 107,518" marker-end="url(#arrow)" />
+</svg>
