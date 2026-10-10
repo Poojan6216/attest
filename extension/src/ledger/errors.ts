@@ -27,6 +27,13 @@ export const LEDGER_ERROR_CODES = [
   'invalid_migrations',
   /** IndexedDB refused to open or upgrade the database. */
   'open_failed',
+  /**
+   * The ledger is encrypted and locked here (sprint_6 6.5; src/crypto/middleware.ts): a sealed row was read, or a row
+   * written, with no key held. The whole read or write fails, never part of it.
+   */
+  'locked',
+  /** A sealed row did not open with its own key: a changed byte, or a value moved from another row. */
+  'unreadable',
 ] as const;
 
 export type LedgerErrorCode = (typeof LEDGER_ERROR_CODES)[number];
@@ -66,3 +73,7 @@ export function parseWrite<S extends z.ZodType>(
   const paths = parsed.error.issues.map((issue) => issue.path.map(String).join('.') || '(root)');
   throw new LedgerError('invalid_input', message, { ...context, paths: paths.join('|') });
 }
+
+/** Whether `error` is the ledger's `locked` (sprint_6 6.5): encrypted, and no key held here. */
+export const isLedgerLocked = (error: unknown): boolean =>
+  error instanceof LedgerError && error.code === 'locked';

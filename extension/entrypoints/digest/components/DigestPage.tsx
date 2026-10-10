@@ -6,6 +6,7 @@ import type { ShareTools } from './ShareDigest';
 import { WeekPicker } from './WeekPicker';
 import type { PrivacySources } from '../../../src/ui/privacy-data';
 import { PrivacyLine } from '../../../src/ui/PrivacyLine';
+import { LockedNotice } from '../../../src/ui/LockedNotice';
 
 export interface DigestPageProps {
   /** Where the page reads; the ledger when absent. */
@@ -40,6 +41,7 @@ export function DigestPage({
           Attest could not read its digests. Reload the page.
         </p>
       ) : null}
+      {state.status === 'locked' ? <LockedNotice toShow="see your weekly digests" /> : null}
       {state.status === 'ready' && state.week === null ? (
         <EmptyState title="No digest yet">
           Attest makes your first weekly digest on Monday at 09:00, from the week before.

@@ -1,5 +1,6 @@
 import { AgentId } from '../../../src/core/schema';
 import { Skeleton } from '../../../src/ui/Skeleton';
+import { LockedNotice } from '../../../src/ui/LockedNotice';
 import { type GrantSources, LIVE_GRANTS, useGrantSettings } from '../use-grant-settings';
 import { AgentGrantForm } from './AgentGrantForm';
 import { Section } from './Section';
@@ -27,6 +28,7 @@ export function GrantsSection({ sources = LIVE_GRANTS }: GrantsSectionProps) {
           Attest could not read the grants. Reload the page.
         </p>
       ) : null}
+      {state.status === 'locked' ? <LockedNotice toShow="see and change the grants" /> : null}
       {state.status === 'ready'
         ? AgentId.options.map((agent) => (
             <AgentGrantForm

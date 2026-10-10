@@ -27,6 +27,7 @@ export const LIVE_GRANTS: GrantSources = {
 export type GrantSettingsState =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
+  | { readonly status: 'locked' }
   | { readonly status: 'ready'; readonly settings: GrantSettings };
 
 const logReadFailed = (error: unknown): void => {

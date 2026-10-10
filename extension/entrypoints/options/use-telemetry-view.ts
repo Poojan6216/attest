@@ -33,7 +33,12 @@ export function useTelemetryView(sources: TelemetrySources): {
     [sources],
   );
   const read = useLedgerRead(sources.preview, subscribe, logPreviewFailed);
-  const view = read.status === 'ready' ? read.value : read.status === 'failed' ? null : undefined;
+  const view =
+    read.status === 'ready'
+      ? read.value
+      : read.status === 'failed' || read.status === 'locked'
+        ? null
+        : undefined;
   return {
     view,
     readAgain: () => {

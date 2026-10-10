@@ -1,5 +1,6 @@
 import { Button } from '../../../src/ui/Button';
 import { EmptyState } from '../../../src/ui/EmptyState';
+import { LockedNotice } from '../../../src/ui/LockedNotice';
 import { ReceiptRow } from '../../../src/ui/ReceiptRow';
 import { Skeleton } from '../../../src/ui/Skeleton';
 import { useListEnd, useReturnFocus } from '../use-list-end';
@@ -24,6 +25,7 @@ export function TimelineList({ list, nowMs, lastBatchMs, onOpen, onMore, returnT
   const end = useListEnd(list.status === 'ready' && list.next !== null && list.more === 'idle', onMore);
   const root = useReturnFocus(returnTo);
   if (list.status === 'loading') return <Skeleton rows={5} label="Loading the timeline" />;
+  if (list.status === 'locked') return <LockedNotice toShow="see your receipts" />;
   if (list.status === 'failed') {
     return (
       <p role="alert" class="text-error-fg">

@@ -82,6 +82,12 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     'byo.forget': { type: 'byo.forget', ...{ key: SECRET } },
     'telemetry.send': { type: 'telemetry.send', ...{ payload: SECRET } },
     'ledger.wipe': { type: 'ledger.wipe', ...{ confirm: SECRET } },
+    // A new passphrase shorter than the shortest taken or of spaces only, an empty one, one too long, a smuggled field.
+    'crypto.enable': { type: 'crypto.enable', passphrase: 'short' },
+    'crypto.unlock': { type: 'crypto.unlock', passphrase: '' },
+    'crypto.lock': { type: 'crypto.lock', ...{ passphrase: SECRET } },
+    'crypto.change': { ...VALID['crypto.change'], next: ' '.repeat(12) },
+    'crypto.disable': { type: 'crypto.disable', passphrase: 'x'.repeat(1_025) },
   };
 }
 

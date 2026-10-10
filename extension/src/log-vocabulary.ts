@@ -89,6 +89,7 @@ export const LOG_EVENTS = [
   'ledger.row_invalid',
   'ledger.row_replaced',
   'ledger.shared_open_reset',
+  'ledger.keyring_reload_failed',
   'ledger.wipe_failed',
   'ledger.wiped',
   'observer.calendar_restarted',
@@ -146,6 +147,22 @@ export const LOG_EVENTS = [
   'storage.close_failed',
   'ui.listen_failed',
   'ui.root_missing',
+  // Encryption at rest (sprint_6 6.5; src/background/crypto.ts, keep-awake.ts). Never a passphrase or a key.
+  'crypto.changed',
+  'crypto.command_failed',
+  'crypto.disabling',
+  'crypto.enabled',
+  'crypto.job_done',
+  'crypto.job_failed',
+  'crypto.job_paused',
+  'crypto.keep_awake_failed',
+  'crypto.locked',
+  'crypto.session_clear_failed',
+  'crypto.unlock_refused',
+  'crypto.unlocked',
+  'alarm.locked',
+  'ui.unlock_failed',
+  'options.crypto_failed',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -179,6 +196,15 @@ export const LOG_VALUES = [
   'byo.forget',
   'telemetry.send',
   'ledger.wipe',
+  'crypto.enable',
+  'crypto.unlock',
+  'crypto.lock',
+  'crypto.change',
+  'crypto.disable',
+  // The encryption jobs (src/ledger/crypto-state.ts CryptoJob).
+  'seal',
+  'reseal',
+  'unseal',
   // A person's receipt events (src/background/user-events.ts): the kind and the refusal codes.
   'override',
   'revert',
@@ -222,6 +248,8 @@ export const LOG_VALUES = [
   'batch_out_of_order',
   'invalid_migrations',
   'open_failed',
+  'locked',
+  'unreadable',
   'read_failed',
   'write_failed',
   // Acknowledgement codes (src/bus/messages.ts AckCode) not listed above, why a Calendar snapshot was skipped, and

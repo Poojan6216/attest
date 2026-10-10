@@ -26,6 +26,12 @@ import {
   type BusMessageType,
   type ByoForgetMessage,
   type ByoSaveMessage,
+  type CryptoChangeMessage,
+  type CryptoDisableMessage,
+  type CryptoEnableMessage,
+  type CryptoLockMessage,
+  type CryptoResult,
+  type CryptoUnlockMessage,
   type TelemetrySendResult,
   type ClaimsImportResult,
   type FlagSetMessage,
@@ -179,6 +185,21 @@ export async function sendSetting(
     | ByoForgetMessage
     | LedgerWipeMessage,
 ): Promise<SettingResult> {
+  return sendCommand(message);
+}
+
+/**
+ * Sends one of the encryption commands (sprint_6 6.5: turn on, unlock, lock, change, turn off; `sendCommand`): the
+ * passphrase goes to the service worker only, and is never logged.
+ */
+export async function sendCrypto(
+  message:
+    | CryptoEnableMessage
+    | CryptoUnlockMessage
+    | CryptoLockMessage
+    | CryptoChangeMessage
+    | CryptoDisableMessage,
+): Promise<CryptoResult> {
   return sendCommand(message);
 }
 

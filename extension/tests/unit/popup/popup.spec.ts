@@ -3,7 +3,8 @@
  * The popup (sprint_4 4.2; entrypoints/popup), rendered with Preact in happy-dom over stand-in sources: skeleton rows
  * while the ledger is read; then the degraded banner, the coverage header and today's receipts newest first, an
  * UNASKED row saying "Likely agent" with its signals, a PENDING row saying from when it can be final, an UNVERIFIABLE
- * row with its reason; a clear empty state for a day with none; a read that fails said and logged; a change the service
+ * row with its reason; a clear empty state for a day with none; a read that fails said and logged; an encrypted ledger
+ * that is locked asking for its passphrase, never said as a failure (sprint_6 6.5); a change the service
  * worker announces read again, overlapping changes in one more read; and the two links: the timeline opens in this
  * window's side panel, the settings in their page. Every value is invented.
  */
@@ -23,6 +24,7 @@ import {
   type ReceiptInput,
 } from '../../../src/ledger/types';
 import type { PopupView } from '../../../src/ui/data';
+import { LedgerError } from '../../../src/ledger/errors';
 import { setLogSink, type LogRecord } from '../../../src/log';
 import { makeClaim, makeObservation, makeReceipt, omit, ulid } from '../ledger/fixtures';
 
@@ -174,6 +176,22 @@ describe('the popup when the day is empty, the read fails, or the ledger changes
     );
     expect(root.textContent).not.toContain('No receipts today');
     expect(records.map(({ event }) => event)).toContain('popup.read_failed');
+  });
+
+  it('asks for the passphrase while the ledger is encrypted and locked, and reads again once it is not', async () => {
+    const stand = sources(new LedgerError('locked', 'The ledger is locked', { table: 'receipts' }), view([]));
+    await show(stand.given);
+    expect(root.textContent).toContain('Your records are encrypted and locked');
+    expect(root.querySelector('input[type="password"]')).not.toBeNull();
+    expect(root.querySelector('[role="alert"]')).toBeNull();
+    expect(root.textContent).not.toContain('No receipts today');
+    expect(records.map(({ event }) => event)).not.toContain('popup.read_failed');
+    await act(async () => {
+      stand.changed();
+      await Promise.resolve();
+    });
+    expect(stand.load).toHaveBeenCalledTimes(2);
+    expect(root.textContent).toContain('No receipts today');
   });
 
   it('reads again when the service worker announces a change', async () => {

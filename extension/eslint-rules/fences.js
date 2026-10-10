@@ -84,25 +84,28 @@ export const DEXIE_RESTRICTION = {
  * Extension code runs in Chrome, never Node (TECH-6). TypeScript cannot enforce this on its own: wxt's types
  * pull in vite's, which reference @types/node, so Node globals type-check in every file that imports
  * wxt/utils. These fences close that gap.
+ *
+ * A Node built-in is imported by its bare name (`crypto`, `fs/promises`) or with `node:`, so the fence matches the
+ * import's name from its start, never a path segment: a gitignore-style `crypto` also matched the project's own
+ * src/crypto (`../crypto/keyring`), which no Node module is (Decisions [6.5]; tests/unit/lint/fences-scopes.spec.ts).
  */
+export const NODE_BUILTINS = [
+  'fs',
+  'path',
+  'os',
+  'http',
+  'https',
+  'net',
+  'url',
+  'util',
+  'stream',
+  'buffer',
+  'child_process',
+  'crypto',
+  'worker_threads',
+];
 export const NODE_IMPORTS = {
-  group: [
-    'node:*',
-    'fs',
-    'fs/*',
-    'path',
-    'os',
-    'http',
-    'https',
-    'net',
-    'url',
-    'util',
-    'stream',
-    'buffer',
-    'child_process',
-    'crypto',
-    'worker_threads',
-  ],
+  regex: `^(node:|(${NODE_BUILTINS.join('|')})(/|$))`,
   message: 'Extension code runs in Chrome: no Node built-ins.',
 };
 export const NODE_GLOBALS = [
@@ -139,7 +142,7 @@ export const PAGE_RESTRICTED_IMPORTS = {
     { regex: '(^|/)background(/|$)', message: `${ONE_WRITER} No page imports src/background.` },
     {
       regex:
-        '(^|/)ledger/(repo|upsert|grant-save|user-events|retention|retention-clock|retention-coverage|replay-records|coverage|calendar-snapshots|activity|clock-guard|clock-repairs|clock-high-water|batch-instant|migrations)$',
+        '(^|/)ledger/(repo|upsert|grant-save|user-events|retention|retention-clock|retention-coverage|replay-records|coverage|calendar-snapshots|activity|clock-guard|clock-repairs|clock-high-water|batch-instant|migrations|crypto-writes|crypto-job)$',
       message: ONE_WRITER,
     },
     { group: ['**/ledger/settings'], importNames: ['saveRetentionDays'], message: ONE_WRITER },
@@ -164,6 +167,12 @@ export const PAGE_RESTRICTED_IMPORTS = {
       group: ['**/ledger/install-id'],
       importNames: ['getInstallId', 'ensureInstallId'],
       message: ONE_WRITER,
+    },
+    // Encryption at rest (sprint_6 6.5): only the service worker keeps or forgets the pages' copy of the keys.
+    {
+      group: ['**/crypto/session'],
+      importNames: ['writeSessionKeys', 'clearSessionKeys'],
+      message: `${ONE_WRITER} The service worker alone keeps the ledger's keys.`,
     },
   ],
 };

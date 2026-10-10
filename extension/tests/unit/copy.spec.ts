@@ -78,6 +78,10 @@ const VERBS: ReadonlySet<string> = new Set([
   'Check',
   'Record',
   'Send',
+  // Encryption at rest (sprint_6 6.5): its three new actions.
+  'Change',
+  'Lock',
+  'Unlock',
 ]);
 
 /** Each banned word or mark in `strings`, as `file:line: why: "text"`. */

@@ -6,6 +6,7 @@ export const SECTIONS = [
   { id: 'grants', title: 'Grants' },
   { id: 'adapters', title: 'Adapters' },
   { id: 'privacy', title: 'Privacy' },
+  { id: 'encryption', title: 'Encryption' },
   { id: 'model', title: 'Model' },
   { id: 'export', title: 'Export' },
   { id: 'danger-zone', title: 'Danger zone' },

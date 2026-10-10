@@ -16,7 +16,7 @@
 import type { LedgerTable } from '../bus/messages';
 import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../config';
 import type { ReceiptDetail } from '../ledger/detail';
-import { getLedger } from '../ledger/shared';
+import { getLedger, onKeyringReloaded } from '../ledger/shared';
 import { log } from '../log';
 import { AgentId, type Grade } from '../ledger/types';
 import {
@@ -114,8 +114,9 @@ export async function loadReceipt(id: string): Promise<ReceiptDetail | undefined
 
 /**
  * Calls `onChange` with the tables that changed whenever the service worker announces a change (`ledger.changed`) to
- * any of `tables`; returns the function that stops it. The listener loads after the page's start (header); once it
- * listens it calls `onChange` once with every table watched, so a change announced before it listened is read too.
+ * any of `tables`, and with every table watched whenever this page's keys change (sprint_6 6.5: the ledger unlocked or
+ * locked); returns the function that stops it. The listener loads after the page's start (header); once it listens
+ * it calls `onChange` once with every table watched, so a change announced before it listened is read too.
  */
 export function onLedgerChanged(
   tables: readonly LedgerTable[],
@@ -124,6 +125,9 @@ export function onLedgerChanged(
   const watched = new Set(tables);
   let stopped = false;
   let stop: () => void = () => undefined;
+  const stopKeys = onKeyringReloaded(() => {
+    onChange([...watched]);
+  });
   void import('../bus/listen').then(
     ({ listen }) => {
       if (stopped) return;
@@ -142,5 +146,6 @@ export function onLedgerChanged(
   return () => {
     stopped = true;
     stop();
+    stopKeys();
   };
 }

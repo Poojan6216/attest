@@ -4,7 +4,9 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger-outline' | 'danger
 
 export interface ButtonProps {
   readonly variant: ButtonVariant;
-  readonly onClick: () => void;
+  /** Absent for a form's submit button, whose form handles the press (`type: 'submit'`). */
+  readonly onClick?: () => void;
+  readonly type?: 'button' | 'submit';
   readonly children: ComponentChildren;
   readonly buttonRef?: Ref<HTMLButtonElement>;
   /** While a step is under way (an import being sent), so a second press cannot start it twice. */
@@ -31,11 +33,21 @@ const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
     'border-red-700 bg-red-700 text-white hover:bg-red-800 focus-visible:outline-red-700! dark:border-red-500 dark:bg-red-600 dark:hover:bg-red-500 dark:focus-visible:outline-red-300!',
 };
 
-/** A plain `<button type="button">`, shared by the options page and the side panel. Labels are verbs (ux_engineer copy rules). */
-export function Button({ variant, onClick, children, buttonRef, disabled = false }: ButtonProps) {
+/**
+ * A plain `<button type="button">`, or a form's submit button, shared by the options page, the side panel and the
+ * popup. Labels are verbs (ux_engineer copy rules).
+ */
+export function Button({
+  variant,
+  onClick,
+  type = 'button',
+  children,
+  buttonRef,
+  disabled = false,
+}: ButtonProps) {
   return (
     <button
-      type="button"
+      type={type}
       ref={buttonRef ?? null}
       onClick={onClick}
       disabled={disabled}

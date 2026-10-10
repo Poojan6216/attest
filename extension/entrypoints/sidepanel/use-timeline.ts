@@ -18,6 +18,7 @@ import { localDate } from '../../src/ledger/digest-week';
 import { AgentId } from '../../src/ledger/types';
 import { log } from '../../src/log';
 import { serial } from '../../src/ui/serial';
+import { isLedgerLocked } from '../../src/ledger/errors';
 import {
   loadOverview,
   loadReceipt,
@@ -77,6 +78,7 @@ export function defaultFilters(now: Date): TimelineFilters {
 export type ListState =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
+  | { readonly status: 'locked' }
   | {
       readonly status: 'ready';
       readonly items: readonly ReceiptItem[];
@@ -145,8 +147,10 @@ function useReceiptList(sources: TimelineSources, filters: TimelineFilters): Rec
           if (current.current !== filters) return;
           setList({ status: 'ready', items: page.items, next: page.next, more: 'idle' });
         } catch (error) {
-          log.error('sidepanel.read_failed', { error });
-          if (current.current === filters) setList({ status: 'failed' });
+          // A locked ledger (sprint_6 6.5) is no failure: the panel offers the unlock.
+          const locked = isLedgerLocked(error);
+          if (!locked) log.error('sidepanel.read_failed', { error });
+          if (current.current === filters) setList({ status: locked ? 'locked' : 'failed' });
         }
       }),
     [sources, filters, top.reread],

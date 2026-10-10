@@ -27,35 +27,41 @@ describe('BUS_MESSAGE_TYPES', () => {
   it('is frozen, so no consumer can reorder or extend it', () => {
     expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
     expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.erase'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(19);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(24);
   });
 });
 
+/** Every message type: the seven of sprint 0.7 and each one added since (the test below names them). */
+const EXPECTED_TYPES = [
+  'adapter.claims',
+  'adapter.health',
+  'adapter.scope',
+  'byo.forget',
+  'byo.save',
+  'calendar.snapshot',
+  'claims.import',
+  'coverage.ping',
+  'crypto.change',
+  'crypto.disable',
+  'crypto.enable',
+  'crypto.lock',
+  'crypto.unlock',
+  'flag.set',
+  'grant.save',
+  'ledger.changed',
+  'ledger.wipe',
+  'observer.observations',
+  'reader.toggle',
+  'receipt.event',
+  'retention.save',
+  'telemetry.send',
+  'ui.query',
+  'ui.result',
+];
+
 describe('BusMessage', () => {
-  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3, the grant of 4.4, the three settings of 4.5, the flag of 4.9, the key commands of 5.3 and the telemetry’s test send of 5.7', () => {
-    expect([...BUS_MESSAGE_TYPES].sort()).toEqual(
-      [
-        'adapter.claims',
-        'adapter.health',
-        'adapter.scope',
-        'byo.forget',
-        'byo.save',
-        'calendar.snapshot',
-        'claims.import',
-        'coverage.ping',
-        'flag.set',
-        'grant.save',
-        'ledger.changed',
-        'ledger.wipe',
-        'observer.observations',
-        'reader.toggle',
-        'receipt.event',
-        'retention.save',
-        'telemetry.send',
-        'ui.query',
-        'ui.result',
-      ].sort(),
-    );
+  it('has exactly the seven message types of sprint 0.7, the Calendar snapshot of 2.7, the scope snapshot of 3.0, the import of 3.13, the receipt event of 4.3, the grant of 4.4, the three settings of 4.5, the flag of 4.9, the key commands of 5.3, the telemetry’s test send of 5.7 and the five encryption commands of 6.5', () => {
+    expect([...BUS_MESSAGE_TYPES].sort()).toEqual([...EXPECTED_TYPES].sort());
     expectTypeOf<BusMessage['type']>().toEqualTypeOf<BusMessageType>();
     expectTypeOf<UiQuery['kind']>().toEqualTypeOf<UiQueryKind>();
   });

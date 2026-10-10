@@ -68,6 +68,11 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'byo.forget': () => extensionPage('/options.html'),
   'telemetry.send': () => extensionPage('/options.html'),
   'ledger.wipe': () => extensionPage('/options.html'),
+  'crypto.enable': () => extensionPage('/options.html'),
+  'crypto.unlock': () => extensionPage('/popup.html'),
+  'crypto.lock': () => extensionPage('/options.html'),
+  'crypto.change': () => extensionPage('/options.html'),
+  'crypto.disable': () => extensionPage('/options.html'),
 };
 
 function sendFailures(): number {

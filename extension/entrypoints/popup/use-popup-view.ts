@@ -7,13 +7,15 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'preact/hooks';
 
 import type { LedgerTable } from '../../src/bus/messages';
+import { isLedgerLocked } from '../../src/ledger/errors';
 import { log } from '../../src/log';
 import { loadPopup, onLedgerChanged, type PopupView } from '../../src/ui/data';
 
 export type PopupState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly view: PopupView; readonly nowMs: number }
-  | { readonly status: 'failed' };
+  | { readonly status: 'failed' }
+  | { readonly status: 'locked' };
 
 /** The tables the popup shows something of. */
 export const POPUP_TABLES: readonly LedgerTable[] = [
@@ -58,8 +60,10 @@ function reader(sources: PopupSources, show: (state: PopupState) => void): Reade
         if (isOpen()) show({ status: 'ready', view, nowMs: now.getTime() });
       }
     } catch (error) {
-      log.error('popup.read_failed', { error });
-      if (isOpen()) show({ status: 'failed' });
+      // An encrypted ledger locked (sprint_6 6.5) is no failure: the popup asks for the passphrase.
+      const locked = isLedgerLocked(error);
+      if (!locked) log.error('popup.read_failed', { error });
+      if (isOpen()) show({ status: locked ? 'locked' : 'failed' });
     } finally {
       reading = false;
     }

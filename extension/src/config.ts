@@ -35,6 +35,8 @@ export const SESSION_KEYS = {
   IDLE_SESSION: 'attest.idleSession',
   /** The receipt a clicked alert asks the side panel to open (sprint_4 4.6; src/background/alerts.ts). */
   OPEN_RECEIPT: 'attest.openReceipt',
+  /** The ledger's keys while it is unlocked, in memory only (sprint_6 6.5; src/crypto/session.ts). */
+  LEDGER_KEYS: 'attest.ledgerKeys',
 } as const;
 
 /**

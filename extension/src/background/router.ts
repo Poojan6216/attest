@@ -23,7 +23,9 @@ import { healthReports } from '../ledger/views';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
 import { onByoForget, onByoSave } from './byo';
+import { onCryptoChange, onCryptoDisable, onCryptoEnable, onCryptoLock, onCryptoUnlock } from './crypto';
 import { onFlagSet } from './flags';
+import { lockedAck } from './locked';
 import { onGrantSave } from './grant-save';
 import { BROWSER_READERS, onReaderToggle, type ReaderDeps, readerOff, syncReaders } from './readers';
 import { onLedgerWipe, onRetentionSave } from './settings';
@@ -93,7 +95,7 @@ export function createHandlers(
   const settings = { db: imports.db, notify: imports.notify };
   return {
     'ui.query': (message) => answerUiQuery(message.query, clock),
-    'claims.import': (message) => onClaimsImport(imports, message),
+    'claims.import': async (message) => (await lockedAck(imports.db)) ?? onClaimsImport(imports, message),
     'grant.save': (message) => onGrantSave(imports, message),
     'receipt.event': (message) =>
       onReceiptEvent({ db: imports.db, nowMs: imports.grading.nowMs, notify: imports.notify }, message),
@@ -104,21 +106,30 @@ export function createHandlers(
     'byo.forget': () => onByoForget(settings),
     'telemetry.send': () => onTelemetrySend(imports.notify),
     'ledger.wipe': () => onLedgerWipe({ notify: imports.notify, syncReaders: () => syncReaders(readers) }),
+    'crypto.enable': (message) => onCryptoEnable(message, settings),
+    'crypto.unlock': (message) => onCryptoUnlock(message, settings),
+    'crypto.lock': () => onCryptoLock(settings),
+    'crypto.change': (message) => onCryptoChange(message, settings),
+    'crypto.disable': (message) => onCryptoDisable(message, settings),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??
       (await readerOff(message.health.adapterId, readers)) ??
+      (await lockedAck(ctx.db)) ??
       onHealth(ctx, message, sender),
     'observer.observations': async (message, sender) =>
       wrongSite(sender, message.observerId, message.type) ??
       (await readerOff(message.observerId, readers)) ??
+      (await lockedAck(ctx.db)) ??
       onObservations(ctx, message),
     'coverage.ping': async (message, sender) =>
       wrongSite(sender, message.ping.observerId, message.type) ??
       (await readerOff(message.ping.observerId, readers)) ??
+      (await lockedAck(ctx.db)) ??
       onCoveragePing(ctx, message, sender),
     'calendar.snapshot': async (message, sender) =>
       wrongSite(sender, message.observerId, message.type) ??
       (await readerOff(message.observerId, readers)) ??
+      (await lockedAck(ctx.db)) ??
       onCalendarSnapshot(ctx, message, sender),
   };
 }

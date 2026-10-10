@@ -29,6 +29,7 @@ export const LIVE_DIGESTS: DigestSources = {
 export type DigestState =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
+  | { readonly status: 'locked' }
   | {
       readonly status: 'ready';
       readonly weeks: readonly string[];

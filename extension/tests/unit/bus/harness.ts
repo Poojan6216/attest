@@ -19,6 +19,11 @@ import {
   CalendarSnapshotMessage,
   ClaimsImportMessage,
   CoveragePingMessage,
+  CryptoChangeMessage,
+  CryptoDisableMessage,
+  CryptoEnableMessage,
+  CryptoLockMessage,
+  CryptoUnlockMessage,
   ByoForgetMessage,
   ByoSaveMessage,
   TelemetrySendMessage,
@@ -208,6 +213,9 @@ export const IMPORTED_CLAIM: Claim = (() => {
   return claim;
 })();
 
+/** An invented passphrase (sprint_6 6.5): no test uses a real one. */
+export const PASSPHRASE = 'an invented passphrase';
+
 /** One valid message per type. The mapped type makes the compiler demand every one. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'adapter.health': AdapterHealthMessage.parse({
@@ -303,6 +311,15 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
   'byo.forget': ByoForgetMessage.parse({ type: 'byo.forget' }),
   'telemetry.send': TelemetrySendMessage.parse({ type: 'telemetry.send' }),
   'ledger.wipe': LedgerWipeMessage.parse({ type: 'ledger.wipe' }),
+  'crypto.enable': CryptoEnableMessage.parse({ type: 'crypto.enable', passphrase: PASSPHRASE }),
+  'crypto.unlock': CryptoUnlockMessage.parse({ type: 'crypto.unlock', passphrase: PASSPHRASE }),
+  'crypto.lock': CryptoLockMessage.parse({ type: 'crypto.lock' }),
+  'crypto.change': CryptoChangeMessage.parse({
+    type: 'crypto.change',
+    passphrase: PASSPHRASE,
+    next: 'another invented passphrase',
+  }),
+  'crypto.disable': CryptoDisableMessage.parse({ type: 'crypto.disable', passphrase: PASSPHRASE }),
 };
 
 /**
@@ -344,4 +361,9 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'byo.forget': { type: 'byo.forget', key: SECRET },
   'telemetry.send': { type: 'telemetry.send', payload: SECRET },
   'ledger.wipe': { type: 'ledger.wipe', confirm: SECRET },
+  'crypto.enable': { type: 'crypto.enable', passphrase: 'short' },
+  'crypto.unlock': { ...VALID['crypto.unlock'], key: SECRET },
+  'crypto.lock': { type: 'crypto.lock', passphrase: SECRET },
+  'crypto.change': { ...VALID['crypto.change'], next: ' '.repeat(12) },
+  'crypto.disable': { type: 'crypto.disable', passphrase: '' },
 };

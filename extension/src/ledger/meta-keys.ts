@@ -10,6 +10,7 @@ import { GRADED_WRITES, HELD_PENDING, LAST_EVALUATED_AT } from './batch-instant'
 import { CLOCK_FLOOR_AT } from './clock-guard';
 import { CLOCK_HIGH_WATER, STORED_WRITES } from './clock-high-water';
 import { CLOCK_REPAIR_PREFIX } from './clock-repairs';
+import { CRYPTO_PREFIX } from './crypto-state';
 import { PURGE_TRUSTED_AT } from './retention-clock';
 import { RETENTION_DAYS_KEY } from './settings';
 import { TELEMETRY_SENT_DAY } from './telemetry-sent';
@@ -39,4 +40,5 @@ export const META_KEYS: readonly string[] = Object.freeze([
   READER_OFF_PREFIX,
   FLAG_PREFIX,
   TELEMETRY_SENT_DAY,
+  CRYPTO_PREFIX,
 ]);

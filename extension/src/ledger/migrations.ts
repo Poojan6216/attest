@@ -36,7 +36,14 @@ import {
   STORES_V11,
 } from './db';
 import { LedgerError } from './errors';
-import { LEDGER_TABLE_NAMES, parsedEpochMs, REPLAY_TABLE_NAMES } from './index-fields';
+import { sealingMiddleware } from '../crypto/middleware';
+import {
+  INDEX_FIELDS,
+  LEDGER_TABLE_NAMES,
+  parsedEpochMs,
+  REPLAY_TABLE_NAMES,
+  type StoredTableName,
+} from './index-fields';
 
 export interface Migration {
   /** Positive integer, strictly greater than the previous entry's version. */
@@ -162,6 +169,9 @@ export function assertValidMigrations(migrations: readonly Migration[]): void {
   }
 }
 
+const STORED_TABLES: ReadonlySet<string> = new Set([...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES]);
+const isStoredTable = (table: string): table is StoredTableName => STORED_TABLES.has(table);
+
 /**
  * Opens (creating or upgrading as needed) the ledger database.
  * Rejects with `invalid_migrations` before touching IndexedDB, or `open_failed` if IndexedDB refuses.
@@ -172,6 +182,14 @@ export async function openLedger(
 ): Promise<LedgerDb> {
   assertValidMigrations(migrations);
   const db = new LedgerDb(name);
+  // Rows of the tables that hold content are sealed while encryption is on (sprint_6 6.5; src/crypto/middleware.ts).
+  db.use(
+    sealingMiddleware({
+      derivedFields: (table) => (isStoredTable(table) ? INDEX_FIELDS[table] : []),
+      locked: (table) => new LedgerError('locked', 'The ledger is locked', { table }),
+      unreadable: (table) => new LedgerError('unreadable', 'A sealed row did not open', { table }),
+    }),
+  );
   for (const migration of migrations) {
     const version = db.version(migration.version).stores(migration.stores);
     if (migration.upgrade !== undefined) version.upgrade(migration.upgrade);

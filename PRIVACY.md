@@ -83,7 +83,7 @@ You can share a receipt (in the side panel) or a week's digest (on the digest pa
 
 In your browser, on this computer: in the browser's own database (IndexedDB), and the install id in the extension's local storage. While Chrome is open, its session memory also holds two small markers, which Chrome empties when it closes: whether away detection has started watching in this session, and which receipt a clicked alert asked the side panel to open. Attest does not copy anything to other devices or to any server.
 
-A later version adds an optional passphrase that encrypts the stored facts. It will be off by default.
+You can also turn on encryption at rest, in the options page's Encryption; it is off by default. Attest then seals the facts that hold content (addresses, subjects, amounts, merchants, what your agents claimed, your grants and marks) with a key made from a passphrase only you know, and keeps the key only in Chrome's memory, where session memory holds it for Attest's pages while it is unlocked. Ids, dates, grades and states stay readable, because Attest finds its records by them. While it is locked, Attest reads and stores nothing. If you forget the passphrase, nobody can open the sealed facts, and Delete all data is the only way back. Details: [What encryption protects](docs/privacy-architecture.md#12-encryption-at-rest).
 
 ## The optional model
 

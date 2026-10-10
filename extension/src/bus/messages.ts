@@ -56,8 +56,10 @@ import {
   RetentionSaveMessage,
   SettingResult,
 } from './page-commands';
+import { CRYPTO_COMMAND_RESULTS, CRYPTO_COMMAND_TYPES, CRYPTO_COMMANDS } from './crypto-commands';
 
 export * from './page-commands';
+export * from './crypto-commands';
 
 /**
  * The ledger tables (build_spec §6, sprint 0.6; the coverage intervals of 2.6 and the Calendar snapshots of 2.7).
@@ -100,6 +102,7 @@ export const BusMessageType = z.enum([
   'byo.forget',
   'telemetry.send',
   'ledger.wipe',
+  ...CRYPTO_COMMAND_TYPES,
 ]);
 
 /**
@@ -182,7 +185,9 @@ export const CalendarSnapshotMessage = z.strictObject({
  *    since): nothing of it is stored, and the observer is not DEGRADED;
  *  - `failed`: the service worker could not store it (the ledger did not open, a bug); logged at error;
  *  - `reader_off`: the person turned this observer's page reader off in the options page (sprint_4 4.5): nothing of
- *    it is stored, the observer is not DEGRADED, and it stops (src/observers/base.ts).
+ *    it is stored, the observer is not DEGRADED, and it stops (src/observers/base.ts);
+ *  - `locked`: the ledger is encrypted and locked (sprint_6 6.5): nothing of it is stored, its coverage least of all,
+ *    until the person unlocks it; the observer stops the pass, as for `refused`, and reads again on its next.
  */
 export const AckCode = z.enum([
   'invalid_input',
@@ -192,6 +197,7 @@ export const AckCode = z.enum([
   'clock_behind',
   'failed',
   'reader_off',
+  'locked',
 ]);
 
 /** The answer to an acknowledged message (sprint_2 2.7 interface 6). */
@@ -313,6 +319,7 @@ export const BusMessage = z.discriminatedUnion('type', [
   ByoForgetMessage,
   TelemetrySendMessage,
   LedgerWipeMessage,
+  ...CRYPTO_COMMANDS,
 ]);
 
 export type LedgerTable = z.infer<typeof LedgerTable>;
@@ -356,6 +363,7 @@ export const PAGE_COMMAND_RESULTS = Object.freeze({
   'byo.forget': SettingResult,
   'telemetry.send': TelemetrySendResult,
   'ledger.wipe': SettingResult,
+  ...CRYPTO_COMMAND_RESULTS,
 } as const satisfies Partial<Record<BusMessageType, z.ZodType>>);
 
 export type PageCommand = keyof typeof PAGE_COMMAND_RESULTS;

@@ -77,6 +77,7 @@ export const LIVE_SETTINGS: SettingsSources = {
 export type SettingsState =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
+  | { readonly status: 'locked' }
   | { readonly status: 'ready'; readonly view: SettingsView };
 
 const logReadFailed = (error: unknown): void => {

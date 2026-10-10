@@ -1,10 +1,14 @@
 /**
  * What the options page reads from the ledger (sprint_4 4.4, 4.5): every agent's grant and whether its alerts are
- * muted, the retention window in force, the person's choices (src/ledger/consent.ts) and each reader's health. Moved
+ * muted, the retention window in force, the person's choices (src/ledger/consent.ts), each reader's health, and where
+ * the ledger's encryption stands (sprint_6 6.5). Moved
  * out of ./data.ts in the Sprint 4 close (tech review TECH-5), so the popup's start loads none of it. Readers only,
  * through the page's own connection to the ledger (src/ledger/shared.ts); the service worker writes.
  */
 import type { ReaderId } from '../config';
+import { SEALED_TABLES } from '../config-crypto';
+import { isLocked } from '../crypto/keyring';
+import { type CryptoJob, isGuarded, readCryptoState } from '../ledger/crypto-state';
 import { type Flags, readersOff, readFlags } from '../ledger/consent';
 import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
@@ -34,4 +38,29 @@ export async function loadRetentionDays(): Promise<RetentionChoice> {
 export async function loadConsent(): Promise<{ readersOff: ReadonlySet<ReaderId>; flags: Flags }> {
   const db = await getLedger();
   return { readersOff: await readersOff(db), flags: await readFlags(db) };
+}
+
+/** Where the ledger's encryption stands (sprint_6 6.5), for the options page's Encryption. */
+export interface CryptoStatus {
+  /** Encryption is on, or a job turning it on or off is not finished. */
+  readonly on: boolean;
+  /** On, and this page holds no key: nothing sealed can be read. */
+  readonly locked: boolean;
+  /** The job rewriting the rows, if one is under way: which, and which table of how many it is in. */
+  readonly job?: { readonly kind: CryptoJob; readonly table: number; readonly of: number };
+}
+
+/** The ledger's encryption state, and whether this page holds its key: `meta` only, readable while locked. */
+export async function loadCryptoStatus(): Promise<CryptoStatus> {
+  const state = await readCryptoState(await getLedger());
+  const on = isGuarded(state);
+  const job =
+    state.job === undefined
+      ? undefined
+      : {
+          kind: state.job,
+          table: Math.max(0, SEALED_TABLES.indexOf(state.jobTable ?? '')) + 1,
+          of: SEALED_TABLES.length,
+        };
+  return { on, locked: on && isLocked(), ...(job === undefined ? {} : { job }) };
 }

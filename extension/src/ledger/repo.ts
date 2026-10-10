@@ -294,9 +294,7 @@ export async function coverageByObserver(db: LedgerDb, observerId: string): Prom
 
 // ── Meta ────────────────────────────────────────────────────────────────────────────────────────
 
-export async function getMeta(db: LedgerDb, key: string): Promise<MetaEntry['value'] | undefined> {
-  return readRow('meta', MetaEntry, await db.meta.get(key))?.value;
-}
+export { getMeta } from './meta-read';
 
 /** Stores a meta value. The last batch instant is written only by `recordBatchInstant` (it never moves back). */
 export async function setMeta(db: LedgerDb, key: string, value: MetaEntry['value']): Promise<void> {

@@ -20,7 +20,7 @@ import { expect, test } from './support/test';
 
 declare const chrome: WxtBrowser;
 
-const SECTION_TITLES = ['Grants', 'Adapters', 'Privacy', 'Model', 'Export', 'Danger zone'];
+const SECTION_TITLES = ['Grants', 'Adapters', 'Privacy', 'Encryption', 'Model', 'Export', 'Danger zone'];
 // Grants are editable since sprint_4 4.4 (tests/e2e/grants.spec.ts).
 /**
  * Every tab stop: each enabled control, and of a radio group only its checked radio (the arrow keys move within the

@@ -28,6 +28,7 @@ import type { LedgerTable } from '../bus/messages';
 import { BROWSER_ALERTS, deliverAlerts } from './alerts';
 import { autoCheckGmail, browserAutoCheck } from './auto-check';
 import { browserDigest, runWeeklyDigest } from './digest';
+import { ledgerLocked } from './locked';
 import { syncReaders } from './readers';
 import { changedReceipts, runGradingBatch, SHIPPED_GRADING } from './grading';
 import { askTheModel } from './intel';
@@ -110,6 +111,28 @@ const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
 };
 
 /**
+ * What runs while the ledger is encrypted and locked (sprint_6 6.5; ./locked.ts): of the grace alarm, only the upkeep
+ * that reads no sealed table, alarms set again (the digest's among them) and the readers' registrations; the purge, the
+ * digest and the telemetry wait for the unlock, each at its next alarm after it.
+ */
+const LOCKED_HANDLERS: Readonly<Partial<Record<AlarmName, AlarmHandler>>> = {
+  [ALARM_NAMES.GRADE]: lockedUpkeep,
+};
+
+async function lockedUpkeep(): Promise<void> {
+  const [alarms, readers] = await Promise.allSettled([ensureAlarms(), syncReaders()]);
+  if (alarms.status === 'rejected') log.error('alarm.ensure_failed', { error: alarms.reason });
+  if (readers.status === 'rejected') log.error('readers.sync_failed', { error: readers.reason });
+}
+
+/** The handler for `name` now: its own, or while the ledger is locked, what runs locked (none: the alarm waits). */
+async function handlerNow(name: AlarmName): Promise<AlarmHandler | undefined> {
+  // A ledger that does not open is the handlers' own failure to report, as before encryption.
+  const locked = await ledgerLocked(getLedger).catch(() => false);
+  return locked ? LOCKED_HANDLERS[name] : HANDLERS[name];
+}
+
+/**
  * How each alarm is created, at `nowMs`: on install or update, each periodic one first fires a whole period out; one
  * recreated at a browser start (`startup`) fires a short delay after it, the period following. The digest is a one-shot
  * alarm at the next Monday 09:00 (src/ledger/digest-week.ts), set again each time it fires. The telemetry alarm looks
@@ -171,7 +194,9 @@ export async function handleAlarm(alarm: { name: string }): Promise<void> {
   }
   log.info('alarm.fired', { alarm: alarm.name });
   try {
-    await HANDLERS[alarm.name]();
+    const handler = await handlerNow(alarm.name);
+    if (handler === undefined) log.info('alarm.locked', { alarm: alarm.name });
+    else await handler();
   } catch (error) {
     log.error('alarm.handler_failed', { alarm: alarm.name, error });
   } finally {

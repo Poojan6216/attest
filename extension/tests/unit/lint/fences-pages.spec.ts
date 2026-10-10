@@ -45,6 +45,12 @@ describe('a page reads the ledger and never writes it (TECH-1)', () => {
     ['entrypoints/options/probe.ts', "export { deleteLedger } from '../../src/ledger/shared';\n"],
     ['src/ui/probe.ts', "export { queueAlerts } from '../ledger/alerts';\n"],
     ['src/ui/probe.ts', "export { recordAutoCheck } from '../ledger/auto-check-record';\n"],
+    // Encryption at rest (sprint_6 6.5): the state's writers, the job, and the keys are the service worker's.
+    ['entrypoints/options/probe.ts', "export { beginSealing } from '../../src/ledger/crypto-writes';\n"],
+    ['entrypoints/options/probe.ts', "export { stepCryptoJob } from '../../src/ledger/crypto-job';\n"],
+    ['entrypoints/popup/probe.ts', "export { writeSessionKeys } from '../../src/crypto/session';\n"],
+    ['src/ui/probe.ts', "export { clearSessionKeys } from '../crypto/session';\n"],
+    ['entrypoints/popup/probe.ts', "export { onCryptoUnlock } from '../../src/background/crypto';\n"],
   ])('%s may not: %s', async (file, code) => {
     expect(await ruleIds(file, code)).toContain('no-restricted-imports');
   });
@@ -55,6 +61,8 @@ describe('a page reads the ledger and never writes it (TECH-1)', () => {
     ['entrypoints/options/probe.ts', "export { readersOff, readFlags } from '../../src/ledger/consent';\n"],
     ['entrypoints/options/probe.ts', "export { getLedger } from '../../src/ledger/shared';\n"],
     ['src/ui/probe.ts', "export type { AlertToShow } from '../ledger/alerts';\n"],
+    ['entrypoints/options/probe.ts', "export { readCryptoState } from '../../src/ledger/crypto-state';\n"],
+    ['src/ui/probe.ts', "export { readSessionKeys } from '../crypto/session';\n"],
   ])('%s may: %s', async (file, code) => {
     expect(await ruleIds(file, code)).not.toContain('no-restricted-imports');
   });

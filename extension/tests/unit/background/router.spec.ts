@@ -43,7 +43,7 @@ describe('answerUiQuery', () => {
 });
 
 describe('createHandlers', () => {
-  it('handles ui.query, since Sprint 2.7 the observer messages, since 3.13 the side panel’s import, since 4.3 its receipt events, since 4.4 the grants, since 4.5 the settings, since 4.9 the flag, since 5.3 the person’s own key, and since 5.7 the telemetry’s test send', () => {
+  it('handles ui.query, since Sprint 2.7 the observer messages, since 3.13 the side panel’s import, since 4.3 its receipt events, since 4.4 the grants, since 4.5 the settings, since 4.9 the flag, since 5.3 the person’s own key, since 5.7 the telemetry’s test send, and since 6.5 the encryption commands', () => {
     expect(Object.keys(createHandlers(FIXED_CLOCK)).sort()).toEqual(
       [
         'adapter.health',
@@ -52,6 +52,11 @@ describe('createHandlers', () => {
         'calendar.snapshot',
         'claims.import',
         'coverage.ping',
+        'crypto.change',
+        'crypto.disable',
+        'crypto.enable',
+        'crypto.lock',
+        'crypto.unlock',
         'flag.set',
         'grant.save',
         'ledger.wipe',

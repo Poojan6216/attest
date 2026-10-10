@@ -11,6 +11,8 @@ import { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
+import { NODE_BUILTINS } from '../../../eslint-rules/fences.js';
+
 const root = path.resolve(import.meta.dirname, '../../..');
 
 const eslint = new ESLint({
@@ -277,6 +279,27 @@ describe('extension code runs in Chrome, never Node (TECH-6)', () => {
       ['src/bus/send.ts', 'export let t: NodeJS.Timeout | undefined;\n', 'no-restricted-syntax'],
       ['src/ui/probe.ts', 'export let t: NodeJS.Timeout | undefined;\n', 'no-restricted-syntax'],
     ]);
+  });
+
+  it('every built-in fails by its bare name, a subpath or node:, in each scope, and a project path named like one passes', async () => {
+    const names = [...NODE_BUILTINS, 'fs/promises', 'path/posix', 'util/types', 'stream/web', 'node:crypto'];
+    names.push(...NODE_BUILTINS.map((name) => `node:${name}`), 'node:test', 'Crypto');
+    for (const file of [
+      'src/ledger/repo.ts',
+      'src/crypto/probe.ts',
+      'src/background/probe.ts',
+      'src/ui/probe.ts',
+    ]) {
+      for (const name of names) {
+        const code = `import * as m from '${name}';\nexport const x = m;\n`;
+        expect(await ruleIds(file, code), `${file}: ${name}`).toContain('no-restricted-imports');
+      }
+    }
+    // The project's own src/crypto (Decisions [6.5]): a relative path is never a Node module.
+    const own = "import { seal } from '../crypto/seal';\nexport const s = seal;\n";
+    expect(await ruleIds('src/ledger/probe.ts', own)).not.toContain('no-restricted-imports');
+    const sibling = "import { open } from './seal';\nexport const o = open;\n";
+    expect(await ruleIds('src/crypto/probe.ts', sibling)).not.toContain('no-restricted-imports');
   });
 });
 

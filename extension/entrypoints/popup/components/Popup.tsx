@@ -1,3 +1,4 @@
+import { LockedNotice } from '../../../src/ui/LockedNotice';
 import { Skeleton } from '../../../src/ui/Skeleton';
 import { type PopupSources, usePopupView } from '../use-popup-view';
 import { PopupLinks } from './PopupLinks';
@@ -14,7 +15,8 @@ export interface PopupProps {
 
 /**
  * The popup (sprint_4 4.2): today's receipts in one glance, with what Attest has checked above them. Skeleton rows
- * while the ledger is read; a read that fails says so. The privacy line closes it, as since Sprint 0.
+ * while the ledger is read; a read that fails says so; an encrypted ledger that is locked asks for its passphrase
+ * (sprint_6 6.5). The privacy line closes it, as since Sprint 0.
  */
 export function Popup({ sources, privacy }: PopupProps) {
   const state = usePopupView(sources);
@@ -30,6 +32,7 @@ export function Popup({ sources, privacy }: PopupProps) {
           Attest could not read its records. Close the popup and open it again.
         </p>
       ) : null}
+      {state.status === 'locked' ? <LockedNotice toShow="see today's receipts" /> : null}
       {state.status === 'ready' ? (
         <Today view={state.view} nowMs={state.nowMs} userAgent={navigator.userAgent} />
       ) : null}

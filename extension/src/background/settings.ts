@@ -3,7 +3,8 @@
  * data (`ledger.wipe`), each sent by the options page only. Which readers run is ./readers.ts.
  *
  * Delete all data deletes everything Attest keeps in this browser, and keeps no copy anywhere (Hard Rules 1, 2). The
- * service worker reads which readers are off, closes its own connection to the ledger and deletes the database: Chrome
+ * service worker reads which readers are off, forgets the keys of an encrypted ledger (sprint_6 6.5: nothing is left to
+ * unlock), closes its own connection to the ledger and deletes the database: Chrome
  * asks every other connection (each open page's) to close, Dexie closes it, and it opens again, empty, at its next
  * read; nothing can be stored in the old database meanwhile, since an open waits for the delete. Then
  * `chrome.storage.local` (the install id; a new one is made when next needed) and `chrome.storage.session` (a receipt a
@@ -23,6 +24,7 @@ import type { LedgerDb } from '../ledger/db';
 import { saveRetentionDays } from '../ledger/settings';
 import { deleteLedger, getLedger } from '../ledger/shared';
 import { log } from '../log';
+import { forgetKeys } from './crypto';
 
 export interface SettingsContext {
   readonly db: () => Promise<LedgerDb>;
@@ -81,6 +83,7 @@ async function readersToKeepOff(): Promise<ReadonlySet<ReaderId>> {
 export async function onLedgerWipe(deps: WipeDeps): Promise<SettingResult> {
   try {
     const off = await readersToKeepOff();
+    await forgetKeys();
     await deleteLedger();
     await (deps.clearStorage ?? clearBrowserStorage)();
     const db = await getLedger();
