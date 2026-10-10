@@ -6,60 +6,74 @@ first (Decisions.md [5.8]). This proves it. With ``IP_LIMIT_PER_DAY=1`` set on t
 
     uv run python scripts/check_client_address.py https://<the API's domain>
 
-It posts the valid payload of tests/payload-cases.json three times, each with its own invented install id and a
+It posts the valid payload of tests/payload-cases.json four times, each with its own invented install id and a
 made-up ``X-Forwarded-For`` (addresses kept for documentation, RFC 5737): the first two say the same address, the third
-another. The API must take the first (204) and refuse the other two (429), all from one client whatever they said. A
-204 for the second means the limit is not 1; a 204 for the third alone means the API counted the address the client
-wrote, so a client could dodge the per-client limit. Prints ok or FAIL; exits 1 unless ok. Each payload taken is one
-day of an invented install.
+another, and the fourth sends two such lines (Sprint 5 close, security review SEC-5). The API must take the first (204)
+and refuse the rest, all from one client whatever they said: the second and third with 429, the fourth with 429 or 400
+(a request with two lines is refused). A 204 for the second means the limit is not 1; a 204 for the third means the API
+counted the address the client wrote, and one for the fourth that a client's own line got through, so a client could
+dodge the per-client limit. Prints ok or FAIL; exits 1 unless ok. Each payload taken is one day of an invented install.
 """
 
+import http.client
 import json
 import sys
-import urllib.error
-import urllib.request
+import urllib.parse
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 CASES: dict[str, Any] = json.loads((Path(__file__).parent.parent / "tests" / "payload-cases.json").read_text("utf-8"))
 
-#: The three sends: an invented install id (UUID v4) and a made-up address (RFC 5737) each.
-SENDS = (
-    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d6e", "192.0.2.1"),
-    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d6f", "192.0.2.1"),
-    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d70", "198.51.100.1"),
+#: The four sends: an invented install id (UUID v4) and the made-up ``X-Forwarded-For`` lines (RFC 5737) of each.
+SENDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d6e", ("192.0.2.1",)),
+    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d6f", ("192.0.2.1",)),
+    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d70", ("198.51.100.1",)),
+    ("8a1d6c2e-3f4b-4a5c-9d7e-1f2a3b4c5d71", ("203.0.113.1", "203.0.113.2")),
 )
 
-#: Posts a payload with one ``X-Forwarded-For``; answers the status.
-type Post = Callable[[dict[str, Any], str], int]
+#: Posts a payload with these ``X-Forwarded-For`` lines; answers the status.
+type Post = Callable[[dict[str, Any], tuple[str, ...]], int]
+
+
+def verdict(statuses: list[int]) -> tuple[bool, str]:
+    """Whether ``statuses`` say the API counted every send as one client (header), and what to print."""
+    if statuses[:3] == [204, 429, 429] and statuses[3] in (400, 429):
+        return True, "ok   a client cannot choose its address: made-up ones, and a second line, were one client"
+    if statuses[:2] == [204, 204]:
+        return False, "FAIL the second was taken: set IP_LIMIT_PER_DAY to 1, wait for the redeploy, run it again"
+    if statuses[:3] == [204, 429, 204]:
+        return False, "FAIL the API counted the address the client wrote: set TRUST_FORWARDED_FOR to false"
+    if statuses[:3] == [204, 429, 429] and statuses[3] == 204:
+        return False, "FAIL a client's own X-Forwarded-For line got through: set TRUST_FORWARDED_FOR to false"
+    return False, f"FAIL expected 204, 429, 429, 429 or 400, got {statuses}: a redeploy starts the day's counts again"
 
 
 def check(post: Post) -> tuple[bool, str]:
-    """Sends the three (header) through ``post``; whether the API counted them as one client, and what to print."""
-    statuses = [post({**CASES["valid"], "installId": install_id}, forwarded) for install_id, forwarded in SENDS]
-    if statuses == [204, 429, 429]:
-        return True, "ok   a client cannot choose its address: two made-up ones were counted as one client"
-    if statuses == [204, 429, 204]:
-        return False, "FAIL the API counted the address the client wrote: set TRUST_FORWARDED_FOR to false"
-    if statuses[:2] == [204, 204]:
-        return False, "FAIL the second was taken: set IP_LIMIT_PER_DAY to 1, wait for the redeploy, run it again"
-    return False, f"FAIL expected 204, 429, 429, got {statuses}: a redeploy starts the day's counts again"
+    """Sends the four (header) through ``post``; the verdict."""
+    return verdict([post({**CASES["valid"], "installId": install_id}, lines) for install_id, lines in SENDS])
 
 
 def over_http(api: str) -> Post:
-    """Posts to the API at ``api``."""
+    """Posts to the API at ``api`` (``http.client``, which can send one header twice)."""
+    parsed = urllib.parse.urlsplit(api)
+    path = parsed.path.rstrip("/") + "/v1/aggregate"
 
-    def post(payload: dict[str, Any], forwarded: str) -> int:
-        headers = {"content-type": "application/json", "x-forwarded-for": forwarded}
+    def post(payload: dict[str, Any], forwarded: tuple[str, ...]) -> int:
         body = json.dumps(payload).encode("utf-8")
-        url = api.rstrip("/") + "/v1/aggregate"
-        sent = urllib.request.Request(url, data=body, method="POST", headers=headers)  # noqa: S310 (http(s), main)
+        kind = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+        connection = kind(parsed.netloc, timeout=10)
         try:
-            with urllib.request.urlopen(sent, timeout=10) as answer:  # noqa: S310 (main allows http and https only)
-                return int(answer.status)
-        except urllib.error.HTTPError as error:
-            return error.code
+            connection.putrequest("POST", path)
+            connection.putheader("content-type", "application/json")
+            connection.putheader("content-length", str(len(body)))
+            for line in forwarded:
+                connection.putheader("x-forwarded-for", line)
+            connection.endheaders(body)
+            return connection.getresponse().status
+        finally:
+            connection.close()
 
     return post
 

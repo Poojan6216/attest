@@ -168,7 +168,11 @@ describe('Adapters: Check Gmail for me (sprint_4 4.9)', () => {
 
 describe('Privacy', () => {
   it('links the privacy architecture, saves the retention window explicitly, and shows telemetry off', async () => {
-    const telemetry = { preview: () => Promise.resolve(null), sendNow: vi.fn() };
+    const telemetry = {
+      preview: () => Promise.resolve({ day: '2026-10-09', payload: null, sent: false }),
+      subscribe: () => () => undefined,
+      sendNow: vi.fn(),
+    };
     await show(h(PrivacySection, { sources, telemetry }));
     const link = [...root.querySelectorAll('a')].find(({ href }) => href === PRIVACY_DOC_URL);
     expect(link?.target).toBe('_blank');

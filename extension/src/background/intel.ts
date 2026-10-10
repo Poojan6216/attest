@@ -29,6 +29,7 @@ import { readRow, readRows, type LedgerDb } from '../ledger/db';
 import { answerAsk, askedClaims, claimAsk } from '../ledger/model-answers';
 import { log } from '../log';
 import { readByo, type StoredByo } from './byo';
+import { endModelRun, startModelRun } from './model-run';
 import { changedReceipts, type GradingDeps, runGradingBatch } from './grading';
 
 /** Where a provider comes from: Chrome's Prompt API here, and the person's saved key. */
@@ -108,12 +109,16 @@ export interface IntelDeps {
   readonly timeoutMs?: number;
 }
 
-/** Asks `provider` about one claim (header); true when the claim's answer was stored, from the model or the cache. */
+/**
+ * Asks `provider` about one claim (header); true when the claim's answer was stored, from the model or the cache. `stop`
+ * aborts the call when the person turns the model off or changes the key (./model-run.ts).
+ */
 async function askOne(
   db: LedgerDb,
   provider: IntelProvider,
   item: ModelAskItem,
   deps: IntelDeps,
+  stop: AbortSignal,
 ): Promise<boolean> {
   let input: IntelInput;
   try {
@@ -126,8 +131,38 @@ async function askOne(
   const ask = { claimId: item.claim.id, inputsHash: inputsHash(input), provider: provider.id, askedAt };
   const outcome = await claimAsk(db, ask);
   if (outcome !== 'ask') return outcome === 'cached';
-  const scores = await scoresFor(provider, input, deps.timeoutMs);
+  const scores = await scoresFor(provider, input, deps.timeoutMs, stop);
   return scores !== undefined && answerAsk(db, item.claim.id, scores, askedAt);
+}
+
+/** Whether the person still has `provider`'s model on (header): read before each claim of a run (SEC-2). */
+async function stillOn(db: LedgerDb, provider: IntelProvider): Promise<boolean> {
+  const flags = await readFlags(db);
+  return provider.id === 'byo' ? flags.ATTEST_MODEL_BYO : flags.ATTEST_MODEL;
+}
+
+/**
+ * Asks about `items` one at a time (header), while the run is not stopped and the person still has the model on;
+ * resolves how many claims got an answer.
+ */
+async function askEach(
+  db: LedgerDb,
+  provider: IntelProvider,
+  items: readonly ModelAskItem[],
+  deps: IntelDeps,
+): Promise<number> {
+  const run = startModelRun();
+  let answered = 0;
+  try {
+    for (const item of items) {
+      // Turned off, or stopped before or while the switch was read: ask no more.
+      if (!(await stillOn(db, provider)) || run.signal.aborted) break;
+      if (await askOne(db, provider, item, deps, run.signal)) answered += 1;
+    }
+  } finally {
+    endModelRun(run);
+  }
+  return answered;
 }
 
 /**
@@ -142,8 +177,7 @@ export async function askTheModel(db: LedgerDb, deps: IntelDeps): Promise<number
     if (items.length === 0) return 0;
     const provider = await (deps.provider ?? chooseProvider)(db);
     if (provider === null) return 0;
-    let answered = 0;
-    for (const item of items) if (await askOne(db, provider, item, deps)) answered += 1;
+    const answered = await askEach(db, provider, items, deps);
     if (answered === 0) return 0;
     log.info('intel.answered', { provider: provider.id, claimCount: answered });
     if (changedReceipts(await runGradingBatch(db, deps.grading))) deps.notify(['receipts']);

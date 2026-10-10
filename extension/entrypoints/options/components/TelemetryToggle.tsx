@@ -1,22 +1,26 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 
 import type { SettingResult, TelemetrySendResult } from '../../../src/bus/messages';
 import { sendTelemetryNow } from '../../../src/bus/send';
-import { TELEMETRY_HOST } from '../../../src/config';
 import { log } from '../../../src/log';
-import type { TelemetryPayload } from '../../../src/telemetry/schema';
 import { Button } from '../../../src/ui/Button';
-import { previewTelemetry } from '../telemetry-preview';
+import { onTelemetryChanged, previewTelemetry, type TelemetryView } from '../telemetry-preview';
+import { useTelemetryView } from '../use-telemetry-view';
+import { TelemetryPreview } from './TelemetryPreview';
+import { TelemetryStatement } from './TelemetryStatement';
 
 export interface TelemetrySources {
-  /** The payload the next send would carry, built from this ledger as the service worker builds it; null if none. */
-  readonly preview: () => Promise<TelemetryPayload | null>;
+  /** The numbers for the last whole day, built from this ledger as the service worker builds them, and whether sent. */
+  readonly preview: () => Promise<TelemetryView>;
+  /** Calls `onChange` whenever the numbers may have changed (../telemetry-preview.ts); returns the unsubscribe. */
+  readonly subscribe: (onChange: () => void) => () => void;
   /** Asks the service worker to send that day now (`telemetry.send`). */
   readonly sendNow: () => Promise<TelemetrySendResult>;
 }
 
 export const LIVE_TELEMETRY: TelemetrySources = {
   preview: () => previewTelemetry(Date.now()),
+  subscribe: (onChange) => onTelemetryChanged(onChange),
   sendNow: sendTelemetryNow,
 };
 
@@ -25,19 +29,6 @@ export interface TelemetryToggleProps {
   readonly on: boolean;
   readonly toggle: (on: boolean) => Promise<SettingResult>;
   readonly sources?: TelemetrySources;
-}
-
-/** What is sent, to whom, how often, and how to stop. */
-function TelemetryStatement() {
-  return (
-    <p class="text-sm">
-      Off unless you turn it on. Once a day, Attest sends {TELEMETRY_HOST} the numbers below for the day
-      before: how many receipts each agent got of each grade, which readers were on, how many hours they
-      covered and whether they worked, a random install id (you can reset it below), the extension’s version,
-      Chrome’s version and the date. Nothing else: never an address, a name, a subject or anything Attest
-      read. Turn it off here at any time.
-    </p>
-  );
 }
 
 /** What one `telemetry.send` did, in one line. */
@@ -53,49 +44,29 @@ function sentLine(result: TelemetrySendResult): string {
   return lines[result.outcome];
 }
 
-/** The payload the next send would carry, exactly. */
-function TelemetryPreview({ payload }: { readonly payload: TelemetryPayload | null | undefined }) {
-  if (payload === undefined) return <p class="text-sm">Reading the numbers the next send would hold.</p>;
-  if (payload === null) return <p class="text-sm">Attest cannot build the numbers on this browser.</p>;
-  return (
-    <figure class="space-y-1">
-      <figcaption class="text-sm">Exactly what the next send holds:</figcaption>
-      <pre
-        aria-label="The next send"
-        data-verbatim=""
-        tabIndex={0}
-        class="max-h-64 overflow-auto rounded border border-rule p-2 text-xs"
-      >
-        {JSON.stringify(payload, null, 2)}
-      </pre>
-    </figure>
-  );
-}
-
 /**
  * The opt-in telemetry (sprint_5 5.7; src/telemetry/): off until the person turns it on (`flag.set` ATTEST_TELEMETRY).
- * It says what is sent, to whom, how often and how to stop, and shows the payload the next send would carry, built from
- * this ledger as the service worker builds it (src/telemetry/aggregate.ts): what the person sees is exactly what goes.
- * While it is on, "Send a test payload now" asks the service worker to send that day now; each day goes once at most.
+ * It says what is sent, to whom, how often and how to stop, and shows the numbers for the last whole day, built from
+ * this ledger as the service worker builds them (src/telemetry/aggregate.ts), read again on every change and after the
+ * page's own command (Sprint 5 close, SEC-8). While it is on, "Send a test payload now" asks the service worker to send
+ * that day now; each day goes once at most. A command that fails is said, never left busy (tech review TECH-6).
  */
 export function TelemetryToggle({ on, toggle, sources = LIVE_TELEMETRY }: TelemetryToggleProps) {
-  const [payload, setPayload] = useState<TelemetryPayload | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [line, setLine] = useState<string | null>(null);
-  const read = useCallback(() => {
-    sources.preview().then(setPayload, (error: unknown) => {
-      log.warn('options.telemetry_preview_failed', { error });
-      setPayload(null);
-    });
-  }, [sources]);
-  useEffect(read, [read]);
+  const { view, readAgain } = useTelemetryView(sources);
   const run = (task: () => Promise<string>): void => {
     setBusy(true);
-    void task().then((said) => {
-      setLine(said);
-      setBusy(false);
-      read();
-    });
+    void task()
+      .catch((error: unknown) => {
+        log.warn('options.telemetry_command_failed', { error });
+        return 'Not done. Try again.';
+      })
+      .then((said) => {
+        setLine(said);
+        setBusy(false);
+        readAgain();
+      });
   };
   const change = () => toggle(!on).then((result) => (result.ok ? '' : 'Not changed. Try again.'));
   const send = () => sources.sendNow().then(sentLine, () => 'Not sent. Try again.');
@@ -117,7 +88,7 @@ export function TelemetryToggle({ on, toggle, sources = LIVE_TELEMETRY }: Teleme
       >
         {on ? 'Turn off usage numbers' : 'Turn on usage numbers'}
       </Button>
-      <TelemetryPreview payload={payload} />
+      <TelemetryPreview view={view} />
       <Button
         variant="secondary"
         disabled={busy || !on}

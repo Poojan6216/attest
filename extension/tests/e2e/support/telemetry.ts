@@ -64,7 +64,7 @@ export async function sendTodaysNumbers(extension: LaunchedExtension): Promise<s
   try {
     const options = await extension.openExtensionPage('options.html');
     const telemetry = options.getByRole('group', { name: 'Anonymous usage numbers' });
-    const shown = (await telemetry.getByLabel('The next send').textContent()) ?? '';
+    const shown = (await telemetry.getByLabel('The usage numbers').textContent()) ?? '';
     await telemetry.getByRole('button', { name: 'Send a test payload now' }).click();
     await expect(telemetry.getByText(/^Sent the numbers for /u)).toBeVisible();
     return shown;

@@ -7,6 +7,10 @@ import type { FlagSetMessage, LedgerTable, SettingResult } from '../bus/messages
 import { saveFlag } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
 import { log } from '../log';
+import { stopModelRuns } from './model-run';
+
+/** The flags that choose a model (./intel.ts `chooseProvider`). */
+const MODEL_FLAGS: ReadonlySet<string> = new Set(['ATTEST_MODEL', 'ATTEST_MODEL_BYO']);
 
 export interface FlagContext {
   readonly db: () => Promise<LedgerDb>;
@@ -15,6 +19,9 @@ export interface FlagContext {
 
 /** Turns `message.flag` on or off (header). */
 export async function onFlagSet(message: FlagSetMessage, ctx: FlagContext): Promise<SettingResult> {
+  // Switching either model stops the runs under way (SEC-2): turned off, nothing more is sent; turned on, the next run
+  // takes the model the person now chose (the on-device one first).
+  if (MODEL_FLAGS.has(message.flag)) stopModelRuns();
   try {
     await saveFlag(await ctx.db(), message.flag, message.on);
   } catch (error) {

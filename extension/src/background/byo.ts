@@ -22,6 +22,7 @@ import { STORAGE_KEYS } from '../config';
 import { saveFlag } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
 import { log } from '../log';
+import { stopModelRuns } from './model-run';
 
 /** The key and its vendor as stored, read back through the schemas the bus checked them with. */
 export const StoredByo = z.strictObject({ vendor: ByoVendorName, key: ByoKey });
@@ -58,6 +59,8 @@ export async function readByo(storage: ByoStorage = local()): Promise<StoredByo 
 /** Saves the person's key and its vendor (header), the area closed to content scripts first. */
 export async function onByoSave(message: ByoSaveMessage, ctx: ByoContext): Promise<SettingResult> {
   const storage = ctx.storage ?? local();
+  // A run under way keeps the key it began with: stop it, so nothing more goes with that key (SEC-2).
+  stopModelRuns();
   try {
     await closeStorage(storage);
     await storage.set({ [STORAGE_KEYS.BYO_KEY]: message.key, [STORAGE_KEYS.BYO_VENDOR]: message.vendor });
@@ -73,6 +76,8 @@ export async function onByoSave(message: ByoSaveMessage, ctx: ByoContext): Promi
 /** Deletes the person's key and its vendor, and turns their own key off (header). */
 export async function onByoForget(ctx: ByoContext): Promise<SettingResult> {
   const storage = ctx.storage ?? local();
+  // Nothing more goes with the key from the moment the person forgets it, a call in flight included (SEC-2).
+  stopModelRuns();
   try {
     await storage.remove([STORAGE_KEYS.BYO_KEY, STORAGE_KEYS.BYO_VENDOR]);
     await saveFlag(await ctx.db(), 'ATTEST_MODEL_BYO', false);

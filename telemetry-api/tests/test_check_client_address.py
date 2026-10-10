@@ -7,12 +7,13 @@ client's, and the check says FAIL and names the setting. With a limit above 1, i
 import json
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.settings import Settings
-from app.store import MemoryStore
-from scripts.check_client_address import Post, check
+from scripts.check_client_address import Post, check, verdict
+from tests.memory import MemoryStore
 
 
 def through(*, trust_forwarded_for: bool, ip_limit_per_day: int = 1) -> tuple[Post, MemoryStore]:
@@ -26,8 +27,8 @@ def through(*, trust_forwarded_for: bool, ip_limit_per_day: int = 1) -> tuple[Po
     store = MemoryStore()
     api = TestClient(create_app(settings, store))
 
-    def post(payload: dict[str, Any], forwarded: str) -> int:
-        headers = {"content-type": "application/json", "x-forwarded-for": forwarded}
+    def post(payload: dict[str, Any], forwarded: tuple[str, ...]) -> int:
+        headers = [("content-type", "application/json"), *(("x-forwarded-for", line) for line in forwarded)]
         status: int = api.post("/v1/aggregate", content=json.dumps(payload), headers=headers).status_code
         return status
 
@@ -61,4 +62,23 @@ def test_says_what_it_got_when_the_day_is_used() -> None:
     check(post)
     ok, said = check(post)
     assert not ok
-    assert said == "FAIL expected 204, 429, 429, got [429, 429, 429]: a redeploy starts the day's counts again"
+    assert said == (
+        "FAIL expected 204, 429, 429, 429 or 400, got [429, 429, 429, 429]: a redeploy starts the day's counts again"
+    )
+
+
+@pytest.mark.parametrize(
+    ("statuses", "ok", "says"),
+    [
+        ([204, 429, 429, 400], True, "a second line"),
+        ([204, 429, 429, 429], True, "a second line"),
+        ([204, 204, 204, 204], False, "IP_LIMIT_PER_DAY to 1"),
+        ([204, 429, 204, 400], False, "counted the address the client wrote"),
+        ([204, 429, 429, 204], False, "own X-Forwarded-For line got through"),
+        ([503, 503, 503, 503], False, "got [503, 503, 503, 503]"),
+    ],
+)
+def test_reads_every_outcome(statuses: list[int], ok: bool, says: str) -> None:
+    # Sprint 5 close, SEC-5: the fourth send carries two X-Forwarded-For lines, which must never be taken.
+    assert verdict(statuses)[0] is ok
+    assert says in verdict(statuses)[1]

@@ -147,7 +147,7 @@ jobs:
         run: uv run ruff check . && uv run ruff format --check .
 
       - name: Mypy (strict)
-        run: uv run mypy app tests
+        run: uv run mypy app tests scripts
 
       # Includes the payload schema's parity with the extension's (tests/test_schema_parity.py).
       - name: Tests

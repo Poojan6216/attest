@@ -1,26 +1,29 @@
 """The telemetry API (sprint_5 5.8; agents/backend_engineer.md): Attest's one server, kept tiny on purpose.
 
 ``POST /v1/aggregate`` takes one install's day (app/schema.py: counts, booleans, enum strings, one install id): a body
-of JSON (415 otherwise), at most ``MAX_BODY_BYTES`` (413), that the payload schema takes (422 otherwise, the input
-never echoed). Then the per-install and per-client limits (429, never stored), then one insert of exactly
-``{payload, received_at}`` (204). ``GET /health`` says whether the database answers (200, or 503). Nothing else: no
-docs pages, no other route (404), no auth, no cookies, no session. CORS allows the allowed extensions' origins alone.
-Every error is ``{"success": false, "data": null, "error": "<a human message>"}``, never a stack trace. The address
-is used only to limit, through a salted hash, and the log holds event names and status codes alone.
+of JSON (415 otherwise), never read past ``MAX_BODY_BYTES`` (413), that the payload schema takes (422 otherwise, the
+input never echoed). Then the limits: per install, per client, and what is stored in a day (429, never stored). Then
+one document per install and day, ``{payload, received_at}`` with the arrival time to the hour; a day already stored
+is answered the same and not stored again (204). ``GET /health`` says whether the database answers (200, or 503).
+Nothing else: no docs pages, no other route (404), no auth, no cookies, no session. CORS allows the allowed
+extensions' origins alone. Every error is ``{"success": false, "data": null, "error": "<a human message>"}``, never a
+stack trace, and an error nobody planned for is answered so and never handed on to the server's log. The address is
+used only to limit, through a salted hash, and the log holds event names and status codes alone.
 """
 
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from starlette.exceptions import HTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import logs
-from app.limits import ClientKeys, DailyLimit
+from app.limits import Limits
 from app.schema import TelemetryPayload
 from app.settings import Settings
 from app.store import MongoStore, Store, StoreError
@@ -38,19 +41,52 @@ MESSAGES = {
 }
 
 
+class Envelope(BaseModel):
+    """Every answer's shape (agents/backend_engineer.md rule 1)."""
+
+    success: bool
+    data: dict[str, str] | None
+    error: str | None
+
+
 def envelope(status: int, data: dict[str, str] | None = None) -> JSONResponse:
     """The API's answer: ``{success, data, error}``."""
     ok = status < 400
-    body = {"success": ok, "data": data, "error": None if ok else MESSAGES.get(status, "The request failed.")}
-    return JSONResponse(body, status_code=status)
+    body = Envelope(success=ok, data=data, error=None if ok else MESSAGES.get(status, "The request failed."))
+    return JSONResponse(body.model_dump(), status_code=status)
 
 
 def client_address(request: Request, settings: Settings) -> str:
-    """The client's address: the first ``X-Forwarded-For`` entry behind a trusted proxy, else the socket's."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if settings.trust_forwarded_for and forwarded.strip() != "":
-        return forwarded.split(",")[0].strip()
+    """The client's address: behind a trusted proxy, the first entry of its one ``X-Forwarded-For`` line, else the
+    socket's. A request with two such lines is refused (400): the proxy wrote one at most, so a client wrote another
+    (Sprint 5 close, security review SEC-5)."""
+    lines = request.headers.getlist("x-forwarded-for")
+    if settings.trust_forwarded_for:
+        if len(lines) > 1:
+            raise HTTPException(status_code=400)
+        if len(lines) == 1 and lines[0].strip() != "":
+            return lines[0].split(",")[0].strip()
     return request.client.host if request.client is not None else "unknown"
+
+
+async def read_body(request: Request, limit: int) -> bytes:
+    """The body, never read past ``limit`` bytes (Sprint 5 close, SEC-4): 413 when its ``Content-Length`` says more,
+    before anything is read, and as soon as a body that did not say passes the limit."""
+    length = request.headers.get("content-length", "")
+    if length.isdigit() and int(length) > limit:
+        raise HTTPException(status_code=413)
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > limit:
+            raise HTTPException(status_code=413)
+    return bytes(body)
+
+
+def hour_of(moment: datetime) -> datetime:
+    """``moment`` to the hour (Sprint 5 close, SEC-9): when a day arrived, without the minute that could join a reset
+    install id to the one before it."""
+    return moment.replace(minute=0, second=0, microsecond=0)
 
 
 def utc_now() -> datetime:
@@ -58,64 +94,79 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def create_app(settings: Settings, store: Store, now: Callable[[], datetime] = utc_now) -> FastAPI:
-    """The API over ``store`` (header); ``now`` is the clock its limits and ``received_at`` read."""
+class Failsafe:
+    """Answers an error nobody planned for in the one shape, and never hands it on (Sprint 5 close, tech review
+    TECH-12): Starlette would re-raise it for uvicorn, which prints the traceback and the message outside the one-line
+    log. Logged as its event and status alone."""
 
-    app = FastAPI(title="Attest telemetry", docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.allowed_origins,
-        allow_methods=["POST"],
-        allow_headers=["content-type"],
-        allow_credentials=False,
-        max_age=86_400,
-    )
-    install_limit = DailyLimit(settings.install_limit_per_day)
-    client_limit = DailyLimit(settings.ip_limit_per_day)
-    clients = ClientKeys()
+    def __init__(self, app: ASGIApp) -> None:
+        """Around ``app``."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Runs the request; on an unplanned error, a 500 in the one shape when no answer has started."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def sending(message: Message) -> None:
+            nonlocal started
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, receive, sending)
+        except Exception:  # noqa: BLE001 (every unplanned error is answered here and never re-raised)
+            logs.log("request.failed", status=500)
+            if not started:
+                await envelope(500)(scope, receive, send)
+
+
+def add_error_handlers(app: FastAPI) -> None:
+    """The planned errors: an HTTP status, and a request FastAPI cannot read, each in the one shape."""
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, error: HTTPException) -> JSONResponse:
         logs.log("request.refused", status=error.status_code)
         return envelope(error.status_code)
 
-    @app.exception_handler(Exception)
-    async def failed(_request: Request, _error: Exception) -> JSONResponse:
-        logs.log("request.failed", status=500)
-        return envelope(500)
-
     @app.exception_handler(RequestValidationError)
     async def invalid(_request: Request, _error: RequestValidationError) -> JSONResponse:
         logs.log("request.refused", status=422)
         return envelope(422)
 
+
+def add_routes(app: FastAPI, settings: Settings, store: Store, now: Callable[[], datetime]) -> None:
+    """The two routes (header)."""
+    limits = Limits(
+        settings.install_limit_per_day,
+        settings.ip_limit_per_day,
+        settings.store_limit_per_day,
+        settings.limit_keys_per_day,
+    )
+
     @app.post("/v1/aggregate", status_code=204, response_class=Response)
     async def aggregate(request: Request) -> Response:
         if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
             raise HTTPException(status_code=415)
-        body = await request.body()
-        if len(body) > settings.max_body_bytes:
-            raise HTTPException(status_code=413)
+        address = client_address(request, settings)
+        body = await read_body(request, settings.max_body_bytes)
         try:
             payload = TelemetryPayload.model_validate_json(body)
         except ValidationError:
             logs.log("aggregate.refused", status=422)
             return envelope(422)
         moment = now()
-        today: date = moment.date()
-        address = clients.of(client_address(request, settings))
-        if not (install_limit.allows(payload.installId, today) and client_limit.allows(address, today)):
+        if not limits.admit(payload.installId, address, moment.date()):
             logs.log("aggregate.refused", status=429)
             return envelope(429)
-        # No await between asking and counting: one request's check and count are never split by another's.
-        install_limit.count(payload.installId, today)
-        client_limit.count(address, today)
         try:
-            await store.insert(payload.model_dump(mode="json"), moment)
+            stored = await store.insert(payload.model_dump(mode="json"), hour_of(moment))
         except StoreError:
             logs.log("aggregate.store_failed", status=503)
             return envelope(503)
-        logs.log("aggregate.stored", status=204)
+        logs.log("aggregate.stored" if stored else "aggregate.repeated", status=204)
         return Response(status_code=204)
 
     @app.get("/health")
@@ -125,6 +176,22 @@ def create_app(settings: Settings, store: Store, now: Callable[[], datetime] = u
         logs.log("health.database_down", status=503)
         return envelope(503)
 
+
+def create_app(settings: Settings, store: Store, now: Callable[[], datetime] = utc_now) -> FastAPI:
+    """The API over ``store`` (header); ``now`` is the clock its limits and ``received_at`` read."""
+    app = FastAPI(title="Attest telemetry", docs_url=None, redoc_url=None, openapi_url=None)
+    # Added first, so it runs inside CORS: an unplanned 500 still carries the extension's CORS headers.
+    app.add_middleware(Failsafe)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_methods=["POST"],
+        allow_headers=["content-type"],
+        allow_credentials=False,
+        max_age=86_400,
+    )
+    add_error_handlers(app)
+    add_routes(app, settings, store, now)
     return app
 
 

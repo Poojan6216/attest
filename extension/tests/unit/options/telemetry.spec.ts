@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 /**
  * The options page's opt-in telemetry (sprint_5 5.7; entrypoints/options/components/TelemetryToggle.tsx), over stand-in
- * sources: it says what is sent, to whom and how to stop; it shows the next send exactly, on or off; its switch sends
- * `flag.set` for ATTEST_TELEMETRY; "Send a test payload now" works only while it is on, and says in one line what the
- * service worker did. Every value is invented.
+ * sources: it says what is sent, to whom and how to stop; it shows the next send exactly, on or off, and a day already
+ * sent as sent, never as the next (Sprint 5 close, SEC-8); it reads the numbers again on every change its sources
+ * announce and after its own command; its switch sends `flag.set` for ATTEST_TELEMETRY; "Send a test payload now" works
+ * only while it is on, and says in one line what the service worker did; a command that fails is said, never left busy
+ * (TECH-6). Every value is invented.
  */
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -13,6 +15,7 @@ import {
   type TelemetrySources,
   TelemetryToggle,
 } from '../../../entrypoints/options/components/TelemetryToggle';
+import type { TelemetryView } from '../../../entrypoints/options/telemetry-preview';
 import type { SettingResult, TelemetrySendResult } from '../../../src/bus/messages';
 import { TELEMETRY_HOST } from '../../../src/config';
 import { setLogSink } from '../../../src/log';
@@ -65,10 +68,20 @@ async function show(
   return toggle;
 }
 
-const sources = (result: TelemetrySendResult, payload: TelemetryPayload | null = PAYLOAD) => ({
-  preview: vi.fn(() => Promise.resolve(payload)),
-  sendNow: vi.fn(() => Promise.resolve(result)),
-});
+/** Stand-in sources: the numbers of 2026-10-09 (`payload`, sent or not), the change callback kept in `changed`. */
+const sources = (result: TelemetrySendResult, payload: TelemetryPayload | null = PAYLOAD, sent = false) => {
+  const changed: { current: () => void } = { current: () => undefined };
+  const view: TelemetryView = { day: '2026-10-09', payload, sent };
+  return {
+    preview: vi.fn(() => Promise.resolve(view)),
+    subscribe: (onChange: () => void) => {
+      changed.current = onChange;
+      return () => undefined;
+    },
+    sendNow: vi.fn(() => Promise.resolve(result)),
+    changed,
+  };
+};
 
 describe('the telemetry switch', () => {
   it('says what goes where, shows the next send exactly while off, and turns on through flag.set', async () => {
@@ -78,6 +91,9 @@ describe('the telemetry switch', () => {
     expect(root.textContent).toContain('never an address, a name, a subject or anything Attest read');
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Usage numbers are off.');
     expect(JSON.parse(root.querySelector('pre')?.textContent ?? '')).toEqual(PAYLOAD);
+    expect(root.querySelector('figcaption')?.textContent).toBe(
+      'Exactly what the next send holds, the numbers for 2026-10-09:',
+    );
     expect(button('Send a test payload now')?.disabled).toBe(true);
     await act(() => {
       button('Turn on usage numbers')?.click();
@@ -112,12 +128,39 @@ describe('the telemetry switch', () => {
     await settle();
     expect(stand.sendNow).toHaveBeenCalledTimes(1);
     expect(root.textContent).toContain(line);
+    // The page reads the numbers again after its own command.
+    expect(stand.preview).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the telemetry numbers and failures', () => {
+  it('says a day already sent is sent, and reads again on a change its sources announce', async () => {
+    const stand = sources({ ok: true, outcome: 'sent', day: '2026-10-09' }, PAYLOAD, true);
+    await show(true, stand);
+    expect(root.querySelector('figcaption')?.textContent).toBe('The numbers for 2026-10-09, already sent:');
+    expect(root.textContent).not.toContain('next send');
+    await act(() => {
+      stand.changed.current();
+    });
+    await settle();
+    expect(stand.preview).toHaveBeenCalledTimes(2);
+  });
+
+  it('says a command that fails, and is no longer busy', async () => {
+    const toggle = vi.fn(() => Promise.reject(new Error('the bus is down')));
+    await show(true, sources({ ok: true, outcome: 'sent', day: '2026-10-09' }), toggle);
+    await act(() => {
+      button('Turn off usage numbers')?.click();
+    });
+    await settle();
+    expect(root.textContent).toContain('Not done. Try again.');
+    expect(button('Turn off usage numbers')?.disabled).toBe(false);
   });
 
   it('says when no payload can be built here, and when the switch did not change', async () => {
     const toggle = vi.fn(() => Promise.resolve<SettingResult>({ ok: false, code: 'failed' }));
     await show(true, sources({ ok: true, outcome: 'sent', day: '2026-10-09' }, null), toggle);
-    expect(root.textContent).toContain('Attest cannot build the numbers on this browser.');
+    expect(root.textContent).toContain('Attest cannot build the numbers for 2026-10-09 on this browser.');
     await act(() => {
       button('Turn off usage numbers')?.click();
     });

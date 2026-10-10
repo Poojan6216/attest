@@ -4,10 +4,10 @@ Attest's one server. It takes the extension's opt-in daily usage numbers and sto
 
 | Route | What it does |
 |---|---|
-| `POST /v1/aggregate` | Takes one install's day, the payload of [`app/schema.py`](app/schema.py), sent as JSON. A malformed payload is refused (422); one over the day's limits (24 per install id, 240 per client) is refused (429). Neither is stored. An accepted one is stored as exactly `{payload, received_at}` (204). |
+| `POST /v1/aggregate` | Takes one install's day, the payload of [`app/schema.py`](app/schema.py), sent as JSON and never read past 16 KB (413). A malformed payload is refused (422); one over the day's limits (24 per install id, 240 per client, an IPv6 client counted by its /64, and 100,000 stored a day in all) is refused (429). Neither is stored. An accepted one is stored as exactly `{payload, received_at}`, the arrival time to the hour, one document per install and day: the extension sends a day again when it did not see the answer, and a day already stored is answered the same (204) and not stored again. |
 | `GET /health` | 200 while the database answers, 503 otherwise. |
 
-Every error answers `{"success": false, "data": null, "error": "<message>"}`. CORS allows only the origins of the extension ids in `ALLOWED_EXT_IDS`. The client's address is used only to limit, as a salted hash kept in memory: it is never stored and never logged. The log is one JSON line per event, holding an event name and a status code.
+Every error answers `{"success": false, "data": null, "error": "<message>"}`, an error nobody planned for too (500), which is never handed on to the server's own log. CORS allows only the origins of the extension ids in `ALLOWED_EXT_IDS`. The client's address is used only to limit, as a salted hash kept in memory: it is never stored and never logged. The log is one JSON line per event, holding an event name and a status code.
 
 ## The payload
 
@@ -38,6 +38,7 @@ From the environment only ([`app/settings.py`](app/settings.py)):
 | `ALLOWED_EXT_IDS` | The extension ids allowed to post, comma-separated. |
 | `TRUST_FORWARDED_FOR` | `true` behind a proxy that writes the client's address first in `X-Forwarded-For` and strips what the client sent there (Railway's edge says it does: [`Decisions.md`](../Decisions.md) `[5.8]`). [`scripts/check_client_address.py`](scripts/check_client_address.py) proves it on the deployed API. |
 | `INSTALL_LIMIT_PER_DAY`, `IP_LIMIT_PER_DAY` | The daily limits, 24 and 240 by default. |
+| `STORE_LIMIT_PER_DAY`, `LIMIT_KEYS_PER_DAY` | What is stored in a day in all, and how many install ids and clients each limit counts in a day: 100,000 each by default. |
 
 ## Deploy
 

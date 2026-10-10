@@ -104,7 +104,7 @@ const HANDLERS: Readonly<Record<AlarmName, AlarmHandler>> = {
   [ALARM_NAMES.PURGE]: runRetentionPurge,
   [ALARM_NAMES.GRADE]: runGraceBatch,
   [ALARM_NAMES.DIGEST]: runDigestAlarm,
-  [ALARM_NAMES.TELEMETRY]: () => runTelemetryAlarm(),
+  [ALARM_NAMES.TELEMETRY]: () => runTelemetryAlarm(announce(nowIso)),
 };
 
 /**

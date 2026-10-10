@@ -172,8 +172,17 @@ export const ALARM_NAMES = Object.freeze({
  */
 export const TELEMETRY_ALARM_PERIOD_MINUTES = 60;
 
-/** How soon a recreated telemetry alarm first fires after a browser start. */
+/**
+ * How soon a recreated telemetry alarm first fires after a browser start: two minutes, after the one-minute catch-ups
+ * (the grace batch among them) have run, so the first send counts yesterday's receipts as the catch-up settled them.
+ */
 export const TELEMETRY_STARTUP_DELAY_MINUTES = 2;
+
+/**
+ * How long the telemetry POST may take (Sprint 5 close, tech review TECH-13): a server that does not answer gives a
+ * failed send, tried again at the next alarm, never a call left hanging in the service worker.
+ */
+export const TELEMETRY_TIMEOUT_MS = 10_000;
 
 /**
  * When the weekly digest is made (sprint_4 4.7; src/background/digest.ts): Monday (`Date.getDay()` 1) at 09:00 on the

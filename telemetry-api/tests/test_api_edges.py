@@ -25,7 +25,8 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from app.main import create_app
 from app.settings import Settings
-from app.store import Document, MemoryStore, MongoStore, StoreError
+from app.store import Document, MongoStore, StoreError
+from tests.memory import MemoryStore
 
 CASES: dict[str, Any] = json.loads((Path(__file__).parent / "payload-cases.json").read_text("utf-8"))
 VALID: dict[str, Any] = CASES["valid"]
@@ -41,7 +42,7 @@ def settings() -> Settings:
 class BrokenStore(MemoryStore):
     """A store whose insert fails in a way the API does not name (not a ``StoreError``)."""
 
-    async def insert(self, payload: dict[str, object], received_at: datetime) -> None:
+    async def insert(self, payload: dict[str, object], received_at: datetime) -> bool:
         """Fails, its message quoting what it was given, as a careless error might."""
         message = f"unexpected: {json.dumps(payload)} at {received_at.isoformat()}"
         raise RuntimeError(message)
@@ -118,7 +119,7 @@ def down_store() -> MongoStore:
 
 
 def test_the_mongo_store_raises_store_error_naming_no_payload_when_the_database_is_down() -> None:
-    payload: dict[str, object] = {"installId": VALID["installId"], "chromeMajor": 154}
+    payload: dict[str, object] = {"installId": VALID["installId"], "dayBucket": VALID["dayBucket"], "chromeMajor": 154}
     with pytest.raises(StoreError) as raised:
         asyncio.run(down_store().insert(payload, AT))
     assert str(raised.value) == "the database did not take the aggregate"

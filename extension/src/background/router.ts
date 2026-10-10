@@ -101,7 +101,7 @@ export function createHandlers(
     'flag.set': (message) => onFlagSet(message, settings),
     'byo.save': (message) => onByoSave(message, settings),
     'byo.forget': () => onByoForget(settings),
-    'telemetry.send': () => onTelemetrySend(),
+    'telemetry.send': () => onTelemetrySend(imports.notify),
     'ledger.wipe': () => onLedgerWipe({ notify: imports.notify, syncReaders: () => syncReaders(readers) }),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??

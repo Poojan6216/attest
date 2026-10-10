@@ -9,7 +9,11 @@
  * a grant saved, both exports, a reader turned off and on, and Delete all data. Then every page is reloaded in turn
  * for 5 minutes.
  * The negative control proves on every run that the guard sees a canary request from the service
- * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened. (If
+ * worker, an extension page and a fixture page. The extension's own canaries go to hosts its content security policy
+ * lets it reach (the model vendors', the telemetry host: wxt.config.ts `connectSources`), since Chrome now refuses any
+ * other host, and every WebSocket, before a request is made (Sprint 5 close, SEC-3; tests/e2e/csp.spec.ts proves that
+ * refusal). The WebSocket canary, which only NetLog can see, so comes from the fixture page. With every option off none
+ * of them is allowed, so each must come back as a violation. This test is never skipped, retried, or weakened. (If
  * Chromium's own start-up hangs, the launcher replaces the browser before the session starts; every attempt
  * writes its own NetLog and every one is analysed: tests/e2e/support/extension.ts.)
  */
@@ -20,7 +24,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { allowedHosts, NETWORK_ALLOWLIST } from '../../src/config';
+import { allowedHosts, BYO_VENDORS, NETWORK_ALLOWLIST, TELEMETRY_HOST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
 import { datedClock, pasteActivity } from './support/paste';
@@ -193,17 +197,40 @@ async function reloadInTurn(pages: readonly Page[], ms: number): Promise<number>
 }
 
 /**
- * The negative control's canary requests: a fetch and a WebSocket from the service worker, a fetch from an extension
- * page and a fetch from a fixture page. Each host must come back as a violation.
+ * The canaries' hosts. The extension's are hosts its content security policy lets it reach, one per context, so that
+ * each request is really made; the fixture page's, a fetch and a WebSocket, are any hosts, a page being outside that
+ * policy.
+ */
+const CANARY = {
+  worker: new URL(BYO_VENDORS.openai.endpoint).host,
+  page: TELEMETRY_HOST,
+  fixture: 'fixture-canary.example.net',
+  socket: 'ws-canary.example.com',
+} as const;
+
+/**
+ * The negative control's canary requests: a fetch from the service worker, a fetch from an extension page, and a fetch
+ * and a WebSocket from a fixture page. Each host must come back as a violation.
  */
 async function plantCanaries(session: GuardedSession): Promise<void> {
   const worker = await session.extension.serviceWorker();
-  await worker.evaluate(() => fetch('https://sw-canary.example.com/attest').catch(() => undefined));
-  // Playwright routing never sees WebSockets, so only the NetLog layer can catch this one.
   await worker.evaluate(
-    () =>
+    (host) => fetch(`https://${host}/attest-canary`).catch(() => undefined),
+    CANARY.worker,
+  );
+  const options = await session.extension.openExtensionPage('options.html');
+  await options.evaluate(
+    (host) => fetch(`https://${host}/attest-canary`).catch(() => undefined),
+    CANARY.page,
+  );
+  const fixture = await session.extension.context.newPage();
+  await fixture.goto(session.server.url('_harness/blank.html'));
+  await fixture.evaluate((host) => fetch(`https://${host}/attest`).catch(() => undefined), CANARY.fixture);
+  // Playwright routing never sees WebSockets, so only the NetLog layer can catch this one.
+  await fixture.evaluate(
+    (host) =>
       new Promise<void>((resolve) => {
-        const socket = new WebSocket('wss://ws-canary.example.com/attest');
+        const socket = new WebSocket(`wss://${host}/attest`);
         socket.onerror = () => {
           resolve();
         };
@@ -211,12 +238,8 @@ async function plantCanaries(session: GuardedSession): Promise<void> {
           resolve();
         };
       }),
+    CANARY.socket,
   );
-  const options = await session.extension.openExtensionPage('options.html');
-  await options.evaluate(() => fetch('https://page-canary.example.org/attest').catch(() => undefined));
-  const fixture = await session.extension.context.newPage();
-  await fixture.goto(session.server.url('_harness/blank.html'));
-  await fixture.evaluate(() => fetch('https://fixture-canary.example.net/attest').catch(() => undefined));
 }
 
 test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
@@ -259,16 +282,9 @@ test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
     }
     logReport(report);
     expect(report.violations).toEqual(
-      expect.arrayContaining([
-        'sw-canary.example.com',
-        'page-canary.example.org',
-        'fixture-canary.example.net',
-        'ws-canary.example.com',
-      ]),
+      expect.arrayContaining([CANARY.worker, CANARY.page, CANARY.fixture, CANARY.socket]),
     );
     // The WebSocket canary is attributed by NetLog alone: the ground-truth layer works on its own.
-    expect(report.attributed).toContainEqual(
-      expect.objectContaining({ host: 'ws-canary.example.com', via: 'netlog' }),
-    );
+    expect(report.attributed).toContainEqual(expect.objectContaining({ host: CANARY.socket, via: 'netlog' }));
   });
 });

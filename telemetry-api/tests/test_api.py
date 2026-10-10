@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.settings import Settings
-from app.store import MemoryStore
+from tests.memory import MemoryStore
 
 CASES: dict[str, Any] = json.loads((Path(__file__).parent / "payload-cases.json").read_text("utf-8"))
 VALID: dict[str, Any] = CASES["valid"]
@@ -119,16 +119,30 @@ def test_refuses_a_body_not_sent_as_json_and_one_too_large() -> None:
     assert store.documents == []
 
 
+def day(n: int) -> dict[str, Any]:
+    """The valid payload about the ``n``-th day of September 2026 (each its own document)."""
+    return {**VALID, "dayBucket": f"2026-09-{n:02d}"}
+
+
 def test_limits_each_install_to_its_day_and_starts_again_the_next() -> None:
     api, store, clock = client(install_limit_per_day=24)
-    for _ in range(24):
-        assert post(api, VALID).status_code == 204
-    refused = post(api, VALID)
+    for n in range(1, 25):
+        assert post(api, day(n)).status_code == 204
+    refused = post(api, day(25))
     assert refused.status_code == 429
     assert refused.json() == {"success": False, "data": None, "error": "Too many payloads today. Try again tomorrow."}
     assert len(store.documents) == 24
     clock.at += timedelta(days=1)
-    assert post(api, VALID).status_code == 204
+    assert post(api, day(25)).status_code == 204
+
+
+def test_stores_one_install_s_day_once_however_often_it_is_sent() -> None:
+    # The extension sends a day again when it did not see the answer (tech review TECH-3): taken, never stored twice.
+    api, store, _ = client()
+    assert [post(api, VALID).status_code for _ in range(3)] == [204, 204, 204]
+    assert len(store.documents) == 1
+    assert post(api, day(1)).status_code == 204
+    assert len(store.documents) == 2
 
 
 def test_limits_each_client_whatever_install_ids_it_sends() -> None:
@@ -143,12 +157,12 @@ def test_limits_each_client_whatever_install_ids_it_sends() -> None:
 
 def test_a_payload_one_limit_refuses_counts_against_neither() -> None:
     api, store, _ = client(install_limit_per_day=2, ip_limit_per_day=1)
-    assert post(api, VALID).status_code == 204
+    assert post(api, day(1)).status_code == 204
     # Refused by its client's limit: its install's count stays at one.
-    assert post(api, VALID).status_code == 429
-    assert post(api, VALID, **{"x-forwarded-for": "198.51.100.9"}).status_code == 204
+    assert post(api, day(2)).status_code == 429
+    assert post(api, day(2), **{"x-forwarded-for": "198.51.100.9"}).status_code == 204
     # The install's second payload was the last; a third client is refused by the install's limit alone.
-    assert post(api, VALID, **{"x-forwarded-for": "198.51.100.10"}).status_code == 429
+    assert post(api, day(3), **{"x-forwarded-for": "198.51.100.10"}).status_code == 429
     assert len(store.documents) == 2
 
 

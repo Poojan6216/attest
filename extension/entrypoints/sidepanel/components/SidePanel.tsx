@@ -8,6 +8,8 @@ import { type TimelineSources, useTimeline } from '../use-timeline';
 import { DetailView } from './DetailView';
 import { TimelineFiltersForm } from './TimelineFiltersForm';
 import { TimelineList } from './TimelineList';
+import type { PrivacySources } from '../../../src/ui/privacy-data';
+import { PrivacyLine } from '../../../src/ui/PrivacyLine';
 
 export interface SidePanelProps {
   /** Where the panel reads and writes; the ledger and the bus when absent. */
@@ -16,6 +18,8 @@ export interface SidePanelProps {
   readonly children?: ComponentChildren;
   /** Where a clicked alert names the receipt to open (sprint_4 4.6); `chrome.storage.session` when absent. */
   readonly openRequests?: OpenRequestStore;
+  /** Where the privacy line reads the person's choices; the ledger and storage when absent. */
+  readonly privacy?: PrivacySources;
 }
 
 /**
@@ -23,7 +27,7 @@ export interface SidePanelProps {
  * Add agent activity, then the timeline of receipts with its filters, or one receipt's detail: the one a clicked alert
  * names, too (sprint_4 4.6). Closing a detail returns the focus to its row.
  */
-export function SidePanel({ sources, children, openRequests = SESSION_STORE }: SidePanelProps) {
+export function SidePanel({ sources, children, openRequests = SESSION_STORE, privacy }: SidePanelProps) {
   const timeline = useTimeline(sources);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   useOpenRequest(timeline.open, openRequests);
@@ -33,7 +37,7 @@ export function SidePanel({ sources, children, openRequests = SESSION_STORE }: S
     <main class="min-h-screen space-y-4 bg-surface p-gutter text-sm text-ink">
       <header>
         <h1 class="text-base font-semibold">Attest timeline</h1>
-        <p class="mt-1 text-ink-muted">Nothing leaves your browser.</p>
+        <PrivacyLine sources={privacy} class="mt-1 text-ink-muted" />
       </header>
       {overview === null ? null : (
         <>

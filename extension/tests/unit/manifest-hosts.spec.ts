@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_HOSTS, AGENT_READERS, OBSERVER_HOSTS } from '../../src/config';
-import config from '../../wxt.config';
+import config, { EXTENSION_PAGES_CSP, withDevServer } from '../../wxt.config';
 
 // wxt.config.ts imports `defineConfig` from 'wxt', which loads WXT and, in the background, its optional `web-ext` peer
 // (not installed: an unhandled rejection under CI's coverage run). `defineConfig` returns its argument, so a stub that
@@ -57,8 +57,18 @@ describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)',
     // (sprint_4 4.5; src/background/readers.ts; Decisions [4.5]). It reaches no host beyond host_permissions.
     // `notifications` shows one alert per FINAL NOT_FOUND, UNASKED or OVER_SCOPE receipt (sprint_4 4.6; Decisions [4.6]).
     expect(block.permissions).toEqual(['storage', 'alarms', 'scripting', 'notifications']);
+    // connect-src (Sprint 5 close, SEC-3): the extension itself, the two model vendors' endpoints and the telemetry
+    // host, so Chrome refuses every other host, a redirect's target included.
     expect(block.content_security_policy).toEqual({
-      extension_pages: "script-src 'self'; object-src 'none'",
+      extension_pages:
+        "script-src 'self'; object-src 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
     });
+  });
+
+  it('let the development server connect only in `pnpm dev`, never in a build', () => {
+    expect(withDevServer(EXTENSION_PAGES_CSP, 'http://localhost:3000')).toBe(
+      "script-src 'self'; object-src 'none'; connect-src http://localhost:3000 ws://localhost:3000 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
+    );
+    expect(manifest().content_security_policy).toEqual({ extension_pages: EXTENSION_PAGES_CSP });
   });
 });

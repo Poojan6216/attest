@@ -37,17 +37,19 @@ export function allowedHosts(on: {
 
 /**
  * The model vendors a person may bring their own key for (sprint_5 5.3; agents/intel_engineer.md rule 6): each one's
- * official API host, the one endpoint Attest posts to, and the model it asks. A vendor's host may be contacted only
+ * name as the pages write it, official API host, the one endpoint Attest posts to, and the model it asks. A vendor's host may be contacted only
  * while the person has their own key on with that vendor (src/intel/providers/byo.ts); it is never in
  * NETWORK_ALLOWLIST, which holds what may be contacted whatever the person chose.
  */
 export const BYO_VENDORS = Object.freeze({
   anthropic: {
+    label: 'Anthropic',
     host: 'api.anthropic.com',
     endpoint: 'https://api.anthropic.com/v1/messages',
     model: 'claude-haiku-4-5-20251001',
   },
   openai: {
+    label: 'OpenAI',
     host: 'api.openai.com',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',

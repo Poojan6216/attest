@@ -2,17 +2,21 @@ import { Skeleton } from '../../../src/ui/Skeleton';
 import { type PopupSources, usePopupView } from '../use-popup-view';
 import { PopupLinks } from './PopupLinks';
 import { Today } from './Today';
+import type { PrivacySources } from '../../../src/ui/privacy-data';
+import { PrivacyLine } from '../../../src/ui/PrivacyLine';
 
 export interface PopupProps {
   /** Where the popup reads from; the ledger and the bus when absent. */
   readonly sources?: PopupSources;
+  /** Where the privacy line reads the person's choices; the ledger and storage when absent. */
+  readonly privacy?: PrivacySources;
 }
 
 /**
  * The popup (sprint_4 4.2): today's receipts in one glance, with what Attest has checked above them. Skeleton rows
  * while the ledger is read; a read that fails says so. The privacy line closes it, as since Sprint 0.
  */
-export function Popup({ sources }: PopupProps) {
+export function Popup({ sources, privacy }: PopupProps) {
   const state = usePopupView(sources);
   return (
     <main class="w-[22rem] space-y-3 bg-surface p-gutter text-sm text-ink">
@@ -29,7 +33,7 @@ export function Popup({ sources }: PopupProps) {
       {state.status === 'ready' ? (
         <Today view={state.view} nowMs={state.nowMs} userAgent={navigator.userAgent} />
       ) : null}
-      <p class="text-xs text-ink-muted">Nothing leaves your browser.</p>
+      <PrivacyLine sources={privacy} class="text-xs text-ink-muted" />
     </main>
   );
 }

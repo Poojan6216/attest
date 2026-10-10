@@ -7,7 +7,7 @@
  * one send runs at a time, so the hourly alarm and the options page's button never send a day twice. The log says what
  * happened and the HTTP status, never the payload (Hard Rule 10).
  */
-import { TELEMETRY_ENDPOINT } from '../config';
+import { TELEMETRY_ENDPOINT, TELEMETRY_TIMEOUT_MS } from '../config';
 import { readFlags } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
 import { recordTelemetrySent, telemetrySentDay } from '../ledger/telemetry-sent';
@@ -41,6 +41,9 @@ function post(body: string): Promise<Response> {
     credentials: 'omit',
     referrerPolicy: 'no-referrer',
     cache: 'no-store',
+    // A redirect is refused, never followed: Attest alone picks where the numbers go (SEC-3).
+    redirect: 'error',
+    signal: AbortSignal.timeout(TELEMETRY_TIMEOUT_MS),
   });
 }
 

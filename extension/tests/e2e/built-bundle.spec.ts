@@ -37,7 +37,7 @@ const ZOD_PROBE =
   /if\([\w$]+\.jitless\|\|[^;]{0,120}Cloudflare`\)\)return!1;try\{return Function\(``\),!0\}catch\{return!1\}/g;
 const BYO_CALL = /\breturn fetch\([\w$]+\[[\w$]+\]\.endpoint,[\w$]+\)/g;
 const TELEMETRY_CALL =
-  /\breturn fetch\([\w$]+,\{method:`POST`,headers:\{"content-type":`application\/json`\},body:[\w$]+,credentials:`omit`,referrerPolicy:`no-referrer`,cache:`no-store`\}\)/g;
+  /\breturn fetch\([\w$]+,\{method:`POST`,headers:\{"content-type":`application\/json`\},body:[\w$]+,credentials:`omit`,referrerPolicy:`no-referrer`,cache:`no-store`,redirect:`error`,signal:AbortSignal\.timeout\((?:[\w$]+|1e4)\)\}\)/g;
 const ALLOWED = [ZOD_PROBE, BYO_CALL, TELEMETRY_CALL];
 
 const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
@@ -82,8 +82,10 @@ test('the shipped manifest matches the decisions', () => {
   // Hard Rule 8: exactly Gmail and Google Calendar (sprint_2 2.0), nothing broader; no agent host while every agent
   // reader is off under its vendor's terms (Decisions [3.10]).
   expect(manifest.host_permissions).toEqual(['https://mail.google.com/*', 'https://calendar.google.com/*']);
+  // connect-src (Sprint 5 close, SEC-3): Chrome refuses any host but these, a redirect's target included.
   expect(manifest.content_security_policy).toEqual({
-    extension_pages: "script-src 'self'; object-src 'none'",
+    extension_pages:
+      "script-src 'self'; object-src 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
   });
   expect(manifest).not.toHaveProperty('optional_host_permissions');
   // Decisions [2.close] S3 (SEC-9): never in incognito, so no incognito page's facts reach the persistent ledger.

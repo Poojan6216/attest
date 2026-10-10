@@ -22,6 +22,7 @@ export interface IntelProvider {
 }
 
 const TIMED_OUT = Symbol('timed out');
+const STOPPED = Symbol('stopped');
 
 /**
  * The model scores `provider` gives `claim`'s `candidates` (header), or undefined when it gives none: it threw, it took
@@ -43,24 +44,37 @@ export async function modelScores(
   return scoresFor(provider, input, timeoutMs);
 }
 
-/** `modelScores` for an input already built (the dev model check scores its own; entrypoints/model-check). */
+/**
+ * `modelScores` for an input already built (the dev model check scores its own; entrypoints/model-check). `stop` ends
+ * the call at once, as the time limit does, when the person turns the model off or changes the key
+ * (src/background/model-run.ts): the provider's signal is aborted, its answer never counts, and nothing is asked when
+ * `stop` has already fired.
+ */
 export async function scoresFor(
   provider: IntelProvider,
   input: IntelInput,
   timeoutMs: number = INTEL_TIMEOUT_MS,
+  stop?: AbortSignal,
 ): Promise<ModelScores | undefined> {
+  if (stop?.aborted === true) return undefined;
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<typeof TIMED_OUT>((resolve) => {
+  let onStop: (() => void) | undefined;
+  const ended = new Promise<typeof TIMED_OUT | typeof STOPPED>((resolve) => {
     timer = setTimeout(() => {
       resolve(TIMED_OUT);
     }, timeoutMs);
+    onStop = () => {
+      resolve(STOPPED);
+    };
+    stop?.addEventListener('abort', onStop, { once: true });
   });
   try {
-    const answer = await Promise.race([provider.score(input, controller.signal), late]);
-    if (answer === TIMED_OUT) {
+    const answer = await Promise.race([provider.score(input, controller.signal), ended]);
+    if (answer === TIMED_OUT || answer === STOPPED) {
       controller.abort();
-      log.warn('intel.timeout', { provider: provider.id });
+      if (answer === TIMED_OUT) log.warn('intel.timeout', { provider: provider.id });
+      else log.warn('intel.stopped', { provider: provider.id });
       return undefined;
     }
     const scores = scoresOf(answer, input);
@@ -71,5 +85,6 @@ export async function scoresFor(
     return undefined;
   } finally {
     clearTimeout(timer);
+    if (onStop !== undefined) stop?.removeEventListener('abort', onStop);
   }
 }

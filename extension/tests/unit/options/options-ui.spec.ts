@@ -21,6 +21,7 @@ import { App as PopupApp } from '../../../entrypoints/popup/App';
 import { App as SidePanelApp } from '../../../entrypoints/sidepanel/App';
 import { STORAGE_KEYS } from '../../../src/config';
 import { type LogRecord, setLogSink } from '../../../src/log';
+import { PRIVACY_UNKNOWN } from '../../../src/ui/privacy-text';
 
 const KEY = STORAGE_KEYS.INSTALL_ID;
 const ID_A = '0b6f3a52-6f1e-4c43-9d6a-2f0e8f1c7a11';
@@ -90,7 +91,9 @@ describe('options App', () => {
     });
     await settle();
     const main = root.querySelector('main');
-    expect(main?.textContent.trim().startsWith('Nothing leaves your browser.')).toBe(true);
+    // This environment has no IndexedDB, so the person's choices are never read and the page says the sentence true
+    // whatever they are (Sprint 5 close, SEC-1; tests/unit/ui/privacy-line.spec.ts covers the read).
+    expect(main?.textContent.trim().startsWith(PRIVACY_UNKNOWN)).toBe(true);
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     const navLinks = Array.from(root.querySelectorAll('nav a')).map((a) => [
       a.getAttribute('href'),
@@ -272,7 +275,8 @@ describe('popup and side panel shells', () => {
       render(h(PopupApp, null), root);
     });
     expect(root.querySelector('h1')?.textContent).toBe('Attest');
-    expect(root.textContent).toContain('Nothing leaves your browser.');
+    // No IndexedDB here: the choices are never read, so the line says what is true whatever they are (SEC-1).
+    expect(root.textContent).toContain(PRIVACY_UNKNOWN);
     // Skeleton rows while the ledger is read (tests/unit/popup/popup.spec.ts covers the day itself).
     expect(statusText()).toBe("Loading today's receipts");
     expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
@@ -288,7 +292,7 @@ describe('popup and side panel shells', () => {
       render(h(SidePanelApp, null), root);
     });
     expect(root.querySelector('h1')?.textContent).toBe('Attest timeline');
-    expect(root.textContent).toContain('Nothing leaves your browser.');
+    expect(root.textContent).toContain(PRIVACY_UNKNOWN);
     expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
       'Add agent activity',
     ]);

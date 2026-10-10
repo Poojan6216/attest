@@ -116,6 +116,8 @@ export function byoProvider(vendor: ByoVendor, key: string): IntelProvider {
         credentials: 'omit',
         referrerPolicy: 'no-referrer',
         cache: 'no-store',
+        // A redirect is refused, never followed: Attest alone picks where the facts and the key go (SEC-3).
+        redirect: 'error',
       });
       if (!response.ok) throw new IntelError(refusalOf(response.status));
       return parsedOrText(textOf(vendor, (await response.json()) as unknown));

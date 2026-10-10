@@ -15,11 +15,6 @@ export interface ByoModelProps {
   readonly send: (command: SettingCommand) => Promise<SettingResult>;
 }
 
-const VENDOR_NAMES: Readonly<Record<ByoVendor, string>> = Object.freeze({
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-});
-
 type Step = 'idle' | 'saving' | 'failed' | 'not_a_key';
 
 /** What the person's own key sends, to whom, and what stays here (agents/intel_engineer.md rule 6). */
@@ -64,7 +59,7 @@ function VendorChoice({
               choose(name);
             }}
           />
-          {VENDOR_NAMES[name]}
+          {BYO_VENDORS[name].label}
         </label>
       ))}
     </fieldset>
@@ -144,7 +139,7 @@ export function ByoModel({ on, vendor, send }: ByoModelProps) {
       <ByoStatement />
       <p role="status" class="text-sm">
         {on ? 'Your own key is on.' : 'Your own key is off.'}{' '}
-        {vendor === null ? 'No key is saved.' : `Your ${VENDOR_NAMES[vendor]} key is saved.`}
+        {vendor === null ? 'No key is saved.' : `Your ${BYO_VENDORS[vendor].label} key is saved.`}
       </p>
       {vendor === null ? (
         <ByoKeyForm send={send} done={setStep} />

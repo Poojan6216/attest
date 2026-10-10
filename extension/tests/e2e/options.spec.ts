@@ -64,10 +64,11 @@ test.describe('options page', () => {
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line !== '');
+    // Both options that send are off here (Sprint 5 close, SEC-1: the line names each one that is on).
     expect(firstLine).toBe('Nothing leaves your browser.');
-    // The statement, then its link to the privacy architecture (ux_engineer rule 8; sprint_4 4.5).
+    // The statement, the two options that send, then its link to the privacy architecture (ux_engineer rule 8).
     expect(secondLine).toMatch(
-      /^Attest reads only pages you have open\b.*sends nothing to any server\. Read how\b/,
+      /^Attest reads only pages you have open\b.*both are off until you turn them on: your own model key, under Model, and anonymous usage numbers, under Privacy\. Read how\b/,
     );
 
     await expect(page.locator('h1')).toHaveCount(1);

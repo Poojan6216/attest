@@ -1,6 +1,7 @@
 /**
  * Sprint 5.7 Done-when, end to end on the built extension (src/telemetry/send.ts; Hard Rule 1). With telemetry off, the
- * hourly alarm sends nothing. Turned on in the options page, the alarm sends one payload, which the schema parses and
+ * hourly alarm sends nothing. Turned on in the options page, the popup says the numbers are on (Sprint 5 close, security
+ * review SEC-1), and the alarm sends one payload, which the schema parses and
  * which is exactly what the options page showed; fired again, the alarm sends nothing more, and "Send a test payload
  * now" says that day was already sent: once a day. NetLog and the route guard see no host but the telemetry host (the
  * allowlist the mandatory test holds empty while telemetry is off grows by exactly that one host while it is on). The
@@ -41,14 +42,19 @@ async function runSession() {
     await fireTelemetryAlarm(worker, lines);
     expect(bodies).toEqual([]);
 
-    // On: the alarm sends one payload, then nothing more; the button says the day was sent.
+    // On: the popup says so (Sprint 5 close, SEC-1); the alarm sends one payload, then nothing more; the button says
+    // the day was sent.
     await turnTelemetryOn(extension);
+    const popup = await extension.openExtensionPage('popup.html');
+    const popupSays = popup.getByText('Usage numbers are on: counts go to Attest’s server once a day.');
+    await expect(popupSays).toBeVisible();
+    await popup.close();
     await fireTelemetryAlarm(worker, lines);
     await expect.poll(() => bodies.length).toBe(1);
     await fireTelemetryAlarm(worker, lines);
     const options = await extension.openExtensionPage('options.html');
     const telemetry = options.getByRole('group', { name: 'Anonymous usage numbers' });
-    const shown = (await telemetry.getByLabel('The next send').textContent()) ?? '';
+    const shown = (await telemetry.getByLabel('The usage numbers').textContent()) ?? '';
     await telemetry.getByRole('button', { name: 'Send a test payload now' }).click();
     const said = telemetry.getByText(/^Already sent the numbers for /u);
     await expect(said).toBeVisible();
