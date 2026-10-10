@@ -20,15 +20,12 @@ import type { ReceiptDetail } from '../ledger/detail';
 import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
 import { log } from '../log';
-import { AgentId, type AdapterHealth, type Grade, type Grant } from '../ledger/types';
+import { AgentId, type AdapterHealth, type Grade } from '../ledger/types';
 import {
-  coverageSummary,
-  type CoverageSummary,
   grantSettings,
   type GrantSettings,
   sidePanelOverview,
   type SidePanelOverview,
-  grantList,
   healthReports,
   popupView,
   type PopupView,
@@ -121,11 +118,6 @@ export async function loadReceipt(id: string): Promise<ReceiptDetail | undefined
   return receiptDetail(db, id);
 }
 
-/** The coverage summary: the latest ping of each observer and account, and each agent's last pasted import. */
-export async function loadCoverage(): Promise<CoverageSummary> {
-  return coverageSummary(await getLedger());
-}
-
 /** The latest health report of every adapter and observer. */
 export async function loadHealth(): Promise<AdapterHealth[]> {
   return healthReports(await getLedger());
@@ -145,11 +137,6 @@ export async function loadRetentionDays(): Promise<RetentionChoice> {
 export async function loadConsent(): Promise<{ readersOff: ReadonlySet<ReaderId>; flags: Flags }> {
   const db = await getLedger();
   return { readersOff: await readersOff(db), flags: await readFlags(db) };
-}
-
-/** Every agent's grant. */
-export async function loadGrants(): Promise<Grant[]> {
-  return grantList(await getLedger());
 }
 
 /**

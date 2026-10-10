@@ -95,7 +95,7 @@ export function AwayDetection() {
         </Button>
       )}
       {problem !== null && (
-        <p role="alert" class="text-red-800 dark:text-red-300">
+        <p role="alert" class="text-error-fg">
           {problem}
         </p>
       )}

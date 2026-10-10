@@ -63,7 +63,7 @@ export function AutoCheckToggle({ on, gmailOn, toggle }: AutoCheckToggleProps) {
         {on ? 'Turn off checking Gmail' : 'Turn on checking Gmail'}
       </Button>
       {state === 'failed' ? (
-        <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+        <p role="alert" class="text-sm text-error-fg">
           Not changed. Try again.
         </p>
       ) : null}

@@ -314,6 +314,9 @@ export const POPUP_RECEIPT_LIMIT = 50;
 /** The receipts one page of the side panel's timeline reads (sprint_4 4.0, 4.3). */
 export const TIMELINE_PAGE_SIZE = 50;
 
+/** The local days a new side-panel timeline shows, today included (sprint_4 4.3; moved here in the Sprint 4 close). */
+export const TIMELINE_DEFAULT_DAYS = 30;
+
 /**
  * Rows per read when the options page builds an export file (sprint_4 4.5; src/ledger/export-file.ts): each table is
  * read this many keys at a time, never whole, and each page is written into the file before the next is read.

@@ -27,7 +27,7 @@ export function DigestPage({ sources = LIVE_DIGESTS, nowMs = Date.now, share = {
       </header>
       {state.status === 'loading' ? <Skeleton rows={4} label="Loading the digest" /> : null}
       {state.status === 'failed' ? (
-        <p role="alert" class="text-grade-not-found-fg">
+        <p role="alert" class="text-error-fg">
           Attest could not read its digests. Reload the page.
         </p>
       ) : null}

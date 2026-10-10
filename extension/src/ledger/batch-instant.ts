@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 import { isoWithLocalOffset, nowIso } from '../clock';
 import { readRow, type LedgerDb } from './db';
-import { LedgerError } from './errors';
+import { LedgerError, parseWrite } from './errors';
 import { epochMs } from './index-fields';
 import { IsoTs, type Receipt } from './types';
 
@@ -62,7 +62,9 @@ export async function heldPending(db: LedgerDb): Promise<number> {
 
 /** Records how many PENDING receipts a batch held (call it in the batch's transaction). */
 export async function noteHeldPending(db: LedgerDb, count: number): Promise<void> {
-  await db.meta.put(HeldPending.parse({ key: HELD_PENDING, value: count }));
+  await db.meta.put(
+    parseWrite(HeldPending, { key: HELD_PENDING, value: count }, 'Invalid held count', { table: 'meta' }),
+  );
 }
 
 const LastEvaluatedAt = z.strictObject({ key: z.literal(LAST_EVALUATED_AT), value: IsoTs });

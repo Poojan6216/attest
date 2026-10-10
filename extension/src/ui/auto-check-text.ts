@@ -5,7 +5,7 @@
 import type { AutoCheckRecord } from '../ledger/auto-check-record';
 import type { AgentId } from '../ledger/types';
 import { clockTime } from './format';
-import { AGENT_NAMES } from './paste-labels';
+import { AGENT_NAMES } from './labels';
 
 /** Whether the popup says it: from the open until its window ends (a record later than now says nothing). */
 export function autoCheckShown(record: AutoCheckRecord | null, nowMs: number): record is AutoCheckRecord {

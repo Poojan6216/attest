@@ -8,24 +8,14 @@
  */
 import { dateLabel, gapLine, healthWord, instantLabel } from './digest-labels';
 import { formatAmount } from './format';
-import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
+import { escapeMarkdown } from './markdown';
+import { AGENT_NAMES, claimTypeLabel } from './labels';
 import { adapterName, gradeLabel } from './receipt-labels';
 import { withoutAddresses } from '../ledger/domain';
-import type { AgentWeek, DigestRecord, Grade, NotableReceipt } from '../ledger/types';
+import { type AgentWeek, type DigestRecord, Grade, type NotableReceipt } from '../ledger/types';
 
-const GRADES: readonly Grade[] = [
-  'VERIFIED',
-  'PARTIAL',
-  'NOT_FOUND',
-  'UNASKED',
-  'OVER_SCOPE',
-  'UNVERIFIABLE',
-];
-
-/** `text` with every character markdown gives a meaning escaped. */
-export function escapeMarkdown(text: string): string {
-  return text.replace(/[\\`*_{}[\]()#+\-.!|<>~]/gu, (char) => `\\${char}`);
-}
+/** Every grade, in the schema's order (sprint_4 close, tech review TECH-8). */
+const GRADES: readonly Grade[] = Grade.options;
 
 function agentLines(week: AgentWeek): string[] {
   const counts = GRADES.map((grade) => `${gradeLabel(grade)} ${String(week.grades[grade])}`).join(' · ');

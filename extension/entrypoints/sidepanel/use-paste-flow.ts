@@ -11,7 +11,7 @@ import { MAX_PASTE_CHARS, type PastedLog, type PasteRefusal, readPastedLog } fro
 import type { OffsetAt } from '../../src/core/normalize';
 import { type AgentId, type Claim, type IsoTs, SCHEMA_LIMITS } from '../../src/core/schema';
 import { log } from '../../src/log';
-import { count } from '../../src/ui/paste-labels';
+import { count } from '../../src/ui/labels';
 
 /** The paste instant and the person's zone: the side panel's own clock (src/clock.ts, src/observers/time-zone.ts). */
 export interface PasteClock {

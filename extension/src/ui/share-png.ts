@@ -6,7 +6,26 @@
  * itself, a side panel or the digest page, which has a DOM and a canvas, so no `offscreen` document is needed
  * (Decisions [4.8]; Hard Rule 8). Pixels only: nothing is sent anywhere.
  */
+import { unescapeMarkdown } from './markdown';
+
 export type ShareTheme = 'light' | 'dark';
+
+/** Why a share's image could not be drawn: the page gave no 2D canvas, or its canvas gave no image. */
+export type ShareImageErrorCode = 'no_canvas' | 'no_image';
+
+/**
+ * A share's image not drawn (sprint_4 close, tech review TECH-11). Its message is its code alone, so it never prints
+ * content (Hard Rule 10).
+ */
+export class ShareImageError extends Error {
+  override readonly name = 'ShareImageError';
+  readonly code: ShareImageErrorCode;
+
+  constructor(code: ShareImageErrorCode) {
+    super(`share image: ${code}`);
+    this.code = code;
+  }
+}
 
 interface Palette {
   readonly background: string;
@@ -27,8 +46,6 @@ export interface ShareLine {
   readonly text: string;
 }
 
-const unescape = (text: string): string => text.replace(/\\(.)/gu, '$1');
-
 /** The markdown's lines as the image draws them (header). Pure. */
 export function shareLines(markdown: string): ShareLine[] {
   return markdown
@@ -36,10 +53,10 @@ export function shareLines(markdown: string): ShareLine[] {
     .split('\n')
     .map((line): ShareLine => {
       if (line === '') return { kind: 'blank', text: '' };
-      if (line.startsWith('## ')) return { kind: 'heading', text: unescape(line.slice(3)) };
-      if (line.startsWith('# ')) return { kind: 'title', text: unescape(line.slice(2)) };
-      if (line.startsWith('- ')) return { kind: 'item', text: `• ${unescape(line.slice(2))}` };
-      return { kind: 'text', text: unescape(line) };
+      if (line.startsWith('## ')) return { kind: 'heading', text: unescapeMarkdown(line.slice(3)) };
+      if (line.startsWith('# ')) return { kind: 'title', text: unescapeMarkdown(line.slice(2)) };
+      if (line.startsWith('- ')) return { kind: 'item', text: `• ${unescapeMarkdown(line.slice(2))}` };
+      return { kind: 'text', text: unescapeMarkdown(line) };
     });
 }
 
@@ -83,17 +100,17 @@ function layout(context: CanvasRenderingContext2D, lines: readonly ShareLine[]):
   });
 }
 
-/** The markdown drawn as a PNG in `theme` (header); rejects when the page can give no canvas. */
+/** The markdown drawn as a PNG in `theme` (header); rejects (`ShareImageError`) when the page can draw none. */
 export async function sharePng(markdown: string, theme: ShareTheme, doc: Document = document): Promise<Blob> {
   const canvas = doc.createElement('canvas');
   const measure = canvas.getContext('2d');
-  if (measure === null) throw new Error('no canvas');
+  if (measure === null) throw new ShareImageError('no_canvas');
   const rows = layout(measure, shareLines(markdown));
   const height = 2 * PAD + rows.reduce((sum, { kind }) => sum + STYLES[kind].height, 0);
   canvas.width = WIDTH * SCALE;
   canvas.height = height * SCALE;
   const context = canvas.getContext('2d');
-  if (context === null) throw new Error('no canvas');
+  if (context === null) throw new ShareImageError('no_canvas');
   const palette = SHARE_PALETTES[theme];
   context.scale(SCALE, SCALE);
   context.fillStyle = palette.background;
@@ -110,7 +127,7 @@ export async function sharePng(markdown: string, theme: ShareTheme, doc: Documen
   }
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
-      if (blob === null) reject(new Error('no image'));
+      if (blob === null) reject(new ShareImageError('no_image'));
       else resolve(blob);
     }, 'image/png');
   });

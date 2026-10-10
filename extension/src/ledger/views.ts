@@ -4,11 +4,12 @@
  * beyond joins and sorting: the UI is a view of the ledger (sprint_4 header).
  *
  *  - `receiptPage`: the receipts graded in a range of instants, newest first (`computedAt`, then id), of the agents and
- *    grades asked, `limit` at a time, each with its claim (or, with none, the observation it is about). One read per agent through `[agent+computedMs]` (per agent
- *    and grade through `[agent+grade+computedMs]` when grades are asked), newest first, stops at `limit + 1` receipts,
- *    so a page reads as many rows however many the range holds; the next page resumes after the last receipt shown.
- *    The popup's range starts at local midnight; the timeline's spans its days. A grade is the computed one: an
- *    overridden receipt is found under the grade Attest gave it, and shows the override beside it.
+ *    grades asked, `limit` at a time, each with its claim (or, with none, the observation it is about). One read per
+ *    agent through `[agent+computedMs]` (per agent and grade through `[agent+grade+computedMs]` when grades are asked),
+ *    newest first, stops at `limit + 1` receipts, so a page reads as many rows however many the range holds; the next
+ *    page resumes after the last receipt shown. The popup's range starts at local midnight; the timeline's spans its
+ *    days. A grade is the computed one: an overridden receipt is found under the grade Attest gave it, and shows the
+ *    override beside it.
  *  - `coverageSummary`: the latest coverage ping of each observer and account, and each agent's last import.
  *  - `popupView`: the popup's reads in one transaction: today's page, the coverage summary, the health reports and the
  *    last batch instant.
@@ -85,10 +86,10 @@ type Prefix = readonly [AgentId] | readonly [AgentId, Grade];
 
 /**
  * The newest `limit` rows under `prefix` in the query's range and after its cursor, newest first, through
- * `[agent+computedMs]`, or `[agent+grade+computedMs]` when the query names grades. Rows come off disk unparsed: an index
- * lists a row only under a number `computedMs`, and the order reads only that and the id (the primary key); the strict
- * read of the rows shown comes after (`receiptPage`). Past a cursor, the rows at its instant up to it are read and
- * passed over: at most the receipts one batch graded.
+ * `[agent+computedMs]`, or `[agent+grade+computedMs]` when the query names grades. Rows come off disk unparsed: an
+ * index lists a row only under a number `computedMs`, and the order reads only that and the id (the primary key); the
+ * strict read of the rows shown comes after (`receiptPage`). Past a cursor, the rows at its instant up to it are read
+ * and passed over: at most the receipts one batch graded.
  */
 async function newestUnder(
   db: LedgerDb,
@@ -205,7 +206,9 @@ export async function grantList(db: LedgerDb): Promise<Grant[]> {
   return readRows('grants', Grant, await db.grants.toArray());
 }
 
-/** The coverage summary (the popup's header, sprint_4 4.2): what each observer last saw, and each agent's last import. */
+/**
+ * The coverage summary (the popup's header, sprint_4 4.2): what each observer last saw, and each agent's last import.
+ */
 export interface CoverageSummary {
   readonly coverage: readonly CoveragePing[];
   readonly imports: Partial<Record<AgentId, IsoTs>>;

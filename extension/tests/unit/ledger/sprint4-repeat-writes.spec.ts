@@ -25,11 +25,11 @@ import type { LedgerDb } from '../../../src/ledger/db';
 import { buildDigest, digestWeeks, getDigest, saveDigest } from '../../../src/ledger/digest';
 import { lastWeek } from '../../../src/ledger/digest-week';
 import { eachPage } from '../../../src/ledger/export-file';
-import { type GrantChoices, saveGrant } from '../../../src/ledger/grant-save';
+import { saveGrant } from '../../../src/ledger/grant-save';
 import { openLedger } from '../../../src/ledger/migrations';
 import { getGrant, getMeta, putGrant, putReceipt, upsertClaim } from '../../../src/ledger/repo';
 import { closeLedger, deleteLedger, getLedger } from '../../../src/ledger/shared';
-import { DigestRecord, IsoTs, SCHEMA_LIMITS } from '../../../src/ledger/types';
+import { DigestRecord, type GrantChoices, IsoTs, SCHEMA_LIMITS } from '../../../src/ledger/types';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { digestMarkdown } from '../../../src/ui/digest-share';
 import {

@@ -60,7 +60,7 @@ export function ActivityForm({ form, onChange, onPreview, onCancel, agentRef, te
           class="mt-1 w-full rounded-md border border-neutral-400 bg-white px-2 py-1.5 font-mono text-xs dark:border-neutral-500 dark:bg-neutral-800"
         />
         {form.error !== null && (
-          <p id={ERROR_ID} role="alert" class="text-red-800 dark:text-red-300">
+          <p id={ERROR_ID} role="alert" class="text-error-fg">
             {form.error}
           </p>
         )}

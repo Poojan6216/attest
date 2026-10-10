@@ -6,10 +6,10 @@
  *    replaces the PENDING row with the same id (idempotent).
  *  - `inputsHash(inputs)` (receipt-hash.ts): what replay proves; `grantHash` and `coverageHash` are its per-batch
  *    sub-hashes and `candidatesHash` its Merkle-style hash of the candidates' per-observation `refHash` (§3 v1.5).
- *  - `buildReceipt(parts)`: assembles a Receipt whose §8 invariants hold by construction: `state` is FINAL iff
- *    the parts say final, and then `finalAt = computedAt` (the evaluatedAt of the grading that met the FINAL
- *    condition), else the parts' `finalFrom` (v1.18); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no `override` and no
- *    `supersededBy` (state.ts adds those). Reasons are ordered per §15.
+ *  - `buildReceipt(parts)`: assembles a Receipt whose §8 invariants hold by construction: `state` is FINAL iff the
+ *    parts say final, and then `finalAt = computedAt` (the evaluatedAt of the grading that met the FINAL condition),
+ *    else the parts' `finalFrom` (v1.18); `attribution: 'likely'` iff the grade is UNASKED, which never has a claim; no
+ *    `override` and no `supersededBy` (state.ts adds those). Reasons are ordered per §15.
  *
  * PURE: no I/O, no clock, no logging (Hard Rule 4).
  */

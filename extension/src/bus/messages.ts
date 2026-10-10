@@ -44,10 +44,13 @@ import { CalendarSnapshot } from '../observers/gcal/snapshot';
 import {
   FlagSetMessage,
   GrantSaveMessage,
+  GrantSaveResult,
   LedgerWipeMessage,
   ReaderToggleMessage,
   ReceiptEventMessage,
+  ReceiptEventResult,
   RetentionSaveMessage,
+  SettingResult,
 } from './page-commands';
 
 export * from './page-commands';
@@ -324,6 +327,28 @@ export type BusMessage = z.infer<typeof BusMessage>;
 
 /** The member of the union with a given `type` (both `ui.result` shapes for `'ui.result'`). */
 export type BusMessageOf<T extends BusMessageType> = Extract<BusMessage, { type: T }>;
+
+/**
+ * Every command an extension page sends, with the schema of its answer (sprint_4 close, tech review TECH-8): the
+ * listener's page-only set and its check of each answer, the handlers' result types (./listen.ts) and the one sender
+ * (./send.ts) all read this table, so a command is added here once, beside its message in the union. Each answers
+ * `{ ok: false, code: 'failed' }` when it fails.
+ */
+export const PAGE_COMMAND_RESULTS = Object.freeze({
+  'claims.import': ClaimsImportResult,
+  'receipt.event': ReceiptEventResult,
+  'grant.save': GrantSaveResult,
+  'retention.save': SettingResult,
+  'reader.toggle': SettingResult,
+  'flag.set': SettingResult,
+  'ledger.wipe': SettingResult,
+} as const satisfies Partial<Record<BusMessageType, z.ZodType>>);
+
+export type PageCommand = keyof typeof PAGE_COMMAND_RESULTS;
+export type PageCommandResult<T extends PageCommand> = z.infer<(typeof PAGE_COMMAND_RESULTS)[T]>;
+
+/** Whether `type` is a command an extension page sends. */
+export const isPageCommand = (type: string): type is PageCommand => Object.hasOwn(PAGE_COMMAND_RESULTS, type);
 
 export function isBusMessageType(value: unknown): value is BusMessageType {
   return BusMessageType.safeParse(value).success;

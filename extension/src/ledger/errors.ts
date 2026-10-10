@@ -4,6 +4,7 @@
  * Messages and context never carry user content (Hard Rule 10): context holds table names, codes,
  * counts and Zod issue *paths* (field names), never field values.
  */
+import type { z } from 'zod';
 
 export const LEDGER_ERROR_CODES = [
   /** A write or query argument failed its Zod schema. */
@@ -47,4 +48,21 @@ export class LedgerError extends Error {
     this.code = code;
     this.context = context;
   }
+}
+
+/**
+ * Parses a row a ledger writer is about to store: the parsed row, or `LedgerError('invalid_input')` with `message`,
+ * `context` and the paths at fault (field names, never a value), never a raw ZodError (sprint_4 close, tech review
+ * TECH-11). A writer that calls it before it writes writes nothing when it throws.
+ */
+export function parseWrite<S extends z.ZodType>(
+  schema: S,
+  input: unknown,
+  message: string,
+  context: LedgerErrorContext = {},
+): z.output<S> {
+  const parsed = schema.safeParse(input);
+  if (parsed.success) return parsed.data;
+  const paths = parsed.error.issues.map((issue) => issue.path.map(String).join('.') || '(root)');
+  throw new LedgerError('invalid_input', message, { ...context, paths: paths.join('|') });
 }

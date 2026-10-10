@@ -1,30 +1,41 @@
 # Attest privacy policy
 
-Version 0.3. Effective 9 October 2026 (version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
+Version 0.4. Effective 9 October 2026 (version 0.3, of the same day, still listed three permissions and described the retention choice, deleting all data and the receipts' export as coming later, and said nothing of alerts, the weekly digest, shares, turning a reader off or Check Gmail for me; version 0.2, of 8 October 2026, said turning away detection off deletes every time away without saying that receipts already made keep their reasons; version 0.1, of the same day, said Attest stored no claims or receipts yet; version 0, of 1 October 2026, said later versions would read your AI agents' pages). Applies to Attest 0.0.1.
 
 ## The short version
 
-Nothing leaves your browser. Attest reads only pages you have open, keeps what it finds in your browser, and sends nothing to any server. It has no accounts, no ads and no analytics. It never clicks, types, sends or buys anything on any page.
+Nothing leaves your browser. Attest reads only pages you have open, plus, if you turn on Check Gmail for me, the one Gmail tab it opens in front of you. It keeps what it finds in your browser and sends nothing to any server. It has no accounts, no ads and no analytics. It never clicks, types, sends or buys anything on any page.
 
 ## Where things stand today
 
 Attest 0.0.1 is a pre-release. It reads your Gmail Sent folder, receipt emails you open, and Google Calendar, only in tabs you have open, and keeps the facts listed below in your browser. It does not read your AI agents' pages: Meta (Muse), OpenAI (ChatGPT) and Anthropic (Claude) do not allow collecting data from their sites by automated means, so Attest's readers for them are off, and stay off unless those companies permit them. Instead, you can paste an agent's own activity log into Attest's side panel: Attest reads the paste there, keeps only the actions it finds and the minutes the log names, and checks each action against your Gmail and Calendar. The text you paste is never stored.
 
-The rest of this policy describes how later versions will work, so you can judge the design before Attest reads anything. Any version that changes what is read, stored or sent updates this policy first.
+You see what it found in its popup, in a timeline in the side panel, in alerts and in a weekly digest, all described below. Any version that changes what is read, stored or sent updates this policy first.
 
-## What Attest reads (later versions)
+## What Attest reads
 
-Later versions read these pages, and only in tabs you have open yourself:
+Attest reads these pages, and only in tabs you have open yourself:
 
-- only if their makers permit it: the activity and chat pages of the AI agents you use (Meta Muse, ChatGPT and Dots, Claude), to see what the agent says it did
-- only if their makers permit it: those agents' settings pages, to see which apps and accounts you have connected to them
 - your Gmail Sent folder, to see which emails were actually sent
 - receipt emails you open in Gmail, to see purchases
 - Google Calendar, to see which events exist
 
-Attest only reads these pages. It never clicks, types, sends, cancels or submits anything on them. It does not run in incognito windows, so nothing you open there is read or stored. It reads only tabs you opened yourself, including one you have switched away from, never opens or reads a tab on its own, and never signs in for you. It does not use the Gmail API or any server-side access to your accounts.
+Later versions read these too, but only if their makers permit it:
 
-It never opens a page on its own, with one exception: an optional feature, off by default, that opens Gmail in a visible, pinned tab so that checks can run. It does nothing until you turn it on, and it is described here in full before it ships.
+- the activity and chat pages of the AI agents you use (Meta Muse, ChatGPT and Dots, Claude), to see what the agent says it did
+- those agents' settings pages, to see which apps and accounts you have connected to them
+
+Attest only reads these pages. It never clicks, types, sends, cancels or submits anything on them. It does not run in incognito windows, so nothing you open there is read or stored. It never signs in for you. It does not use the Gmail API or any server-side access to your accounts.
+
+You can turn the Gmail reader or the Calendar reader off in Attest's options page, under Adapters. A reader that is off does not run on that site at all: a page you open there is not read, and nothing from it is stored. Turning it on again reads the pages you open from then on. Your choice stays when you delete all Attest data.
+
+## Check Gmail for me
+
+Attest never opens a page on its own, with one exception, which is off unless you turn it on: Check Gmail for me, in the options page under Adapters.
+
+When it is on and the Gmail reader is on, Attest looks every 5 minutes for an email your agent says it sent that has waited 15 minutes for a check, with no Gmail tab showing Attest your Sent folder since then. When it finds one, it opens your Gmail Sent folder in one new tab, pinned and in front of you, in the Chrome window you are using. It never opens one in the background: it waits while another app is in front of Chrome, the screen is locked, or the window is minimised, and, if away detection is on, while Chrome says you are away. One tab serves every email waiting at that moment. After it, Attest opens no other tab for 30 minutes, and never opens a second one for the same email.
+
+Attest reads that tab as it reads any Gmail tab you open, and never clicks or types in it. The popup says why the tab opened and for which agent. Attest keeps when it opened the tab, until when it waits before it may open another, how many emails it was for and which agents. Turning the feature off stops it at once.
 
 ## What Attest stores
 
@@ -41,25 +52,41 @@ It also keeps:
 
 - the first 200 characters of what you asked an agent to do, so a receipt can show which request it belongs to
 - the receipts it works out: the grade and the reasons for it
-- the limits you set for each agent, and the names of the apps and accounts each agent's settings page shows as connected
+- a mark you put on a receipt (Verified or Not found), with the reason you write for it, and a mark you take back
+- the limits you set for each agent, whether you muted its alerts, and the names of the apps and accounts each agent's settings page shows as connected
 - when your Gmail and Calendar tabs were open and whether you were active in them, with a fingerprint of the account instead of its address, so a receipt can say UNVERIFIABLE when Attest could not see, and can flag sends made while you were away
 - whether each page reader is working
 - for an activity log you paste: the actions it reports, kept as above, and the minutes its entries name, which show when the agent was working; never the text you pasted
 - for each receipt, what it was checked with (which tabs had been seen and when, the limits you set for the agent, and the rules in force), so the receipt can be checked again later from your export
 - only if you turn on away detection in the options page: when each time you were away from this computer began and ended, as Chrome reports it, and nothing else
 - for each Google Calendar range you look at, every event shown: its title (at most 80 characters), its start and end, whether it is all day, its first guest's email address, and a one-way fingerprint of each guest's address (never the address), so Attest can later tell which events were created, changed or deleted; calendar names and Google's event ids are kept only as fingerprints
+- for each receipt that alerted you: which receipt, the agent, the grade, and when the alert was handled
+- the weekly digests described below
+- your choices: which readers are off, whether Check Gmail for me is on, and how long to keep your history
 
 It never stores email bodies, attachments, chat transcripts or full pages. The full list, table by table and field by field, is in docs/privacy-architecture.md.
 
+## Alerts
+
+When a receipt ends Not found, Unasked (an action no agent reported, likely one of them) or Over scope, Attest asks Chrome to show you a notification, once for that receipt. Chrome and your operating system show it on this device, and depending on your system's settings it can appear on your lock screen. So an alert names only the grade, the agent, and what was done and when, for example "Not found: Muse. Muse said it created a calendar event at 14:00. Attest found no sign of it." It never names who an email was to, an amount or a subject. When more than three arrive at once, you get one notice saying how many. Clicking an alert opens the receipt in the side panel. You can mute each agent's alerts in the options page, under Grants.
+
+## The weekly digest
+
+Every Monday at 09:00, Attest makes a summary of the week before and keeps it in your browser, so you can read earlier weeks again. A digest holds, for each agent, how many receipts ended in each grade; the receipts worth a look, each with its grade, agent, kind of action, time, amount, the domain of who it was to (company.com, never the address) and its subject hint, with any address in the hint written as its domain; the days Gmail or Calendar was not checked; whether each page reader was working; and the marks you put on that week's receipts, with your reasons. A notification says the digest is ready, with counts only. Digests are deleted with the rest of your history (see below).
+
+## Sharing a receipt or a week
+
+You can share a receipt (in the side panel) or a week's digest (on the digest page), as text or as an image. Attest shows you the whole share first and copies it to your clipboard only when you click Copy; it sends nothing anywhere, and a share goes only where you paste it yourself. A share names who an email was to by its domain only, never by address, and never includes what you asked an agent or why you marked a receipt. It keeps times, amounts and a subject's hint, with any address in the hint written as its domain. A hint is the first 80 characters of a subject as written, so it can still hold a name: check the preview before you copy.
+
 ## Where it is stored
 
-In your browser, on this computer: in the browser's own database (IndexedDB) and, for a few settings and the install id, in the extension's local storage. Attest does not copy it to other devices or to any server.
+In your browser, on this computer: in the browser's own database (IndexedDB), and the install id in the extension's local storage. While Chrome is open, its session memory also holds two small markers, which Chrome empties when it closes: whether away detection has started watching in this session, and which receipt a clicked alert asked the side panel to open. Attest does not copy anything to other devices or to any server.
 
 A later version adds an optional passphrase that encrypts the stored facts. It will be off by default.
 
 ## What leaves your browser
 
-Nothing. Attest makes no network requests. A test in the source code records every request the extension makes during a scripted session and fails the build if any host is contacted.
+Nothing. Attest makes no network requests. A test in the source code records every request the extension makes during a scripted session, every feature above included, and fails the build if any host is contacted. Alerts are shown by Chrome and your operating system on this device, and a share leaves your browser only if you paste it somewhere yourself.
 
 A later version may offer telemetry to help fix page readers that stop working. It will be off by default and will send nothing unless you turn it on. If you do, it sends one report a day made of counts and yes-or-no values (for example, how many receipts of each grade that day, or whether a page reader is working), the Attest version, the Chrome major version, the date and the random install id. It never sends email addresses, names, subjects, amounts, page content or anything you typed. The exact list of fields will be published in this policy before telemetry ships.
 
@@ -75,29 +102,35 @@ Its only use is the opt-in telemetry described above, which does not exist yet. 
 
 ## How long data is kept
 
-Attest deletes stored facts once they are 90 days old; the purge runs once a day. A later version lets you choose 30, 90 or 180 days, and deletes receipts on the same schedule once it makes them.
+You choose in the options page, under Privacy: 30, 90 or 180 days, and 90 until you change it. Once a day, Attest deletes the stored facts, receipts, alerts and weekly digests older than that.
 
 ## Deleting your data
 
-Uninstalling Attest removes everything it stored: Chrome deletes the extension's storage with it. Turning away detection off deletes every time away it kept. Receipts already made keep their reasons: an UNASKED receipt that counted a time away of yours still says so until that receipt is deleted with the rest of your history after 90 days. The options page already exports everything Attest keeps as one JSON file, so you can keep a copy. A later version adds a button there to delete all Attest data without uninstalling, and an export of the receipts as JSON or CSV.
+Delete all data, in the options page's Danger zone, deletes everything Attest keeps at once: every fact, receipt, mark, alert and digest, your settings and the install id, and it takes down any notification Attest is showing. Attest asks twice before it does. One thing stays, a choice and never data: a page reader you turned off stays off, so deleting never makes Attest read more. Attest then starts again, empty.
+
+Uninstalling Attest also removes everything it stored: Chrome deletes the extension's storage with it. Turning away detection off deletes every time away it kept. Receipts already made keep their reasons: an UNASKED receipt that counted a time away of yours still says so until that receipt is deleted with the rest of your history.
+
+Before you delete anything, the options page can export everything Attest keeps as one JSON file, and your receipts as one CSV file (one line per receipt, without the reasons you wrote for your marks and without subject hints), through your browser's own download.
 
 ## Permissions
 
 Attest 0.0.1 asks Chrome for:
 
-- storage, to keep settings and the install id
-- alarms, to schedule checks
+- storage, to keep the install id, and the two session markers above while Chrome is open
+- alarms, to schedule checks, the daily deletion of old history and the weekly digest
 - side panel, to show receipts beside the page you are on
+- scripting, to turn its own Gmail and Calendar readers on and off as you choose; it never puts any other code into a page
+- notifications, to show alerts and the weekly digest's notice
 
 Only if you turn on away detection in the options page, it then asks for one more:
 
 - idle, to know when you are away from this computer; turning the feature off gives it back
 
-It asks for access to two websites, to read them in tabs you open: mail.google.com and calendar.google.com. A later version adds an AI agent's site only if its maker permits Attest to read it, and nothing broader.
+It asks for access to two websites, to read them in tabs you open: mail.google.com and calendar.google.com. Check Gmail for me opens its tab without any further permission. A later version adds an AI agent's site only if its maker permits Attest to read it, and nothing broader.
 
 ## Logs
 
-Attest's diagnostic log, visible only in Chrome's developer tools on your computer, prints only what Attest itself wrote into its code: event names and status words from a fixed list, ids and content hashes Attest generated, small counts, versions and timestamps. Any other text is replaced by its length, and any long number by a placeholder, whatever it looks like. It is built never to print email addresses, names, subjects, tokens or page content, and the secret-seed test checks the log for exactly that on every build.
+Attest's diagnostic log, visible only in Chrome's developer tools on your computer, prints only what Attest itself wrote into its code: event names and status words from a fixed list, ids and content hashes Attest generated, small counts, versions and timestamps. Any other text is replaced by its length, and any long number by a placeholder, whatever it looks like. It is built never to print email addresses, names, subjects, tokens, the reasons you write or page content, and the secret-seed test checks the log for exactly that on every build.
 
 ## What Attest cannot tell you
 

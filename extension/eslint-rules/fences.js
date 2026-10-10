@@ -43,7 +43,7 @@ export const WORKER_SCOPES = [
   'src/ui/alert-text.ts',
   'src/ui/digest-labels.ts',
   'src/ui/receipt-labels.ts',
-  'src/ui/paste-labels.ts',
+  'src/ui/labels.ts',
   'src/ui/format.ts',
 ];
 

@@ -21,6 +21,8 @@ export const MONTHS_PER_YEAR = 12;
 export const HOURS_PER_HALF_DAY = 12;
 /** Positional notation: minor units are major × DECIMAL_RADIX^exponent; ISO fields are zero-padded decimals. */
 export const DECIMAL_RADIX = 10;
+/** The digits ISO 8601 writes a month, a day, an hour or a minute in: "07". */
+export const ISO_FIELD_DIGITS = 2;
 
 /**
  * ISO 4217 minor-unit exponents (docs/grading.md §11): "$1.50" is 150 minor units of USD, "¥980" is 980 of JPY,

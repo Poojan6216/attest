@@ -1,7 +1,7 @@
 import type { RefObject } from 'preact';
 
 import type { AgentId } from '../../../src/core/schema';
-import { AGENT_NAMES, AGENT_ORDER } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES, AGENT_ORDER } from '../../../src/ui/labels';
 
 export interface AgentPickerProps {
   readonly value: AgentId | null;

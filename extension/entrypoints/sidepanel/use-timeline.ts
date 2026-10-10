@@ -13,7 +13,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 
 import type { LedgerTable, ReceiptEventMessage, ReceiptEventResult } from '../../src/bus/messages';
 import { sendReceiptEvent } from '../../src/bus/send';
-import { TIMELINE_PAGE_SIZE } from '../../src/config';
+import { TIMELINE_DEFAULT_DAYS, TIMELINE_PAGE_SIZE } from '../../src/config';
+import { localDate } from '../../src/ledger/digest-week';
 import { AgentId } from '../../src/ledger/types';
 import { log } from '../../src/log';
 import { serial } from '../../src/ui/serial';
@@ -63,20 +64,13 @@ export const LIST_TABLES: readonly LedgerTable[] = ['receipts', 'claims', 'reque
 /** The tables the side panel shows something of: the rows', and the overview's alone. */
 export const TIMELINE_TABLES: readonly LedgerTable[] = [...LIST_TABLES, 'coverage', 'adapterHealth', 'meta'];
 
-/** The days a new timeline shows: the last 30, today included. */
-export const DEFAULT_DAYS = 30;
+const dateOf = (ms: number): string => localDate(new Date(ms));
 
-const dateOf = (ms: number): string => {
-  const day = new Date(ms);
-  const two = (value: number) => String(value).padStart(2, '0');
-  return `${String(day.getFullYear())}-${two(day.getMonth() + 1)}-${two(day.getDate())}`;
-};
-
-/** Every agent and grade, over the last DEFAULT_DAYS local days ending today. */
+/** Every agent and grade, over the last TIMELINE_DEFAULT_DAYS local days ending today. */
 export function defaultFilters(now: Date): TimelineFilters {
   const today = localDayStartMs(now.getTime());
   const from = new Date(today);
-  from.setDate(from.getDate() - (DEFAULT_DAYS - 1));
+  from.setDate(from.getDate() - (TIMELINE_DEFAULT_DAYS - 1));
   return { agents: AgentId.options, from: dateOf(from.getTime()), to: dateOf(today) };
 }
 

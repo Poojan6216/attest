@@ -29,7 +29,7 @@ export function GrantTextField({ id, label, hint, value, error, onInput }: Grant
         {hint}
       </p>
       {error === undefined ? null : (
-        <p id={`${id}-error`} role="alert" class="text-xs text-red-700 dark:text-red-300">
+        <p id={`${id}-error`} role="alert" class="text-xs text-error-fg">
           {error}
         </p>
       )}

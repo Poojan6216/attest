@@ -2,14 +2,14 @@
  * The commands an extension page sends the service worker for a change a person made (sprint_4): a mark on a receipt
  * (`receipt.event`), an agent's grant (`grant.save`), the retention window (`retention.save`), a page reader on or off
  * (`reader.toggle`), a feature flag on or off (`flag.set`), and deleting every Attest datum (`ledger.wipe`). Pages read
- * the ledger but never write it: the
- * service worker, its one writer, applies each and answers with the command's result. Only an extension page may send
- * one (listen.ts `EXTENSION_PAGE_ONLY`); src/bus/messages.ts puts each in the bus union and re-exports this module.
+ * the ledger but never write it: the service worker, its one writer, applies each and answers with the command's
+ * result. Only an extension page may send one (listen.ts `EXTENSION_PAGE_ONLY`); src/bus/messages.ts puts each in the
+ * bus union and re-exports this module.
  */
 import { z } from 'zod';
 
 import { READERS, RETENTION_CHOICES, SETTABLE_FLAGS } from '../config';
-import { Grant, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
+import { GrantChoices, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
 
 /**
  * A person's override of one receipt's grade, or its revert (sprint_4 4.3; src/ledger/user-events.ts): sent by an
@@ -30,7 +30,10 @@ export const ReceiptEventMessage = z.strictObject({
   ]),
 });
 
-/** Why a receipt event was not saved: none such, the state machine refused it, its evidence is another claim's, or it failed. */
+/**
+ * Why a receipt event was not saved: none such, the state machine refused it, its evidence is another claim's, or it
+ * failed.
+ */
 export const ReceiptEventCode = z.enum(['not_found', 'refused', 'evidence_taken', 'failed']);
 
 /** The answer to a `receipt.event`: saved, or why not. */
@@ -39,27 +42,8 @@ export const ReceiptEventResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(false), code: ReceiptEventCode }),
 ]);
 
-const { agent, allowedTypes, counterpartyAllowlist, spendCeilingCents, spendCurrency, declaredScopes } =
-  Grant.shape;
-
-/**
- * What a person chooses for one agent (sprint_4 4.4): the `Grant` fields they declare and its rule across fields (a
- * ceiling needs its currency). Never what Attest observed (`observedScopes`, `accounts`) nor the stamp, which the
- * service worker keeps from the stored grant and stamps itself (src/ledger/grant-save.ts).
- */
-export const GrantChoices = z
-  .strictObject({
-    agent,
-    allowedTypes,
-    counterpartyAllowlist,
-    spendCeilingCents,
-    spendCurrency,
-    declaredScopes,
-  })
-  .refine((choices) => choices.spendCeilingCents === null || choices.spendCurrency !== undefined, {
-    path: ['spendCurrency'],
-    message: 'required when spendCeilingCents is set',
-  });
+/** What a person chooses for one agent: the core schema (src/core/schema.ts), the one the ledger saves. */
+export { GrantChoices };
 
 /**
  * A person's grant for one agent, and whether its alerts are muted (sprint_4 4.4): sent by an extension page only (the
@@ -71,10 +55,13 @@ export const GrantSaveMessage = z.strictObject({
   alertsMuted: z.boolean(),
 });
 
-/** The answer to a `grant.save`: saved, or refused (`invalid_input`) or failed. */
+/**
+ * The answer to a `grant.save`: saved, or failed. A malformed one is never answered (the bus drops it,
+ * src/bus/listen.ts), and the options page checks every domain before it sends (sprint_4 close, tech review TECH-9).
+ */
 export const GrantSaveResult = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true) }),
-  z.strictObject({ ok: z.literal(false), code: z.enum(['invalid_input', 'failed']) }),
+  z.strictObject({ ok: z.literal(false), code: z.literal('failed') }),
 ]);
 
 /** The retention window a person chose (sprint_4 4.5): one of `RETENTION_CHOICES`, in days. */
@@ -117,7 +104,9 @@ export const FlagSetMessage = z.strictObject({
 
 /**
  * Delete all Attest data (sprint_4 4.5, the options page's Danger zone): the service worker deletes the ledger's
- * database and clears `chrome.storage.local` (src/background/wipe.ts). The page asks twice before it sends this.
+ * database, clears `chrome.storage.local`, `chrome.storage.session` and Attest's notifications, and keeps only which
+ * readers the person turned off, a choice and never data (src/background/settings.ts `onLedgerWipe`; security review
+ * SEC-6). The page asks twice before it sends this.
  */
 export const LedgerWipeMessage = z.strictObject({ type: z.literal('ledger.wipe') });
 
@@ -130,7 +119,6 @@ export const SettingResult = z.discriminatedUnion('ok', [
 export type ReceiptEventMessage = z.infer<typeof ReceiptEventMessage>;
 export type ReceiptEventCode = z.infer<typeof ReceiptEventCode>;
 export type ReceiptEventResult = z.infer<typeof ReceiptEventResult>;
-export type GrantChoices = z.infer<typeof GrantChoices>;
 export type GrantSaveMessage = z.infer<typeof GrantSaveMessage>;
 export type GrantSaveResult = z.infer<typeof GrantSaveResult>;
 export type RetentionDays = z.infer<typeof RetentionDays>;

@@ -3,7 +3,7 @@ import { AgentBadge } from '../../../src/ui/AgentBadge';
 import { instantLabel } from '../../../src/ui/digest-labels';
 import { formatAmount } from '../../../src/ui/format';
 import { GradeChip } from '../../../src/ui/GradeChip';
-import { claimTypeLabel } from '../../../src/ui/paste-labels';
+import { claimTypeLabel } from '../../../src/ui/labels';
 import { gradeLabel } from '../../../src/ui/receipt-labels';
 
 export interface NotableItemProps {

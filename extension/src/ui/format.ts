@@ -4,11 +4,8 @@
  * the day when it is not today and the year when it is not this year. An amount is written in its currency with the
  * currency's own minor units.
  */
+import { MONTHS, twoDigits as two } from '../core/calendar-words';
 import { CURRENCY_MINOR_UNITS } from '../core/units';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-const two = (value: number): string => String(value).padStart(2, '0');
 
 /** "14:10" today; "8 Oct, 14:10" another day this year; "8 Oct 2025, 14:10" another year. Invalid text as given. */
 export function clockTime(iso: string, nowMs: number): string {

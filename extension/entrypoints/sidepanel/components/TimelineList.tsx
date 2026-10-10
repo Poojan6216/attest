@@ -26,7 +26,7 @@ export function TimelineList({ list, nowMs, lastBatchMs, onOpen, onMore, returnT
   if (list.status === 'loading') return <Skeleton rows={5} label="Loading the timeline" />;
   if (list.status === 'failed') {
     return (
-      <p role="alert" class="text-grade-not-found-fg">
+      <p role="alert" class="text-error-fg">
         Attest could not read its records. Close the panel and open it again.
       </p>
     );
@@ -59,7 +59,7 @@ export function TimelineList({ list, nowMs, lastBatchMs, onOpen, onMore, returnT
         </div>
       )}
       {list.more === 'failed' ? (
-        <p role="alert" class="text-xs text-grade-not-found-fg">
+        <p role="alert" class="text-xs text-error-fg">
           Could not read older receipts. Try again.
         </p>
       ) : null}

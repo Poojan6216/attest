@@ -134,6 +134,16 @@ describe('analyse', () => {
     expect(report.attributed).toEqual([]);
     expect(report.violations).toEqual([]);
   });
+
+  it('knows a routed address NetLog logs with its fragment, and still catches any other address on that host', () => {
+    const routed = { ...options, routedFixtureUrls: new Set(['https://mail.google.com/mail/u/0/']) };
+    const opened = (url: string) => analyse([{ url, method: 'GET', initiator: 'not an origin' }], [], routed);
+    expect(opened('https://mail.google.com/mail/u/0/#sent').unknownBrowserHosts).toEqual([]);
+    expect(opened('https://mail.google.com/mail/u/1/#sent').unknownBrowserHosts).toEqual(['mail.google.com']);
+    expect(opened('https://mail.google.com/mail/u/0/?ui=2#sent').unknownBrowserHosts).toEqual([
+      'mail.google.com',
+    ]);
+  });
 });
 
 describe('analyse: browser background traffic and the allowlist', () => {

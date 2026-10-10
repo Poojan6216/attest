@@ -49,7 +49,7 @@ export function CeilingField({ id, ceiling, currency, error, onChange }: Ceiling
         A whole number, such as 50. Leave it blank for no ceiling.
       </p>
       {error === undefined ? null : (
-        <p id={`${id}-error`} role="alert" class="text-xs text-red-700 dark:text-red-300">
+        <p id={`${id}-error`} role="alert" class="text-xs text-error-fg">
           {error}
         </p>
       )}

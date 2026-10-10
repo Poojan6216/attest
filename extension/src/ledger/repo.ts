@@ -33,7 +33,7 @@ import { observationIntegrityProblems } from '../core/redact';
 import { LAST_EVALUATED_AT } from './batch-instant';
 import { noteStoredInstant } from './clock-high-water';
 import { readRow, readRows, type LedgerDb } from './db';
-import { LedgerError } from './errors';
+import { LedgerError, parseWrite } from './errors';
 import {
   accountKeyOf,
   toCoverageRow,
@@ -80,10 +80,7 @@ export interface WriteResult {
 const LocalDate = z.iso.date();
 
 function parseInput<S extends z.ZodType>(table: LedgerTableName, schema: S, input: unknown): z.output<S> {
-  const parsed = schema.safeParse(input);
-  if (parsed.success) return parsed.data;
-  const paths = parsed.error.issues.map((issue) => issue.path.map(String).join('.') || '(root)');
-  throw new LedgerError('invalid_input', `Invalid ${table} input`, { table, paths: paths.join('|') });
+  return parseWrite(schema, input, `Invalid ${table} input`, { table });
 }
 
 function agentDateKey(table: LedgerTableName, agent: AgentId, date: string): [AgentId, string] {

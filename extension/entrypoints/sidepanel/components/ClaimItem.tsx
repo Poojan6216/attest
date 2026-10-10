@@ -1,5 +1,5 @@
 import type { Claim } from '../../../src/core/schema';
-import { claimTypeLabel, claimWhat, claimWhen } from '../../../src/ui/paste-labels';
+import { claimTypeLabel, claimWhat, claimWhen } from '../../../src/ui/labels';
 
 export interface ClaimItemProps {
   readonly claim: Claim;

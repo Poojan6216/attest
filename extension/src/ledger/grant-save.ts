@@ -18,10 +18,7 @@ import { lastBatchMs, stampEventAt } from './batch-instant';
 import { noteStoredInstant } from './clock-high-water';
 import type { LedgerDb } from './db';
 import { getGrant, putGrant, setMeta } from './repo';
-import { type Grant, IsoTs } from './types';
-
-/** What a person chooses for one agent: a grant without what Attest observed and without its stamp. */
-export type GrantChoices = Omit<Grant, 'observedScopes' | 'accounts' | 'updatedAt'>;
+import { type Grant, type GrantChoices, IsoTs } from './types';
 
 /** The grant `choices` make at `at`, keeping what `stored` observed (each field taken by name, nothing else). */
 function grantOf(choices: GrantChoices, stored: Grant | undefined, at: IsoTs): Grant {

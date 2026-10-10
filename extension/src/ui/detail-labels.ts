@@ -8,7 +8,7 @@ import { MATCH_FEATURES } from '../core/schema-checks';
 import { reasonText } from '../core/reason-text';
 import type { Claim, Coverage, Receipt, ReceiptInputs } from '../ledger/types';
 import { clockTime, formatAmount } from './format';
-import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
+import { AGENT_NAMES, claimTypeLabel } from './labels';
 import { gradeLabel, sourceName } from './receipt-labels';
 
 /** One labelled value of the detail. */

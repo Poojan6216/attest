@@ -9,7 +9,7 @@ import { reasonText } from '../core/reason-text';
 import type { Reason, Receipt } from '../ledger/types';
 import type { ReceiptItem } from '../ledger/views';
 import { clockTime } from './format';
-import { claimTypeLabel, claimWhat, count } from './paste-labels';
+import { claimTypeLabel, claimWhat, count } from './labels';
 import { evidenceSummary, gradeLabel } from './receipt-labels';
 
 /** The row's one line: the claim as extracted, what an UNASKED receipt is about, or a scope receipt's finding. */

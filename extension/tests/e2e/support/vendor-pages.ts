@@ -100,6 +100,21 @@ export async function openVendorPage(
   return page;
 }
 
+/**
+ * The Gmail Sent page with its time cells gone, at an address of its own: a selector that broke on a real Sent list,
+ * which the Gmail Sent reader reports DEGRADED (`selector.missing.time`).
+ */
+export function brokenSentList(): { url: string; html: string } {
+  const page = vendorFixture('gmail', 'synthetic-sent-page-1.html');
+  const html = readFileSync(page.htmlPath, 'utf8').replace(
+    /<span title="[^"]*" aria-label="[^"]*"><span>[^<]*<\/span><\/span>/gu,
+    '',
+  );
+  const url = new URL(fixtureUrl(page));
+  url.searchParams.set('fixture', 'broken-sent-page-1');
+  return { url: url.href, html };
+}
+
 /** The ledger export, asked for from an extension page and parsed with the ledger's own schema. */
 export async function readLedger(extensionPage: Page): Promise<LedgerExport> {
   const answer: unknown = await extensionPage.evaluate(() =>

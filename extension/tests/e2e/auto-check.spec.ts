@@ -5,75 +5,34 @@
  * PENDING with no Gmail coverage. The service worker's clock is moved past the 15 minutes such a claim waits, and the
  * grace alarm fired: with Check Gmail for me off, no tab opens, then or later. Turned on in the options page, the next
  * alarm opens exactly one tab, pinned and active, on the Gmail Sent folder (served here by the demo's Sent page, which
- * the Gmail reader then reads), and the popup says why; another alarm in the same 30-minute window opens none. The
- * built manifest asks for no `tabs` permission. No console error on the options page or the popup.
+ * the Gmail reader then reads, with no input event on the tab), and the popup says why; another alarm in the same
+ * 30-minute window opens none. The popup's row says the receipt is checking: final from a time within its grace, then
+ * waiting for a check after it. Each alarm's check is known done when its upkeep sets the cleared purge alarm again.
+ * The built manifest asks for no `tabs` permission. No console error on the options page or the popup.
  */
 import { readFileSync } from 'node:fs';
 
-import { type BrowserContext, expect, type Page, test, type Worker } from '@playwright/test';
+import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { ALARM_NAMES, AUTO_CHECK_URL, GRADE_ALARM_PERIOD_MINUTES } from '../../src/config';
+import { AUTO_CHECK_URL } from '../../src/config';
+import {
+  checkDone,
+  gmailTabs,
+  graceAlarmAt,
+  loadUnderGuard,
+  oneSentTab,
+  turnOnAutoCheck,
+} from './support/auto-check';
 import { demoSentPage } from './support/demo';
+import { installRecorder, recorded } from './support/input-recorder';
 import { datedClock, pasteActivity } from './support/paste';
 import { type VendorSession, withVendorSession } from './support/session';
-import {
-  FIXTURE_TIME_ZONE,
-  readLedger,
-  requestUrl,
-  vendorFixture,
-  waitForLedger,
-} from './support/vendor-pages';
+import { FIXTURE_TIME_ZONE, readLedger, requestUrl, vendorFixture } from './support/vendor-pages';
 
 declare const chrome: WxtBrowser;
 
 const MINUTE = 60_000;
-
-/**
- * Moves the worker's clock `minutes` past the real one (the batches and the auto-check read `Date.now`) and fires the
- * grace alarm at once, keeping its period; resolves the worker's now.
- */
-async function graceAlarmAt(worker: Worker, minutes: number): Promise<number> {
-  return worker.evaluate(
-    ({ ahead, name, period }) => {
-      const kept: unknown = Reflect.get(globalThis, 'attestRealNow');
-      const real = typeof kept === 'function' ? (kept as () => number) : Date.now.bind(Date);
-      Reflect.set(globalThis, 'attestRealNow', real);
-      Reflect.set(Date, 'now', () => real() + ahead * 60_000);
-      void chrome.alarms.create(name, { when: real() + 300, periodInMinutes: period });
-      return real() + ahead * 60_000;
-    },
-    { ahead: minutes, name: ALARM_NAMES.GRADE, period: GRADE_ALARM_PERIOD_MINUTES },
-  );
-}
-
-/** Waits until a grading batch at or after `atMs` (the worker's clock) is recorded, and the auto-check after it. */
-async function batchDone(ledgerPage: Page, atMs: number): Promise<void> {
-  await waitForLedger(ledgerPage, (ledger) =>
-    ledger.tables.meta.some(
-      ({ key, value }) => key === 'lastEvaluatedAt' && typeof value === 'string' && Date.parse(value) >= atMs,
-    ),
-  );
-  // The auto-check runs right after the batch, in the same alarm: one storage read when off, one ledger read when on.
-  await ledgerPage.waitForTimeout(3_000);
-}
-
-interface GmailTab {
-  readonly url: string;
-  readonly pinned: boolean;
-  readonly active: boolean;
-}
-
-/** The Gmail tabs open, read by the worker: its host permission shows their address, with no `tabs` permission. */
-async function gmailTabs(worker: Worker): Promise<GmailTab[]> {
-  return worker.evaluate(async () =>
-    (await chrome.tabs.query({ url: 'https://mail.google.com/*' })).map((tab) => ({
-      url: tab.url ?? tab.pendingUrl ?? '',
-      pinned: tab.pinned,
-      active: tab.active,
-    })),
-  );
-}
 
 /** The pages of the context on a Gmail address. */
 const gmailPages = (context: BrowserContext): Page[] =>
@@ -104,6 +63,10 @@ async function pendingEmailClaim(session: VendorSession): Promise<() => Promise<
   expect(await pasteActivity(panel, 'Muse', log)).toBe('Imported 1 claim.');
   const states = async () => (await readLedger(session.ledgerPage)).tables.receipts.map((r) => r.state);
   expect(await states()).toEqual(['PENDING']);
+  // Within its grace, the popup's row says from when the receipt is final (QA review GAP 11).
+  const popup = await session.extension.openExtensionPage('popup.html');
+  await expect(popup.locator('li[data-receipt]').first()).toContainText('Checking — final from');
+  await popup.close();
   return states;
 }
 
@@ -111,31 +74,8 @@ async function pendingEmailClaim(session: VendorSession): Promise<() => Promise<
 async function turnOn(session: VendorSession): Promise<string[]> {
   const options = await session.extension.openExtensionPage('options.html');
   const errors = errorsOf(options);
-  await options.getByRole('button', { name: 'Turn on checking Gmail' }).click();
-  await expect(options.getByRole('group', { name: 'Check Gmail for me' }).getByRole('status')).toHaveText(
-    'Checking Gmail for you is on.',
-  );
+  await turnOnAutoCheck(options);
   return errors;
-}
-
-/**
- * The tab was created before the route guard could attach to it, so its first load fails at the session's dead
- * proxy, and its page shows Chrome's error page (or still the Gmail address, while it fails); loaded again under the
- * guard, it shows the demo's Sent page, which the Gmail reader reads.
- */
-async function loadUnderGuard(session: VendorSession): Promise<void> {
-  const tabPages = (): Page[] =>
-    session.extension.context
-      .pages()
-      .filter(
-        (page) =>
-          page.url().startsWith('chrome-error://') || page.url().startsWith('https://mail.google.com/'),
-      );
-  await expect.poll(() => tabPages().length, { timeout: 30_000 }).toBe(1);
-  await tabPages()[0]?.goto(AUTO_CHECK_URL);
-  await waitForLedger(session.ledgerPage, (ledger) =>
-    ledger.tables.coverage.some(({ source }) => source === 'gmail.sent'),
-  );
 }
 
 /** Opens the popup on the worker's clock (`nowMs`), checks it says why the tab opened; resolves its console errors. */
@@ -147,6 +87,10 @@ async function popupSaysWhy(session: VendorSession, nowMs: number): Promise<stri
   await expect(popup.getByRole('status').filter({ hasText: 'Gmail Sent folder' })).toContainText(
     'Attest opened your Gmail Sent folder in a pinned tab, to check an email Muse says it sent',
   );
+  // Past its grace, with no Gmail check after it yet, the row says the receipt waits for one (QA review GAP 11).
+  await expect(popup.locator('li[data-receipt]').first()).toContainText(
+    'Checking — waiting for a check after',
+  );
   return errors;
 }
 
@@ -155,13 +99,15 @@ test('off, no tab ever opens; on, exactly one pinned, visible Gmail Sent tab a w
   await withVendorSession(async (session) => {
     const { context } = session.extension;
     const worker = await session.extension.serviceWorker();
+    await installRecorder(context);
     const permissions = await worker.evaluate(() => chrome.runtime.getManifest().permissions ?? []);
     expect(permissions).not.toContain('tabs');
     const states = await pendingEmailClaim(session);
 
     // Off: a claim due and unseen opens nothing, at its due time or later.
     for (const minutes of [16, 40]) {
-      await batchDone(session.ledgerPage, await graceAlarmAt(worker, minutes));
+      await graceAlarmAt(worker, minutes);
+      await checkDone(worker);
       expect(await gmailTabs(worker)).toEqual([]);
       expect(gmailPages(context)).toEqual([]);
     }
@@ -170,16 +116,16 @@ test('off, no tab ever opens; on, exactly one pinned, visible Gmail Sent tab a w
     // On: the next alarm opens exactly one tab, pinned and active, on the Sent folder.
     const optionErrors = await turnOn(session);
     const openedAt = await graceAlarmAt(worker, 50);
-    await expect
-      .poll(() => gmailTabs(worker), { timeout: 60_000 })
-      .toEqual([{ url: AUTO_CHECK_URL, pinned: true, active: true }]);
+    await oneSentTab(worker);
     expect(await states()).toEqual(['PENDING']);
     const at = await autoCheckAt(session.ledgerPage);
     expect(Date.parse(at ?? '')).toBeGreaterThanOrEqual(openedAt);
-    await loadUnderGuard(session);
+    // The reader read the tab Attest opened, and did nothing on it (Hard Rule 3; QA review GAP 10).
+    expect(await recorded(await loadUnderGuard(context, session.ledgerPage))).toEqual([]);
 
     // The same window: another alarm opens nothing more.
-    await batchDone(session.ledgerPage, await graceAlarmAt(worker, 60));
+    await graceAlarmAt(worker, 60);
+    await checkDone(worker);
     expect(await gmailTabs(worker)).toHaveLength(1);
     expect(gmailPages(context)).toHaveLength(1);
     expect(await autoCheckAt(session.ledgerPage)).toBe(at);

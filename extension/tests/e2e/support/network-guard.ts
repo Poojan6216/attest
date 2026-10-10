@@ -102,11 +102,22 @@ function parse(url: string): URL | null {
   }
 }
 
-function isExempt(url: URL, options: AnalyseOptions): boolean {
+/**
+ * The address a request asks the server for: a URL without its fragment, which never leaves the browser. NetLog keeps
+ * the fragment on a navigation (a tab the extension opens at `…/mail/u/0/#sent`, sprint_4 4.9), and a route matches
+ * the request without it; both sides are compared without it (sprint_4 close), so no other address is exempted.
+ */
+function requestTarget(url: URL): string {
+  const target = new URL(url.href);
+  target.hash = '';
+  return target.href;
+}
+
+function isExempt(url: URL, options: AnalyseOptions, routedTargets: ReadonlySet<string>): boolean {
   return (
     LOCAL_SCHEMES.has(url.protocol) ||
     url.origin === options.fixtureOrigin ||
-    (options.routedFixtureUrls?.has(url.href) ?? false)
+    routedTargets.has(requestTarget(url))
   );
 }
 
@@ -155,10 +166,16 @@ export function analyse(
   const attributed: AttributedRequest[] = [];
   const unknownBrowserHosts = new Set<string>();
   const browserInternalHosts = new Set<string>();
+  const routedTargets = new Set(
+    [...(options.routedFixtureUrls ?? [])].flatMap((routed) => {
+      const url = parse(routed);
+      return url === null ? [] : [requestTarget(url)];
+    }),
+  );
 
   for (const request of netLog) {
     const url = parse(request.url);
-    if (url === null || isExempt(url, options)) continue;
+    if (url === null || isExempt(url, options, routedTargets)) continue;
     if (isBrowserInitiated(request)) {
       if (CHROMIUM_BACKGROUND_HOSTS.has(url.hostname)) browserInternalHosts.add(url.hostname);
       else unknownBrowserHosts.add(url.hostname);
@@ -168,7 +185,7 @@ export function analyse(
   }
   for (const record of routeRecords) {
     const url = parse(record.url);
-    if (url !== null && isExempt(url, options)) continue;
+    if (url !== null && isExempt(url, options, routedTargets)) continue;
     attributed.push({
       url: record.url,
       host: url?.hostname ?? record.url,

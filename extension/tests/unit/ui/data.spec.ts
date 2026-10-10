@@ -13,8 +13,7 @@ import { DB_NAME, POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../../../src/c
 import { closeLedger, getLedger, putAdapterHealth, putGrant, putReceipt } from '../../../src/ledger/repo';
 import type { AgentId, Grade, ReceiptInput } from '../../../src/ledger/types';
 import {
-  loadCoverage,
-  loadGrants,
+  loadGrantSettings,
   loadHealth,
   loadPopup,
   loadReceipt,
@@ -157,7 +156,7 @@ describe('the timeline filters', () => {
 });
 
 describe('the detail and the small tables', () => {
-  it('reads a receipt, the coverage summary, the health reports and the grants', async () => {
+  it('reads a receipt, the health reports and the grants', async () => {
     await store([receiptAt(1, 'muse', Date.parse('2026-10-01T12:00:00Z'))]);
     const db = await getLedger();
     await putGrant(db, makeGrant({ agent: 'claude' }));
@@ -167,11 +166,10 @@ describe('the detail and the small tables', () => {
     );
     expect((await loadReceipt(ulid(1)))?.receipt.id).toBe(ulid(1));
     expect(await loadReceipt(ulid(2))).toBeUndefined();
-    expect(await loadCoverage()).toEqual({ coverage: [], imports: {} });
     expect((await loadHealth()).map(({ adapterId, status }) => [adapterId, status])).toEqual([
       ['gmail', 'DEGRADED'],
     ]);
-    expect((await loadGrants()).map(({ agent }) => agent)).toEqual(['claude']);
+    expect((await loadGrantSettings()).grants.map(({ agent }) => agent)).toEqual(['claude']);
   });
 });
 

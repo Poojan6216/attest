@@ -1,6 +1,6 @@
 import type { PastedEntry } from '../../../src/adapters/paste';
 import type { AgentId } from '../../../src/core/schema';
-import { excerpt, keptTime, skippedReason } from '../../../src/ui/paste-labels';
+import { excerpt, keptTime, skippedReason } from '../../../src/ui/labels';
 
 export interface SkippedItemProps {
   readonly entry: PastedEntry & { readonly outcome: Exclude<PastedEntry['outcome'], 'claim'> };

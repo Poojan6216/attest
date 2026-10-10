@@ -77,7 +77,7 @@ export function PopupLinks() {
         Open settings
       </Button>
       {failed ? (
-        <p role="alert" class="w-full text-xs text-grade-not-found-fg">
+        <p role="alert" class="w-full text-xs text-error-fg">
           Chrome did not open it. Try again.
         </p>
       ) : null}

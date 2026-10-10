@@ -126,9 +126,17 @@ describe('sharePng', () => {
       expect([canvas.width, canvas.height]).toEqual([2 * CARD, 2 * height]);
     },
   );
+});
 
-  it('refuses a page with no canvas, and a canvas that gives no image', async () => {
-    await expect(sharePng(MARKDOWN, 'light', standIn({ context: false }).doc)).rejects.toThrow('no canvas');
-    await expect(sharePng(MARKDOWN, 'dark', standIn({ image: false }).doc)).rejects.toThrow('no image');
+describe('sharePng, where it cannot draw', () => {
+  it('refuses a page with no canvas, and a canvas that gives no image, each with a typed error', async () => {
+    await expect(sharePng(MARKDOWN, 'light', standIn({ context: false }).doc)).rejects.toMatchObject({
+      name: 'ShareImageError',
+      code: 'no_canvas',
+    });
+    await expect(sharePng(MARKDOWN, 'dark', standIn({ image: false }).doc)).rejects.toMatchObject({
+      name: 'ShareImageError',
+      code: 'no_image',
+    });
   });
 });

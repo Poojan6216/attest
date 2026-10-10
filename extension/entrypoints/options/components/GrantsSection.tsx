@@ -23,7 +23,7 @@ export function GrantsSection({ sources = LIVE_GRANTS }: GrantsSectionProps) {
       </p>
       {state.status === 'loading' ? <Skeleton rows={4} label="Loading the grants" /> : null}
       {state.status === 'failed' ? (
-        <p role="alert" class="text-red-700 dark:text-red-300">
+        <p role="alert" class="text-error-fg">
           Attest could not read the grants. Reload the page.
         </p>
       ) : null}

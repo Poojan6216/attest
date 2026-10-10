@@ -18,13 +18,14 @@
  * except `no_handler`, which is expected wherever several contexts listen (every open extension page sees
  * every message) and is logged at debug.
  *
- * A handled message is always answered (classic protocol: return true, call `sendResponse` once the
- * handler settles), so the sender never sees a closed port for a message that was processed.
- * `ui.query` handlers answer with a `ui.result`, each page command's handler with its own result (`ClaimsImportResult`,
- * `ReceiptEventResult`, `GrantSaveResult`, `SettingResult`), and the handlers of acknowledged messages (observer
- * health, rows, coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is validated before it leaves, and
- * a handler that throws or answers badly is answered `handler_failed` / `{ ok: false, code: 'failed' }` and logged
- * at error (fail loud). Every other handler is acknowledged with `undefined`. The listener never throws.
+ * A handled message is always answered (classic protocol: return true, call `sendResponse` once the handler settles),
+ * so the sender never sees a closed port for a message that was processed. `ui.query` handlers answer with a
+ * `ui.result`, each page command's handler with its own result (messages.ts `PAGE_COMMAND_RESULTS`:
+ * `ClaimsImportResult`, `ReceiptEventResult`, `GrantSaveResult`, `SettingResult`), and the handlers of acknowledged
+ * messages (observer health, rows, coverage and snapshots: messages.ts ACKED_TYPES) with a `BusAck`; each answer is
+ * validated before it leaves, and a handler that throws or answers badly is answered `handler_failed` / `{ ok: false,
+ * code: 'failed' }` and logged at error (fail loud). Every other handler is acknowledged with `undefined`. The listener
+ * never throws.
  */
 import { type Browser, browser } from 'wxt/browser';
 
@@ -36,12 +37,12 @@ import {
   BusAck,
   BusMessage,
   type BusMessageOf,
-  ClaimsImportResult,
   type BusMessageType,
-  GrantSaveResult,
-  ReceiptEventResult,
-  SettingResult,
   isAckedType,
+  isPageCommand,
+  PAGE_COMMAND_RESULTS,
+  type PageCommand,
+  type PageCommandResult,
   isBusMessageType,
   type UiQueryMessage,
   type UiResult,
@@ -59,20 +60,11 @@ export type MessageSender = Browser.runtime.MessageSender;
  */
 export type BusHandlerResult<T extends BusMessageType> = T extends 'ui.query'
   ? UiResult | Promise<UiResult>
-  : T extends 'claims.import'
-    ? ClaimsImportResult | Promise<ClaimsImportResult>
-    : T extends 'receipt.event'
-      ? ReceiptEventResult | Promise<ReceiptEventResult>
-      : T extends 'grant.save'
-        ? GrantSaveResult | Promise<GrantSaveResult>
-        : T extends SettingCommand
-          ? SettingResult | Promise<SettingResult>
-          : T extends AckedType
-            ? BusAck | Promise<BusAck>
-            : unknown;
-
-/** The page commands that answer a `SettingResult`. */
-type SettingCommand = 'retention.save' | 'reader.toggle' | 'flag.set' | 'ledger.wipe';
+  : T extends PageCommand
+    ? PageCommandResult<T> | Promise<PageCommandResult<T>>
+    : T extends AckedType
+      ? BusAck | Promise<BusAck>
+      : unknown;
 
 export type BusHandler<T extends BusMessageType> = (
   message: BusMessageOf<T>,
@@ -87,16 +79,10 @@ export const DROP_REASONS = ['foreign_sender', 'malformed', 'untrusted_context',
 
 type DropReason = (typeof DROP_REASONS)[number];
 
-/** Message types that only an extension page (popup, side panel, options) may send. */
+/** Message types that only an extension page (popup, side panel, options) may send: its queries and its commands. */
 const EXTENSION_PAGE_ONLY: ReadonlySet<BusMessageType> = new Set<BusMessageType>([
   'ui.query',
-  'claims.import',
-  'receipt.event',
-  'grant.save',
-  'retention.save',
-  'reader.toggle',
-  'flag.set',
-  'ledger.wipe',
+  ...(Object.keys(PAGE_COMMAND_RESULTS) as PageCommand[]),
 ]);
 
 function typeOf(raw: unknown): BusMessageType | undefined {
@@ -149,24 +135,9 @@ function checkedAck(message: BusMessage, value: unknown): BusAck {
   return ackRefused('failed');
 }
 
-/** The answer schema of each command an extension page sends, each answering `{ ok: false, code: 'failed' }` on failure. */
-const PAGE_RESULTS = {
-  'claims.import': ClaimsImportResult,
-  'receipt.event': ReceiptEventResult,
-  'grant.save': GrantSaveResult,
-  'retention.save': SettingResult,
-  'reader.toggle': SettingResult,
-  'flag.set': SettingResult,
-  'ledger.wipe': SettingResult,
-} as const satisfies Record<SettingCommand | 'claims.import' | 'receipt.event' | 'grant.save', unknown>;
-
-type PageCommand = keyof typeof PAGE_RESULTS;
-
-const isPageCommand = (type: string): type is PageCommand => Object.hasOwn(PAGE_RESULTS, type);
-
 /** The validated answer to a page's command, or `{ ok: false, code: 'failed' }` if the handler answered badly. */
 function checkedCommand(message: BusMessage, type: PageCommand, value: unknown): unknown {
-  const parsed = PAGE_RESULTS[type].safeParse(value);
+  const parsed = PAGE_COMMAND_RESULTS[type].safeParse(value);
   if (parsed.success) return parsed.data;
   log.error('bus.handler_failed', { type: message.type, error: new BusError('invalid_reply') });
   return { ok: false, code: 'failed' };

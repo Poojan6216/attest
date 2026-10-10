@@ -12,8 +12,6 @@
  * the ledger never stores) and its answer awaited: one observer's messages are handled one at a time, in arrival
  * order (src/background/observer-state.ts `serially`), so every report before it has been handled when it answers.
  */
-import { readFileSync } from 'node:fs';
-
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
@@ -22,7 +20,7 @@ import { SENT_SELECTORS } from '../../src/observers/gmail/selectors';
 import { contentScriptPost } from './support/content-world';
 import { type VendorSession, withVendorSession } from './support/session';
 import {
-  fixtureUrl,
+  brokenSentList,
   openVendorPage,
   readLedger,
   requestUrl,
@@ -95,18 +93,6 @@ async function handled(session: VendorSession, tab: Page): Promise<void> {
 
 const sentHealth = (ledger: LedgerExport) =>
   ledger.tables.adapterHealth.find((report) => report.adapterId === 'gmail.sent');
-
-/** The Sent page with its time cells gone: a selector that broke on a real Sent list. */
-function brokenSentList(): { url: string; html: string } {
-  const page = vendorFixture('gmail', 'synthetic-sent-page-1.html');
-  const html = readFileSync(page.htmlPath, 'utf8').replace(
-    /<span title="[^"]*" aria-label="[^"]*"><span>[^<]*<\/span><\/span>/gu,
-    '',
-  );
-  const url = new URL(fixtureUrl(page));
-  url.searchParams.set('fixture', 'broken-sent-page-1');
-  return { url: url.href, html };
-}
 
 async function tabsKeepTheSentStatus(session: VendorSession): Promise<void> {
   const worker = await session.extension.serviceWorker();

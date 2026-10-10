@@ -1,11 +1,11 @@
 /**
  * A person's grant from the options page (sprint_4 4.4): a `grant.save` from an extension page. The clock guard runs
- * first, as for every message that stores rows; the person's choices are saved with the mute, what Attest observed
- * kept from the stored grant (src/ledger/grant-save.ts), announced (`ledger.changed`: grants, meta) and logged
- * (`grant.saved`, the agent only); then a grading batch runs, so the agent's open (PENDING) receipts are regraded
- * under it at once. A FINAL receipt is never regraded (docs/grading.md §3,
- * §8): a grant changes what comes, never what was decided. A failing batch is logged loud (`grading.failed`) and the
- * grant stays; the grace alarm grades within 5 minutes.
+ * first, as for every message that stores rows; the person's choices are saved with the mute, what Attest observed kept
+ * from the stored grant (src/ledger/grant-save.ts), announced (`ledger.changed`: grants, meta) and logged
+ * (`grant.saved`, the agent only); then a grading batch runs, so the agent's open (PENDING) receipts are regraded under
+ * it at once. A FINAL receipt is never regraded (docs/grading.md §3, §8): a grant changes what comes, never what was
+ * decided. A failing batch is logged loud (`grading.failed`) and the grant stays; the grace alarm grades within 5
+ * minutes.
  */
 import type { GrantSaveMessage, GrantSaveResult } from '../bus/messages';
 import { guardClock } from '../ledger/clock-guard';

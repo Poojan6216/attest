@@ -5,6 +5,7 @@
  * local time zone through `Date`.
  */
 import { DIGEST_HOUR, DIGEST_WEEKDAY } from '../config';
+import { twoDigits } from '../core/calendar-words';
 
 export interface DigestWeek {
   /** The week's Monday, `YYYY-MM-DD`: the digest's key. */
@@ -21,11 +22,9 @@ export interface WeekDay {
 
 const DAYS_PER_WEEK = 7;
 
-const two = (value: number): string => String(value).padStart(2, '0');
-
-/** `day`'s local calendar date, `YYYY-MM-DD`. */
+/** `day`'s local calendar date, `YYYY-MM-DD` (the side panel's filters write theirs through this too). */
 export function localDate(day: Date): string {
-  return `${String(day.getFullYear())}-${two(day.getMonth() + 1)}-${two(day.getDate())}`;
+  return `${String(day.getFullYear())}-${twoDigits(day.getMonth() + 1)}-${twoDigits(day.getDate())}`;
 }
 
 /** Midnight of `days` calendar days after `day`'s midnight, on the local clock. */

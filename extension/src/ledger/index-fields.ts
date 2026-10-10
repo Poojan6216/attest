@@ -96,12 +96,19 @@ export function dateKey(isoTs: string): string {
   return isoTs.slice(0, 10);
 }
 
+/**
+ * Milliseconds since the epoch, or null when the timestamp does not parse: the one reading of an instant that every
+ * index field and the v8 upgrade's `computedMs` share (sprint_4 close, tech review TECH-8).
+ */
+export function parsedEpochMs(isoTs: string): number | null {
+  const ms = Date.parse(isoTs);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 /** Milliseconds since the epoch; throws `invalid_input` when the timestamp does not parse. */
 export function epochMs(isoTs: string): number {
-  const ms = Date.parse(isoTs);
-  if (!Number.isFinite(ms)) {
-    throw new LedgerError('invalid_input', 'Unparseable timestamp', { length: isoTs.length });
-  }
+  const ms = parsedEpochMs(isoTs);
+  if (ms === null) throw new LedgerError('invalid_input', 'Unparseable timestamp', { length: isoTs.length });
   return ms;
 }
 

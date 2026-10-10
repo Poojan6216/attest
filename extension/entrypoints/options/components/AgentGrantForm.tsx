@@ -2,7 +2,7 @@ import { ActionType, type AgentId, type Grant } from '../../../src/core/schema';
 import { Button } from '../../../src/ui/Button';
 import { CheckGroup } from '../../../src/ui/CheckGroup';
 import { grantOfDraft, grantSentence } from '../../../src/ui/grant-form';
-import { AGENT_NAMES, claimTypeLabel } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES, claimTypeLabel } from '../../../src/ui/labels';
 import { useGrantDraft } from '../use-grant-draft';
 import type { GrantSources } from '../use-grant-settings';
 import { GrantLists } from './GrantLists';

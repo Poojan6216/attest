@@ -1,6 +1,6 @@
 import { AgentId, type Grade, Grade as Grades } from '../../../src/core/schema';
 import type { TimelineFilters } from '../../../src/ui/data';
-import { AGENT_NAMES } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES } from '../../../src/ui/labels';
 import { gradeLabel } from '../../../src/ui/receipt-labels';
 import { CheckGroup } from '../../../src/ui/CheckGroup';
 import { DayRange } from './DayRange';

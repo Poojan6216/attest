@@ -2,7 +2,7 @@ import type { RefObject } from 'preact';
 
 import type { PastedEntry } from '../../../src/adapters/paste';
 import { Button } from '../../../src/ui/Button';
-import { AGENT_NAMES, count, keptTimes } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES, count, keptTimes } from '../../../src/ui/labels';
 import type { PreviewStep } from '../use-paste-flow';
 import { ClaimItem } from './ClaimItem';
 import { SkippedItem, type SkippedItemProps } from './SkippedItem';
@@ -54,7 +54,7 @@ export function PastePreview({ preview, onImport, onEdit, onCancel, headingRef }
         </div>
       )}
       {failed && (
-        <p role="alert" class="text-red-800 dark:text-red-300">
+        <p role="alert" class="text-error-fg">
           Could not import the claims. Try again.
         </p>
       )}

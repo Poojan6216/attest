@@ -7,7 +7,7 @@
 import type { ActionType } from '../core/schema';
 import type { AlertToShow } from '../ledger/alerts';
 import { clockTime } from './format';
-import { AGENT_NAMES } from './paste-labels';
+import { AGENT_NAMES } from './labels';
 import { gradeLabel } from './receipt-labels';
 
 export interface AlertText {

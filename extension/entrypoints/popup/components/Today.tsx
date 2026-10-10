@@ -16,8 +16,9 @@ export interface TodayProps {
 
 /**
  * The popup once read (sprint_4 4.2): the degraded banner, why Gmail opened by itself if it just did (4.9), the
- * coverage header, then today's receipts newest first, or an empty state that says what to do. The heading, drawn in the same frame as the list, carries an element timing
- * name, so a test reads when Chrome painted the day (tests/e2e/support/popup-paint.ts).
+ * coverage header, then today's receipts newest first, or an empty state that says what to do. The heading, drawn in
+ * the same frame as the list, carries an element timing name, so a test reads when Chrome painted the day
+ * (tests/e2e/support/popup-paint.ts).
  */
 export function Today({ view, nowMs, userAgent }: TodayProps) {
   const { today } = view;

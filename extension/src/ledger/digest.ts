@@ -40,6 +40,7 @@ import {
   Receipt,
   SCHEMA_LIMITS,
 } from './types';
+import { parseWrite } from './errors';
 
 /** The sources whose windows a digest checks for days nobody looked at. */
 const GAP_SOURCES: readonly ObservationSource[] = ['gmail.sent', 'gcal.event'];
@@ -95,7 +96,7 @@ async function notableOf(db: LedgerDb, receipts: readonly Receipt[]): Promise<No
   );
   return receipts.map((receipt): NotableReceipt => {
     const { id: receiptId, agent, claimId, observationIds } = receipt;
-    const grade = AlertGrade.parse(receipt.grade);
+    const grade = parseWrite(AlertGrade, receipt.grade, 'Invalid digest receipt', { table: 'digests' });
     const claim = claimId === undefined ? undefined : claims.get(claimId);
     const [first] = observationIds;
     const orphan = claimId === undefined && first !== undefined ? orphans.get(first) : undefined;
@@ -161,7 +162,7 @@ export async function buildDigest(db: LedgerDb, week: DigestWeek, createdAt: Iso
     }
     notable.sort(newestFirst);
     marked.sort(newestFirst);
-    return DigestRecord.parse({
+    const digest = {
       week: week.week,
       from: isoWithLocalOffset(new Date(week.fromMs)),
       to: isoWithLocalOffset(new Date(week.toMs)),
@@ -173,13 +174,14 @@ export async function buildDigest(db: LedgerDb, week: DigestWeek, createdAt: Iso
       health: readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()),
       marks: marksOf(marked.slice(0, SCHEMA_LIMITS.LIST)),
       marksCount: marked.length,
-    });
+    };
+    return parseWrite(DigestRecord, digest, 'Invalid digest', { table: 'digests' });
   });
 }
 
 /** Stores `digest`, replacing the week's digest made before (header). */
 export async function saveDigest(db: LedgerDb, digest: DigestRecord): Promise<void> {
-  await db.digests.put(DigestRecord.parse(digest));
+  await db.digests.put(parseWrite(DigestRecord, digest, 'Invalid digest', { table: 'digests' }));
 }
 
 /** The weeks that have a digest, newest first. */

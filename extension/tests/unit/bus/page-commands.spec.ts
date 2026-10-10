@@ -136,7 +136,7 @@ describe('sendSetting(): no answer and invalid commands', () => {
     await expect(sendSetting(valid('ledger.wipe'))).resolves.toEqual({ ok: false, code: 'failed' });
     expect(records).toContainEqual({
       level: 'warn',
-      event: 'bus.setting_unavailable',
+      event: 'bus.command_unavailable',
       fields: { type: 'ledger.wipe', reason: 'no_response' },
     });
   });
@@ -153,7 +153,7 @@ describe('sendSetting(): no answer and invalid commands', () => {
     await expect(attempt).rejects.toMatchObject({ code: 'invalid_outgoing' });
     expect(sendMessage).not.toHaveBeenCalled();
     expect(
-      records.filter(({ event }) => event === 'bus.setting_refused').map(({ fields }) => fields.type),
+      records.filter(({ event }) => event === 'bus.command_refused').map(({ fields }) => fields.type),
     ).toEqual([type]);
   });
 });
@@ -169,7 +169,10 @@ describe('sendReceiptEvent() and sendGrant(): invalid commands and no answer', (
     });
     await expect(attempt).rejects.toMatchObject({ name: 'BusError', code: 'invalid_outgoing' });
     expect(sendMessage).not.toHaveBeenCalled();
-    expect(records.map(({ event }) => event)).toContain('bus.receipt_event_refused');
+    expect(records.map(({ event, fields }) => [event, fields.type])).toContainEqual([
+      'bus.command_refused',
+      'receipt.event',
+    ]);
     expect(JSON.stringify(records)).not.toContain(blank);
   });
 
@@ -181,7 +184,10 @@ describe('sendReceiptEvent() and sendGrant(): invalid commands and no answer', (
     expect(noCurrency.spendCeilingCents).toBe(5000);
     await expect(sendGrant(noCurrency, false)).rejects.toMatchObject({ code: 'invalid_outgoing' });
     expect(sendMessage).not.toHaveBeenCalled();
-    expect(records.map(({ event }) => event)).toContain('bus.grant_refused');
+    expect(records.map(({ event, fields }) => [event, fields.type])).toContainEqual([
+      'bus.command_refused',
+      'grant.save',
+    ]);
   });
 
   it('resolves failed, logged, when nobody answers a mark or a grant', async () => {
@@ -190,11 +196,11 @@ describe('sendReceiptEvent() and sendGrant(): invalid commands and no answer', (
     await expect(sendGrant(VALID['grant.save'].grant, true)).resolves.toEqual({ ok: false, code: 'failed' });
     expect(
       records
-        .filter(({ event: name }) => name.endsWith('_unavailable'))
-        .map(({ event: name, fields }) => [name, fields.reason]),
+        .filter(({ event: name }) => name === 'bus.command_unavailable')
+        .map(({ fields }) => [fields.type, fields.reason]),
     ).toEqual([
-      ['bus.receipt_event_unavailable', 'no_response'],
-      ['bus.grant_unavailable', 'no_response'],
+      ['receipt.event', 'no_response'],
+      ['grant.save', 'no_response'],
     ]);
     const reason = event.kind === 'override' ? event.reason : '';
     expect(JSON.stringify(records)).not.toContain(reason);

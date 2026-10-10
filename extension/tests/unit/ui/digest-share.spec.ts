@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
 
 import { DigestRecord } from '../../../src/ledger/types';
 import { dayRuns, digestReadyText, gapLine, instantLabel, weekLabel } from '../../../src/ui/digest-labels';
-import { digestMarkdown, escapeMarkdown } from '../../../src/ui/digest-share';
+import { digestMarkdown } from '../../../src/ui/digest-share';
+import { escapeMarkdown } from '../../../src/ui/markdown';
 
 const ZERO = { VERIFIED: 0, PARTIAL: 0, NOT_FOUND: 0, UNASKED: 0, OVER_SCOPE: 0, UNVERIFIABLE: 0 };
 

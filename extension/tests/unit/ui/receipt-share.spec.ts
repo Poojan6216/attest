@@ -11,12 +11,11 @@ import { describe, expect, it } from 'vitest';
 import type { Claim, Observation, Receipt } from '../../../src/core/schema';
 import { dateLabel, instantLabel } from '../../../src/ui/digest-labels';
 import { formatMoney } from '../../../src/ui/format';
+import { unescapeMarkdown } from '../../../src/ui/markdown';
 import { receiptMarkdown, type ShareInput } from '../../../src/ui/receipt-share';
 import { shareLines } from '../../../src/ui/share-png';
 import { loadScenario, scenarioFiles } from '../../golden/load';
 import { runScenario } from '../../golden/runner';
-
-const unescaped = (text: string): string => text.replace(/\\(.)/gu, '$1');
 
 /**
  * The domain a share may show of `party`, by a fixed rule, never the code under test (security review SEC-1): the text
@@ -31,7 +30,7 @@ function expectedDomain(party: string, merchant: boolean): string | undefined {
 
 /** The redaction assertions on one receipt's share: each failed one as a sentence. */
 function redactionProblems({ receipt, claim, observations }: ShareInput, text: string): string[] {
-  const plain = unescaped(text);
+  const plain = unescapeMarkdown(text);
   const problems: string[] = [];
   if (plain.includes('@')) problems.push('holds an @');
   const hints = [claim?.subjectHint, ...observations.map((o) => o.subjectHint)].filter(

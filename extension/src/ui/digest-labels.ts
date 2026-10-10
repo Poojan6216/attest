@@ -5,12 +5,10 @@
  * checked Tue–Thu."), and the notice that a digest is ready. Pure: a date is read from its own `YYYY-MM-DD` text, never
  * from a clock or a time zone.
  */
+import { MONTHS, WEEKDAYS } from '../core/calendar-words';
+import { MS_PER_DAY } from '../core/units';
 import type { AdapterHealth, DigestRecord, ObservationSource } from '../ledger/types';
 import { adapterName, sourceName } from './receipt-labels';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MS_PER_DAY = 86_400_000;
 
 /** `YYYY-MM-DD` as the UTC midnight of that date, for reading its weekday and the date after it. */
 function utcOf(date: string): number {

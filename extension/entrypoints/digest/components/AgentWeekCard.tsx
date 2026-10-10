@@ -1,19 +1,13 @@
-import type { AgentWeek, Grade } from '../../../src/ledger/types';
+import { type AgentWeek, Grade } from '../../../src/ledger/types';
 import { GradeChip } from '../../../src/ui/GradeChip';
-import { AGENT_NAMES } from '../../../src/ui/paste-labels';
+import { AGENT_NAMES } from '../../../src/ui/labels';
 
 export interface AgentWeekCardProps {
   readonly week: AgentWeek;
 }
 
-const GRADES: readonly Grade[] = [
-  'VERIFIED',
-  'PARTIAL',
-  'NOT_FOUND',
-  'UNASKED',
-  'OVER_SCOPE',
-  'UNVERIFIABLE',
-];
+/** Every grade, in the schema's order (sprint_4 close, tech review TECH-8). */
+const GRADES: readonly Grade[] = Grade.options;
 
 /**
  * One agent's week (sprint_4 4.7): its final receipts by grade, how many of its checked claims were verified, and how

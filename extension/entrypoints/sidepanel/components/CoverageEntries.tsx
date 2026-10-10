@@ -1,5 +1,5 @@
 import type { Coverage } from '../../../src/core/schema';
-import { count } from '../../../src/ui/paste-labels';
+import { count } from '../../../src/ui/labels';
 import { coverageEntryLine } from '../../../src/ui/detail-labels';
 
 export interface CoverageEntriesProps {

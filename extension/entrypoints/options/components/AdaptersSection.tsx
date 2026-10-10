@@ -29,7 +29,7 @@ export function AdaptersSection({ sources = LIVE_SETTINGS, nowMs = Date.now }: A
       </p>
       {state.status === 'loading' ? <Skeleton rows={2} label="Loading the readers" /> : null}
       {state.status === 'failed' ? (
-        <p role="alert" class="text-red-700 dark:text-red-300">
+        <p role="alert" class="text-error-fg">
           Attest could not read its settings. Reload the page.
         </p>
       ) : null}

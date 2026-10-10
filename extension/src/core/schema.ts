@@ -15,16 +15,25 @@ import {
   claimProblems,
   coverageProblems,
   intervalProblems,
-  MATCH_FEATURES,
   observationProblems,
-  REASON_CODES,
   REASON_PARAM_KINDS,
   type ReasonParamKind,
-  RECEIPT_SIGNALS,
   refineReasonParams,
   refineWith,
   signalProblems,
 } from './schema-checks';
+import {
+  ActionType,
+  AgentId,
+  ClaimPrecision,
+  Grade,
+  ObservationSource,
+  OverrideGrade,
+  ReasonCode,
+  ReceiptState,
+  SourceKind,
+  UnaskedSignal,
+} from './schema-enums';
 import { receiptProblems, revertedOverrides } from './schema-receipt';
 import { componentId, healthReason, oneLineText, vendorId, VISIBLE } from './schema-text';
 import { BASIS_POINTS } from './units';
@@ -63,6 +72,9 @@ export const SCHEMA_LIMITS = Object.freeze({
 
 const L = SCHEMA_LIMITS;
 
+/** The closed sets (agents, actions, sources, grades, states, reasons, signals): ./schema-enums, re-exported whole. */
+export * from './schema-enums';
+
 // ── Primitives ──────────────────────────────────────────────────────────────────────────────────
 
 const ULID_UPPER = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -87,43 +99,6 @@ export const ComponentId = componentId(L.ID);
 /** A developer-chosen name (feature, signal, param): never content (Hard Rule 10). */
 const Key = z.string().max(L.ID).regex(IDENTIFIER, 'expected an identifier');
 const UnitInterval = z.number().min(0).max(1);
-
-// ── Enums ───────────────────────────────────────────────────────────────────────────────────────
-
-export const AgentId = z.enum(['muse', 'chatgpt', 'dots', 'claude']);
-
-export const ActionType = z.enum([
-  'email.sent',
-  'calendar.created',
-  'calendar.updated',
-  'calendar.deleted',
-  'purchase.made',
-  'subscription.changed',
-  'listing.posted',
-  'message.sent',
-  'other',
-]);
-
-export const ObservationSource = z.enum(['gmail.sent', 'gmail.receipt', 'gcal.event']);
-/** The unit containing `claimedAt`, in its own UTC offset (§4.1). */
-export const ClaimPrecision = z.enum(['minute', 'hour', 'day']);
-export const SourceKind = z.enum(['activity_view', 'chat', 'notification', 'settings']);
-export const Grade = z.enum(['VERIFIED', 'PARTIAL', 'NOT_FOUND', 'UNASKED', 'OVER_SCOPE', 'UNVERIFIABLE']);
-/** The grades a user may override a receipt to (§8). */
-export const OverrideGrade = z.enum(['VERIFIED', 'NOT_FOUND']);
-export const ReceiptState = z.enum(['PENDING', 'FINAL', 'USER_OVERRIDDEN']);
-export const UnaskedSignal = z.enum([
-  'agentSessionActive',
-  'userIdle',
-  'agentSignature',
-  'activityLogAdjacent',
-]);
-
-/** Closed, in docs/grading.md §15 table order (reasons are emitted in this order within each group). */
-export const ReasonCode = z.enum(REASON_CODES);
-/** The §5.1 match features; a receipt's `signals` keys are these plus `score` (§8). */
-export const MatchFeature = z.enum(MATCH_FEATURES);
-export const ReceiptSignal = z.enum(RECEIPT_SIGNALS);
 
 // ── Agent side ──────────────────────────────────────────────────────────────────────────────────
 
@@ -223,6 +198,13 @@ export const HealthReport = z.strictObject({
 
 // ── The user's declaration ──────────────────────────────────────────────────────────────────────
 
+/** A spend ceiling needs its currency (§6.1): the rule of a grant, and of a person's choices for one. */
+const ceilingHasCurrency = (grant: {
+  spendCeilingCents: number | null;
+  spendCurrency?: string | undefined;
+}) => grant.spendCeilingCents === null || grant.spendCurrency !== undefined;
+const CEILING_NEEDS_CURRENCY = { path: ['spendCurrency'], message: 'required when spendCeilingCents is set' };
+
 export const Grant = z
   .strictObject({
     agent: AgentId,
@@ -240,10 +222,27 @@ export const Grant = z
     accounts: z.partialRecord(ObservationSource, z.array(Sha256).max(L.ACCOUNTS)).optional(),
     updatedAt: IsoTs,
   })
-  .refine((grant) => grant.spendCeilingCents === null || grant.spendCurrency !== undefined, {
-    path: ['spendCurrency'],
-    message: 'required when spendCeilingCents is set',
-  });
+  .refine(ceilingHasCurrency, CEILING_NEEDS_CURRENCY);
+
+const { agent, allowedTypes, counterpartyAllowlist, spendCeilingCents, spendCurrency, declaredScopes } =
+  Grant.shape;
+
+/**
+ * What a person chooses of one agent's grant (sprint_4 4.4): the fields they declare, with the grant's rule across them.
+ * Never what Attest observed (`observedScopes`, `accounts`) nor the stamp, which the service worker keeps from the
+ * stored grant and stamps itself (src/ledger/grant-save.ts). The one definition the options page, the bus and the
+ * ledger share (sprint_4 close, tech review TECH-8).
+ */
+export const GrantChoices = z
+  .strictObject({
+    agent,
+    allowedTypes,
+    counterpartyAllowlist,
+    spendCeilingCents,
+    spendCurrency,
+    declaredScopes,
+  })
+  .refine(ceilingHasCurrency, CEILING_NEEDS_CURRENCY);
 
 // ── Receipts ────────────────────────────────────────────────────────────────────────────────────
 
@@ -361,18 +360,6 @@ export type Sha256 = z.infer<typeof Sha256>;
 export type IsoTs = z.infer<typeof IsoTs>;
 export type Currency = z.infer<typeof Currency>;
 export type RuleId = z.infer<typeof RuleId>;
-export type AgentId = z.infer<typeof AgentId>;
-export type ActionType = z.infer<typeof ActionType>;
-export type ObservationSource = z.infer<typeof ObservationSource>;
-export type ClaimPrecision = z.infer<typeof ClaimPrecision>;
-export type SourceKind = z.infer<typeof SourceKind>;
-export type Grade = z.infer<typeof Grade>;
-export type OverrideGrade = z.infer<typeof OverrideGrade>;
-export type MatchFeature = z.infer<typeof MatchFeature>;
-export type ReceiptSignal = z.infer<typeof ReceiptSignal>;
-export type ReceiptState = z.infer<typeof ReceiptState>;
-export type UnaskedSignal = z.infer<typeof UnaskedSignal>;
-export type ReasonCode = z.infer<typeof ReasonCode>;
 export type Request = z.infer<typeof Request>;
 export type Claim = z.infer<typeof Claim>;
 export type Observation = z.infer<typeof Observation>;
@@ -380,6 +367,7 @@ export type ObserverCoverage = z.infer<typeof ObserverCoverage>;
 export type Coverage = z.infer<typeof Coverage>;
 export type HealthReport = z.infer<typeof HealthReport>;
 export type Grant = z.infer<typeof Grant>;
+export type GrantChoices = z.infer<typeof GrantChoices>;
 export type Reason = z.infer<typeof Reason>;
 export type ReceiptOverride = z.infer<typeof ReceiptOverride>;
 export type Receipt = z.infer<typeof Receipt>;

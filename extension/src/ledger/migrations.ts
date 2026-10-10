@@ -35,7 +35,7 @@ import {
   STORES_V10,
 } from './db';
 import { LedgerError } from './errors';
-import { LEDGER_TABLE_NAMES, REPLAY_TABLE_NAMES } from './index-fields';
+import { LEDGER_TABLE_NAMES, parsedEpochMs, REPLAY_TABLE_NAMES } from './index-fields';
 
 export interface Migration {
   /** Positive integer, strictly greater than the previous entry's version. */
@@ -99,8 +99,8 @@ async function upgradeToV8(tx: Transaction): Promise<void> {
     .table('receipts')
     .toCollection()
     .modify((row: Record<string, unknown>) => {
-      const ms = typeof row.computedAt === 'string' ? Date.parse(row.computedAt) : Number.NaN;
-      if (Number.isFinite(ms)) row.computedMs = ms;
+      const ms = typeof row.computedAt === 'string' ? parsedEpochMs(row.computedAt) : null;
+      if (ms !== null) row.computedMs = ms;
     });
 }
 

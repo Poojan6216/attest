@@ -4,9 +4,9 @@
  * one (the page follows the system's, as every surface does), the page's one control (the degraded banner's report
  * link) is reached by Tab with a visible focus ring in both, and the page logs no console error.
  */
-import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+import { seriousViolations } from './support/a11y';
 import type { LaunchedExtension } from './support/extension';
 import { expectVisibleFocus, focusState } from './support/options-page';
 import { expect, test } from './support/test';
@@ -44,17 +44,6 @@ async function openComponents(
 }
 
 /** The serious and critical axe-core violations on the page, each with the elements it names. */
-async function seriousViolations(page: Page): Promise<{ id: string; impact: string; targets: string[] }[]> {
-  const results = await new AxeBuilder({ page }).analyze();
-  return results.violations
-    .filter(({ impact }) => impact === 'serious' || impact === 'critical')
-    .map(({ id, impact, nodes }) => ({
-      id,
-      impact: impact ?? 'unknown',
-      targets: nodes.map(({ target }) => target.join(' ')),
-    }));
-}
-
 test.describe('the components page (sprint_4 4.1)', () => {
   test('renders every shared component, each in its own section', async ({ attest }) => {
     const { page, errors } = await openComponents(attest, 'light');

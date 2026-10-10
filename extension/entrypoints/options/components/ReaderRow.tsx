@@ -72,7 +72,7 @@ export function ReaderRow({ reader, on, health, nowMs, toggle }: ReaderRowProps)
         {on ? `Turn off ${name}` : `Turn on ${name}`}
       </Button>
       {state === 'failed' ? (
-        <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+        <p role="alert" class="text-sm text-error-fg">
           Not changed. Try again.
         </p>
       ) : null}

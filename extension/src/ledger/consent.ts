@@ -25,6 +25,7 @@ import {
   SETTABLE_FLAGS,
 } from '../config';
 import { readRow, type LedgerDb } from './db';
+import { parseWrite } from './errors';
 
 /** The meta key prefixes of the choices (./meta-keys.ts). */
 export const READER_OFF_PREFIX = 'readerOff.';
@@ -35,6 +36,8 @@ export const flagKey = (flag: SettableFlag): string => `${FLAG_PREFIX}${flag}`;
 
 /** A stored choice: a key of one of the two families, and true or false. */
 const Choice = z.strictObject({ key: z.string(), value: z.boolean() });
+const REFUSED = 'Invalid choice';
+const META = { table: 'meta' };
 
 export type Flags = Readonly<Record<FeatureFlag, boolean>>;
 
@@ -67,11 +70,11 @@ export async function readFlags(db: LedgerDb): Promise<Flags> {
 
 /** Turns `reader` off or on: the key is written while it is off and removed when it is on. */
 export async function saveReaderOff(db: LedgerDb, reader: ReaderId, off: boolean): Promise<void> {
-  if (off) await db.meta.put(Choice.parse({ key: readerOffKey(reader), value: true }));
+  if (off) await db.meta.put(parseWrite(Choice, { key: readerOffKey(reader), value: true }, REFUSED, META));
   else await db.meta.delete(readerOffKey(reader));
 }
 
 /** Sets `flag` on or off. */
 export async function saveFlag(db: LedgerDb, flag: SettableFlag, on: boolean): Promise<void> {
-  await db.meta.put(Choice.parse({ key: flagKey(flag), value: on }));
+  await db.meta.put(parseWrite(Choice, { key: flagKey(flag), value: on }, REFUSED, META));
 }

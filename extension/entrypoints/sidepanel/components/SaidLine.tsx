@@ -8,7 +8,7 @@ export interface SaidLineProps {
 export function SaidLine({ said }: SaidLineProps) {
   if (said === null) return null;
   return said.kind === 'error' ? (
-    <p role="alert" class="text-xs text-grade-not-found-fg">
+    <p role="alert" class="text-xs text-error-fg">
       {said.text}
     </p>
   ) : (

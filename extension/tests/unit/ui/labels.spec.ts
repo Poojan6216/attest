@@ -1,5 +1,5 @@
 /**
- * src/ui/paste-labels.ts (sprint_3 3.12): the words the Add agent activity preview uses. A claim's time is written
+ * src/ui/labels.ts (sprint_3 3.12): the words the Add agent activity preview uses. A claim's time is written
  * from its own wall clock, whatever zone the test runs in; amounts follow each currency's minor units; every skipped
  * outcome has its reason. Every value here is invented.
  */
@@ -15,7 +15,7 @@ import {
   count,
   excerpt,
   skippedReason,
-} from '../../../src/ui/paste-labels';
+} from '../../../src/ui/labels';
 
 /** Only the fields the labels read; the rest of a claim does not matter here. */
 const claim = (fields: Partial<Claim>): Claim =>

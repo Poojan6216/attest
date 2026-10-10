@@ -1,10 +1,13 @@
 /**
- * What the side panel's Add agent activity preview says about a pasted log (sprint_3 3.12; docs/claims-import.md
- * §2): the agent's name, each claim's type, who or what it names and when, and why an entry is not imported. Pure.
- * A claim's time is written from its own ISO text, the wall clock in the person's offset at that instant, so the
- * preview shows the day and time the log said, whatever zone the page runs in.
+ * The words every surface names an agent and a claim with (named for the paste preview it began in, sprint_3 3.12;
+ * renamed in the Sprint 4 close, tech review TECH-8, since the popup, the side panel, the digest, the shares and the
+ * service worker's alerts read it too): the agent's name, each claim's type, who or what it names and when, a count,
+ * and why a pasted entry is not imported (docs/claims-import.md §2). Pure. A claim's time is written from its own ISO
+ * text, the wall clock in the person's offset at that instant, so the preview shows the day and time the log said,
+ * whatever zone the page runs in.
  */
 import type { EntryOutcome } from '../adapters/paste';
+import { MONTHS, twoDigits, WEEKDAYS } from '../core/calendar-words';
 import type { ActionType, AgentId, Claim } from '../core/schema';
 import { HOURS_PER_HALF_DAY } from '../core/units';
 import { formatAmount } from './format';
@@ -44,13 +47,11 @@ export function claimWhat(claim: Claim): string | null {
   return named ?? amount;
 }
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const WALL_CLOCK = /^(?<y>\d{4})-(?<mo>\d{2})-(?<d>\d{2})T(?<h>\d{2}):(?<mi>\d{2})/u;
 
 const clock12 = (hour: number, minute: number): string => {
   const twelve = hour % HOURS_PER_HALF_DAY === 0 ? HOURS_PER_HALF_DAY : hour % HOURS_PER_HALF_DAY;
-  return `${String(twelve)}:${String(minute).padStart(2, '0')} ${hour < HOURS_PER_HALF_DAY ? 'am' : 'pm'}`;
+  return `${String(twelve)}:${twoDigits(minute)} ${hour < HOURS_PER_HALF_DAY ? 'am' : 'pm'}`;
 };
 
 /** When a claim says it happened, on the person's clock: "Thu 8 Oct, 4:33 pm"; a whole day or hour says so. */

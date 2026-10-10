@@ -15,7 +15,7 @@ export function SaveLine({ state }: SaveLineProps) {
   }
   if (state === 'invalid' || state === 'failed') {
     return (
-      <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+      <p role="alert" class="text-sm text-error-fg">
         {state === 'invalid' ? 'Not saved: fix the fields marked above.' : 'Not saved. Try again.'}
       </p>
     );

@@ -99,7 +99,7 @@ The route from page to disk has two checks. In the content script, `redact.proje
 
 ## 5. Every ledger table and field
 
-The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 8 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
+The ledger is one IndexedDB database, `attest`, opened through Dexie only inside `extension/src/ledger/` ([`db.ts`](../extension/src/ledger/db.ts), schema version 10 in [`migrations.ts`](../extension/src/ledger/migrations.ts)). Every row is written through a strict Zod schema and read back through one: a row that fails is skipped (logged by id only) and never shown. Some tables add derived **index fields** to each row so IndexedDB can answer range queries; they are computed from the row's own fields, stripped on every read, and never exported ([`index-fields.ts`](../extension/src/ledger/index-fields.ts)).
 
 Outside IndexedDB, `chrome.storage.local` holds one key today and nothing else: `attest.installId` (a random version-4 UUID, [`install-id.ts`](../extension/src/ledger/install-id.ts); it identifies nothing about you, is never logged, and will only ever be used by the opt-in telemetry of Sprint 5). Your choices about what Attest may read or open, the page readers you turned off and the flags you set, are kept in the ledger's meta ([§5.6](#56-meta); [`src/ledger/consent.ts`](../extension/src/ledger/consent.ts)), where no script on a Gmail or Calendar page can reach them. Sprints 4.5 and 4.9 kept them in `chrome.storage.local` (`attest.readersOff`, `attest.flags`), which content scripts can write; an update moves them into the ledger once and removes those keys ([`src/background/consent-move.ts`](../extension/src/background/consent-move.ts); security review SEC-3). A reader that is off has no content script registered, so a page you open is not read, and what a tab opened before sends is not stored. `chrome.storage.session` (memory Chrome empties when the browser closes) holds at most two keys: `attest.idleSession`, while away detection is on, `true` once this browser session has started watching, so a time away that the previous session left open is closed at what was confirmed, never stretched over the next day ([`src/background/idle.ts`](../extension/src/background/idle.ts)); and `attest.openReceipt`, from Sprint 4.6, the id of the receipt a clicked alert asked the side panel to open ([`src/background/alerts.ts`](../extension/src/background/alerts.ts)).
 
@@ -379,7 +379,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 ```json
 {
   "format": "attest-ledger",
-  "schemaVersion": 7,
+  "schemaVersion": 10,
   "exportedAt": "2026-10-09T09:30:00.000-04:00",
   "tables": {
     "requests": [],
@@ -392,7 +392,9 @@ Dated history is kept for the window you choose in the options page's Privacy se
     "meta": [],
     "coverageIntervals": [],
     "calendarSnapshots": [],
-    "activity": []
+    "activity": [],
+    "alerts": [],
+    "digests": []
   },
   "receiptInputs": {},
   "batchCoverages": {},
@@ -400,7 +402,7 @@ Dated history is kept for the window you choose in the options page's Privacy se
 }
 ```
 
-It holds every table of [§5](#5-every-ledger-table-and-field), with exactly the fields listed there: index fields are stripped, and a row that fails its schema is left out (logged by id). It is deterministic: one read transaction, each table in key order, each object's keys in schema order. An export made before Sprint 2.7 has no `coverageIntervals` or `calendarSnapshots` and still reads, with both empty. [`extension/tests/e2e/observers.spec.ts`](../extension/tests/e2e/observers.spec.ts) opens the Sent and Calendar fixtures with the built extension and checks that the export holds the labelled observations with allowlisted fields only.
+It holds every table of [§5](#5-every-ledger-table-and-field), with exactly the fields listed there: index fields are stripped, and a row that fails its schema is left out (logged by id). It is deterministic: one read transaction, each table in key order, each object's keys in schema order. An export made before Sprint 2.7 has no `coverageIntervals` or `calendarSnapshots`, and one made before Sprint 4.6 or 4.7 no `alerts` or `digests`; each still reads, with what it lacks empty. [`extension/tests/e2e/observers.spec.ts`](../extension/tests/e2e/observers.spec.ts) opens the Sent and Calendar fixtures with the built extension and checks that the export holds the labelled observations with allowlisted fields only.
 
 **Shares (Sprints 4.7, 4.8).** A receipt (the side panel's detail) and a weekly digest (the digest page) can each be shared, as text or as an image, which you see in full before you copy either: Attest copies it to your clipboard at your click and sends nothing anywhere. A share is made from the ledger's derived facts only ([`src/ui/receipt-share.ts`](../extension/src/ui/receipt-share.ts), [`src/ui/digest-share.ts`](../extension/src/ui/digest-share.ts)). It names a counterparty by its domain only, and only from an address: a name gives nothing, even one written with a dot like "A.Kumar", and a merchant gives its domain only when it is written as one ("Amazon.com"; [`src/ledger/domain.ts`](../extension/src/ledger/domain.ts); security review SEC-1). It keeps amounts (one with no currency, behind a bare "$", says so) and times, and shows a subject only as the hint the ledger keeps, with any address in it written as its domain. It never holds what you asked an agent, why you marked a receipt, or an address. A hint is the subject's first 80 characters as written, so it can hold a name the subject held: you see it in the preview before you copy. Text that came from a page is escaped, so it can never become a link. The image draws exactly the same lines on a canvas in the page ([`src/ui/share-png.ts`](../extension/src/ui/share-png.ts)), in its light or dark colours. Every golden scenario's receipts are checked against these rules, and the mandatory no-leak test searches the digest's share and every receipt's share for every seeded secret, for any `@`, and for a pasted name written with a dot.
 

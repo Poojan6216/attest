@@ -15,7 +15,7 @@ import {
 } from '../ledger/types';
 import type { CoverageSummary } from '../ledger/views';
 import { clockTime, formatAmount } from './format';
-import { AGENT_NAMES, AGENT_ORDER, claimTypeLabel } from './paste-labels';
+import { AGENT_NAMES, AGENT_ORDER, claimTypeLabel } from './labels';
 
 const GRADE_LABELS: Readonly<Record<Grade, string>> = Object.freeze({
   VERIFIED: 'Verified',

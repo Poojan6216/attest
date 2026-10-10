@@ -27,6 +27,7 @@ import {
   Observation,
   Receipt,
 } from './types';
+import { parseWrite } from './errors';
 
 export { ALERTS_PER_TAKE } from '../config';
 
@@ -40,9 +41,8 @@ export async function queueAlerts(db: LedgerDb, receipts: readonly Receipt[]): P
     const { state, grade, supersededBy, finalAt } = receipt;
     if (state !== 'FINAL' || !isAlertGrade(grade) || supersededBy !== undefined || finalAt === undefined)
       return [];
-    return [
-      AlertRecord.parse({ receiptId: receipt.id, agent: receipt.agent, grade, state: 'pending', finalAt }),
-    ];
+    const row = { receiptId: receipt.id, agent: receipt.agent, grade, state: 'pending', finalAt };
+    return [parseWrite(AlertRecord, row, 'Invalid alert', { table: 'alerts' })];
   });
   if (alerting.length === 0) return 0;
   const held = await db.alerts.bulkGet(alerting.map(({ receiptId }) => receiptId));
@@ -111,7 +111,9 @@ export async function takeAlerts(db: LedgerDb, handledAt: IsoTs): Promise<TakenA
       const receipt = readRow('receipts', Receipt, await db.receipts.get(alert.receiptId));
       const mute = readRow('meta', MetaEntry, await db.meta.get(alertsMutedKey(alert.agent)));
       const state = settle(receipt, mute?.value === true);
-      await db.alerts.put({ ...alert, state, handledAt });
+      await db.alerts.put(
+        parseWrite(AlertRecord, { ...alert, state, handledAt }, 'Invalid alert', { table: 'alerts' }),
+      );
       if (state === 'shown' && receipt !== undefined) {
         const { receiptId, agent, grade } = alert;
         shown.push({ receiptId, agent, grade, action: await actionOf(db, receipt) });

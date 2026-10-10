@@ -17,7 +17,7 @@ export function DetailView({ timeline, lastBatchMs, onClose }: DetailViewProps) 
   if (detail === 'failed' || detail === undefined) {
     return (
       <section class="space-y-2">
-        <p role="alert" class="text-grade-not-found-fg">
+        <p role="alert" class="text-error-fg">
           {detail === 'failed'
             ? 'Attest could not read this receipt.'
             : 'Attest no longer keeps this receipt.'}

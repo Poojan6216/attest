@@ -57,6 +57,9 @@ describe('sendImport', () => {
       code: 'invalid_outgoing',
     });
     expect(handler).not.toHaveBeenCalled();
-    expect(records.map((record) => record.event)).toContain('bus.import_refused');
+    expect(records.map((record) => [record.event, record.fields.type])).toContainEqual([
+      'bus.command_refused',
+      'claims.import',
+    ]);
   });
 });

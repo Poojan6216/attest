@@ -67,6 +67,7 @@ import { readRow, readRows, type LedgerDb } from './db';
 import { setByLedger } from './health';
 import { accountKeyOf, epochMs } from './index-fields';
 import { AdapterHealth, CoveragePing, Grant, IsoTs, Observation } from './types';
+import { parseWrite } from './errors';
 
 export { CLOCK_HIGH_WATER, noteStoredInstant } from './clock-high-water';
 
@@ -173,7 +174,10 @@ async function restampFutureGrants(db: LedgerDb, now: IsoTs): Promise<number> {
   const future = readRows('grants', Grant, await db.grants.toArray()).filter(
     (grant) => epochMs(grant.updatedAt) > epochMs(at),
   );
-  await db.grants.bulkPut(future.map((grant) => ({ ...grant, updatedAt: at })));
+  const grants = { table: 'grants' };
+  await db.grants.bulkPut(
+    future.map((grant) => parseWrite(Grant, { ...grant, updatedAt: at }, 'Invalid grant', grants)),
+  );
   return future.length;
 }
 

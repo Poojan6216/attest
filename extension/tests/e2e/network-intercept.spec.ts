@@ -1,10 +1,13 @@
 /**
  * @mandatory — Hard Rule 1: nothing leaves the browser.
  *
- * Runs the real build through a 5-minute scripted session (three fixture pages, the Gmail and Calendar
- * fixtures with their content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing)
- * with Chromium's NetLog on, then asserts that every request the
- * extension or a page initiated went to an allowlisted host. In this sprint the allowlist is empty.
+ * Runs the real build through a scripted session (three fixture pages, the Gmail and Calendar fixtures with their
+ * content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing) with Chromium's NetLog on,
+ * then asserts that every request the extension or a page initiated went to an allowlisted host. In this sprint the
+ * allowlist is empty. Sprint 4's surfaces run first (sprint_4 close, QA review GAP 7; ./support/sprint4-surfaces.ts):
+ * Check Gmail for me opening its tab, alerts, a receipt's share and image, the weekly digest with its page and share,
+ * a grant saved, both exports, a reader turned off and on, and Delete all data. Then every page is reloaded in turn
+ * for 5 minutes.
  * The negative control proves on every run that the guard sees a canary request from the service
  * worker, an extension page and a fixture page. This test is never skipped, retried, or weakened. (If
  * Chromium's own start-up hangs, the launcher replaces the browser before the session starts; every attempt
@@ -21,6 +24,8 @@ import { NETWORK_ALLOWLIST } from '../../src/config';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
 import { datedClock, pasteActivity } from './support/paste';
+import type { VendorSession } from './support/session';
+import { checkGmailForMe, sprint4Surfaces } from './support/sprint4-surfaces';
 import { FIXTURE_TIME_ZONE, fixtureUrl, routesFor, vendorFixture } from './support/vendor-pages';
 import { launchExtension, type LaunchedExtension } from './support/extension';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
@@ -148,6 +153,41 @@ async function openAll(session: GuardedSession): Promise<Page[]> {
   return pages;
 }
 
+/** The session as the shared flows take it: the vendor routes, and an options page to ask the ledger from. */
+async function vendorSessionOf(session: GuardedSession): Promise<VendorSession> {
+  const ledgerPage = await session.extension.openExtensionPage('options.html');
+  return { server: session.server, extension: session.extension, routes: VENDOR_ROUTES, ledgerPage };
+}
+
+/**
+ * Opens every page, with Sprint 4's surfaces around them: Check Gmail for me before any Gmail page is read, the rest
+ * after. Resolves the pages to reload, the tab Attest opened and the digest page among them.
+ */
+async function openEverything(session: GuardedSession): Promise<Page[]> {
+  const vendor = await vendorSessionOf(session);
+  const autoCheckTab = await checkGmailForMe(vendor);
+  const pages = await openAll(session);
+  const digest = await sprint4Surfaces(vendor);
+  recordConsole(autoCheckTab, 'auto-check tab', session.consoleLines);
+  recordConsole(digest, 'digest.html', session.consoleLines);
+  return [...pages, autoCheckTab, digest];
+}
+
+/** Reloads `pages` in turn, one every STEP_MS, for `ms`; resolves how many reloads it made. */
+async function reloadInTurn(pages: readonly Page[], ms: number): Promise<number> {
+  const deadline = Date.now() + ms;
+  let step = 0;
+  while (Date.now() < deadline) {
+    const page = pages[step % pages.length];
+    if (page !== undefined) await page.reload();
+    step += 1;
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(STEP_MS, Math.max(0, deadline - Date.now()))),
+    );
+  }
+  return step;
+}
+
 /**
  * The negative control's canary requests: a fetch and a WebSocket from the service worker, a fetch from an extension
  * page and a fetch from a fixture page. Each host must come back as a violation.
@@ -181,27 +221,19 @@ test.describe('nothing leaves the browser', { tag: '@mandatory' }, () => {
   });
 
   test('a 5-minute scripted session makes no request outside the allowlist', async () => {
-    test.setTimeout(SESSION_MS + 3 * 60_000);
+    // Sprint 4's surfaces take a minute or two before the 5 minutes of reloads start.
+    test.setTimeout(SESSION_MS + 6 * 60_000);
     const session = await startGuardedSession();
-    const deadline = Date.now() + SESSION_MS;
     let report: NetworkReport;
     try {
-      const pages = await openAll(session);
+      const pages = await openEverything(session);
       // Fire the extension's own alarm well inside the session (Chrome's floor is 30 s).
       const worker = await session.extension.serviceWorker();
       await worker.evaluate(() => chrome.alarms.create('attest.purge', { delayInMinutes: 0.5 }));
-      let step = 0;
-      while (Date.now() < deadline) {
-        const page = pages[step % pages.length];
-        if (page !== undefined) await page.reload();
-        step += 1;
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(STEP_MS, Math.max(0, deadline - Date.now()))),
-        );
-      }
+      const steps = await reloadInTurn(pages, SESSION_MS);
       expect(session.consoleLines.some((line) => line.includes('"event":"alarm.fired"'))).toBe(true);
       // Every page was reloaded repeatedly over the whole session.
-      expect(step).toBeGreaterThanOrEqual(2 * pages.length);
+      expect(steps).toBeGreaterThanOrEqual(2 * pages.length);
     } finally {
       report = await finishGuardedSession(session);
     }

@@ -1,7 +1,7 @@
 import type { ReceiptItem } from '../ledger/views';
 import { AgentBadge } from './AgentBadge';
 import { GradeChip } from './GradeChip';
-import { count } from './paste-labels';
+import { count } from './labels';
 import { reasonLine, receiptLine, signalLines, statusLine } from './receipt-row-labels';
 
 export interface ReceiptRowProps {

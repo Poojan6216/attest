@@ -10,8 +10,9 @@
  * Every ledger table is exported (LEDGER_TABLE_NAMES), the coverage intervals and Calendar snapshots included
  * (Sprint 2.7): the user's data is everything the ledger holds. Those two default to empty when an export from
  * before Sprint 2.7 is read, so older exports still parse for `attest replay`, which never reads them. The replay
- * records (sprint_3 3.13) follow the tables as the two maps the replay input holds (tests/tools/attest-snapshot.ts),
- * so an export is what `pnpm attest replay` reads; they default to empty for an export from before 3.13.
+ * records (sprint_3 3.13) follow the tables as the three maps the replay input holds (receipt inputs, batch coverages
+ * and policies; tests/tools/attest-snapshot.ts), so an export is what `pnpm attest replay` reads; they default to
+ * empty for an export from before 3.13.
  */
 import { z } from 'zod';
 

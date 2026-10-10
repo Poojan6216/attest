@@ -48,10 +48,10 @@ describe('core schemas are strict everywhere', () => {
   it('reaches every object schema: no unknown container kind was skipped', () => {
     const { objects, unknownKinds } = walkExports();
     expect([...unknownKinds]).toEqual([]);
-    // Request, Claim + extractor, Observation, ObserverCoverage, Coverage, HealthReport, Grant, Reason,
-    // ReceiptOverride, Receipt + a reverted override, Attribution, GradeContext + scope, Activity + its four element shapes,
-    // and one params object per ReasonCode (§15).
-    expect(objects.size).toBe(20 + core.ReasonCode.options.length);
+    // Request, Claim + extractor, Observation, ObserverCoverage, Coverage, HealthReport, Grant, GrantChoices (sprint_4
+    // close), Reason, ReceiptOverride, Receipt + a reverted override, Attribution, GradeContext + scope, Activity + its
+    // four element shapes, and one params object per ReasonCode (§15).
+    expect(objects.size).toBe(21 + core.ReasonCode.options.length);
   });
 
   it('every object, nested ones included, rejects unknown keys', () => {

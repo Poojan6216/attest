@@ -16,9 +16,9 @@ import { reasonText } from '../core/reason-text';
 import type { Claim, Observation, Receipt } from '../core/schema';
 import { addressDomain, merchantDomain, withoutAddresses } from '../ledger/domain';
 import { dateLabel, instantLabel } from './digest-labels';
-import { escapeMarkdown } from './digest-share';
+import { escapeMarkdown } from './markdown';
 import { formatAmount } from './format';
-import { AGENT_NAMES, claimTypeLabel } from './paste-labels';
+import { AGENT_NAMES, claimTypeLabel } from './labels';
 import { gradeLabel, sourceName } from './receipt-labels';
 
 export interface ShareInput {

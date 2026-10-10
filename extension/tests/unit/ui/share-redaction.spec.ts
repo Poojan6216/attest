@@ -11,12 +11,12 @@ import { Claim, IsoTs, Receipt } from '../../../src/core/schema';
 import { DigestRecord } from '../../../src/ledger/types';
 import { claimFields } from '../../../src/ui/detail-labels';
 import { digestMarkdown } from '../../../src/ui/digest-share';
-import { claimWhat } from '../../../src/ui/paste-labels';
+import { unescapeMarkdown } from '../../../src/ui/markdown';
+import { claimWhat } from '../../../src/ui/labels';
 import { receiptMarkdown } from '../../../src/ui/receipt-share';
 import { makeClaim, makeReceipt, ulid } from '../ledger/fixtures';
 
 const NOW = Date.parse('2026-10-08T17:00:00-04:00');
-const unescaped = (text: string): string => text.replace(/\\(.)/gu, '$1');
 
 /** The claims of a pasted log in `agent`'s shape, pasted at 17:00 on 8 October in New York. */
 function read(agent: 'chatgpt' | 'muse', ...rows: string[]): Claim[] {
@@ -58,7 +58,7 @@ describe('a name written with a dot', () => {
   it('is kept as the claim’s counterparty, and never shared, as a domain or at all', () => {
     const [claim] = read('muse', 'Today', '4:33 pm · Texted J.Smith that the deck is ready');
     expect(claim?.counterparty).toBe('J.Smith');
-    const shared = unescaped(receiptMarkdown({ receipt: noEvidence(claim), claim, observations: [] }));
+    const shared = unescapeMarkdown(receiptMarkdown({ receipt: noEvidence(claim), claim, observations: [] }));
     expect(shared.toLowerCase()).not.toContain('j.smith');
   });
 });
@@ -67,10 +67,12 @@ describe('an address inside a subject hint', () => {
   it('is shared as its domain, in a receipt’s share and in a week’s', () => {
     const claim = Claim.parse(makeClaim({ subjectHint: 'Lunch with priya@company.example' }));
     const receipt = Receipt.parse(makeReceipt({ observationIds: [] }));
-    const shared = unescaped(receiptMarkdown({ receipt, claim, observations: [] }));
+    const shared = unescapeMarkdown(receiptMarkdown({ receipt, claim, observations: [] }));
     expect(shared).not.toMatch(/@/u);
     expect(shared).toContain('“Lunch with company.example”');
-    const digest = unescaped(digestMarkdown(week({ subjectHint: 'Lunch with priya@company.example' })));
+    const digest = unescapeMarkdown(
+      digestMarkdown(week({ subjectHint: 'Lunch with priya@company.example' })),
+    );
     expect(digest).not.toMatch(/@/u);
     expect(digest).toContain('“Lunch with company.example”');
   });
@@ -91,10 +93,10 @@ describe('an amount read behind a bare $', () => {
     if (claim === undefined) throw new Error('no claim');
     expect(claimFields(claim, NOW)).toContainEqual(['Amount', '89.99 (currency not stated)']);
     expect(claimWhat(claim)).toContain('89.99 (currency not stated)');
-    expect(unescaped(receiptMarkdown({ receipt: noEvidence(claim), claim, observations: [] }))).toContain(
-      '89.99 (currency not stated)',
-    );
+    expect(
+      unescapeMarkdown(receiptMarkdown({ receipt: noEvidence(claim), claim, observations: [] })),
+    ).toContain('89.99 (currency not stated)');
     const digest = week({ type: 'purchase.made', at: '2026-10-08T15:40:00-04:00', amountCents: 8999 });
-    expect(unescaped(digestMarkdown(digest))).toContain('89.99 (currency not stated)');
+    expect(unescapeMarkdown(digestMarkdown(digest))).toContain('89.99 (currency not stated)');
   });
 });

@@ -21,6 +21,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
+import { unescapeMarkdown } from '../../src/ui/markdown';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import {
   collectPageChannels,
@@ -158,7 +159,7 @@ async function collectAfter(
   }
   const netLogUrls = readNetLogRequests(dir).map((r) => r.url);
   rmSync(dir, { recursive: true, force: true });
-  const share = shares.flatMap((text) => [text, text.replace(/\\(.)/gu, '$1')]);
+  const share = shares.flatMap((text) => [text, unescapeMarkdown(text)]);
   return { storage, pages, consoleLines, routeRecords, netLogUrls, share };
 }
 

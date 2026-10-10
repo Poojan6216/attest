@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { type BrowserContext, chromium, errors, type Page, type Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
+import { DEAD_PROXY_ARG } from './network-guard';
+
 /** The extension API inside the worker, where `waitForReaders` runs. */
 declare const chrome: WxtBrowser;
 
@@ -34,6 +36,12 @@ export interface LaunchOptions {
    * the Calendar observer checks the page's zone against the browser's). The machine's zone by default.
    */
   readonly timezoneId?: string;
+  /**
+   * Every launch runs behind the dead proxy (sprint_4 close, security review SEC-5): a request that escapes the route
+   * guard, as a tab the extension creates itself can, fails on this machine instead of reaching the internet. A test
+   * that truly needs the network says so here; none does.
+   */
+  readonly allowNetwork?: true;
 }
 
 export interface LaunchedExtension {
@@ -126,6 +134,13 @@ async function startBrowser(
     const userDataDir = options.userDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'attest-e2e-'));
     const extraArgs =
       typeof options.extraArgs === 'function' ? options.extraArgs(attempt) : options.extraArgs;
+    const args = [...(extraArgs ?? [])];
+    if (options.allowNetwork !== true && !args.some((arg) => arg.startsWith('--proxy-server='))) {
+      args.push(DEAD_PROXY_ARG);
+    }
+    if (options.allowNetwork !== true && !args.includes(DEAD_PROXY_ARG)) {
+      throw new Error('every launch runs behind the dead proxy, and this one names another');
+    }
     try {
       const context = await chromium.launchPersistentContext(userDataDir, {
         channel: 'chromium',
@@ -135,7 +150,7 @@ async function startBrowser(
         args: [
           `--disable-extensions-except=${EXTENSION_PATH}`,
           `--load-extension=${EXTENSION_PATH}`,
-          ...(extraArgs ?? []),
+          ...args,
         ],
       });
       return { context, userDataDir };

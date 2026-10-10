@@ -1,6 +1,6 @@
 /*
  * Design tokens (sprint_4 4.1; agents/ux_engineer.md rules 1, 3 and 10): the grade colours, the degraded banner's
- * yellow, the page's surface, ink and rules, and the spacing the surfaces share. Each colour has its dark value under
+ * yellow, the error text's red (sprint_4 close, tech review TECH-8), the page's surface, ink and rules, and the spacing the surfaces share. Each colour has its dark value under
  * `prefers-color-scheme: dark`. Tailwind reads `@theme`, so each token is a utility (`bg-grade-verified-bg`,
  * `text-grade-verified-fg`, `border-grade-verified-edge`, `p-gutter`, `gap-row`). Colour is never the only signal:
  * every chip, line and banner drawn with these says its grade or state in words (src/ui/receipt-labels.ts).
@@ -36,6 +36,8 @@
   --color-degraded-fg: oklch(28.6% 0.066 53.813);
   --color-degraded-bg: oklch(97.3% 0.071 103.193);
   --color-degraded-edge: oklch(68.1% 0.162 75.834);
+  /* An error a page says (a read or a save that failed, a field it refuses): red, on the page's own surface. */
+  --color-error-fg: oklch(39.6% 0.141 25.723);
   /* The page. */
   --color-surface: oklch(100% 0 0);
   --color-ink: oklch(20.5% 0 none);
@@ -71,6 +73,7 @@
     --color-degraded-fg: oklch(97.3% 0.071 103.193);
     --color-degraded-bg: oklch(28.6% 0.066 53.813);
     --color-degraded-edge: oklch(79.5% 0.184 86.047);
+    --color-error-fg: oklch(88.5% 0.062 18.334);
     --color-surface: oklch(20.5% 0 none);
     --color-ink: oklch(97% 0 none);
     --color-ink-muted: oklch(70.8% 0 none);

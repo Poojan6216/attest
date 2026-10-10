@@ -15,6 +15,7 @@
  * 2.7 interface 6). `postAcked` is the observer skeleton's `post`: it also rejects on `{ ok: false }`.
  */
 import { browser } from 'wxt/browser';
+import type { z } from 'zod';
 
 import type { AgentId, Claim, IsoTs } from '../core/schema';
 import { log } from '../log';
@@ -23,21 +24,24 @@ import {
   BusAck,
   BusMessage,
   type BusMessageType,
+  type ClaimsImportResult,
+  type FlagSetMessage,
+  type GrantSaveMessage,
+  type GrantSaveResult,
   isAckedType,
+  type LedgerWipeMessage,
+  PAGE_COMMAND_RESULTS,
+  type PageCommand,
+  type PageCommandResult,
+  type ReaderToggleMessage,
+  type ReceiptEventMessage,
+  type ReceiptEventResult,
+  type RetentionSaveMessage,
+  type SettingResult,
   type UiQuery,
   type UiResult,
   UiResultMessage,
   uiFailure,
-  ClaimsImportResult,
-  type GrantSaveMessage,
-  GrantSaveResult,
-  type FlagSetMessage,
-  type LedgerWipeMessage,
-  type ReaderToggleMessage,
-  type ReceiptEventMessage,
-  ReceiptEventResult,
-  type RetentionSaveMessage,
-  SettingResult,
 } from './messages';
 
 /**
@@ -106,99 +110,64 @@ export async function query(query: UiQuery): Promise<UiResult> {
   return parsed.data;
 }
 
+/** The table of answers, each command's schema typed by its own result, so the one sender reads it with no cast. */
+const ANSWERS: { readonly [K in PageCommand]: z.ZodType<PageCommandResult<K>> } = PAGE_COMMAND_RESULTS;
+
 /**
- * Sends claims the person pasted to the service worker (sprint_3 3.13) and resolves its `ClaimsImportResult`: for a
- * valid message it always resolves, an absent or malformed answer becoming `{ ok: false, code: 'failed' }` (logged
- * as `bus.import_unavailable`). An invalid message is never sent: it is logged (`bus.import_refused`) and rejects
- * with `BusError('invalid_outgoing')`.
+ * Sends one of a person's commands from an extension page (messages.ts `PAGE_COMMAND_RESULTS`) and resolves its
+ * answer: for a valid message it always resolves, an absent or malformed answer becoming `{ ok: false, code: 'failed' }`
+ * (logged as `bus.command_unavailable`, with the type and why). An invalid message is never sent: it is logged
+ * (`bus.command_refused`, with the type) and rejects with `BusError('invalid_outgoing')`. Nothing a person wrote is
+ * logged (a mark's reason, a grant's domains). One sender for every command (sprint_4 close, tech review TECH-8).
  */
+async function sendCommand<T extends PageCommand>(
+  message: BusMessage & { readonly type: T },
+): Promise<PageCommandResult<T>> {
+  let response: unknown;
+  try {
+    response = await send(message);
+  } catch (error) {
+    log.warn('bus.command_refused', { type: message.type, error });
+    throw error;
+  }
+  const answers = ANSWERS[message.type];
+  const parsed = answers.safeParse(response);
+  if (parsed.success) return parsed.data;
+  const reason = response === undefined ? 'no_response' : 'malformed_result';
+  log.warn('bus.command_unavailable', { type: message.type, reason });
+  return answers.parse({ ok: false, code: 'failed' });
+}
+
+/** Sends claims the person pasted (sprint_3 3.13), with the minutes the log's timed entries name (`sendCommand`). */
 export async function importClaims(
   agent: AgentId,
   claims: readonly Claim[],
   activeAt: readonly IsoTs[],
 ): Promise<ClaimsImportResult> {
-  let response: unknown;
-  try {
-    response = await send({ type: 'claims.import', agent, claims: [...claims], activeAt: [...activeAt] });
-  } catch (error) {
-    log.warn('bus.import_refused', { error });
-    throw error;
-  }
-  const parsed = ClaimsImportResult.safeParse(response);
-  if (parsed.success) return parsed.data;
-  log.warn('bus.import_unavailable', { reason: response === undefined ? 'no_response' : 'malformed_result' });
-  return { ok: false, code: 'failed' };
+  return sendCommand({ type: 'claims.import', agent, claims: [...claims], activeAt: [...activeAt] });
 }
 
-/**
- * Sends a person's override or revert of one receipt to the service worker (sprint_4 4.3) and resolves its
- * `ReceiptEventResult`: for a valid message it always resolves, an absent or malformed answer becoming `{ ok: false,
- * code: 'failed' }` (logged as `bus.receipt_event_unavailable`). An invalid message is never sent: it is logged
- * (`bus.receipt_event_refused`) and rejects with `BusError('invalid_outgoing')`. The reason is never logged.
- */
+/** Sends a person's override or revert of one receipt (sprint_4 4.3; `sendCommand`: the reason is never logged). */
 export async function sendReceiptEvent(
   receiptId: ReceiptEventMessage['receiptId'],
   event: ReceiptEventMessage['event'],
 ): Promise<ReceiptEventResult> {
-  let response: unknown;
-  try {
-    response = await send({ type: 'receipt.event', receiptId, event });
-  } catch (error) {
-    log.warn('bus.receipt_event_refused', { error });
-    throw error;
-  }
-  const parsed = ReceiptEventResult.safeParse(response);
-  if (parsed.success) return parsed.data;
-  log.warn('bus.receipt_event_unavailable', {
-    reason: response === undefined ? 'no_response' : 'malformed_result',
-  });
-  return { ok: false, code: 'failed' };
+  return sendCommand({ type: 'receipt.event', receiptId, event });
 }
 
-/**
- * Sends a person's grant for one agent, and whether its alerts are muted, to the service worker (sprint_4 4.4), and
- * resolves its `GrantSaveResult`: for a valid message it always resolves, an absent or malformed answer becoming
- * `{ ok: false, code: 'failed' }` (logged as `bus.grant_unavailable`). An invalid message is never sent: it is logged
- * (`bus.grant_refused`) and rejects with `BusError('invalid_outgoing')`.
- */
+/** Sends a person's grant for one agent, and whether its alerts are muted (sprint_4 4.4; `sendCommand`). */
 export async function sendGrant(
   grant: GrantSaveMessage['grant'],
   alertsMuted: boolean,
 ): Promise<GrantSaveResult> {
-  let response: unknown;
-  try {
-    response = await send({ type: 'grant.save', grant, alertsMuted });
-  } catch (error) {
-    log.warn('bus.grant_refused', { error });
-    throw error;
-  }
-  const parsed = GrantSaveResult.safeParse(response);
-  if (parsed.success) return parsed.data;
-  log.warn('bus.grant_unavailable', { reason: response === undefined ? 'no_response' : 'malformed_result' });
-  return { ok: false, code: 'failed' };
+  return sendCommand({ type: 'grant.save', grant, alertsMuted });
 }
 
-/**
- * Sends one of a person's settings to the service worker (sprint_4 4.5: `retention.save`, `reader.toggle`,
- * `ledger.wipe`; 4.9: `flag.set`) and resolves its `SettingResult`: for a valid message it always resolves, an absent or malformed
- * answer becoming `{ ok: false, code: 'failed' }` (logged as `bus.setting_unavailable` with the type). An invalid
- * message is never sent: it is logged (`bus.setting_refused`) and rejects with `BusError('invalid_outgoing')`.
- */
+/** Sends one of a person's settings (sprint_4 4.5: retention, a reader, Delete all data; 4.9: a flag; `sendCommand`). */
 export async function sendSetting(
   message: RetentionSaveMessage | ReaderToggleMessage | FlagSetMessage | LedgerWipeMessage,
 ): Promise<SettingResult> {
-  let response: unknown;
-  try {
-    response = await send(message);
-  } catch (error) {
-    log.warn('bus.setting_refused', { type: message.type, error });
-    throw error;
-  }
-  const parsed = SettingResult.safeParse(response);
-  if (parsed.success) return parsed.data;
-  const reason = response === undefined ? 'no_response' : 'malformed_result';
-  log.warn('bus.setting_unavailable', { type: message.type, reason });
-  return { ok: false, code: 'failed' };
+  return sendCommand(message);
 }
 
 /**

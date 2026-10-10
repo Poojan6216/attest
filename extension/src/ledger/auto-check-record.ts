@@ -15,6 +15,7 @@ import type { Policy } from '../core/policy';
 import { MS_PER_MINUTE } from '../core/units';
 import { readRow, type LedgerDb } from './db';
 import { AgentId, IsoTs } from './types';
+import { parseWrite } from './errors';
 
 export const AUTO_CHECK_AT = 'autoCheckAt';
 export const AUTO_CHECK_UNTIL = 'autoCheckUntil';
@@ -74,13 +75,18 @@ export async function readAutoCheck(db: LedgerDb): Promise<AutoCheckRecord | nul
   };
 }
 
-/** Records an open (header), its four keys in one transaction; a record its reader would refuse throws, unwritten. */
+/**
+ * Records an open (header), its four keys in one transaction; a record its reader would refuse is refused
+ * (`invalid_input`), unwritten.
+ */
 export async function recordAutoCheck(db: LedgerDb, record: AutoCheckRecord): Promise<void> {
+  const refused = 'Invalid auto-check record';
+  const meta = { table: 'meta' };
   const rows = [
-    AtEntry.parse({ key: AUTO_CHECK_AT, value: record.at }),
-    UntilEntry.parse({ key: AUTO_CHECK_UNTIL, value: record.until }),
-    ClaimsEntry.parse({ key: AUTO_CHECK_CLAIMS, value: record.claims }),
-    AgentsEntry.parse({ key: AUTO_CHECK_AGENTS, value: record.agents.join(',') }),
+    parseWrite(AtEntry, { key: AUTO_CHECK_AT, value: record.at }, refused, meta),
+    parseWrite(UntilEntry, { key: AUTO_CHECK_UNTIL, value: record.until }, refused, meta),
+    parseWrite(ClaimsEntry, { key: AUTO_CHECK_CLAIMS, value: record.claims }, refused, meta),
+    parseWrite(AgentsEntry, { key: AUTO_CHECK_AGENTS, value: record.agents.join(',') }, refused, meta),
   ];
   await db.transaction('rw', db.meta, () => db.meta.bulkPut(rows));
 }
