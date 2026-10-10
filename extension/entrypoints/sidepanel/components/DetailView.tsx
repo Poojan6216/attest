@@ -23,7 +23,7 @@ export function DetailView({ timeline, lastBatchMs, onClose }: DetailViewProps) 
             : 'Attest no longer keeps this receipt.'}
         </p>
         <Button variant="secondary" onClick={onClose}>
-          Back to the timeline
+          Return to the timeline
         </Button>
       </section>
     );

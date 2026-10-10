@@ -11,3 +11,12 @@
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
+
+/*
+ * A date field's own calendar button, which Tab reaches inside the field, takes focus without the field matching
+ * :focus-visible: the field shows the outline while focus is anywhere in it (sprint_4 4.10 keyboard walk).
+ */
+input[type='date']:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

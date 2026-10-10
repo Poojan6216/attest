@@ -7,11 +7,21 @@ export interface AgentBadgeProps {
   readonly likely?: boolean;
 }
 
-/** Which agent a receipt is about, last in its row (agents/ux_engineer.md rules 1 and 4). */
+/**
+ * Which agent a receipt is about, last in its row (agents/ux_engineer.md rules 1 and 4). A screen reader hears "Agent:
+ * Muse", or "Likely agent: Muse" on an UNASKED receipt, as it hears "Grade: Not found" on the chip beside it.
+ */
 export function AgentBadge({ agent, likely = false }: AgentBadgeProps) {
   return (
     <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded border border-rule px-1.5 py-0.5 text-xs text-ink-muted">
-      {likely ? `Likely agent: ${agentName(agent)}` : agentName(agent)}
+      {likely ? (
+        `Likely agent: ${agentName(agent)}`
+      ) : (
+        <>
+          <span class="sr-only">Agent: </span>
+          {agentName(agent)}
+        </>
+      )}
     </span>
   );
 }

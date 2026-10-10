@@ -66,7 +66,7 @@ test('the timeline lists the pasted receipts, and a mark on one round-trips thro
     );
     expect(await seriousViolations(panel)).toEqual([]);
 
-    await email.getByRole('button', { name: /^Details/u }).click();
+    await email.getByRole('button', { name: /^Open details/u }).click();
     await expect(panel.getByRole('heading', { name: 'Receipt' })).toBeFocused();
     await expect(panel.getByRole('list', { name: 'Evidence' })).toContainText('Sent-folder row');
     await expect(panel.locator('dt').filter({ hasText: /^Rule$/u })).toBeVisible();

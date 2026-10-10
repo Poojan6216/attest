@@ -256,7 +256,7 @@ describe('a receipt’s detail', () => {
     );
     expect(root.querySelector('details summary')?.textContent).toBe('2 coverage entries');
     expect(document.activeElement?.textContent).toBe('Receipt');
-    await click(button('Back to the timeline'));
+    await click(button('Return to the timeline'));
     expect(document.activeElement?.closest('li')?.getAttribute('data-receipt')).toBe(id);
   });
 });

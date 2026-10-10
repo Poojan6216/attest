@@ -71,7 +71,7 @@ export function PopupLinks() {
         Open timeline
       </Button>
       <Button variant="secondary" onClick={openDigest}>
-        Weekly digest
+        Open weekly digest
       </Button>
       <Button variant="secondary" onClick={openSettings}>
         Open settings

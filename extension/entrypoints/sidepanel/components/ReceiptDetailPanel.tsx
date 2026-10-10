@@ -49,7 +49,7 @@ export function ReceiptDetailPanel({
           Receipt
         </h2>
         <Button variant="secondary" onClick={onClose}>
-          Back to the timeline
+          Return to the timeline
         </Button>
       </div>
       <ul>

@@ -64,7 +64,10 @@ describe('GradeChip and AgentBadge', () => {
   });
 
   it('names the agent, and says "Likely agent" for an UNASKED receipt', () => {
-    expect(show(h(AgentBadge, { agent: 'chatgpt' })).textContent).toBe('ChatGPT');
+    const badge = show(h(AgentBadge, { agent: 'chatgpt' }));
+    // A screen reader hears "Agent: ChatGPT" (sprint_4 4.10); the eye sees the name alone.
+    expect(badge.textContent).toBe('Agent: ChatGPT');
+    expect(badge.querySelector('.sr-only')?.textContent).toBe('Agent: ');
     expect(show(h(AgentBadge, { agent: 'muse', likely: true })).textContent).toBe('Likely agent: Muse');
   });
 });
