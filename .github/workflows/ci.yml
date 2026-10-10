@@ -204,6 +204,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The manifest asks for no more than Attest needs (sprint_6 6.6; Hard Rules 1, 8, 9): `tabs`, a wildcard host, a
+      # content script, a loosened CSP or an old Chrome fails here (scripts/audit-manifest.ts).
+      - name: Audit the manifest
+        run: pnpm audit:manifest
+
       - name: Install Playwright Chromium
         run: pnpm --dir extension exec playwright install --with-deps chromium
 

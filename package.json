@@ -15,6 +15,7 @@
     "build:release": "pnpm --dir extension run build:release",
     "lint": "pnpm --dir extension run lint && eslint . --max-warnings 0 && prettier --check . && pnpm check-docs",
     "check-docs": "tsx scripts/check-docs.ts",
+    "audit:manifest": "tsx scripts/audit-manifest.ts",
     "format": "pnpm --dir extension run format",
     "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",
