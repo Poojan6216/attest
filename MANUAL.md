@@ -45,6 +45,8 @@ The agent appends here whenever a task is `BLOCKED(MANUAL)`. Each item: what, wh
 - [ ] **Push the Sprint 4 commits** (`git push origin main` from the repository root) and check that CI is green, the new "ui coverage" job included. The agent cannot push from here.
 
 ## During Sprint 5 (telemetry)
+- [ ] **Check Chrome's on-device model on your Mac (Sprint 5.2), when you have ten minutes.** No test browser has Chrome's real on-device model, so this one check is yours. (1) From the repository root run `pnpm build`, then in `chrome://extensions` reload Attest (Developer mode, "Load unpacked" from `extension/.output/chrome-mv3` if it is not loaded). (2) Open Attest's options page, section Model. If it says Chrome has not downloaded its on-device model, click "Download Chrome's on-device model" and wait until it finishes (Chrome needs about 22 GB free and 16 GB of memory, or a graphics card with more than 4 GB). (3) Open `chrome-extension://<Attest's id>/model-check.html` (the id is on `chrome://extensions`) and click "Score the ten check claims". (4) Tell the agent what the ten lines say, for example "model check: 10 of 10 answered" or how many say "No answer". All ten claims are invented. Nothing is sent anywhere: the model runs inside Chrome. **Recommended default: do it before Sprint 5's gate**; if your Mac cannot run the model, say so, and the model simply stays unavailable there.
+
 - [ ] Create a Railway project + MongoDB, set `MONGO_URL` and `ALLOWED_EXT_IDS` env vars; give the agent the public URL for `config.TELEMETRY_HOST`. Unblocks 5.8 deploy (docker-compose proves it locally meanwhile).
 
 ## During Sprint 6

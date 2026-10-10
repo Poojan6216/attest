@@ -146,8 +146,8 @@ describe('the components page', () => {
   });
 
   it('is left out of a release build, and kept in every other', () => {
-    const infos = [{ name: 'popup' }, { name: 'dev' }, { name: 'sidepanel' }];
-    expect(DEV_ENTRYPOINTS).toEqual(['dev']);
+    const infos = [{ name: 'popup' }, { name: 'dev' }, { name: 'model-check' }, { name: 'sidepanel' }];
+    expect(DEV_ENTRYPOINTS).toEqual(['dev', 'model-check']);
     expect(releaseEntrypoints(infos, true).map(({ name }) => name)).toEqual(['popup', 'sidepanel']);
     expect(releaseEntrypoints(infos, false)).toBe(infos);
   });

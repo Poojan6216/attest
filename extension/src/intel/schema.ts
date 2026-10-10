@@ -23,6 +23,32 @@ export const IntelScore = z.strictObject({
 export const IntelOutput = z.strictObject({ scores: z.array(IntelScore).max(SCHEMA_LIMITS.BATCH) });
 
 export type IntelOutput = z.infer<typeof IntelOutput>;
+
+/**
+ * The answer's shape as a JSON Schema, written out, for a model that can be held to one (the built-in model's
+ * `responseConstraint`). Written by hand because the shipped build carries no zod JSON Schema code (wxt.config.ts);
+ * tests/unit/intel/builtin.spec.ts holds it to `IntelOutput`.
+ */
+export const INTEL_OUTPUT_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    scores: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          candidateId: { type: 'string' },
+          score: { type: 'number', minimum: 0, maximum: 1 },
+          rationaleHint: { type: 'string', maxLength: RATIONALE_HINT_MAX },
+        },
+        required: ['candidateId', 'score'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['scores'],
+  additionalProperties: false,
+} as const;
 export type ModelScores = NonNullable<GradeContext['modelScores']>;
 
 /**

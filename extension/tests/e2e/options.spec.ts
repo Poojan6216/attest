@@ -22,7 +22,6 @@ declare const chrome: WxtBrowser;
 
 const SECTION_TITLES = ['Grants', 'Adapters', 'Privacy', 'Model', 'Export', 'Danger zone'];
 // Grants are editable since sprint_4 4.4 (tests/e2e/grants.spec.ts).
-const STUB_SECTION_IDS = ['model'];
 /**
  * Every tab stop: each enabled control, and of a radio group only its checked radio (the arrow keys move within the
  * group, which the retention test below walks). A disabled control is no tab stop: the telemetry choice until Sprint 5,
@@ -56,9 +55,7 @@ test.describe('options page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Attest settings');
   });
 
-  test('privacy line first, one h1, one h2 per section in order, stubs without controls', async ({
-    attest,
-  }) => {
+  test('privacy line first, one h1, one h2 per section in order', async ({ attest }) => {
     await installedId(attest);
     const { page, errors } = await openOptions(attest);
 
@@ -81,11 +78,43 @@ test.describe('options page', () => {
     for (const title of SECTION_TITLES) {
       await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
     }
-    for (const id of STUB_SECTION_IDS) {
-      const section = page.locator(`#${id}`);
-      await expect(section).toContainText('Available in a later version.');
-      await expect(section.locator('a, button, input, select, textarea')).toHaveCount(0);
-    }
+    expect(errors).toEqual([]);
+  });
+});
+
+/** Why the on-device model cannot be turned on, by what Chrome's Prompt API says (BuiltinModelToggle.tsx). */
+const WHY_NOT: Readonly<Record<string, string>> = {
+  no_api: 'This Chrome has no on-device model: it needs Chrome 138 or later on a computer that can run it.',
+  unavailable: 'Chrome says this computer cannot run its on-device model.',
+  downloadable: 'Chrome has not downloaded its on-device model yet.',
+  downloading: 'Chrome is downloading its on-device model. Come back once it has finished.',
+};
+
+test.describe('options page: the Model section (sprint_5 5.2)', () => {
+  test('the on-device model switch is disabled, with its reason, where this Chrome cannot run the model', async ({
+    attest,
+  }) => {
+    const { page, errors } = await openOptions(attest);
+    const said = await page.evaluate(async () => {
+      const api: unknown = Reflect.get(globalThis, 'LanguageModel');
+      if ((typeof api !== 'function' && typeof api !== 'object') || api === null) return 'no_api';
+      const availability: unknown = Reflect.get(api, 'availability');
+      if (typeof availability !== 'function') return 'no_api';
+      const languages = [{ type: 'text', languages: ['en'] }];
+      try {
+        const answer: unknown = await Reflect.apply(availability, api, [
+          { expectedInputs: languages, expectedOutputs: languages },
+        ]);
+        return String(answer);
+      } catch {
+        return 'unavailable';
+      }
+    });
+    // The test browser runs no model; one that did would need this test to say what it shows.
+    expect(Object.keys(WHY_NOT)).toContain(said);
+    const model = page.getByRole('group', { name: 'Chrome’s on-device model' });
+    await expect(model.getByRole('status')).toHaveText(`The on-device model is off. ${WHY_NOT[said] ?? ''}`);
+    await expect(model.getByRole('button', { name: 'Turn on the on-device model' })).toBeDisabled();
     expect(errors).toEqual([]);
   });
 });

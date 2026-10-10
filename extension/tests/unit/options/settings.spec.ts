@@ -39,6 +39,7 @@ beforeEach(() => {
     retentionDays: 90,
     readersOff: new Set(['gcal']),
     autoCheckGmail: false,
+    modelOn: false,
     health: [
       AdapterHealth.parse({
         adapterId: 'gmail.sent',

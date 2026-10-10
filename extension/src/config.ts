@@ -117,20 +117,21 @@ export const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlag, boolean>> = Obj
 });
 
 /**
- * The flags a person turns on or off in the options page (sprint_4 4.9): the Gmail auto-check. Each other flag comes
- * with its feature.
+ * The flags a person turns on or off in the options page: the Gmail auto-check (sprint_4 4.9) and Chrome's on-device
+ * model (sprint_5 5.2). Each other flag comes with its feature.
  */
+export const SETTABLE_FLAGS = Object.freeze([
+  'ATTEST_AUTO_CHECK_GMAIL',
+  'ATTEST_MODEL',
+] as const satisfies readonly FeatureFlag[]);
+
+export type SettableFlag = (typeof SETTABLE_FLAGS)[number];
+
 /**
  * The advisory model's time for one claim (sprint_5 5.1; agents/intel_engineer.md rule 4): an answer later than this
  * is no answer, and the claim is graded rules-only.
  */
 export const INTEL_TIMEOUT_MS = 2_000;
-
-export const SETTABLE_FLAGS = Object.freeze([
-  'ATTEST_AUTO_CHECK_GMAIL',
-] as const satisfies readonly FeatureFlag[]);
-
-export type SettableFlag = (typeof SETTABLE_FLAGS)[number];
 
 /**
  * What the Gmail auto-check opens (sprint_4 4.9; src/background/auto-check.ts): the Sent folder of the first account

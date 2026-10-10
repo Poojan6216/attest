@@ -81,6 +81,8 @@ export const LOG_EVENTS = [
   'observer.refused',
   'observer.snapshot_skipped',
   'observer.wrong_site',
+  'options.model_download_failed',
+  'options.model_toggle_failed',
   'options.away_change_failed',
   'options.away_check_failed',
   'options.auto_check_toggle_failed',

@@ -100,10 +100,11 @@ export function zodWithoutJsonSchema(): Plugin {
 
 /**
  * The pages built for development and the tests, never for the store: the components page (entrypoints/dev, sprint_4
- * 4.1). `pnpm build:release` sets ATTEST_RELEASE=1, and the store zip then holds none of them; every other build has
- * them, so the end-to-end tests can open the page.
+ * 4.1) and the on-device model check (entrypoints/model-check, sprint_5 5.2). `pnpm build:release` sets
+ * ATTEST_RELEASE=1, and the store zip then holds none of them; every other build has them, so the end-to-end tests
+ * and a person checking Chrome's model can open them.
  */
-export const DEV_ENTRYPOINTS: readonly string[] = ['dev'];
+export const DEV_ENTRYPOINTS: readonly string[] = ['dev', 'model-check'];
 
 /** `infos` without the development pages when `release` is set: what a release build makes. */
 export function releaseEntrypoints<T extends { readonly name: string }>(infos: T[], release: boolean): T[] {

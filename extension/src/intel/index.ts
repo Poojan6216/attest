@@ -33,6 +33,22 @@ export async function modelScores(
   candidates: readonly Observation[],
   timeoutMs: number = INTEL_TIMEOUT_MS,
 ): Promise<ModelScores | undefined> {
+  let input: IntelInput;
+  try {
+    input = buildInput(claim, candidates);
+  } catch (error) {
+    log.warn('intel.failed', { provider: provider.id, error });
+    return undefined;
+  }
+  return scoresFor(provider, input, timeoutMs);
+}
+
+/** `modelScores` for an input already built (the dev model check scores its own; entrypoints/model-check). */
+export async function scoresFor(
+  provider: IntelProvider,
+  input: IntelInput,
+  timeoutMs: number = INTEL_TIMEOUT_MS,
+): Promise<ModelScores | undefined> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<typeof TIMED_OUT>((resolve) => {
@@ -41,7 +57,6 @@ export async function modelScores(
     }, timeoutMs);
   });
   try {
-    const input = buildInput(claim, candidates);
     const answer = await Promise.race([provider.score(input, controller.signal), late]);
     if (answer === TIMED_OUT) {
       controller.abort();

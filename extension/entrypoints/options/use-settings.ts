@@ -1,6 +1,6 @@
 /**
- * The options page's settings (sprint_4 4.5): the retention window, which page readers are off and whether the Gmail
- * auto-check is on (4.9), all ledger meta (src/ledger/settings.ts, src/ledger/consent.ts), and each observer's last
+ * The options page's settings (sprint_4 4.5): the retention window, which page readers are off, whether the Gmail
+ * auto-check is on (4.9) and whether the on-device model is (sprint_5 5.2), all ledger meta (src/ledger/settings.ts, src/ledger/consent.ts), and each observer's last
  * health report. They are read when a section opens and again when the service worker announces a change to meta or
  * adapter health. Every change goes to the service worker (`retention.save`, `reader.toggle`, `flag.set`,
  * `ledger.wipe`): pages never write. A read that fails is said and logged (Hard Rule 6).
@@ -26,6 +26,8 @@ export interface SettingsView {
   readonly readersOff: ReadonlySet<ReaderId>;
   /** Whether the Gmail auto-check is on (flag ATTEST_AUTO_CHECK_GMAIL). */
   readonly autoCheckGmail: boolean;
+  /** Whether Chrome's on-device model may score candidates (flag ATTEST_MODEL; sprint_5 5.2). */
+  readonly modelOn: boolean;
   readonly health: readonly AdapterHealth[];
 }
 
@@ -45,6 +47,7 @@ export const LIVE_SETTINGS: SettingsSources = {
       retentionDays: await loadRetentionDays(),
       readersOff: consent.readersOff,
       autoCheckGmail: consent.flags.ATTEST_AUTO_CHECK_GMAIL,
+      modelOn: consent.flags.ATTEST_MODEL,
       health: await loadHealth(),
     };
   },
