@@ -239,6 +239,19 @@ Measured 2026-10-10 with `pnpm bench`.
 | commitDirty | false |
 | node | v22.14.0 |
 
+## redteam
+
+Measured 2026-10-10 with `pnpm bench`.
+
+| Metric | Value |
+|---|---|
+| redteamStrategies | 0 |
+| redteamCases | 0 |
+| redteamWorking | 0 |
+| commit | 66aad093d36703121443520587d001980c46b5b2 |
+| commitDirty | false |
+| node | v22.14.0 |
+
 ## ui
 
 Measured 2026-10-10 with `pnpm bench`.
