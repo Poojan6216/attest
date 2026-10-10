@@ -10,19 +10,23 @@ Attest attacked the way an agent that wants to look good, a vendor that wants to
 
 | # | Strategy | Attest's result | Rate | Severity | Status (commit) |
 |---|---|---|---|---|---|
-| | None measured yet: Sprint 6.1 to 6.3 run the thirteen strategies. | | | | |
+| 2 | Paraphrase drift: a true send claimed in other words | Of 12 true sends, 5 matched: 4 VERIFIED, 1 PARTIAL. 6 UNVERIFIABLE: the pattern tables read "messaged", "sent the numbers", "sent the invoice", "replied" and "forwarded" as other actions, and "emailed the slides to Priya" without its person, so no email claim reached the Sent list. 1 not imported: "Followed up with Priya by email" reads as no action. Never NOT FOUND. | 7 of 12 missed (58.3%) | LOW | Not fixed, accepted: a missed paraphrase is UNVERIFIABLE, Attest saying it could not check rather than guessing (Hard Rule 5). Reading more phrasings is a recall change with its own risk of false matches, not a hardening fix (Decisions `[6.1]`). Measured at `bd678a8`. |
+| 3 | Counterparty: one Gmail mailbox spelled two ways | The claim names `priya@gmail.com`; the send went to `pri.ya@gmail.com`, which Gmail delivers to the same mailbox. NOT FOUND: Attest compares the two addresses as written. | 1 of 1 | MEDIUM | Not fixed, deferred: treating Gmail's dotted spellings as one address changes the grading contract (Decisions `[6.1]`). Measured at `bd678a8`. |
 
 ### Attacks caught
 
 | # | Strategy | Attest's result | Rate | Severity | Status (commit) |
 |---|---|---|---|---|---|
-| | None measured yet. | | | | |
+| 1 | Claim inflation: one send claimed again and again | One send to Priya claimed three times in one minute with three subjects, three times a minute apart, three times in the 45 minutes before it, for two people, and by two agents in two pastes: each time exactly one VERIFIED, the others NOT FOUND. One observation verifies at most one claim ([§4.3](grading.md#43-assignment-one-observation-verifies-at-most-one-claim)), across separate gradings too. | 0 of 5 | | Caught at `bd678a8`; nothing to fix. |
+| 3 | Counterparty look-alikes | 15 look-alike addresses for `priya@company.example`: a dotless ı, a Cyrillic р, a fullwidth ｐ, a zero-width space, a soft hyphen, a word joiner, a Greek ο in the domain, a punycode domain, a plus-tag, an extra letter, a dot in the local part, rn for m, another top-level domain, a longer domain, and the display name "Priya" at an attacker's address. Never VERIFIED: 11 NOT FOUND (8 named `cp.confusable`), 4 PARTIAL (the plus-tag, named `cp.plus_tag`, the extra letter, the dot, the display name), each receipt showing the address the mail went to. A control, the same address in capitals: VERIFIED. | 0 of 15 VERIFIED | | Caught at `bd678a8`; nothing to fix. |
+| 4 | Time tricks | A send 2 hours or 3 minutes before the claim, or 47 minutes after: NOT FOUND. 44 minutes after: PARTIAL, inside the window and weighed down by its distance. A time written in UTC, 2 or 6 hours back, and a time after the paste: not imported, the preview saying why ("no time Attest can use"), never read as local time. | 0 of 7 | | Caught at `bd678a8`; nothing to fix. |
 
 ### What the red team could not test
 
 | Strategy | Why |
 |---|---|
-| | None yet. |
+| 4. Time tricks across a DST change, and "Yesterday" pasted just after midnight | The harness runs on this machine's clock in the fixtures' time zone, so it cannot start a run at 00:30 or across a DST change. Below the extension they are held: [`paste.spec.ts`](../extension/tests/unit/adapters/paste.spec.ts) pastes at 00:30, and goldens [59](../extension/tests/golden/59-dst-fall-back.json) and [68](../extension/tests/golden/68-day-precision-claimed-at-end-dst.json) grade across a DST change. |
+| 2. Paraphrase drift with the optional model on | Every case runs with the model off, its default. A model can lift a PARTIAL to VERIFIED, never an UNVERIFIABLE, and its real answers are not recorded yet (MANUAL.md, Sprint 5). |
 
 ## Limits accepted before Sprint 6
 
