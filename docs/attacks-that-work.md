@@ -8,7 +8,7 @@ Attest attacked the way an agent that wants to look good, a vendor that wants to
 
 ### Attacks that work
 
-Most severe first. Every number is from `pnpm redteam` at `b2d2028` (131 cases), unless a row says otherwise.
+Most severe first. Every number is from `pnpm redteam` at `b2d2028` (131 cases), unless a row says otherwise, and was measured again, unchanged in every row, at `7d32572`, after the hardening pass (Sprint 6.9): no fix moved a number, so the numbers before it are the numbers now.
 
 | # | Strategy | Attest's result | Rate | Severity | Status (commit) |
 |---|---|---|---|---|---|

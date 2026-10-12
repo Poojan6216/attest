@@ -12,20 +12,20 @@ Measured 2026-10-10 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 354.5 |
-| lookupMinMs | 326.7 |
-| lookupMaxMs | 489.3 |
-| lookupCpuMedianMs | 382.9 |
-| indexBuildMedianMs | 163.5 |
-| buildPlusLookupMedianMs | 515.8 |
+| lookupMedianMs | 448.6 |
+| lookupMinMs | 357 |
+| lookupMaxMs | 483.5 |
+| lookupCpuMedianMs | 451.7 |
+| indexBuildMedianMs | 162.5 |
+| buildPlusLookupMedianMs | 622.3 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1140.1 |
-| gradingMinMs | 1094.4 |
-| gradingMaxMs | 1421.6 |
-| gradingCpuMedianMs | 1352.3 |
+| gradingMedianMs | 1159.4 |
+| gradingMinMs | 1069.8 |
+| gradingMaxMs | 1399.4 |
+| gradingCpuMedianMs | 1355.2 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,7 +33,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -66,7 +66,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -98,7 +98,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -120,7 +120,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | intelByoOpenaiMeasured | false |
 | intelModelHelps | false |
 | intelCorpusInvented | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -136,7 +136,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | pasteAccuracyThreshold | 0.95 |
 | pasteCorpusInvented | true |
 | pasteGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -161,7 +161,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | patternsAccuracyThreshold | 0.9 |
 | patternsCorpusInvented | true |
 | patternsGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -172,30 +172,30 @@ Measured 2026-10-10 with `pnpm bench`.
 | Metric | Value |
 |---|---|
 | perfGmailRows | 10000 |
-| perfGmailPassMedianMs | 661.9 |
-| perfGmailPassMinMs | 650.7 |
-| perfGmailPassMaxMs | 663.9 |
+| perfGmailPassMedianMs | 739 |
+| perfGmailPassMinMs | 734.4 |
+| perfGmailPassMaxMs | 788.7 |
 | perfGmailPassGateMs | 2000 |
 | perfGmailPassGatePassed | true |
-| perfGmailStoreMs | 135258 |
+| perfGmailStoreMs | 89113 |
 | perfGmailRowsAfterTwoReads | 10000 |
 | perfGmailSentWindows | 1 |
 | perfMonthClaims | 5000 |
 | perfMonthObservations | 50000 |
-| perfMonthStorageBytes | 40222931 |
+| perfMonthStorageBytes | 40209337 |
 | perfMonthStorageGateBytes | 50000000 |
 | perfMonthStorageGatePassed | true |
-| perfMonthPopupFirstPaintMedianMs | 72 |
+| perfMonthPopupFirstPaintMedianMs | 60 |
 | perfMonthPopupGateMs | 100 |
 | perfMonthPopupGatePassed | true |
-| perfExportJsonMs | 3662 |
+| perfExportJsonMs | 2973 |
 | perfExportJsonBytes | 40143898 |
-| perfExportJsonPeakHeapBytes | 58475164 |
-| perfExportCsvMs | 1394 |
+| perfExportJsonPeakHeapBytes | 58245896 |
+| perfExportCsvMs | 1268 |
 | perfExportCsvBytes | 1206053 |
-| perfExportCsvPeakHeapBytes | 33704188 |
-| perfWorkerIdleHeapBytes | 3300344 |
-| commit | ea6f30e9d3458d5ec3666cc20c719228ced7be42 |
+| perfExportCsvPeakHeapBytes | 32433098 |
+| perfWorkerIdleHeapBytes | 3425432 |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -208,21 +208,21 @@ Measured 2026-10-10 with `pnpm bench`.
 | popupReceipts | 5000 |
 | popupRuns | 5 |
 | popupRows | 50 |
-| popupFirstPaintMedianMs | 64 |
-| popupFirstPaintMinMs | 56 |
-| popupFirstPaintMaxMs | 72 |
-| popupDayPaintMedianMs | 108 |
-| popupDayPaintMinMs | 84 |
-| popupDayPaintMaxMs | 116 |
-| popupCpuMedianMs | 84.3 |
-| popupCpuMinMs | 74.3 |
-| popupCpuMaxMs | 90.1 |
+| popupFirstPaintMedianMs | 68 |
+| popupFirstPaintMinMs | 60 |
+| popupFirstPaintMaxMs | 76 |
+| popupDayPaintMedianMs | 112 |
+| popupDayPaintMinMs | 104 |
+| popupDayPaintMaxMs | 124 |
+| popupCpuMedianMs | 90.2 |
+| popupCpuMinMs | 81.2 |
+| popupCpuMaxMs | 97.7 |
 | popupChromeMajor | 153 |
 | popupTrace | bench/traces/popup-paint.zip |
 | popupPaintGateMs | 100 |
 | popupPaintGateMetric | popupFirstPaintMedianMs |
 | popupPaintGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -269,7 +269,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -360,7 +360,7 @@ Measured 2026-10-10 with `pnpm bench`.
 | redteam15UnaskedFalseAccusationSeverity | MEDIUM |
 | redteam15UnaskedFalseAccusationOutcome | works |
 | redteam15UnaskedFalseAccusationGrades | UNASKED 6, UNVERIFIABLE 37 |
-| commit | b2d202843b67f4bca5e5113e5f0f134853edb86b |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
 
@@ -375,17 +375,17 @@ Measured 2026-10-10 with `pnpm bench`.
 | uiPopupItems | 50 |
 | uiPopupReceiptRowsRead | 204 |
 | uiPopupFullScans | 0 |
-| uiPopupMedianMs | 12.1 |
-| uiPopupMinMs | 11.1 |
-| uiPopupMaxMs | 19 |
-| uiPopupCpuMedianMs | 16.1 |
-| uiTimelineCpuMedianMs | 11.9 |
-| uiFilteredCpuMedianMs | 16 |
-| uiDetailCpuMedianMs | 0.7 |
+| uiPopupMedianMs | 15 |
+| uiPopupMinMs | 12.8 |
+| uiPopupMaxMs | 23.3 |
+| uiPopupCpuMedianMs | 18.2 |
+| uiTimelineCpuMedianMs | 14.3 |
+| uiFilteredCpuMedianMs | 16.4 |
+| uiDetailCpuMedianMs | 1.7 |
 | uiGateMs | 50 |
 | uiGateMetric | uiPopupCpuMedianMs |
 | uiGatePassed | true |
 | uiTimelineGatePassed | true |
-| commit | d49cab0fd3921c30d2871f0353b18be46bbc1ecb |
+| commit | 7d325729a59c30c9076919db061cf12422446e9a |
 | commitDirty | false |
 | node | v22.14.0 |
