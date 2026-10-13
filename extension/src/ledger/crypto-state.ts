@@ -6,7 +6,7 @@
  * memory only (src/crypto/keyring.ts). `loadKeyring` sets this context's keyring from this state and the keys this
  * context holds or is given.
  */
-import { setKeyring, type HeldKeys } from '../crypto/keyring';
+import { lockKeyring, setKeyring, type HeldKeys } from '../crypto/keyring';
 import type { LedgerDb } from './db';
 
 /** The prefix of every encryption key in `meta`. */
@@ -92,9 +92,12 @@ export const sealsNow = (state: CryptoState): boolean => state.on && state.job !
 
 /**
  * Sets this context's keyring from `db`'s state, with the keys `keys` gives: asked only while the ledger may hold sealed
- * rows, so a page never wakes the service worker for a ledger that is not encrypted. Returns the state it read.
+ * rows, so a page never wakes the service worker for a ledger that is not encrypted. Returns the state it read. While
+ * it reads, and if a read fails, the keyring is locked (Sprint 6 close, security review SEC-5): fail closed.
  */
 export async function loadKeyring(db: LedgerDb, keys: () => Promise<HeldKeys>): Promise<CryptoState> {
+  // Locked while it reads, and so after a read that fails: never the keys before a lock (SEC-5).
+  lockKeyring();
   const state = await readCryptoState(db);
   const guarded = isGuarded(state);
   setKeyring({ sealing: sealsNow(state), guarded, ...(guarded ? await keys() : {}) });

@@ -72,9 +72,13 @@ export function onUnlocked(run: () => Promise<void>): void {
 export function holdKeysHere(): void {
   held = {};
   setKeySource(() => Promise.resolve(held));
-  clearSessionKeys().catch((error: unknown) => {
-    log.error('crypto.session_clear_failed', { error });
-  });
+  // Before any command runs, and tried again once (Sprint 6 close, security review SEC-5): a copy a previous start
+  // kept and this one failed to clear would leave every page unlocked.
+  commands = clearSessionKeys()
+    .catch(() => clearSessionKeys())
+    .catch((error: unknown) => {
+      log.error('crypto.session_clear_failed', { error });
+    });
 }
 
 /** Forgets the keys this worker holds (Delete all data): nothing is left to unlock. */
@@ -95,7 +99,8 @@ async function hold(keys: HeldKeys, deps: CryptoDeps): Promise<void> {
   await sealSavedKey().catch((error: unknown) => {
     log.error('byo.seal_failed', { error });
   });
-  if (keys.current === undefined) letSleep();
+  // From what this worker holds now, not from what it was asked to hold (tech review TECH-6).
+  if (held.current === undefined) letSleep();
   else keepAwake();
   deps.notify(['meta']);
 }
@@ -176,13 +181,14 @@ export function onCryptoUnlock(message: CryptoUnlockMessage, deps: CryptoDeps): 
   });
 }
 
-/** Locks the ledger now: every context forgets the keys. A job under way pauses until the next unlock. */
+/**
+ * Locks the ledger now: every context forgets the keys. A job under way pauses until the next unlock. Always, even
+ * when this worker holds no key: the pages' copy goes too, as after a start whose clear failed (SEC-5).
+ */
 export function onCryptoLock(deps: CryptoDeps): Promise<CryptoResult> {
   return oneAtATime('crypto.lock', async () => {
-    if (held.current !== undefined) {
-      await hold({}, deps);
-      log.info('crypto.locked');
-    }
+    await hold({}, deps);
+    log.info('crypto.locked');
     return OK;
   });
 }
@@ -243,7 +249,11 @@ async function runJob(deps: CryptoDeps): Promise<void> {
     const step = await stepCryptoJob(db);
     if (step === undefined) return;
     if (step.done) {
-      await jobDone(step.job, deps);
+      // In its turn with the commands, so a lock or an unlock never lands in the middle of it (TECH-6).
+      await oneAtATime('crypto.job_done', async () => {
+        await jobDone(step.job, deps);
+        return OK;
+      });
       return;
     }
     if (step.table !== table) deps.notify(['meta']);

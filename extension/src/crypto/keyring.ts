@@ -41,6 +41,16 @@ export function clearKeyring(): void {
   ring = OPEN;
 }
 
+const UNREAD: Keyring = Object.freeze({ sealing: true, guarded: true });
+
+/**
+ * Locks this context until its keyring is read again: while the ledger's state is being read, and after a read that
+ * failed, so a context that cannot tell its keys are still good drops them (Sprint 6 close, security review SEC-5).
+ */
+export function lockKeyring(): void {
+  ring = UNREAD;
+}
+
 /** The keys this context holds. */
 export function heldKeys(): HeldKeys {
   return {

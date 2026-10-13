@@ -142,7 +142,9 @@ describe('the model key as the keys change', () => {
     await enable();
     await save();
     const sealed = String(await stored());
-    const flipped = `${sealed.slice(0, -3)}${sealed.at(-3) === 'A' ? 'B' : 'A'}${sealed.slice(-2)}`;
+    // A character inside the ciphertext, away from base64's padding, whose low bits may not count.
+    const at = sealed.lastIndexOf('.') + 5;
+    const flipped = `${sealed.slice(0, at)}${sealed[at] === 'A' ? 'B' : 'A'}${sealed.slice(at + 1)}`;
     await fakeBrowser.storage.local.set({ [STORAGE_KEYS.BYO_KEY]: flipped });
     expect(await readByo()).toBeNull();
     expect(records.map((record) => record.event)).toContain('byo.stored_invalid');

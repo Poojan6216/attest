@@ -188,6 +188,7 @@ export const LOG_VALUES = [
   'crypto.lock',
   'crypto.change',
   'crypto.disable',
+  'crypto.job_done',
   // The encryption jobs (src/ledger/crypto-state.ts CryptoJob).
   'seal',
   'reseal',

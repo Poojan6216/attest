@@ -19,7 +19,7 @@ import { Dexie } from 'dexie';
 
 import { DB_NAME } from '../config';
 import { log } from '../log';
-import type { HeldKeys } from '../crypto/keyring';
+import { lockKeyring, type HeldKeys } from '../crypto/keyring';
 import { onSessionKeysChanged, readSessionKeys } from '../crypto/session';
 import { loadKeyring } from './crypto-state';
 import type { LedgerDb } from './db';
@@ -108,10 +108,14 @@ export function reloadKeyring(): Promise<void> {
   reloading = reloading
     .then(async () => {
       await loadKeyring(await current, () => keySource());
-      for (const listener of reloaded) listener();
     })
     .catch((error: unknown) => {
+      // Fail closed (Sprint 6 close, security review SEC-5): keys this context cannot vouch for any more are dropped.
+      lockKeyring();
       log.warn('ledger.keyring_reload_failed', { error });
+    })
+    .finally(() => {
+      for (const listener of reloaded) listener();
     });
   return reloading;
 }
