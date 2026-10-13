@@ -12,6 +12,7 @@
 import { test, expect } from '@playwright/test';
 
 import {
+  cryptoKeysAtRest,
   LOCKED_TEXT,
   ledgerAtRest,
   stopServiceWorker,
@@ -43,13 +44,10 @@ test('turned on, the ledger is sealed at rest and reads back whole; a restart of
     expect(rest).toMatchObject({ plain: 0, found: [] });
     expect(rest.sealed).toBeGreaterThan(0);
     expect(rest.keyIds).toHaveLength(1);
-    // Read back whole: every table as before, and `meta` too but for the encryption state it now holds.
-    const after = await readLedger(ledgerPage);
-    const { meta, ...tables } = after.tables;
-    const { meta: metaBefore, ...tablesBefore } = before.tables;
-    expect(tables).toEqual(tablesBefore);
-    expect(meta.filter((entry) => !entry.key.startsWith('crypto.'))).toEqual(metaBefore);
-    expect(meta.map((entry) => entry.key)).toEqual(
+    // Read back whole: every table as before, `meta` too. The encryption state `meta` now holds is left out of the
+    // export (Sprint 6 close, security review SEC-4), so it is read from IndexedDB itself.
+    expect((await readLedger(ledgerPage)).tables).toEqual(before.tables);
+    expect(await cryptoKeysAtRest(ledgerPage)).toEqual(
       expect.arrayContaining(['crypto.sealing', 'crypto.keyId', 'crypto.salt', 'crypto.check']),
     );
 

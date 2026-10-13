@@ -87,6 +87,32 @@ export async function ledgerAtRest(page: Page, lookFor: readonly string[]): Prom
   );
 }
 
+/** The keys of the encryption state in the ledger's `meta`, read straight from IndexedDB (the export leaves them out). */
+export async function cryptoKeysAtRest(page: Page): Promise<string[]> {
+  // No named function inside: `pnpm bench` runs the e2e helpers under tsx (see ./perf-ledger.ts).
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const open = indexedDB.open('attest');
+        open.onerror = () => {
+          reject(new Error('the ledger did not open'));
+        };
+        open.onsuccess = () => {
+          const db = open.result;
+          const keys = db.transaction('meta').objectStore('meta').getAllKeys();
+          keys.onsuccess = () => {
+            db.close();
+            resolve(keys.result.map(String).filter((key) => key.startsWith('crypto.')));
+          };
+          keys.onerror = () => {
+            db.close();
+            reject(new Error('meta did not read'));
+          };
+        };
+      }),
+  );
+}
+
 /** Turns encryption on from the options page's Encryption, and waits until every row is sealed. */
 export async function turnOnEncryption(options: Page, passphrase: string): Promise<void> {
   const section = options.locator('#encryption');

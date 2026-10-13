@@ -221,7 +221,20 @@ function readIfThere(file: string): Buffer | undefined {
 
 /** Searches every IndexedDB file of the profile at `userDataDir` (header). */
 export function scanProfileIndexedDb(userDataDir: string, lookFor: readonly string[]): ProfileScan {
-  const files = filesUnder(path.join(userDataDir, 'Default', 'IndexedDB'));
+  return scanFiles(path.join(userDataDir, 'Default', 'IndexedDB'), lookFor);
+}
+
+/**
+ * Searches every file of the profile at `userDataDir`: Chrome's other LevelDB stores, the extension's own storage
+ * among them, decoded as IndexedDB's are, and every other file as it is. A `.log` file that is not LevelDB's is named
+ * in `unparsed`, and still searched as it is.
+ */
+export function scanProfileFiles(userDataDir: string, lookFor: readonly string[]): ProfileScan {
+  return scanFiles(path.join(userDataDir, 'Default'), lookFor);
+}
+
+function scanFiles(dir: string, lookFor: readonly string[]): ProfileScan {
+  const files = filesUnder(dir);
   const needles = lookFor.map((value) => [Buffer.from(value, 'latin1'), Buffer.from(value, 'utf16le')]);
   const unparsed: string[] = [];
   const found = new Set<number>();

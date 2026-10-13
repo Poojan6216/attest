@@ -187,6 +187,23 @@ describe('exportLedgerBlob', () => {
     }
   });
 
+  it('leaves the encryption state out of both exports, its other settings kept (SEC-4)', async () => {
+    await db.meta.bulkPut([
+      { key: 'crypto.sealing', value: true },
+      { key: 'crypto.keyId', value: 'aaaaaaaaaaaa' },
+      { key: 'crypto.salt', value: 'AAAAAAAAAAAAAAAAAAAAAA==' },
+      { key: 'crypto.iterations', value: 600_000 },
+      { key: 'crypto.check', value: 'invented-check-nonce.invented-check-ciphertext' },
+      { key: 'retentionDays', value: 30 },
+    ]);
+    const expected = await singleMessage();
+    const parsed = LedgerExport.parse(JSON.parse(expected));
+    expect(parsed.tables.meta).toEqual([{ key: 'retentionDays', value: 30 }]);
+    expect(expected).not.toContain('crypto.');
+    expect(expected).not.toContain('invented-check');
+    expect(await (await exportLedgerBlob(db, { exportedAt: EXPORTED_AT }, 2)).text()).toBe(expected);
+  });
+
   it('refuses an export instant without an offset, as the single-message export does', async () => {
     await expect(exportLedgerBlob(db, { exportedAt: '2026-10-08T18:00:00' })).rejects.toMatchObject({
       code: 'invalid_input',

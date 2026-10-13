@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { PolicyDocument } from '../core/policy-document';
 import { Coverage } from '../core/schema';
 import { CalendarRecord } from './calendar-record';
+import { isCryptoEntry } from './crypto-state';
 import { readRows, type LedgerDb } from './db';
 import { LedgerError } from './errors';
 import { replayRecords } from './replay-records';
@@ -138,7 +139,7 @@ export async function exportLedger(db: LedgerDb, options: ExportOptions): Promis
       receipts: readRows('receipts', Receipt, await db.receipts.toArray()).map(canonicalReceipt),
       adapterHealth: readRows('adapterHealth', AdapterHealth, await db.adapterHealth.toArray()),
       coverage: readRows('coverage', CoveragePing, await db.coverage.toArray()),
-      meta: readRows('meta', MetaEntry, await db.meta.toArray()),
+      meta: readRows('meta', MetaEntry, await db.meta.toArray()).filter((entry) => !isCryptoEntry(entry)),
       coverageIntervals: readRows(
         'coverageIntervals',
         ObserverCoverage,

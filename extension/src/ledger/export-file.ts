@@ -11,6 +11,7 @@ import type { IndexableType, Table } from 'dexie';
 
 import { EXPORT_PAGE_SIZE } from '../config';
 import { CalendarRecord } from './calendar-record';
+import { isCryptoEntry } from './crypto-state';
 import { readRows, type LedgerDb } from './db';
 import {
   canonicalGrant,
@@ -118,7 +119,9 @@ function tablePlans(db: LedgerDb): readonly Plan[] {
     plan('receipts', db.receipts, (rows) => readRows('receipts', Receipt, rows).map(canonicalReceipt)),
     plan('adapterHealth', db.adapterHealth, (rows) => readRows('adapterHealth', AdapterHealth, rows)),
     plan('coverage', db.coverage, (rows) => readRows('coverage', CoveragePing, rows)),
-    plan('meta', db.meta, (rows) => readRows('meta', MetaEntry, rows)),
+    plan('meta', db.meta, (rows) =>
+      readRows('meta', MetaEntry, rows).filter((entry) => !isCryptoEntry(entry)),
+    ),
     plan('coverageIntervals', db.coverageIntervals, (rows) =>
       readRows('coverageIntervals', ObserverCoverage, rows),
     ),

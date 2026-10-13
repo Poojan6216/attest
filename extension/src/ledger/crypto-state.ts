@@ -11,6 +11,14 @@ import type { LedgerDb } from './db';
 
 /** The prefix of every encryption key in `meta`. */
 export const CRYPTO_PREFIX = 'crypto.';
+
+/**
+ * Whether a `meta` row is part of the encryption state. An export leaves these out (./export.ts, ./export-file.ts;
+ * Sprint 6 close, security review SEC-4): the export is written opened, so they mean nothing there, and the salt, the
+ * rounds and the key check together would let whoever holds the file test guesses of the passphrase.
+ */
+export const isCryptoEntry = (entry: { readonly key: string }): boolean =>
+  entry.key.startsWith(CRYPTO_PREFIX);
 export const CRYPTO_KEYS = Object.freeze({
   /** True while encryption is on. */
   SEALING: 'crypto.sealing',
