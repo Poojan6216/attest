@@ -114,10 +114,11 @@ export async function readTwice(rows: number): Promise<TwoReads> {
     const storeMs = Date.now() - started;
     const reloadedMs = Math.floor(Date.now() / 1000) * 1000;
     await gmail.reload();
+    // The second pass is stored once its Sent window is: the reader posts its coverage after its rows, and the worker
+    // keeps every newer sync. Never its health: a report that repeats the stored one is written only once that one is
+    // a minute old (src/config.ts OBSERVER_HEALTH_REFRESH_MS), so a first pass stored in under a minute had none to show.
     const again = (ledger: LedgerExport) =>
-      ledger.tables.adapterHealth.some(
-        (report) => report.adapterId === 'gmail.sent' && Date.parse(report.checkedAt) >= reloadedMs,
-      );
+      sentWindows(ledger).some((entry) => Date.parse(entry.lastSyncAt) >= reloadedMs);
     await slowPoll(ledgerPage, again, 5 * 60_000);
     const second = await readLedger(ledgerPage);
     return {
