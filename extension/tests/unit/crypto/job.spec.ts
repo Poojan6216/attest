@@ -108,3 +108,36 @@ describe('the sealing job, a page at a time', () => {
     expect(await sealedCount('requests')).toBe(SEAL_JOB_PAGE + 1);
   });
 });
+
+describe('the sealing job over a table keyed by an array (Sprint 6 close, tech review TECH-5)', () => {
+  /** Calendar snapshots, keyed by [observerId, accountHash, range], written plain as before encryption. */
+  const SNAPSHOTS = SEAL_JOB_PAGE * 2 + 50;
+  const snapshot = (n: number) => ({
+    observerId: 'gcal.event',
+    accountHash: sha(9),
+    range: `2026-10-${String(1 + (n % 28)).padStart(2, '0')}/${String(n).padStart(4, '0')}`,
+    readMs: n,
+    snapshot: { invented: `calendar content ${String(n)}` },
+  });
+
+  it('pages it with its place as an array, resumes from it, and seals every row', async () => {
+    for (let n = 0; n < SNAPSHOTS; n += 1) await rawPut(name, 'calendarSnapshots', snapshot(n));
+    const places: unknown[] = [];
+    for (
+      let step = await stepCryptoJob(db);
+      step !== undefined && !step.done;
+      step = await stepCryptoJob(db)
+    ) {
+      const { jobTable, jobAfter } = await readCryptoState(db);
+      if (jobTable === 'calendarSnapshots' && jobAfter !== undefined) places.push(JSON.parse(jobAfter));
+    }
+    expect(places).toHaveLength(2);
+    for (const place of places) expect(Array.isArray(place) && place.length === 3).toBe(true);
+    expect(await sealedCount('calendarSnapshots')).toBe(SNAPSHOTS);
+    const read = await db.calendarSnapshots.toArray();
+    expect(read).toHaveLength(SNAPSHOTS);
+    expect(read.map((row) => row.readMs).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: SNAPSHOTS }, (_, n) => n),
+    );
+  });
+});

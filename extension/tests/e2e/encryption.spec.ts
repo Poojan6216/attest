@@ -23,7 +23,13 @@ import {
 import { launchExtension } from './support/extension';
 import { MINUTE_MS, openSent } from './support/priya';
 import { withVendorSession } from './support/session';
-import { FIXTURE_TIME_ZONE, readLedger } from './support/vendor-pages';
+import {
+  FIXTURE_TIME_ZONE,
+  openVendorPage,
+  readLedger,
+  vendorFixture,
+  waitForLedger,
+} from './support/vendor-pages';
 
 /** An invented passphrase; no test uses a real one. */
 const PASSPHRASE = 'an invented passphrase';
@@ -35,6 +41,15 @@ test('turned on, the ledger is sealed at rest and reads back whole; a restart of
   await withVendorSession(async ({ extension, routes, ledgerPage }) => {
     const nowMs = Date.now();
     await openSent(extension, routes, ledgerPage, nowMs, nowMs - 20 * MINUTE_MS);
+    // A Calendar week too, so the one sealed table keyed by an array is sealed and read back (tech review TECH-5);
+    // its tab closed once read, so nothing more is written while the two reads are compared.
+    const week = await openVendorPage(
+      extension.context,
+      routes,
+      vendorFixture('gcal', 'synthetic-gcal-week-before.html'),
+    );
+    await waitForLedger(ledgerPage, (ledger) => ledger.tables.calendarSnapshots.length > 0);
+    await week.close();
     const before = await readLedger(ledgerPage);
     // The control: before encryption, the sends are readable in IndexedDB.
     expect((await ledgerAtRest(ledgerPage, SENT_VALUES)).found).toEqual(SENT_VALUES);
