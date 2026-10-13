@@ -99,6 +99,14 @@ async function replayed(): Promise<unknown> {
 const CAPPED = ['coverage.partial', 'coverage.clock_repaired', 'match.none'];
 
 /**
+ * Repair spans as instants: a span's `from` is stamped with the running zone's offset (src/clock.ts
+ * `isoWithLocalOffset`) and its `to` keeps the offset it was stored with, and the ledger compares instants, never these
+ * strings, so neither does the test, which runs in any zone (CI's is UTC).
+ */
+const instants = (spans: readonly { readonly from: string; readonly to: string }[]): number[][] =>
+  spans.map(({ from, to }) => [Date.parse(from), Date.parse(to)]);
+
+/**
  * The clock reads three hours ahead from real 12:30 to 12:40 (the Calendar tab hidden meanwhile): the claim is stamped
  * 15:34 and stored at 15:35, then the clock comes back and the next pass, at 12:40, repairs and first sees the event.
  * The view at 16:10 is fresh: synced after the claim's grace sync, end(15:35) + 30 = 16:05.
@@ -108,7 +116,7 @@ async function aheadAndBack(): Promise<void> {
   await pass(at(20), [standup]);
   await claimVendor(at(214), at(215));
   await pass(at(40), [standup, vendor]);
-  expect(await clockRepairs(db)).toEqual([{ from: at(40), to: at(215) }]);
+  expect(instants(await clockRepairs(db))).toEqual(instants([{ from: at(40), to: at(215) }]));
   await pass(at(250), [standup, vendor]);
 }
 
@@ -122,7 +130,7 @@ async function steppedBack(): Promise<void> {
   await pass(at(230), [standup]);
   await claimVendor(at(235), at(236));
   await pass(at(135), [standup, vendor]);
-  expect(await clockRepairs(db)).toEqual([{ from: at(135), to: at(236) }]);
+  expect(instants(await clockRepairs(db))).toEqual(instants([{ from: at(135), to: at(236) }]));
   await pass(at(270), [standup, vendor]);
 }
 

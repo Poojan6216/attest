@@ -23,6 +23,7 @@ import type { SettingResult } from '../../../src/bus/messages';
 import { PRIVACY_DOC_URL } from '../../../src/config';
 import { AdapterHealth } from '../../../src/ledger/types';
 import { setLogSink } from '../../../src/log';
+import { clockTime } from '../../../src/ui/format';
 
 const NOW_MS = Date.parse('2026-10-09T14:30:00-04:00');
 let root: HTMLElement;
@@ -108,7 +109,9 @@ describe('Adapters', () => {
     await show(h(AdaptersSection, { sources, nowMs: () => NOW_MS }));
     const [gmail, calendar] = [...root.querySelectorAll('ul.space-y-3 > li')].map((item) => item.textContent);
     expect(gmail).toContain('Gmail On');
-    expect(gmail).toContain('Gmail Sent reader: Working. Version 1.4.0, last checked 14:25.');
+    // In the zone the test runs in (CI's is UTC): the time as the page writes it, src/ui/format.ts's own tests hold.
+    const checked = clockTime(new Date(NOW_MS - 5 * 60_000).toISOString(), NOW_MS);
+    expect(gmail).toContain(`Gmail Sent reader: Working. Version 1.4.0, last checked ${checked}.`);
     expect(gmail).toContain(
       'Gmail receipts reader: Needs repair: its receipts may be Unverifiable (selector.missing).',
     );

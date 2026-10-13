@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { askTheModel, type IntelDeps } from '../../../src/background/intel';
 import { runGradingBatch } from '../../../src/background/grading';
+import { isoWithLocalOffset } from '../../../src/clock';
 import { hashCanonical, idFromHash } from '../../../src/core/hash';
 import { DEFAULT_POLICY, DEFAULT_POLICY_DOCUMENT } from '../../../src/core/policy';
 import { replay } from '../../../src/core/replay';
@@ -38,8 +39,8 @@ import { storeDemo } from './demo-store';
 const DEPS = { policy: DEFAULT_POLICY, policyDocument: DEFAULT_POLICY_DOCUMENT, nowMs: () => Date.now() };
 /** After the batch before grace: a batch must be stamped after the last one. */
 const ASKED_AT = '2026-10-06T14:21:00-04:00';
-/** ASKED_AT as the service worker writes an instant (src/clock.ts `isoWithLocalOffset`). */
-const ASKED_AT_WRITTEN = '2026-10-06T14:21:00.000-04:00';
+/** ASKED_AT as the service worker writes an instant, in the zone the test runs in (src/clock.ts; CI's is UTC). */
+const ASKED_AT_WRITTEN = isoWithLocalOffset(new Date(ASKED_AT));
 const opened: LedgerDb[] = [];
 let lines: string[] = [];
 let restoreLog: () => void = () => undefined;
