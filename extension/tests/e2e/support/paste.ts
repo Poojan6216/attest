@@ -1,23 +1,37 @@
 /**
  * The side panel's Add agent activity as a person uses it (sprint_3 3.12, 3.13; docs/claims-import.md §2), for the
- * end-to-end tests: choose the agent, paste, preview, import, and wait for the service worker's answer.
+ * end-to-end tests and the launch's pictures: choose the agent, paste, preview; then import, and wait for the service
+ * worker's answer. The two halves are apart so the demo can show the preview before the import (Sprint 7 close, tech
+ * review TECH-7), on the same steps every test takes.
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import type { Seed } from './leaks';
 
-/** Pastes `log` as `agent`'s activity and imports it; resolves the status line the side panel shows after. */
-export async function pasteActivity(page: Page, agent: string, log: string): Promise<string> {
+/** Pastes `log` as `agent`'s activity and previews it; resolves the import button the preview shows. */
+export async function previewActivity(page: Page, agent: string, log: string): Promise<Locator> {
   await page.getByRole('button', { name: 'Add agent activity' }).click();
   await page.getByRole('radio', { name: agent }).check();
   await page.getByLabel('Activity log').fill(log);
   await page.getByRole('button', { name: 'Preview' }).click();
-  await page.getByRole('button', { name: /^Import \d+ claims?$/u }).click();
+  const importButton = page.getByRole('button', { name: /^Import \d+ claims?$/u });
+  await expect(importButton).toBeVisible();
+  return importButton;
+}
+
+/** Imports what was previewed, by its `importButton`; resolves the status line the side panel shows after. */
+export async function importActivity(page: Page, importButton: Locator): Promise<string> {
+  await importButton.click();
   // The panel's other status lines (the timeline loading, an empty timeline) are not the import's: its line is the one
   // that says what was imported.
   const status = page.getByRole('status').filter({ hasText: /^(?:Imported \d+|Attest already had)/u });
   await expect(status).toBeVisible({ timeout: 30_000 });
   return (await status.textContent()) ?? '';
+}
+
+/** Pastes `log` as `agent`'s activity and imports it; resolves the status line the side panel shows after. */
+export async function pasteActivity(page: Page, agent: string, log: string): Promise<string> {
+  return importActivity(page, await previewActivity(page, agent, log));
 }
 
 /**

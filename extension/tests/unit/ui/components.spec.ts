@@ -9,7 +9,8 @@
 import { type ComponentChild, h, render } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEV_ENTRYPOINTS, releaseEntrypoints } from '../../../wxt.config';
+import { DEV_ENTRYPOINTS } from '../../../src/config-manifest';
+import { releaseEntrypoints } from '../../../wxt.config';
 import { samples } from '../../../entrypoints/dev/samples';
 import { AdapterHealth, Grade, IsoTs } from '../../../src/ledger/types';
 import { AgentBadge } from '../../../src/ui/AgentBadge';

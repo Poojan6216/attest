@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "build:release": "ATTEST_RELEASE=1 wxt zip",
+    "build:release": "rm -f .output/attest-*.zip && ATTEST_RELEASE=1 wxt zip",
+    "check-release-zip": "tsx tests/tools/check-release-zip.ts",
+    "render-icons": "tsx tests/tools/render-icons.ts",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/core/tsconfig.json && tsc --noEmit -p tests/tsconfig.json && tsc --noEmit -p tsconfig.node.json",

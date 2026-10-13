@@ -7,7 +7,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { type BrowserContext, chromium, errors, type Page, type Worker } from '@playwright/test';
+import {
+  type BrowserContext,
+  chromium,
+  type ConsoleMessage,
+  errors,
+  type Page,
+  type Worker,
+} from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { DEAD_PROXY_ARG } from './network-guard';
@@ -16,14 +23,17 @@ import { DEAD_PROXY_ARG } from './network-guard';
 declare const chrome: WxtBrowser;
 
 /**
- * The unpacked build under test. ATTEST_EXTENSION_PATH points at another build (used to prove that a
- * deliberately broken build fails the mandatory tests); CI never sets it.
+ * The unpacked build the end-to-end tests load. ATTEST_EXTENSION_PATH points them at another build, as the proof that a
+ * deliberately broken build fails the mandatory tests does (Decisions [0.4]); CI never sets it. A tool that loads a
+ * build of its own passes it as `launchExtension({ extensionPath })` (tests/tools/check-release-zip.ts).
  */
 export const EXTENSION_PATH =
   process.env.ATTEST_EXTENSION_PATH ??
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.output/chrome-mv3');
 
 export interface LaunchOptions {
+  /** The unpacked build to load: EXTENSION_PATH unless given (Sprint 7 close, tech review TECH-13). */
+  readonly extensionPath?: string;
   /**
    * Extra Chromium switches, e.g. NetLog capture for the mandatory tests. A function gets the launch attempt
    * (0, 1, 2), so a retried start writes its NetLog to a file of its own and none is overwritten.
@@ -48,6 +58,11 @@ export interface LaunchedExtension {
   readonly context: BrowserContext;
   readonly extensionId: string;
   readonly userDataDir: string;
+  /**
+   * What the extension's service workers logged to the console, each heard from the moment the launcher first saw its
+   * worker (Sprint 7 close, tech review TECH-13): the release check fails on an error or a warning among them.
+   */
+  readonly workerConsole: readonly ConsoleMessage[];
   serviceWorker(): Promise<Worker>;
   openExtensionPage(page: 'popup.html' | 'options.html' | 'sidepanel.html' | (string & {})): Promise<Page>;
   close(): Promise<void>;
@@ -152,6 +167,7 @@ async function discard(context: BrowserContext, userDataDir: string, ownsProfile
 async function startBrowser(
   options: LaunchOptions,
 ): Promise<{ context: BrowserContext; userDataDir: string }> {
+  const extensionPath = options.extensionPath ?? EXTENSION_PATH;
   for (let attempt = 0; ; attempt += 1) {
     const userDataDir = options.userDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'attest-e2e-'));
     const extraArgs =
@@ -169,11 +185,7 @@ async function startBrowser(
         headless: true,
         timeout: LAUNCH_TIMEOUT_MS,
         ...(options.timezoneId === undefined ? {} : { timezoneId: options.timezoneId }),
-        args: [
-          `--disable-extensions-except=${EXTENSION_PATH}`,
-          `--load-extension=${EXTENSION_PATH}`,
-          ...args,
-        ],
+        args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, ...args],
       });
       return { context, userDataDir };
     } catch (error) {
@@ -188,11 +200,20 @@ async function startBrowser(
 }
 
 export async function launchExtension(options: LaunchOptions = {}): Promise<LaunchedExtension> {
-  if (!existsSync(path.join(EXTENSION_PATH, 'manifest.json'))) {
-    throw new Error(`No extension build at ${EXTENSION_PATH}. Run \`pnpm build\` first (pnpm e2e does).`);
+  const extensionPath = options.extensionPath ?? EXTENSION_PATH;
+  if (!existsSync(path.join(extensionPath, 'manifest.json'))) {
+    throw new Error(`No extension build at ${extensionPath}. Run \`pnpm build\` first (pnpm e2e does).`);
   }
   const ownsProfile = options.userDataDir === undefined;
   const { context, userDataDir } = await startBrowser(options);
+  const workerConsole: ConsoleMessage[] = [];
+  const listen = (worker: Worker): void => {
+    worker.on('console', (message) => {
+      workerConsole.push(message);
+    });
+  };
+  for (const worker of context.serviceWorkers()) listen(worker);
+  context.on('serviceworker', listen);
 
   const serviceWorker = async (): Promise<Worker> => {
     const [existing] = context.serviceWorkers().filter((w) => w.url().startsWith('chrome-extension://'));
@@ -220,6 +241,7 @@ export async function launchExtension(options: LaunchOptions = {}): Promise<Laun
     context,
     extensionId,
     userDataDir,
+    workerConsole,
     serviceWorker,
     async openExtensionPage(page) {
       const tab = await context.newPage();

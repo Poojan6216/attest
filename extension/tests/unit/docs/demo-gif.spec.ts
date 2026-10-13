@@ -1,5 +1,5 @@
 /**
- * launch/demo.gif (sprint_7 7.3; `pnpm record-demo`, scripts/record-demo.ts): the build_spec §2 demo at 1280×800, six
+ * launch/demo.gif (sprint_7 7.3; `pnpm record-demo`, scripts/record-launch.ts): the build_spec §2 demo at 1280×800, six
  * frames of ten seconds, sixty seconds in all, as the README shows it. Read from the GIF's own blocks (the GIF89a
  * format): its logical screen size, and each frame's delay from the graphic control extension before it.
  */

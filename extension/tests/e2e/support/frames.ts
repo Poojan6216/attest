@@ -12,12 +12,9 @@ export const SHOT = { width: FRAME.width, height: FRAME.height - CAPTION_HEIGHT 
 /** The popup and the side panel, at the width Chrome draws them. */
 export const PANEL = { width: 400, height: SHOT.height } as const;
 
-export interface Frame {
-  readonly caption: string;
-  /** A screenshot to show above the caption; or `words` for a frame that is only words. */
-  readonly image?: Buffer;
-  readonly words?: string;
-}
+/** A screenshot above its caption, or a frame of words alone above it (Sprint 7 close, tech review TECH-7). */
+export type Frame =
+  { readonly caption: string; readonly image: Buffer } | { readonly caption: string; readonly words: string };
 
 const escape = (text: string): string =>
   text.replace(
@@ -52,8 +49,8 @@ export async function draw(
 /** `frame` drawn at 1280×800: its screenshot or words above, its caption in a bar below. */
 export function compose(context: BrowserContext, frame: Frame): Promise<Buffer> {
   const top =
-    frame.image === undefined
-      ? `<p class="words">${escape(frame.words ?? '')}</p>`
+    'words' in frame
+      ? `<p class="words">${escape(frame.words)}</p>`
       : `<img src="data:image/png;base64,${frame.image.toString('base64')}" alt="">`;
   return draw(
     context,

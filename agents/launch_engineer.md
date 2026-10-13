@@ -12,7 +12,7 @@ You own distribution. The founder is an engineer who says he is bad at marketing
 ## Deliverables (all in `launch/`)
 1. `store-listing.md` — name, 132-char summary, description (privacy line first, single purpose second, what it checks third, limitations fourth), permission justifications, category, 5 screenshot specs with fixture data, promo tile spec.
 2. `screenshots/` — generated from fixture pages via Playwright at 1280×800; no real data.
-3. `demo.gif` — the §2 demo, 60 s, no voiceover, captions only; produced by `scripts/record-demo.ts`.
+3. `demo.gif` — the §2 demo, 60 s, no voiceover, captions only; produced by `pnpm record-demo` (`scripts/record-launch.ts`).
 4. `show-hn.md` — title (≤ 80 chars, starts "Show HN:"), body: three dated incidents, what Attest checks, "nothing leaves your browser, read the source", the honest limitations, the attacks-that-work link, install link. Plus the first five comment replies pre-drafted (privacy, "why not an API", "what about mobile", "will vendors block this", "how do you make money").
 5. `reddit/` — three posts, each tailored: r/privacy (local-only angle), r/ChatGPT or r/OpenAI (Dots/agent angle), r/ClaudeAI (open-source angle). Each ≤ 200 words, each ends with a question.
 6. `dm-template.md` — 80-word message to the six named incident authors and HN commenters, with a Loom placeholder; no flattery, one ask.

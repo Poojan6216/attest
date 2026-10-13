@@ -25,7 +25,7 @@ What Attest cannot do. It sees only tabs you have open: actions inside Messenger
 
 ## Screenshots and promo tile
 
-Made by `pnpm record-screenshots` on the built extension and saved test pages with invented names ([`scripts/record-screenshots.ts`](../scripts/record-screenshots.ts)); before each one, the page's text is searched for every seeded secret and every address in it must be at a reserved example domain. Each screenshot is 1280×800 with its caption at the foot.
+Made by `pnpm record-screenshots` on the built extension and saved test pages with invented names ([`scripts/record-launch.ts`](../scripts/record-launch.ts)), by the same flow `pnpm e2e` runs ([`extension/tests/e2e/launch-shots.spec.ts`](../extension/tests/e2e/launch-shots.spec.ts)). Before each one, what the page draws, its form fields and labels included, must hold only addresses at reserved example domains and no seeded secret. The saved pages Attest reads in the flow hold no seeded secret but the broken Sent list behind the degraded screenshot, so that screenshot's check is the one that would catch a secret Attest had kept and showed. Each screenshot is 1280×800 with its caption at the foot.
 
 | File | Shows | Caption |
 |---|---|---|
