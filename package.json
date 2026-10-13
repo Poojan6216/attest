@@ -16,6 +16,7 @@
     "lint": "pnpm --dir extension run lint && eslint . --max-warnings 0 && prettier --check . && pnpm check-docs",
     "check-docs": "tsx scripts/check-docs.ts",
     "audit:manifest": "tsx scripts/audit-manifest.ts",
+    "record-demo": "tsx scripts/record-demo.ts",
     "format": "pnpm --dir extension run format",
     "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",

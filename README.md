@@ -11,6 +11,10 @@ Attest is a Chrome extension that checks what your AI agents (Meta Muse, ChatGPT
 
 **Attacks that still work.** Attest has been attacked on purpose, and 6 of the 13 attack strategies in its red-team harness still win in some cases: worst, an agent's send it never claimed goes unflagged in 18 of 25 cases. Every attack, its rate and why it works: [docs/attacks-that-work.md](docs/attacks-that-work.md). What Attest defends and what it does not: [docs/threat-model.md](docs/threat-model.md).
 
+![The demo, in six captioned frames: you ask Muse to email Priya the Q3 deck and put a review on the calendar; Muse's activity log is pasted into Attest's side panel; Attest reads the Gmail Sent folder and the Calendar week, saved test pages with invented names; the popup shows the email Verified, the event Not found and a send to a vendor nobody asked for Unasked, likely agent; the weekly digest sums up the week.](launch/demo.gif)
+
+The demo runs on saved test pages with invented names, and is remade by `pnpm record-demo`.
+
 ## Install
 
 - **Chrome Web Store:** not listed yet. This line will link to the listing once it is published.
