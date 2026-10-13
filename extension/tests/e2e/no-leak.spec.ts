@@ -48,6 +48,7 @@ import { BYO_KEY_SEED, plantKey, saveKey, withoutKeySlot } from './support/byo-k
 import { plantInModel, stubAnthropic, type VendorRequest } from './support/model-vendor';
 import { askAboutPriya } from './support/priya';
 import { plantInTelemetry, sendTodaysNumbers, stubTelemetry, turnTelemetryOn } from './support/telemetry';
+import { LEDGER_PLACE } from './support/ledger-place';
 import {
   FIXTURE_TIME_ZONE,
   fixtureUrl,
@@ -367,7 +368,7 @@ test.describe('no seeded secret leaks', { tag: '@mandatory' }, () => {
       kind: 'ledger.export',
       ok: true,
     });
-    expect(Object.keys(collected.storage.indexedDb)).toContain('attest');
+    expect(Object.keys(collected.storage.indexedDb)).toContain(`${LEDGER_PLACE.first}:${LEDGER_PLACE.db}`);
     expect(collected.storage.storage).toHaveProperty('local');
     expect(Object.keys(collected.storage.webStorage).length).toBeGreaterThanOrEqual(EXTENSION_PAGES.length);
     expect(Object.keys(collected.pages.pageStorage)).toHaveLength(

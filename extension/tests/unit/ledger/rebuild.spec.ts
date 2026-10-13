@@ -1,34 +1,48 @@
 import 'fake-indexeddb/auto';
 /**
- * Rebuilding the ledger's database (src/ledger/rebuild.ts; Sprint 6 close, security review SEC-1): every row of every
- * table put back exactly as stored, keys and bytes alike, over more rows than one page; a copy marked whole finishes a
- * rebuild a stop cut short after the ledger was deleted, or while its rows were going back; a copy a stop left
- * unmarked is never trusted, but made again; and nothing is left behind: no copy, no flush database, no mark of the
- * copy in the ledger, no rebuild due.
+ * Rebuilding the ledger into its next storage bucket (src/ledger/rebuild.ts; Sprint 6 close, security review SEC-1), on
+ * the unit run's fake buckets (tests/unit/storage-buckets-setup.ts): every row of every table copied exactly as stored,
+ * keys and bytes alike, over more rows than one page, into the next bucket, which is named, and the bucket before
+ * deleted, so nothing is left: no other bucket, no mark that a rebuild is due. A stop at each step is settled at the
+ * next start: a half-made copy is never trusted, but deleted, the ledger as it was; a named copy is kept, the bucket
+ * before deleted. A copy that fails leaves the ledger where it was. A ledger a build before buckets kept in the default
+ * store is moved into the bucket, as stored, and deleted there.
  */
 import { Dexie, type Table } from 'dexie';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import { DB_NAME } from '../../../src/config';
-import { FLUSH_DB_NAME, REBUILD_DB_NAME, REBUILD_PAGE } from '../../../src/config-crypto';
+import { REBUILD_PAGE } from '../../../src/config-crypto';
 import { CRYPTO_KEYS } from '../../../src/ledger/crypto-state';
 import { MIGRATIONS, openLedger } from '../../../src/ledger/migrations';
 import {
-  copyIsWhole,
-  copyLedger,
-  deleteLedgerCopy,
-  flushChromeFiles,
-  restoreLedger,
-} from '../../../src/ledger/rebuild';
+  bucketIndexedDb,
+  FIRST_LEDGER_BUCKET,
+  ledgerBucket,
+  ledgerBuckets,
+  nameLedgerBucket,
+} from '../../../src/ledger/place';
+import { copyLedger, rebuildLedgerPlace, settleLedgerPlace } from '../../../src/ledger/rebuild';
+import { deleteLedger } from '../../../src/ledger/shared';
+import { fakeStorageBuckets } from '../storage-buckets-setup';
+import { expectLedgerError } from './fixtures';
 
 type Entry = readonly [key: unknown, value: unknown];
 type Stored = Record<string, Entry[]>;
 
-const openAsStored = (name: string) => openLedger(name, MIGRATIONS, { asStored: true });
+const NEXT = 'ledger-2';
+
+/** The ledger of `bucket` as stored; the default store's without one. */
+const openAsStored = async (bucket?: string) =>
+  openLedger(DB_NAME, MIGRATIONS, {
+    asStored: true,
+    ...(bucket === undefined ? {} : { indexedDB: await bucketIndexedDb(bucket) }),
+  });
 
 /** Every table's rows as IndexedDB holds them, with their keys, in key order. */
-async function stored(name: string): Promise<Stored> {
-  const db = await openAsStored(name);
+async function stored(bucket?: string): Promise<Stored> {
+  const db = await openAsStored(bucket);
   try {
     const tables: Stored = {};
     for (const { name: table } of db.tables) {
@@ -70,9 +84,9 @@ function rowFor(table: Table, n: number): Record<string, unknown> {
 /** The keys of the rows of a table keyed outside its rows (`++`): not what a new table would number them. */
 const OUTBOUND_KEYS = [10, 20, 30];
 
-/** Fills every table: three rows each, `observations` more than two pages, and the rebuild marked due. */
-async function seed(): Promise<void> {
-  const db = await openAsStored(DB_NAME);
+/** Fills every table of `bucket`'s ledger: three rows each, `observations` more than two pages, the rebuild due. */
+async function seed(bucket?: string): Promise<void> {
+  const db = await openAsStored(bucket);
   try {
     for (const table of db.tables) {
       const rows = table.name === 'observations' ? REBUILD_PAGE * 2 + 7 : 3;
@@ -93,79 +107,110 @@ function withoutRebuildDue(before: Stored): Stored {
   return { ...before, meta: (before.meta ?? []).filter(([key]) => key !== CRYPTO_KEYS.REBUILD) };
 }
 
-async function deleteAll(): Promise<void> {
-  await Promise.all([DB_NAME, REBUILD_DB_NAME, FLUSH_DB_NAME].map((name) => Dexie.delete(name)));
-}
-
 beforeEach(async () => {
-  await deleteAll();
-  await seed();
+  fakeBrowser.reset();
+  await deleteLedger();
+  await seed(await ledgerBucket());
 });
 
-afterEach(deleteAll);
+afterEach(deleteLedger);
 
 describe('rebuilding the ledger', () => {
-  it('puts back every row of every table as stored, keys and bytes alike, and leaves nothing behind', async () => {
-    const before = await stored(DB_NAME);
+  it('copies every row of every table as stored into the next bucket, names it, and deletes the one before', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
     expect(before.observations).toHaveLength(REBUILD_PAGE * 2 + 7);
     expect(before.coverageIntervals?.map(([key]) => key)).toEqual(OUTBOUND_KEYS);
 
-    await copyLedger();
-    expect(await copyIsWhole()).toBe(true);
-    await restoreLedger();
+    await rebuildLedgerPlace();
 
-    expect(await stored(DB_NAME)).toEqual(withoutRebuildDue(before));
-    expect(await Dexie.getDatabaseNames()).toEqual([DB_NAME]);
+    expect(await ledgerBucket()).toBe(NEXT);
+    expect(await ledgerBuckets()).toEqual([NEXT]);
+    expect(await stored(NEXT)).toEqual(withoutRebuildDue(before));
+    expect(await Dexie.getDatabaseNames()).toEqual([]);
   });
 
-  it('reports no whole copy when there is none, and deletes one on Delete all data', async () => {
-    expect(await copyIsWhole()).toBe(false);
-    await copyLedger();
-    await deleteLedgerCopy();
-    expect(await copyIsWhole()).toBe(false);
-    expect(await Dexie.getDatabaseNames()).toEqual([DB_NAME]);
+  it('never trusts a bucket a stop left half made: it is made again from the ledger', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
+    const stale = await openAsStored(NEXT);
+    await stale.requests.add(rowFor(stale.requests, 99) as never);
+    stale.close();
+
+    await rebuildLedgerPlace();
+    expect(await stored(NEXT)).toEqual(withoutRebuildDue(before));
   });
 
-  it("flushes Chrome's files with a database it deletes at once", async () => {
-    await flushChromeFiles();
-    expect(await Dexie.getDatabaseNames()).toEqual([DB_NAME]);
+  it('leaves the ledger where it was when the next bucket does not open, and that bucket gone', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
+    const open = fakeStorageBuckets.open.bind(fakeStorageBuckets);
+    const opened = vi
+      .spyOn(fakeStorageBuckets, 'open')
+      .mockImplementation((name) => (name === NEXT ? Promise.reject(new Error('no bucket')) : open(name)));
+
+    await expectLedgerError(rebuildLedgerPlace(), 'rebuild_failed');
+    opened.mockRestore();
+    expect(await ledgerBucket()).toBe(FIRST_LEDGER_BUCKET);
+    expect(await ledgerBuckets()).toEqual([FIRST_LEDGER_BUCKET]);
+    expect(await stored(FIRST_LEDGER_BUCKET)).toEqual(before);
+  });
+
+  it('refuses a copy whose counts differ from the ledger, which stays where it was', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
+    // A next bucket that will not go, an extra row in it: the copy counts one row more than the ledger holds.
+    const stale = await openAsStored(NEXT);
+    await stale.requests.add(rowFor(stale.requests, 99) as never);
+    stale.close();
+    const kept = vi.spyOn(fakeStorageBuckets, 'delete').mockResolvedValue(undefined);
+
+    await expectLedgerError(rebuildLedgerPlace(), 'rebuild_failed');
+    kept.mockRestore();
+    expect(await ledgerBucket()).toBe(FIRST_LEDGER_BUCKET);
+    expect(await stored(FIRST_LEDGER_BUCKET)).toEqual(before);
   });
 });
 
-describe('a rebuild a stop cut short', () => {
-  it('finishes from a whole copy after a stop that deleted the ledger', async () => {
-    const before = await stored(DB_NAME);
-    await copyLedger();
-    await Dexie.delete(DB_NAME);
+describe('a rebuild a stop cut short, settled at the next start', () => {
+  it('after the copy, before it was named: the copy is deleted, the ledger as it was, the rebuild still due', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
+    expect(await copyLedger(FIRST_LEDGER_BUCKET)).toBe(NEXT);
 
-    expect(await copyIsWhole()).toBe(true);
-    await restoreLedger();
-    expect(await stored(DB_NAME)).toEqual(withoutRebuildDue(before));
+    expect(await settleLedgerPlace()).toEqual({ moved: false, deleted: 1 });
+    expect(await ledgerBuckets()).toEqual([FIRST_LEDGER_BUCKET]);
+    expect(await stored(FIRST_LEDGER_BUCKET)).toEqual(before);
   });
 
-  it('finishes from a whole copy after a stop while its rows were going back', async () => {
-    const before = await stored(DB_NAME);
-    await copyLedger();
-    await Dexie.delete(DB_NAME);
-    const half = await openAsStored(DB_NAME);
-    await half.observations.bulkAdd(
-      (before.observations ?? []).slice(0, REBUILD_PAGE).map(([, value]) => value as never),
-    );
-    half.close();
+  it('after the copy was named, before the bucket before was deleted: that bucket is deleted', async () => {
+    const before = await stored(FIRST_LEDGER_BUCKET);
+    await nameLedgerBucket(await copyLedger(FIRST_LEDGER_BUCKET));
 
-    await restoreLedger();
-    expect(await stored(DB_NAME)).toEqual(withoutRebuildDue(before));
+    expect(await settleLedgerPlace()).toEqual({ moved: false, deleted: 1 });
+    expect(await ledgerBuckets()).toEqual([NEXT]);
+    expect(await stored(NEXT)).toEqual(withoutRebuildDue(before));
   });
 
-  it('never trusts a copy a stop left unmarked: it is made again from the ledger', async () => {
-    const before = await stored(DB_NAME);
-    const stale = await openAsStored(REBUILD_DB_NAME);
-    await stale.requests.add(rowFor(stale.requests, 99) as never);
-    stale.close();
-    expect(await copyIsWhole()).toBe(false);
+  it('with nothing to settle, does nothing', async () => {
+    expect(await settleLedgerPlace()).toEqual({ moved: false, deleted: 0 });
+    expect(await ledgerBuckets()).toEqual([FIRST_LEDGER_BUCKET]);
+  });
+});
 
-    await copyLedger();
-    await restoreLedger();
-    expect(await stored(DB_NAME)).toEqual(withoutRebuildDue(before));
+describe('a ledger a build before buckets kept in the default store', () => {
+  it('is moved into the bucket named, as stored, and deleted from the default store', async () => {
+    await deleteLedger();
+    await seed();
+    const before = await stored();
+
+    expect(await settleLedgerPlace()).toEqual({ moved: true, deleted: 0 });
+    expect(await Dexie.getDatabaseNames()).toEqual([]);
+    expect(await ledgerBuckets()).toEqual([FIRST_LEDGER_BUCKET]);
+    expect(await stored(FIRST_LEDGER_BUCKET)).toEqual(before);
+  });
+
+  it('goes with every ledger bucket on Delete all data', async () => {
+    await seed();
+    await nameLedgerBucket(await copyLedger(FIRST_LEDGER_BUCKET));
+
+    await deleteLedger();
+    expect(await ledgerBuckets()).toEqual([]);
+    expect(await Dexie.getDatabaseNames()).toEqual([]);
   });
 });

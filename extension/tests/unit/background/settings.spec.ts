@@ -13,10 +13,11 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { onLedgerWipe, onRetentionSave } from '../../../src/background/settings';
 import { LedgerTable } from '../../../src/bus/messages';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
-import { SESSION_KEYS, STORAGE_KEYS } from '../../../src/config';
+import { DB_NAME, SESSION_KEYS, STORAGE_KEYS } from '../../../src/config';
 import { readersOff, readFlags, saveFlag, saveReaderOff } from '../../../src/ledger/consent';
 import { LEDGER_TABLE_NAMES } from '../../../src/ledger/index-fields';
-import { openLedger } from '../../../src/ledger/migrations';
+import { MIGRATIONS, openLedger } from '../../../src/ledger/migrations';
+import { bucketIndexedDb, FIRST_LEDGER_BUCKET, ledgerBucket, ledgerBuckets } from '../../../src/ledger/place';
 import {
   closeLedger,
   getLedger,
@@ -71,6 +72,10 @@ describe('retention.save', () => {
   });
 });
 
+/** A connection of a page's own to the ledger, in the bucket named. */
+const pageConnection = async () =>
+  openLedger(DB_NAME, MIGRATIONS, { indexedDB: await bucketIndexedDb(await ledgerBucket()) });
+
 describe('ledger.wipe', () => {
   it('leaves every table and both storage areas empty but for the readers kept off, clears the notifications, and announces it', async () => {
     const db = await getLedger();
@@ -83,8 +88,8 @@ describe('ledger.wipe', () => {
     await saveFlag(db, 'ATTEST_AUTO_CHECK_GMAIL', true);
     await browser.storage.local.set({ [STORAGE_KEYS.INSTALL_ID]: '0b6f3a52-6f1e-4c43-9d6a-2f0e8f1c7a11' });
     await browser.storage.session.set({ [SESSION_KEYS.OPEN_RECEIPT]: makeReceipt().id });
-    // A page's own connection, open while the service worker deletes the database.
-    const page = await openLedger();
+    // A page's own connection, open while the service worker deletes the ledger's bucket.
+    const page = await pageConnection();
     expect(await page.claims.count()).toBe(1);
     expect((await filled()).length).toBeGreaterThan(4);
     const syncReaders = vi.fn(() => Promise.resolve());
@@ -97,13 +102,17 @@ describe('ledger.wipe', () => {
     expect(await (await getLedger()).meta.toArray()).toEqual([{ key: 'readerOff.gcal', value: true }]);
     expect(await readersOff(await getLedger())).toEqual(new Set(['gcal']));
     expect((await readFlags(await getLedger())).ATTEST_AUTO_CHECK_GMAIL).toBe(false);
-    expect(await browser.storage.local.get(null)).toEqual({});
+    // Only the name of the new ledger's bucket, the first again (src/ledger/place.ts).
+    expect(await browser.storage.local.get(null)).toEqual({
+      [STORAGE_KEYS.LEDGER_BUCKET]: FIRST_LEDGER_BUCKET,
+    });
+    expect(await ledgerBuckets()).toEqual([FIRST_LEDGER_BUCKET]);
     expect(await browser.storage.session.get(null)).toEqual({});
     expect(clearNotifications).toHaveBeenCalledOnce();
     expect(notify.mock.calls).toEqual([[LedgerTable.options]]);
     expect(syncReaders).toHaveBeenCalledOnce();
-    // The page's connection was closed by the delete; it reads the new, empty ledger at its next read.
-    expect(await page.claims.count()).toBe(0);
+    // The page's connection was closed with its bucket; its next read is of the new, empty ledger (src/ledger/shared.ts).
+    expect(page.isOpen()).toBe(false);
     expect((await getLedger()).tables.map(({ name }) => name).sort()).toEqual(
       [...LEDGER_TABLE_NAMES, 'receiptInputs', 'policies', 'batchCoverages'].sort(),
     );

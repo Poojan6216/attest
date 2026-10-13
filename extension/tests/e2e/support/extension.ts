@@ -72,44 +72,51 @@ export const SERVICE_WORKER_TIMEOUT_MS = 30_000;
  * are registered at runtime, src/background/readers.ts): each reader on is registered, each off is not. A test that
  * opened Gmail before then would find no reader. The choice is in the ledger's meta (`readerOff.<reader>` true while
  * off; src/ledger/consent.ts), read here without opening the ledger when it does not exist yet (a fresh profile, every
- * reader on), so the test never creates it. The ids are src/config.ts READERS, written out: the worker evaluates this
- * alone.
+ * reader on), so the test never creates it, nor its storage bucket. The ids are src/config.ts READERS, and the bucket's
+ * key STORAGE_KEYS.LEDGER_BUCKET, written out: the worker evaluates this alone.
  */
 export async function waitForReaders(worker: Worker): Promise<void> {
   // No named function inside the callback: `pnpm bench` runs this file under tsx, which wraps a named function in a
   // `__name` helper that the worker, evaluating the callback alone, does not have.
   await worker.evaluate(async () => {
     for (let tries = 0; tries < 400; tries += 1) {
-      const readersOff = (await indexedDB.databases()).some(({ name }) => name === 'attest')
-        ? await new Promise<string[]>((resolve) => {
-            const open = indexedDB.open('attest');
-            open.onerror = () => {
-              resolve([]);
-            };
-            open.onsuccess = () => {
-              const db = open.result;
-              if (!db.objectStoreNames.contains('meta')) {
-                db.close();
+      // The ledger's bucket (src/ledger/place.ts; STORAGE_KEYS.LEDGER_BUCKET), opened only when it is there.
+      const named: unknown = (await chrome.storage.local.get('attest.ledgerBucket'))['attest.ledgerBucket'];
+      const bucket =
+        typeof named === 'string' && (await navigator.storageBuckets.keys()).includes(named)
+          ? (await navigator.storageBuckets.open(named)).indexedDB
+          : undefined;
+      const readersOff =
+        bucket !== undefined && (await bucket.databases()).some(({ name }) => name === 'attest')
+          ? await new Promise<string[]>((resolve) => {
+              const open = bucket.open('attest');
+              open.onerror = () => {
                 resolve([]);
-                return;
-              }
-              const store = db.transaction('meta').objectStore('meta');
-              const found: string[] = [];
-              for (const reader of ['gmail', 'gcal']) {
-                const get = store.get(`readerOff.${reader}`);
-                get.onsuccess = () => {
-                  const row: unknown = get.result;
-                  if (typeof row === 'object' && row !== null && Reflect.get(row, 'value') !== false)
-                    found.push(reader);
-                };
-              }
-              store.transaction.oncomplete = () => {
-                db.close();
-                resolve(found);
               };
-            };
-          })
-        : [];
+              open.onsuccess = () => {
+                const db = open.result;
+                if (!db.objectStoreNames.contains('meta')) {
+                  db.close();
+                  resolve([]);
+                  return;
+                }
+                const store = db.transaction('meta').objectStore('meta');
+                const found: string[] = [];
+                for (const reader of ['gmail', 'gcal']) {
+                  const get = store.get(`readerOff.${reader}`);
+                  get.onsuccess = () => {
+                    const row: unknown = get.result;
+                    if (typeof row === 'object' && row !== null && Reflect.get(row, 'value') !== false)
+                      found.push(reader);
+                  };
+                }
+                store.transaction.oncomplete = () => {
+                  db.close();
+                  resolve(found);
+                };
+              };
+            })
+          : [];
       const ids = (await chrome.scripting.getRegisteredContentScripts()).map((script) => script.id);
       if (['gmail', 'gcal'].every((reader) => readersOff.includes(reader) !== ids.includes(reader))) return;
       await new Promise((resolve) => setTimeout(resolve, 25));

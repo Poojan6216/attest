@@ -103,9 +103,27 @@ const ASKING_FOR_MORE: readonly [string, Record<string, unknown>, string][] = [
     { externally_connectable: { matches: ['https://*/*'] } },
     'externally_connectable is not allowed',
   ],
-  ['no Chrome version', { minimum_chrome_version: undefined }, 'minimum_chrome_version must be at least 120'],
-  ['an old Chrome version', { minimum_chrome_version: '100' }, 'minimum_chrome_version must be at least 120'],
-  ['Chrome 114', { minimum_chrome_version: '114' }, 'minimum_chrome_version must be at least 120'],
+  [
+    'no Chrome version',
+    { minimum_chrome_version: undefined },
+    `minimum_chrome_version must be at least ${String(MIN_CHROME_MAJOR)}`,
+  ],
+  [
+    'an old Chrome version',
+    { minimum_chrome_version: '100' },
+    `minimum_chrome_version must be at least ${String(MIN_CHROME_MAJOR)}`,
+  ],
+  [
+    'Chrome 114',
+    { minimum_chrome_version: '114' },
+    `minimum_chrome_version must be at least ${String(MIN_CHROME_MAJOR)}`,
+  ],
+  // The last Chrome without storage buckets, which the ledger lives in (Sprint 6 close; src/ledger/place.ts).
+  [
+    'Chrome 121',
+    { minimum_chrome_version: '121' },
+    `minimum_chrome_version must be at least ${String(MIN_CHROME_MAJOR)}`,
+  ],
   [
     'every host, optionally',
     { optional_host_permissions: ['<all_urls>'] },

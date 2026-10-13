@@ -55,6 +55,7 @@ export default defineConfig({
       'tests/unit/lint/test-timeout-setup.ts',
       'tests/unit/page-windows-setup.ts',
       'tests/unit/fake-browser-setup.ts',
+      'tests/unit/storage-buckets-setup.ts',
     ],
     tags: TEST_TAGS,
     coverage: {

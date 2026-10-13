@@ -8,12 +8,11 @@ import 'fake-indexeddb/auto';
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Dexie } from 'dexie';
-
-import { ALARM_NAMES, DB_NAME } from '../../../src/config';
+import { ALARM_NAMES } from '../../../src/config';
 import { Receipt } from '../../../src/core/schema';
 import { readRows } from '../../../src/ledger/db';
 import { closeLedger, getLedger } from '../../../src/ledger/repo';
+import { deleteLedger } from '../../../src/ledger/shared';
 import { AT } from '../core/demo-ledger';
 import { pinClock, releaseClock } from '../ledger/fixtures';
 import { storeDemo } from './demo-store';
@@ -61,8 +60,7 @@ describe('the grace alarm', () => {
   });
   it('tells open pages when it changed a receipt, and nothing when it had nothing to grade (TECH-8)', async () => {
     // The shared ledger an earlier case graded is deleted: this one starts empty.
-    await closeLedger();
-    await Dexie.delete(DB_NAME);
+    await deleteLedger();
     await storeDemo(await getLedger(), AT.evaluated);
     pinClock(AT.evaluated);
     const { runGraceBatch } = await import('../../../src/background/alarms');
@@ -75,8 +73,7 @@ describe('the grace alarm', () => {
   });
 
   it('asks the advisory model after its batch, about what the batch graded (sprint_5 5.4)', async () => {
-    await closeLedger();
-    await Dexie.delete(DB_NAME);
+    await deleteLedger();
     await storeDemo(await getLedger(), AT.beforeGrace);
     pinClock(AT.beforeGrace);
     const { runGraceBatch } = await import('../../../src/background/alarms');
@@ -93,8 +90,7 @@ describe('the grace alarm', () => {
 
 describe('the grace alarm and the model', () => {
   it('asks the model last, after the upkeep: nothing the alarm does waits for its calls (TECH-10)', async () => {
-    await closeLedger();
-    await Dexie.delete(DB_NAME);
+    await deleteLedger();
     await storeDemo(await getLedger(), AT.beforeGrace);
     pinClock(AT.beforeGrace);
     const { runGraceBatch } = await import('../../../src/background/alarms');

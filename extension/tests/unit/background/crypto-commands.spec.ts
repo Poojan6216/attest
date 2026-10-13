@@ -38,11 +38,12 @@ import { readSessionKeys } from '../../../src/crypto/session';
 import { stepCryptoJob } from '../../../src/ledger/crypto-job';
 import { CRYPTO_PREFIX, readCryptoState } from '../../../src/ledger/crypto-state';
 import { beginResealing, beginUnsealing } from '../../../src/ledger/crypto-writes';
+import { ledgerBucket, ledgerBuckets, nextLedgerBucket } from '../../../src/ledger/place';
 import { closeLedger, getClaim, getLedger, getRequest } from '../../../src/ledger/repo';
 import { deleteLedger } from '../../../src/ledger/shared';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { expectLedgerError, makeClaim, pinClock, releaseClock } from '../ledger/fixtures';
-import { rawRows, textsIn } from '../crypto/raw-store';
+import { ledgerIndexedDb, rawRows, textsIn } from '../crypto/raw-store';
 import { CLAIM, CONTENT, REQUEST, SEALED_STORES, seedLedger } from './crypto-fixtures';
 
 /** Invented passphrases only. */
@@ -57,7 +58,7 @@ async function atRest(): Promise<{ readonly keyIds: ReadonlySet<string>; readonl
   const keyIds = new Set<string>();
   let plain = 0;
   for (const store of SEALED_STORES) {
-    for (const row of await rawRows(DB_NAME, store)) {
+    for (const row of await rawRows(DB_NAME, store, await ledgerIndexedDb())) {
       if (isSealed(row.sealed)) keyIds.add(row.sealed.k);
       else plain += 1;
     }
@@ -103,7 +104,7 @@ describe('turned on', () => {
     expect(rest.plain).toBe(0);
     expect(rest.keyIds.size).toBe(1);
     for (const store of SEALED_STORES) {
-      const texts = textsIn(await rawRows(DB_NAME, store)).join('\n');
+      const texts = textsIn(await rawRows(DB_NAME, store, await ledgerIndexedDb())).join('\n');
       for (const value of CONTENT) expect(texts, `${store}: ${value}`).not.toContain(value);
     }
     expect(await getRequest(await getLedger(), REQUEST.id)).toEqual(REQUEST);
@@ -112,11 +113,13 @@ describe('turned on', () => {
     expect((await readSessionKeys()).current?.id).toBe([...rest.keyIds][0]);
   });
 
-  it("then rebuilds the ledger's database, sealed rows and all, and leaves no copy and no rebuild due", async () => {
+  it('then rebuilds the ledger into the next bucket, sealed rows and all, and leaves no other and no rebuild due', async () => {
+    const first = await ledgerBucket();
     await enable();
     const state = await readCryptoState(await getLedger());
     expect([state.on, state.job, state.rebuild]).toEqual([true, undefined, undefined]);
-    expect(await Dexie.getDatabaseNames()).toEqual([DB_NAME]);
+    expect(await ledgerBuckets()).toEqual([nextLedgerBucket(first)]);
+    expect(await Dexie.getDatabaseNames()).toEqual([]);
     expect((await atRest()).plain).toBe(0);
     expect(await getRequest(await getLedger(), REQUEST.id)).toEqual(REQUEST);
   });
@@ -144,7 +147,7 @@ describe('locked and unlocked', () => {
   });
 
   it('stays locked for a wrong passphrase, reading nothing, and unlocks for the right one', async () => {
-    const before = await rawRows(DB_NAME, 'claims');
+    const before = await rawRows(DB_NAME, 'claims', await ledgerIndexedDb());
     expect(await onCryptoUnlock({ type: 'crypto.unlock', passphrase: SECOND }, deps)).toEqual({
       ok: false,
       code: 'wrong_passphrase',
@@ -152,7 +155,7 @@ describe('locked and unlocked', () => {
     expect(isLocked()).toBe(true);
     expect(await readSessionKeys()).toEqual({});
     await expectLedgerError(getClaim(await getLedger(), CLAIM.id), 'locked');
-    expect(await rawRows(DB_NAME, 'claims')).toEqual(before);
+    expect(await rawRows(DB_NAME, 'claims', await ledgerIndexedDb())).toEqual(before);
     expect(await onCryptoUnlock({ type: 'crypto.unlock', passphrase: FIRST }, deps)).toEqual({ ok: true });
     expect(await getClaim(await getLedger(), CLAIM.id)).toMatchObject({ counterparty: CLAIM.counterparty });
   });

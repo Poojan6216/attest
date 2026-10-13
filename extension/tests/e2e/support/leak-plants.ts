@@ -4,9 +4,13 @@
  * spec unchanged (sprint_4 close: the spec reached its 400-line limit when the receipt's share became a channel).
  */
 import type { Page, Worker } from '@playwright/test';
+import type { WxtBrowser } from 'wxt/browser';
 
 import { BYO_VENDORS } from '../../../src/config';
+import { LEDGER_PLACE } from './ledger-place';
 import { loadSeeds, type Seed } from './leaks';
+
+declare const chrome: WxtBrowser;
 
 const SEEDS = loadSeeds();
 
@@ -103,9 +107,12 @@ export async function plantInDigest(page: Page): Promise<void> {
     health: [],
   };
   await page.evaluate(
-    (row) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
+    async ({ row, place }) => {
+      const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+      const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+        .indexedDB;
+      return new Promise<void>((resolve, reject) => {
+        const open = ledger.open(place.db);
         open.onsuccess = () => {
           const tx = open.result.transaction('digests', 'readwrite');
           tx.objectStore('digests').put(row);
@@ -120,7 +127,8 @@ export async function plantInDigest(page: Page): Promise<void> {
         open.onerror = () => {
           reject(new Error('the ledger did not open'));
         };
-      }),
-    digest,
+      });
+    },
+    { row: digest, place: LEDGER_PLACE },
   );
 }

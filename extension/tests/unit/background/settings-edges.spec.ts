@@ -14,6 +14,7 @@ import { onLedgerWipe, onRetentionSave } from '../../../src/background/settings'
 import type { LedgerTable } from '../../../src/bus/messages';
 import { STORAGE_KEYS } from '../../../src/config';
 import { closeLedger, getLedger, upsertClaim } from '../../../src/ledger/repo';
+import { FIRST_LEDGER_BUCKET } from '../../../src/ledger/place';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { makeClaim, pinClock, releaseClock } from '../ledger/fixtures';
 
@@ -50,14 +51,16 @@ describe('retention.save that cannot be stored', () => {
 });
 
 describe('ledger.wipe, twice', () => {
-  it('leaves the ledger and chrome.storage.local empty each time, the second over nothing', async () => {
+  it('leaves the ledger and chrome.storage.local empty each time but for the bucket named, the second over nothing', async () => {
     await upsertClaim(await getLedger(), makeClaim());
     await browser.storage.local.set({ [STORAGE_KEYS.FLAGS]: { ATTEST_AUTO_CHECK_GMAIL: true } });
     const syncReaders = vi.fn(() => Promise.resolve());
     expect(await onLedgerWipe({ notify, syncReaders })).toEqual({ ok: true });
     expect(await onLedgerWipe({ notify, syncReaders })).toEqual({ ok: true });
     expect(await (await getLedger()).claims.count()).toBe(0);
-    expect(await browser.storage.local.get(null)).toEqual({});
+    expect(await browser.storage.local.get(null)).toEqual({
+      [STORAGE_KEYS.LEDGER_BUCKET]: FIRST_LEDGER_BUCKET,
+    });
     expect(notify).toHaveBeenCalledTimes(2);
     expect(syncReaders).toHaveBeenCalledTimes(2);
   });

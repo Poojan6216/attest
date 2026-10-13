@@ -3,7 +3,8 @@
  * Unicode 15.0 reads it, whatever Unicode version the engine running it has. Pure.
  *
  * Why. `\p{…}`, `\s`, `trim()`, `normalize()` and `toLowerCase()` follow the Unicode version of the engine's ICU.
- * Chrome 120, the oldest Chrome Attest supports (minimum_chrome_version), ships ICU 73.1: Unicode 15.0. Node 22
+ * Chrome 120, the oldest Chrome Attest supported when this was set, ships ICU 73.1: Unicode 15.0; every later Chrome,
+ * the oldest Attest supports now among them (minimum_chrome_version, 122 since the Sprint 6 close), has it. Node 22
  * and current Chrome have 16.0 or later, in which OUTLINED DIGIT ONE (U+1CCF1) is a digit that NFKC turns into
  * "1", while 15.0 leaves it unassigned. The same claim and observation would get different subject tokens, score
  * and grade on two engines, and replay would report a grade mismatch on unchanged inputs (Hard Rule 4).

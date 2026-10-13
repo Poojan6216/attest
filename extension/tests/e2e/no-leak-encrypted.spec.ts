@@ -21,6 +21,7 @@ import { startFixtureServer } from '../tools/serve-fixtures';
 import { collectPageChannels, collectStorageChannels, recordConsole } from './support/channels';
 import { LOCKED_TEXT, turnOnEncryption, unlockIn } from './support/encryption';
 import { launchExtension, type LaunchedExtension } from './support/extension';
+import { LEDGER_PLACE } from './support/ledger-place';
 import { findLeaks, type Leak, type Seed } from './support/leaks';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';
 import { guardArgs, installRouteGuard, type RouteRecord } from './support/network-guard';
@@ -37,23 +38,25 @@ const PASSPHRASE_SEED = seedOf('ledger_passphrase', PASSPHRASE);
 
 /** The ledger's key check, read from IndexedDB itself. */
 const keyCheckAtRest = (page: Page): Promise<string> =>
-  page.evaluate(
-    () =>
-      new Promise<string>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
+  page.evaluate(async (place) => {
+    const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+    const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+      .indexedDB;
+    return new Promise<string>((resolve, reject) => {
+      const open = ledger.open(place.db);
+      open.onerror = () => {
+        reject(new Error('the ledger did not open'));
+      };
+      open.onsuccess = () => {
+        const db = open.result;
+        const read = db.transaction('meta').objectStore('meta').get('crypto.check');
+        read.onsuccess = () => {
+          db.close();
+          resolve(String(Reflect.get(Object(read.result), 'value')));
         };
-        open.onsuccess = () => {
-          const db = open.result;
-          const read = db.transaction('meta').objectStore('meta').get('crypto.check');
-          read.onsuccess = () => {
-            db.close();
-            resolve(String(Reflect.get(Object(read.result), 'value')));
-          };
-        };
-      }),
-  );
+      };
+    });
+  }, LEDGER_PLACE);
 
 /** Two sends stored, encryption turned on, the ledger locked and unlocked again from the popup. */
 async function sealAndUnlockAgain(extension: LaunchedExtension, routes: Map<string, string>, options: Page) {

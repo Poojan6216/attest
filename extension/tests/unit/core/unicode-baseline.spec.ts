@@ -1,6 +1,7 @@
 /**
  * SEC-1 (Hard Rule 4): every text reader gives a Unicode 15.0 engine's answer, whatever Unicode the engine running
- * it has. Node 22 (this suite) has Unicode 16.0; Chrome 120, the oldest supported, has 15.0. Each probe below is a
+ * it has. Node 22 (this suite) has Unicode 16.0; Chrome 120 has 15.0, and every later Chrome, the ones Attest supports
+ * (122 and later since the Sprint 6 close) among them, has it or a later one. Each probe below is a
  * character 15.0 does not assign and Node 22 does (or a property Node 22 changed), with the answer an engine
  * that does not know it gives: Chromium 123 (ICU 73/74) gave these results before the fix, Node 22 did not.
  * Every non-ASCII input is a \u escape (Decisions [1.1]).

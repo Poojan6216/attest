@@ -1,9 +1,11 @@
 /**
  * A Chrome profile's IndexedDB files read as bytes, as a forensic tool reads a copied profile, without Chrome (security
- * review SEC-1 at the Sprint 6 close). Chrome keeps an origin's databases in one LevelDB store. A put never overwrites
- * in place: it is appended to the log, then written to table files whose blocks are usually compressed. A replaced or
- * deleted version goes only when a compaction rewrites the files that hold it. So this reads every file under the
- * profile's `IndexedDB` folder and decodes both kinds of LevelDB file:
+ * review SEC-1 at the Sprint 6 close). Chrome keeps an origin's databases in one LevelDB store, and each storage bucket's
+ * in one of its own, under the profile's `WebStorage` folder (the ledger's, src/ledger/place.ts). A put never
+ * overwrites in place: it is appended to the log, then written to table files whose blocks are usually compressed. A
+ * replaced or deleted version goes only when a compaction rewrites the files that hold it, or with its bucket's folder.
+ * So this reads every file under the profile's `IndexedDB` and `WebStorage` folders and decodes both kinds of LevelDB
+ * file:
  *  - the log's records, joined across its 32 KiB blocks;
  *  - every block of every table, decompressed.
  * It then decodes each stored value Chrome compressed itself, and searches all of it for the given values. Each value
@@ -12,7 +14,7 @@
  * `unparsed`: a test that claims nothing was found must also find nothing unparsed. Formats: leveldb's
  * doc/log_format.md and doc/table_format.md, and Snappy's format_description.txt.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const LOG_BLOCK = 32_768;
@@ -219,9 +221,10 @@ function readIfThere(file: string): Buffer | undefined {
   }
 }
 
-/** Searches every IndexedDB file of the profile at `userDataDir` (header). */
+/** Searches every IndexedDB file of the profile at `userDataDir`, its storage buckets' included (header). */
 export function scanProfileIndexedDb(userDataDir: string, lookFor: readonly string[]): ProfileScan {
-  return scanFiles(path.join(userDataDir, 'Default', 'IndexedDB'), lookFor);
+  const profile = path.join(userDataDir, 'Default');
+  return scanFiles([path.join(profile, 'IndexedDB'), path.join(profile, 'WebStorage')], lookFor);
 }
 
 /**
@@ -230,11 +233,12 @@ export function scanProfileIndexedDb(userDataDir: string, lookFor: readonly stri
  * in `unparsed`, and still searched as it is.
  */
 export function scanProfileFiles(userDataDir: string, lookFor: readonly string[]): ProfileScan {
-  return scanFiles(path.join(userDataDir, 'Default'), lookFor);
+  return scanFiles([path.join(userDataDir, 'Default')], lookFor);
 }
 
-function scanFiles(dir: string, lookFor: readonly string[]): ProfileScan {
-  const files = filesUnder(dir);
+function scanFiles(dirs: readonly string[], lookFor: readonly string[]): ProfileScan {
+  // A folder Chrome has not made (no storage bucket yet) holds nothing to read.
+  const files = dirs.filter((dir) => existsSync(dir)).flatMap(filesUnder);
   const needles = lookFor.map((value) => [Buffer.from(value, 'latin1'), Buffer.from(value, 'utf16le')]);
   const unparsed: string[] = [];
   const found = new Set<number>();

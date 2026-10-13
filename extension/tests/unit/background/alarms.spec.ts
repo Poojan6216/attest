@@ -18,6 +18,7 @@ import {
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { closeLedger, getLedger, getObservation, upsertObservation } from '../../../src/ledger/repo';
 import { type LogRecord, setLogSink } from '../../../src/log';
+import { bucketIndexedDb, ledgerBucket } from '../../../src/ledger/place';
 import { makeObservation, pinClock, releaseClock } from '../ledger/fixtures';
 
 let records: LogRecord[] = [];
@@ -137,7 +138,7 @@ describe('handleAlarm', () => {
   // Added by the Sprint 0 QA review: the "never throws" contract had no test.
   it('never rejects when a handler throws; logs the failure with the alarm name', async () => {
     await closeLedger();
-    vi.spyOn(globalThis.indexedDB, 'open').mockImplementation(() => {
+    vi.spyOn(await bucketIndexedDb(await ledgerBucket()), 'open').mockImplementation(() => {
       throw new TypeError('handler blew up');
     });
     await expect(handleAlarm({ name: ALARM_NAMES.PURGE })).resolves.toBeUndefined();

@@ -19,6 +19,7 @@ import { readersOff, readFlags } from '../../../src/ledger/consent';
 import { nextDigestMs } from '../../../src/ledger/digest-week';
 import { deleteLedger, getLedger } from '../../../src/ledger/shared';
 import { Receipt } from '../../../src/ledger/types';
+import { FIRST_LEDGER_BUCKET } from '../../../src/ledger/place';
 import { setLogSink } from '../../../src/log';
 import { makeReceipt, pinClock, releaseClock, ulid } from '../ledger/fixtures';
 import { asFreshInstall, type FakeScripting } from './chrome-fakes';
@@ -83,7 +84,10 @@ describe('moving an older profile’s choices into the ledger', () => {
     expect(await moveStoredChoices(db, browser.storage.local)).toBe(2);
     expect(await readersOff(db)).toEqual(new Set(['gcal']));
     expect(await readFlags(db)).toEqual({ ...FEATURE_FLAG_DEFAULTS, ATTEST_AUTO_CHECK_GMAIL: true });
-    expect(await browser.storage.local.get(null)).toEqual({});
+    // The old keys gone; the name of the ledger's bucket stays (src/ledger/place.ts).
+    expect(await browser.storage.local.get(null)).toEqual({
+      [STORAGE_KEYS.LEDGER_BUCKET]: FIRST_LEDGER_BUCKET,
+    });
   });
 
   it('reads a readers’ choice it cannot read as every reader off, and carries no flag it cannot read', async () => {

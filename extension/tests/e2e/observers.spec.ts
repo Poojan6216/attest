@@ -16,6 +16,7 @@
  *    sighting as `sightedAt` and is not that claim's evidence (SIM-2; docs/grading.md §4.1; Hard Rule 5).
  */
 import { expect, type Page, test } from '@playwright/test';
+import type { WxtBrowser } from 'wxt/browser';
 
 import { candidates, createMemoryIndex } from '../../src/core/candidates';
 import { idFromHash } from '../../src/core/hash';
@@ -23,6 +24,7 @@ import { instantMs } from '../../src/core/normalize';
 import { Claim } from '../../src/core/schema';
 import type { LedgerExport } from '../../src/ledger/export';
 import type { LabelledFixture } from '../unit/fixtures/fixture-labels';
+import { LEDGER_PLACE, type LedgerPlace } from './support/ledger-place';
 import { findLeaks, loadSeeds } from './support/leaks';
 import { type VendorSession, withVendorSession } from './support/session';
 import {
@@ -35,6 +37,8 @@ import {
   vendorFixture,
   waitForLedger,
 } from './support/vendor-pages';
+
+declare const chrome: WxtBrowser;
 
 const hashesOf = (ledger: LedgerExport): Set<string> =>
   new Set(ledger.tables.observations.map((observation) => observation.contentHash));
@@ -144,7 +148,10 @@ async function sightedBeforeBatch(session: VendorSession): Promise<void> {
   await readLedger(session.ledgerPage);
   const batchMs = Date.now() + 120_000;
   const worker = await session.extension.serviceWorker();
-  await worker.evaluate(recordBatchInstant, new Date(batchMs).toISOString());
+  await worker.evaluate(recordBatchInstant, {
+    evaluatedAt: new Date(batchMs).toISOString(),
+    place: LEDGER_PLACE,
+  });
 
   const before = vendorFixture('gcal', 'synthetic-gcal-week-before.html');
   const rows = before.events.map((event) => sightingOf(before, event).contentHash);
@@ -274,9 +281,18 @@ async function expectEvidenceExcluded(
 }
 
 /** Runs in the service worker: records a batch instant in the ledger's `meta` store, as a grading batch does. */
-async function recordBatchInstant(evaluatedAt: string): Promise<void> {
+async function recordBatchInstant({
+  evaluatedAt,
+  place,
+}: {
+  readonly evaluatedAt: string;
+  readonly place: LedgerPlace;
+}): Promise<void> {
+  const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+  const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+    .indexedDB;
   await new Promise<void>((resolve, reject) => {
-    const open = indexedDB.open('attest');
+    const open = ledger.open(place.db);
     open.onerror = () => {
       reject(new Error('ledger open failed'));
     };

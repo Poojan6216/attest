@@ -6,7 +6,6 @@ import 'fake-indexeddb/auto';
  * worker saved it; and a read that fails is said on the page and logged as `digest.read_failed`, never left blank (Hard
  * Rule 6). Every value is invented.
  */
-import { Dexie } from 'dexie';
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -14,12 +13,12 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import { App } from '../../../entrypoints/digest/App';
 import { DigestPage } from '../../../entrypoints/digest/components/DigestPage';
-import { DB_NAME } from '../../../src/config';
 import { buildDigest, saveDigest } from '../../../src/ledger/digest';
 import { lastWeek } from '../../../src/ledger/digest-week';
-import { closeLedger, getLedger } from '../../../src/ledger/repo';
+import { getLedger } from '../../../src/ledger/repo';
 import { IsoTs } from '../../../src/ledger/types';
 import { type LogRecord, setLogSink } from '../../../src/log';
+import { deleteLedger } from '../../../src/ledger/shared';
 
 let root: HTMLElement;
 let records: LogRecord[];
@@ -35,8 +34,7 @@ beforeEach(() => {
 afterEach(async () => {
   render(null, root);
   root.remove();
-  await closeLedger();
-  await Dexie.delete(DB_NAME);
+  await deleteLedger();
 });
 
 async function settle(): Promise<void> {

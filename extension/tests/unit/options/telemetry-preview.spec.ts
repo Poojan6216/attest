@@ -18,6 +18,7 @@ import {
 import { STORAGE_KEYS } from '../../../src/config';
 import { deleteLedger, getLedger } from '../../../src/ledger/shared';
 import { recordTelemetrySent } from '../../../src/ledger/telemetry-sent';
+import { fakeStorageBuckets } from '../storage-buckets-setup';
 
 const ID = '4f1c2b3a-5d6e-4f70-8a9b-0c1d2e3f4a5b';
 const NOW = new Date(2026, 9, 10, 9, 30).getTime();
@@ -33,7 +34,7 @@ beforeEach(() => {
     name: 'Attest',
     version: '0.1.0',
   });
-  vi.stubGlobal('navigator', { userAgent: USER_AGENT });
+  vi.stubGlobal('navigator', { userAgent: USER_AGENT, storageBuckets: fakeStorageBuckets });
 });
 
 afterEach(async () => {

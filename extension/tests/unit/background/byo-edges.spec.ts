@@ -24,6 +24,7 @@ import { claimAsk } from '../../../src/ledger/model-answers';
 import { closeLedger, getLedger } from '../../../src/ledger/repo';
 import { recordTelemetrySent, telemetrySentDay } from '../../../src/ledger/telemetry-sent';
 import { ModelAnswer } from '../../../src/ledger/types';
+import { FIRST_LEDGER_BUCKET } from '../../../src/ledger/place';
 import { type LogRecord, setLogSink } from '../../../src/log';
 import { accessLevels } from '../fake-browser-setup';
 import { sha, ulid, uniqueDbName } from '../ledger/fixtures';
@@ -161,7 +162,10 @@ describe('Delete all data takes Sprint 5’s data too', () => {
     });
     expect(result).toEqual({ ok: true });
     const after = await getLedger();
-    expect(await browser.storage.local.get(null)).toEqual({});
+    // Only the name of the new ledger's bucket (src/ledger/place.ts).
+    expect(await browser.storage.local.get(null)).toEqual({
+      [STORAGE_KEYS.LEDGER_BUCKET]: FIRST_LEDGER_BUCKET,
+    });
     expect(await readByo()).toBeNull();
     expect(await after.modelAnswers.count()).toBe(0);
     expect(await telemetrySentDay(after)).toBeNull();

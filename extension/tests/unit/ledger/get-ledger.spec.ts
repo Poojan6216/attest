@@ -1,11 +1,12 @@
 import 'fake-indexeddb/auto';
 
-import { Dexie } from 'dexie';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DB_NAME } from '../../../src/config';
 import { MIGRATIONS } from '../../../src/ledger/migrations';
+import { bucketIndexedDb, ledgerBucket } from '../../../src/ledger/place';
 import { closeLedger, getLedger, getMeta, setMeta } from '../../../src/ledger/repo';
+import { fakeStorageBuckets } from '../storage-buckets-setup';
 import { captureLogs, expectLedgerError } from './fixtures';
 
 /** An IndexedDB factory that refuses everything, as a browser with site data blocked would. */
@@ -35,14 +36,21 @@ describe('getLedger', () => {
     expect(first.verno).toBe(MIGRATIONS.at(-1)?.version);
   });
 
+  it('opens it in the storage bucket named (src/ledger/place.ts), never in the default store', async () => {
+    const db = await getLedger();
+    expect(await (await bucketIndexedDb(await ledgerBucket())).databases()).toEqual([
+      { name: DB_NAME, version: db.verno * 10 },
+    ]);
+    expect(await indexedDB.databases()).toEqual([]);
+  });
+
   it('does not cache a failed open: the next call retries', async () => {
-    const original = Dexie.dependencies.indexedDB;
     const logs = captureLogs();
-    Dexie.dependencies.indexedDB = refusingFactory();
+    const refused = vi.spyOn(fakeStorageBuckets, 'open').mockResolvedValue({ indexedDB: refusingFactory() });
     try {
       await expectLedgerError(getLedger(), 'open_failed');
     } finally {
-      Dexie.dependencies.indexedDB = original;
+      refused.mockRestore();
       logs.restore();
     }
     expect(logs.records.map((record) => record.event)).toContain('ledger.open_failed');

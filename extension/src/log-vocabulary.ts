@@ -196,11 +196,13 @@ export const LOG_VALUES = [
   'seal',
   'reseal',
   'unseal',
-  // Where a rebuild of the ledger's database failed (src/background/rebuild.ts), and which field of the key record
-  // cannot be read (src/background/crypto.ts `damaged`; 'check' is listed here too).
+  // Where a rebuild of the ledger failed (src/background/rebuild.ts), and which field of the key record cannot be read
+  // (src/background/crypto.ts `damaged`; 'check' is listed here too).
   'check',
   'copy',
-  'restore',
+  'delete',
+  'settle',
+  'start',
   'key_id',
   'salt',
   'iterations',

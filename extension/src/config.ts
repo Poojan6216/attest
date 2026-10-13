@@ -8,10 +8,9 @@
 
 export const EXTENSION_NAME = 'Attest';
 
-/** IndexedDB database name (Dexie). */
-export const DB_NAME = 'attest';
+export const DB_NAME = 'attest'; // The ledger's IndexedDB database (Dexie), in its storage bucket: src/ledger/place.ts.
 
-/** Keys in `chrome.storage.local`. Only small flags and the install id live there. */
+/** Keys in `chrome.storage.local`. Only small flags, the install id and bucket names live there. */
 export const STORAGE_KEYS = {
   INSTALL_ID: 'attest.installId',
   FLAGS: 'attest.flags',
@@ -24,6 +23,7 @@ export const STORAGE_KEYS = {
    */
   BYO_VENDOR: 'attest.byoVendor',
   BYO_KEY: 'attest.byoKey',
+  LEDGER_BUCKET: 'attest.ledgerBucket', // The storage bucket the ledger is in (Sprint 6 close; src/ledger/place.ts).
 } as const;
 
 /**

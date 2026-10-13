@@ -192,6 +192,8 @@ export interface OpenOptions {
    * one database to another and never makes one (./rebuild.ts; Sprint 6 close, security review SEC-1).
    */
   readonly asStored?: boolean;
+  /** The IndexedDB the database is in: a ledger bucket's (./place.ts); the extension's default store without one. */
+  readonly indexedDB?: IDBFactory;
 }
 
 /**
@@ -204,7 +206,12 @@ export async function openLedger(
   options: OpenOptions = {},
 ): Promise<LedgerDb> {
   assertValidMigrations(migrations);
-  const db = new LedgerDb(name);
+  // In a bucket, never reopened by Dexie once closed: Chrome closes the connection when it deletes the bucket, and the
+  // next read must open the bucket named then (./shared.ts), never the deleted one again.
+  const db = new LedgerDb(
+    name,
+    options.indexedDB === undefined ? {} : { indexedDB: options.indexedDB, IDBKeyRange, autoOpen: false },
+  );
   // Rows of the tables that hold content are sealed while encryption is on (sprint_6 6.5; src/crypto/middleware.ts).
   if (options.asStored !== true) {
     db.use(

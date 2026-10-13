@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleAlarm, runRetentionPurge } from '../../../src/background/alarms';
 import { ALARM_NAMES } from '../../../src/config';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { bucketIndexedDb, ledgerBucket } from '../../../src/ledger/place';
 import { closeLedger, getLedger, getObservation, upsertObservation } from '../../../src/ledger/repo';
 import { captureLogs, makeObservation, pinClock, releaseClock, sha } from './fixtures';
 
@@ -54,7 +55,7 @@ describe('the purge alarm', () => {
   });
 
   it('runRetentionPurge rejects when the ledger cannot be opened, and handleAlarm logs it by alarm name', async () => {
-    vi.spyOn(globalThis.indexedDB, 'open').mockImplementation(() => {
+    vi.spyOn(await bucketIndexedDb(await ledgerBucket()), 'open').mockImplementation(() => {
       throw new DOMException('blocked', 'InvalidStateError');
     });
     await closeLedger();

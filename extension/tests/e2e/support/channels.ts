@@ -8,6 +8,8 @@
 import type { BrowserContext, Cookie, Page, Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
+import { LEDGER_PLACE } from './ledger-place';
+
 declare const chrome: WxtBrowser;
 
 type IndexedDbDump = Readonly<Record<string, Readonly<Record<string, unknown[]>>>>;
@@ -32,7 +34,10 @@ export interface PageChannels {
   readonly cookies: readonly Cookie[];
 }
 
-/** Every IndexedDB database of the page's origin, store by store (runs in the page). */
+/**
+ * Every IndexedDB database of the page's origin, store by store (runs in the page): the default store's by their
+ * names, and each storage bucket's as `<bucket>:<name>` (the ledger's, src/ledger/place.ts, among them).
+ */
 function dumpIndexedDb(page: Page): Promise<IndexedDbDump> {
   return page.evaluate(async () => {
     const request = <T>(r: IDBRequest<T>) =>
@@ -45,15 +50,21 @@ function dumpIndexedDb(page: Page): Promise<IndexedDbDump> {
         };
       });
     const dump: Record<string, Record<string, unknown[]>> = {};
-    for (const info of await indexedDB.databases()) {
-      if (info.name === undefined) continue;
-      const db = await request(indexedDB.open(info.name));
-      const stores: Record<string, unknown[]> = {};
-      for (const name of Array.from(db.objectStoreNames)) {
-        stores[name] = await request(db.transaction(name).objectStore(name).getAll());
+    const places: (readonly [prefix: string, factory: IDBFactory])[] = [['', indexedDB]];
+    for (const bucket of await navigator.storageBuckets.keys()) {
+      places.push([`${bucket}:`, (await navigator.storageBuckets.open(bucket)).indexedDB]);
+    }
+    for (const [prefix, factory] of places) {
+      for (const info of await factory.databases()) {
+        if (info.name === undefined) continue;
+        const db = await request(factory.open(info.name));
+        const stores: Record<string, unknown[]> = {};
+        for (const name of Array.from(db.objectStoreNames)) {
+          stores[name] = await request(db.transaction(name).objectStore(name).getAll());
+        }
+        db.close();
+        dump[`${prefix}${info.name}`] = stores;
       }
-      db.close();
-      dump[info.name] = stores;
     }
     return dump;
   });
@@ -140,9 +151,12 @@ export async function plantIndexedDbProbe(
   key = 'probe',
 ): Promise<void> {
   await extensionPage.evaluate(
-    ([k, v]) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
+    async ([k, v, place]) => {
+      const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+      const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+        .indexedDB;
+      return new Promise<void>((resolve, reject) => {
+        const open = ledger.open(place.db);
         open.onsuccess = () => {
           const tx = open.result.transaction('meta', 'readwrite');
           tx.objectStore('meta').put({ key: k, value: v });
@@ -157,8 +171,9 @@ export async function plantIndexedDbProbe(
         open.onerror = () => {
           reject(new Error('probe open failed'));
         };
-      }),
-    [key, value] as const,
+      });
+    },
+    [key, value, LEDGER_PLACE] as const,
   );
 }
 

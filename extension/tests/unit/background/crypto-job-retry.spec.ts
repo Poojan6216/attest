@@ -28,7 +28,7 @@ import { readCryptoState } from '../../../src/ledger/crypto-state';
 import { getLedger, putRequest } from '../../../src/ledger/repo';
 import { deleteLedger } from '../../../src/ledger/shared';
 import { loadCryptoStatus } from '../../../src/ui/settings-data';
-import { rawPut, rawRows } from '../crypto/raw-store';
+import { ledgerIndexedDb, rawPut, rawRows } from '../crypto/raw-store';
 import { makeRequest, sha, ulid } from '../ledger/fixtures';
 
 /** Invented only. */
@@ -46,9 +46,9 @@ async function sealedWithOneBroken(): Promise<void> {
   await putRequest(db, makeRequest({ id: BROKEN, textHash: sha(2) }));
   expect(await onCryptoEnable({ type: 'crypto.enable', passphrase: FIRST }, deps)).toEqual({ ok: true });
   await resumeCryptoJob(deps);
-  const [first, second] = await rawRows(DB_NAME, 'requests');
+  const [first, second] = await rawRows(DB_NAME, 'requests', await ledgerIndexedDb());
   if (first === undefined || second === undefined) throw new Error('the requests were not stored');
-  await rawPut(DB_NAME, 'requests', { ...second, sealed: first.sealed });
+  await rawPut(DB_NAME, 'requests', { ...second, sealed: first.sealed }, await ledgerIndexedDb());
 }
 
 /** Puts the broken row right: gone, as Delete would leave it. */

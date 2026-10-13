@@ -4,7 +4,9 @@
  */
 
 /**
- * The oldest Chrome Attest runs on (Decisions [0.1]): the Unicode baseline assumes Chrome 120's (Decisions [1.close];
- * Hard Rule 4), above what the side panel (114), storage access levels (102) and the worker's keep-awake (110) need.
+ * The oldest Chrome Attest runs on (Decisions [0.1]): 122, the first with storage buckets, which the ledger lives in
+ * (Sprint 6 close, security review SEC-1; src/ledger/place.ts). It was 120, whose Unicode (15.0) the Unicode baseline
+ * reads as (Decisions [1.close]; Hard Rule 4): every later Chrome has that Unicode or a later one. Above what the side
+ * panel (114), storage access levels (102) and the worker's keep-awake (110) need.
  */
-export const MIN_CHROME_MAJOR = 120;
+export const MIN_CHROME_MAJOR = 122;

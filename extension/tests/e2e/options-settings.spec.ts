@@ -16,6 +16,7 @@ import { DEMO_LOG, demoSentPage } from './support/demo';
 import { pasteActivity } from './support/paste';
 import { scanProfileIndexedDb } from './support/profile-files';
 import { withVendorSession } from './support/session';
+import { LEDGER_PLACE } from './support/ledger-place';
 import {
   fixtureUrl,
   openVendorPage,
@@ -140,7 +141,8 @@ test('the retention window is saved, and Delete all data leaves the ledger and s
     ).toEqual(['readerOff.gmail']);
     expect(after.receiptInputs).toEqual({});
     expect(after.policies).toEqual({});
-    expect(await storedLocally(worker)).toEqual({});
+    // Only the name of the new ledger's storage bucket, the first again (src/ledger/place.ts).
+    expect(await storedLocally(worker)).toEqual({ [LEDGER_PLACE.key]: LEDGER_PLACE.first });
     await expect.poll(() => ids(worker)).toEqual(['gcal']);
     await expect(options.getByRole('button', { name: 'Turn on Gmail' })).toBeVisible();
   });

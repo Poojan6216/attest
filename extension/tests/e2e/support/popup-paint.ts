@@ -18,6 +18,7 @@ import type { CDPSession, Page } from '@playwright/test';
 import { POPUP_RECEIPT_LIMIT } from '../../../src/config';
 import { uiRows } from '../../perf/ui-rows';
 import type { LaunchedExtension } from './extension';
+import { putRawRows } from './raw-ledger';
 
 export interface PaintRun {
   /** The popup page's main-thread CPU time from its navigation to the paint of the day, in ms (the gated number). */
@@ -39,35 +40,9 @@ function noonToday(): number {
 /** Rows written per call, so no one message between the test and the page carries the whole ledger. */
 const CHUNK = 1_000;
 
-/** Writes `rows` into one store of the extension's ledger, from `page`, in one transaction. */
+/** Writes `rows` into one store of the extension's ledger, from `page`, in one transaction (./raw-ledger.ts). */
 async function putRows(page: Page, store: 'receipts' | 'claims', rows: readonly unknown[]): Promise<void> {
-  await page.evaluate(
-    ({ name, chunk }) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-        // Never create the ledger here: only the extension's own code creates it, with every store.
-        open.onupgradeneeded = () => {
-          open.transaction?.abort();
-          reject(new Error('the ledger does not exist yet'));
-        };
-        open.onsuccess = () => {
-          const tx = open.result.transaction(name, 'readwrite');
-          for (const row of chunk) tx.objectStore(name).put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onabort = () => {
-            open.result.close();
-            reject(new Error(`the ${name} were not stored`));
-          };
-        };
-      }),
-    { name: store, chunk: rows },
-  );
+  await putRawRows(page, store, rows);
 }
 
 /** Writes the 5,000 receipts and their claims into the extension's ledger, from its popup page (header). */

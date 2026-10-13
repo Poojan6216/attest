@@ -31,10 +31,11 @@ export const CRYPTO_LOG_EVENTS = [
   'byo.key_sealed',
   'byo.save_locked',
   'byo.seal_failed',
-  // Rebuilding the ledger's database (Sprint 6 close, security review SEC-1; src/background/rebuild.ts).
+  // Rebuilding the ledger into its next bucket (Sprint 6 close, security review SEC-1; src/background/rebuild.ts).
+  'ledger.bucket_name_invalid',
+  'ledger.place_settled',
   'ledger.rebuilt',
   'ledger.rebuild_failed',
   'ledger.rebuild_mark_failed',
   'ledger.rebuild_mark_unread',
-  'ledger.rebuild_resumed',
 ] as const;

@@ -5,14 +5,14 @@ import 'fake-indexeddb/auto';
  * through the page's own connection to the ledger, and `ledger.changed` passed on for the tables a page shows. Every
  * assertion on a day holds in any time zone, a day of a clock change included.
  */
-import { Dexie } from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
-import { DB_NAME, POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../../../src/config';
-import { closeLedger, getLedger, putAdapterHealth, putGrant, putReceipt } from '../../../src/ledger/repo';
+import { POPUP_RECEIPT_LIMIT, TIMELINE_PAGE_SIZE } from '../../../src/config';
+import { getLedger, putAdapterHealth, putGrant, putReceipt } from '../../../src/ledger/repo';
 import type { AgentId, Grade, ReceiptInput } from '../../../src/ledger/types';
 import { loadGrantSettings, loadHealth } from '../../../src/ui/settings-data';
+import { deleteLedger } from '../../../src/ledger/shared';
 import {
   loadPopup,
   loadReceipt,
@@ -50,8 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await closeLedger();
-  await Dexie.delete(DB_NAME);
+  await deleteLedger();
 });
 
 describe('local days', () => {

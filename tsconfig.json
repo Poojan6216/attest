@@ -17,5 +17,10 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["bench/**/*.ts", "scripts/**/*.ts", "eslint.config.js"]
+  "include": [
+    "bench/**/*.ts",
+    "scripts/**/*.ts",
+    "eslint.config.js",
+    "extension/tests/tools/storage-buckets.d.ts"
+  ]
 }

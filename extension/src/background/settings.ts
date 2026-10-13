@@ -4,9 +4,9 @@
  *
  * Delete all data deletes everything Attest keeps in this browser, and keeps no copy anywhere (Hard Rules 1, 2). The
  * service worker reads which readers are off, forgets the keys of an encrypted ledger (sprint_6 6.5: nothing is left to
- * unlock), closes its own connection to the ledger and deletes the database: Chrome
- * asks every other connection (each open page's) to close, Dexie closes it, and it opens again, empty, at its next
- * read; nothing can be stored in the old database meanwhile, since an open waits for the delete. Then
+ * unlock), closes its own connection to the ledger and deletes every bucket the ledger was in, each with its folder of
+ * Chrome's files (Sprint 6 close, SEC-1; src/ledger/place.ts): Chrome closes every other connection (each open page's),
+ * and the page opens the bucket named, empty, at its next read. Then
  * `chrome.storage.local` (the install id; a new one is made when next needed) and `chrome.storage.session` (a receipt a
  * clicked alert asked to open, the away session's mark) are cleared, and every notification Attest shows is taken down.
  * The one thing kept is a choice, never data: each reader the person turned off is written off again into the new
@@ -21,7 +21,6 @@ import { LedgerTable, type RetentionSaveMessage, type SettingResult } from '../b
 import { type ReaderId, READERS } from '../config';
 import { readersOff, saveReaderOff } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
-import { deleteAndCompact, deleteLedgerCopy, flushChromeFiles } from '../ledger/rebuild';
 import { saveRetentionDays } from '../ledger/settings';
 import { deleteLedger, getLedger } from '../ledger/shared';
 import { log } from '../log';
@@ -85,13 +84,9 @@ export async function onLedgerWipe(deps: WipeDeps): Promise<SettingResult> {
   try {
     const off = await readersToKeepOff();
     await forgetKeys();
-    // Chrome's files keep a deleted row until a compaction rewrites them (Sprint 6 close, security review SEC-1): the
-    // deletions are made so that Chrome compacts them away, and a rebuild's copy goes too (src/ledger/rebuild.ts).
-    await deleteAndCompact(async () => {
-      await deleteLedger();
-      await deleteLedgerCopy();
-    });
-    await flushChromeFiles();
+    // Every ledger bucket is deleted, each with its folder of Chrome's files (Sprint 6 close, security review SEC-1;
+    // src/ledger/place.ts): no deleted row is left for a compaction that may never come.
+    await deleteLedger();
     await (deps.clearStorage ?? clearBrowserStorage)();
     const db = await getLedger();
     for (const reader of off) await saveReaderOff(db, reader, true);

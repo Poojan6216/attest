@@ -35,8 +35,8 @@ export const LEDGER_ERROR_CODES = [
   /** A sealed row did not open with its own key: a changed byte, or a value moved from another row. */
   'unreadable',
   /**
-   * Rebuilding the ledger's database (./rebuild.ts; Sprint 6 close, SEC-1) copied a table short: the ledger is not
-   * deleted, or the copy is kept to put back again.
+   * Rebuilding the ledger into the next bucket (./rebuild.ts; Sprint 6 close, SEC-1) did not finish: a table copied
+   * short, or a step that failed (`step`). The ledger stays in the bucket named until the copy is whole.
    */
   'rebuild_failed',
 ] as const;

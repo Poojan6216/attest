@@ -10,10 +10,12 @@
  * worker sets its own memory as its source at its start (src/background/crypto.ts), so it never takes a key it did
  * not unlock itself.
  *
- * While the service worker rebuilds the ledger's database (Sprint 6 close, security review SEC-1; ./rebuild.ts), every
- * `getLedger()` waits: in the worker, until its rebuild releases the hold it took (`holdLedger`); in a page, while the
- * session's mark is set (./rebuild-mark.ts), the page's own connection closed so it opens the rebuilt ledger after. So
- * nothing reads a ledger half put back, and nothing writes one about to be deleted.
+ * The ledger is in the storage bucket `chrome.storage.local` names (./place.ts). While the service worker rebuilds it
+ * into the next bucket (Sprint 6 close, security review SEC-1; ./rebuild.ts), every `getLedger()` waits: in the worker,
+ * until its rebuild releases the hold it took (`holdLedger`); in a page, while the session's mark is set
+ * (./rebuild-mark.ts), the page's own connection closed so it opens the bucket named after. So nothing writes rows the
+ * copy has passed, and nothing reads a bucket about to be deleted. A connection Chrome closes, as it does when it
+ * deletes the bucket, is forgotten: the next `getLedger()` opens the bucket named then.
  */
 import { Dexie } from 'dexie';
 
@@ -23,7 +25,8 @@ import { lockKeyring, type HeldKeys } from '../crypto/keyring';
 import { onSessionKeysChanged, readSessionKeys } from '../crypto/session';
 import { loadKeyring } from './crypto-state';
 import type { LedgerDb } from './db';
-import { openLedger } from './migrations';
+import { MIGRATIONS, openLedger } from './migrations';
+import { bucketIndexedDb, deleteLedgerBucket, ledgerBucket, ledgerBuckets } from './place';
 import { onRebuildMarkChanged, readRebuildMark } from './rebuild-mark';
 
 /** Where this context's ledger keys come from (header). */
@@ -121,7 +124,9 @@ export function reloadKeyring(): Promise<void> {
 }
 
 async function openWithKeys(): Promise<LedgerDb> {
-  const db = await openLedger();
+  const db = await openLedger(DB_NAME, MIGRATIONS, {
+    indexedDB: await bucketIndexedDb(await ledgerBucket()),
+  });
   await loadKeyring(db, () => keySource());
   if (!watching) {
     watching = true;
@@ -136,16 +141,24 @@ function ledgerNow(): Promise<LedgerDb> {
   if (shared !== undefined) return shared;
   const opening = openWithKeys();
   shared = opening;
-  opening.catch((error: unknown) => {
-    if (shared === opening) shared = undefined;
-    log.warn('ledger.shared_open_reset', { error });
-  });
+  opening.then(
+    (db) => {
+      // Closed by Chrome (its bucket deleted) or here: forgotten, so the next read opens the bucket named then (header).
+      db.on('close', () => {
+        if (shared === opening) shared = undefined;
+      });
+    },
+    (error: unknown) => {
+      if (shared === opening) shared = undefined;
+      log.warn('ledger.shared_open_reset', { error });
+    },
+  );
   return opening;
 }
 
 /**
- * The extension's ledger (`DB_NAME`, latest migrations), opened once per context on first use, with its keyring
- * loaded, once no rebuild holds it (header). A failed open is not cached: the next call retries.
+ * The extension's ledger (`DB_NAME`, latest migrations, in the bucket named), opened once per context on first use,
+ * with its keyring loaded, once no rebuild holds it (header). A failed open is not cached: the next call retries.
  */
 export function getLedger(): Promise<LedgerDb> {
   return followRebuildMark()
@@ -166,11 +179,13 @@ export async function closeLedger(): Promise<void> {
 }
 
 /**
- * Deletes the ledger's database (sprint_4 4.5, Delete all data): closes this context's instance, then deletes the
- * database once every other connection closed (Dexie closes a page's when Chrome asks it to; that page opens a new,
- * empty one at its next read, after the delete). The next `getLedger()` here opens a new, empty ledger.
+ * Deletes the ledger (sprint_4 4.5, Delete all data): closes this context's instance, then deletes every ledger bucket,
+ * each with the folder of Chrome's files that held it (./place.ts), and a ledger a build before buckets kept in the
+ * default store (./rebuild.ts `settleLedgerPlace`). Chrome closes a page's connection as it deletes the bucket; the page
+ * opens the bucket named at its next read. The next `getLedger()` here opens a new, empty ledger.
  */
 export async function deleteLedger(): Promise<void> {
   await closeLedger();
+  for (const bucket of await ledgerBuckets()) await deleteLedgerBucket(bucket);
   await Dexie.delete(DB_NAME);
 }

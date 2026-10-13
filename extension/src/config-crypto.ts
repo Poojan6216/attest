@@ -51,11 +51,10 @@ export const KEEP_AWAKE_MS = 20_000;
 export const MIN_KDF_ITERATIONS = 600_000;
 export const MAX_KDF_ITERATIONS = 6_000_000;
 /**
- * Rebuilding the ledger's database once a job has sealed its rows (Sprint 6 close, security review SEC-1;
- * src/ledger/rebuild.ts): the copy the rows wait in while the ledger is deleted and made again, so Chrome compacts away
- * every older copy of a row; and the small database made and deleted after, so Chrome removes the files left behind.
+ * The storage buckets the ledger lives in (Sprint 6 close, security review SEC-1; src/ledger/place.ts), this and a
+ * generation: `ledger-1`, `ledger-2`. A rebuild (src/ledger/rebuild.ts) copies the rows into the next one and deletes
+ * the one before, and with it every older copy of a row in Chrome's files.
  */
-export const REBUILD_DB_NAME = 'attest-rebuild';
-export const FLUSH_DB_NAME = 'attest-flush';
+export const LEDGER_BUCKET_PREFIX = 'ledger-';
 /** Rows the rebuild copies per transaction: read whole, a page of raw rows a couple of MB at most. */
 export const REBUILD_PAGE = 2_000;

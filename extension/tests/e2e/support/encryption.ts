@@ -1,7 +1,8 @@
 /**
  * Driving encryption at rest in the built extension (sprint_6 6.5): turning it on in the options page, unlocking from
  * any page's prompt, stopping the service worker as Chrome stops an idle one, and reading the ledger's rows straight
- * from IndexedDB, as someone who copied the profile would, without Dexie and so without the sealing middleware. The
+ * from IndexedDB (its storage bucket, ./ledger-place.ts), as someone who copied the profile would, without Dexie and so
+ * without the sealing middleware. The
  * raw read runs in an extension page and answers counts and which of the given values it found, never the rows.
  */
 import { expect, type Page } from '@playwright/test';
@@ -9,6 +10,7 @@ import type { WxtBrowser } from 'wxt/browser';
 
 import { SEALED_TABLES } from '../../../src/config-crypto';
 import type { LaunchedExtension } from './extension';
+import { LEDGER_PLACE } from './ledger-place';
 
 declare const chrome: WxtBrowser;
 
@@ -29,9 +31,12 @@ export interface AtRest {
 export async function ledgerAtRest(page: Page, lookFor: readonly string[]): Promise<AtRest> {
   // No named function inside: `pnpm bench` runs the e2e helpers under tsx (see ./perf-ledger.ts).
   return page.evaluate(
-    async ({ stores, values }) => {
+    async ({ stores, values, place }) => {
+      const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+      const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+        .indexedDB;
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const open = indexedDB.open('attest');
+        const open = ledger.open(place.db);
         open.onsuccess = () => {
           resolve(open.result);
         };
@@ -74,34 +79,36 @@ export async function ledgerAtRest(page: Page, lookFor: readonly string[]): Prom
       const all = texts.join('\n');
       return { sealed, plain, keyIds: [...keyIds], found: values.filter((value) => all.includes(value)) };
     },
-    { stores: SEALED, values: [...lookFor] },
+    { stores: SEALED, values: [...lookFor], place: LEDGER_PLACE },
   );
 }
 
 /** The keys of the encryption state in the ledger's `meta`, read straight from IndexedDB (the export leaves them out). */
 export async function cryptoKeysAtRest(page: Page): Promise<string[]> {
   // No named function inside: `pnpm bench` runs the e2e helpers under tsx (see ./perf-ledger.ts).
-  return page.evaluate(
-    () =>
-      new Promise<string[]>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
+  return page.evaluate(async (place) => {
+    const named: unknown = (await chrome.storage.local.get(place.key))[place.key];
+    const ledger = (await navigator.storageBuckets.open(typeof named === 'string' ? named : place.first))
+      .indexedDB;
+    return new Promise<string[]>((resolve, reject) => {
+      const open = ledger.open(place.db);
+      open.onerror = () => {
+        reject(new Error('the ledger did not open'));
+      };
+      open.onsuccess = () => {
+        const db = open.result;
+        const keys = db.transaction('meta').objectStore('meta').getAllKeys();
+        keys.onsuccess = () => {
+          db.close();
+          resolve(keys.result.map(String).filter((key) => key.startsWith('crypto.')));
         };
-        open.onsuccess = () => {
-          const db = open.result;
-          const keys = db.transaction('meta').objectStore('meta').getAllKeys();
-          keys.onsuccess = () => {
-            db.close();
-            resolve(keys.result.map(String).filter((key) => key.startsWith('crypto.')));
-          };
-          keys.onerror = () => {
-            db.close();
-            reject(new Error('meta did not read'));
-          };
+        keys.onerror = () => {
+          db.close();
+          reject(new Error('meta did not read'));
         };
-      }),
-  );
+      };
+    });
+  }, LEDGER_PLACE);
 }
 
 /** Turns encryption on from the options page's Encryption, and waits until every row is sealed. */
