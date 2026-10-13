@@ -83,6 +83,8 @@ const VERBS: ReadonlySet<string> = new Set([
   'Change',
   'Lock',
   'Unlock',
+  // A stopped encryption job's Try again (Sprint 6 close, tech review TECH-2).
+  'Try',
 ]);
 
 /** Each banned word or mark in `strings`, as `file:line: why: "text"`. */
