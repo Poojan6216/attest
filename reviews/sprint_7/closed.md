@@ -93,8 +93,8 @@ Each is in MANUAL.md with its steps.
 2. [ ] The public repository, after both clean-ups (the real captures, Sprint 7; the bench trace in history, Sprint 4 close) and the license choice → MANUAL.md (gap 2, SEC-7).
 3. [ ] The store zip → deploy the API (MANUAL.md, Sprint 5), then "Release 0.1.0", whose steps now name the host in PRIVACY.md (gap 3, sprint_7 7.0).
 4. [ ] Certify the privacy practices form, with the draft categories → `launch/store-listing.md` (gap 4).
-5. [ ] Re-read OpenAI's Terms of Use in a browser → MANUAL.md, Sprint 6 (gap 5). Meta's, Anthropic's and Google's were re-read on 2026-10-13 and stand (Decisions `[7.close]`).
-6. [ ] Write the server's operator and a private contact into PRIVACY.md → MANUAL.md, Sprint 7 (gap 8). The release build refuses until you do.
+5. [x] Re-read OpenAI's Terms of Use in a browser → done later on 2026-10-13, in the founder's Chrome: they read as `[3.10]` quoted them (gap 5). Meta's, Anthropic's and Google's were re-read the same day and stand (Decisions `[7.close]`).
+6. [x] Done later on 2026-10-13: the founder's name and address are in PRIVACY.md 0.11. Write the server's operator and a private contact into PRIVACY.md → MANUAL.md, Sprint 7 (gap 8). The release build refuses until you do.
 7. [ ] See what Railway's request logs hold, and for how long, when you deploy → MANUAL.md, Sprint 7 (gap 14).
 8. [ ] Each month, before publishing the report, compare its installs with the store's users → MANUAL.md, after launch.
 

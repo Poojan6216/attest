@@ -80,6 +80,7 @@ describe('assertReleasable', () => {
     expect(() => {
       assertReleasable(true, HOST, "reports go to Attest's own telemetry server");
     }).toThrow(/does not name the telemetry host attest-telemetry\.up\.railway\.app/u);
-    expect(readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8')).toContain(POLICY_TO_FILL);
+    // The founder filled both blanks on 2026-10-13 (MANUAL.md, Sprint 7): the policy itself holds none.
+    expect(readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8')).not.toContain(POLICY_TO_FILL);
   });
 });
