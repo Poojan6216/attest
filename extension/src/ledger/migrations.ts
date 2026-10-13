@@ -36,7 +36,9 @@ import {
   STORES_V11,
 } from './db';
 import { LedgerError } from './errors';
+import { lockKeyring } from '../crypto/keyring';
 import { sealingMiddleware } from '../crypto/middleware';
+import { CRYPTO_KEYS } from './crypto-state';
 import {
   INDEX_FIELDS,
   LEDGER_TABLE_NAMES,
@@ -169,6 +171,18 @@ export function assertValidMigrations(migrations: readonly Migration[]): void {
   }
 }
 
+/**
+ * Before a data upgrade runs (Sprint 6 close, security review SEC-7, tech review TECH-10): on an encrypted ledger, this
+ * context's keyring is locked for it. The ledger opens before its keyring is loaded (./shared.ts), so a keyring still
+ * as it starts would let an upgrade write a row of a sealed table in the clear, and no job would ever seal it. Locked,
+ * any read or write of a sealed table fails, the upgrade with it, and the ledger does not open: fail closed. The
+ * keyring is loaded for real once the ledger is open.
+ */
+async function lockedIfSealing(tx: Transaction): Promise<void> {
+  const sealing: unknown = await tx.table('meta').get(CRYPTO_KEYS.SEALING);
+  if (Reflect.get(Object(sealing), 'value') === true) lockKeyring();
+}
+
 const STORED_TABLES: ReadonlySet<string> = new Set([...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES]);
 const isStoredTable = (table: string): table is StoredTableName => STORED_TABLES.has(table);
 
@@ -203,7 +217,8 @@ export async function openLedger(
   }
   for (const migration of migrations) {
     const version = db.version(migration.version).stores(migration.stores);
-    if (migration.upgrade !== undefined) version.upgrade(migration.upgrade);
+    const { upgrade } = migration;
+    if (upgrade !== undefined) version.upgrade((tx) => lockedIfSealing(tx).then(() => upgrade(tx)));
   }
   try {
     await db.open();
