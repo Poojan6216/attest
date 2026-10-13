@@ -4,8 +4,8 @@
  * sources: it says what encryption protects and what it does not; off, its form checks the new passphrase, its repeat
  * and the person's word before anything is sent, then sends `crypto.enable`; on and locked, it offers the unlock;
  * on and unlocked, Lock now, a passphrase change (checked the same way) and turning it off, each sent as its command;
- * a refusal is said in words; and while a job rewrites the records, it says which and how far. Every passphrase is
- * invented.
+ * a refusal is said in words, a damaged key record as such (Sprint 6 close, SEC-6); and while a job rewrites the
+ * records, it says which and how far. Every passphrase is invented.
  */
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -159,5 +159,20 @@ describe('encryption on', () => {
     await type(off, 'Passphrase in use', PASSPHRASE);
     await submit(off);
     expect(text()).toContain('Attest is still rewriting your records');
+  });
+});
+
+describe('a damaged key record (Sprint 6 close, SEC-6)', () => {
+  it('says a damaged key record is damaged, and that Delete all data is the way back, never to try again', async () => {
+    const { sources } = sourcesOf({ on: true, locked: true }, { ok: false, code: 'damaged' });
+    await show(sources);
+    const form = formNamed('Unlock');
+    await type(form, 'Passphrase', PASSPHRASE);
+    await submit(form);
+    expect(text()).toContain(
+      'Attest’s record of your encryption is damaged, so no passphrase can open your records.',
+    );
+    expect(text()).toContain('Delete all data, in the options page, is the only way back.');
+    expect(text()).not.toMatch(/try again/iu);
   });
 });

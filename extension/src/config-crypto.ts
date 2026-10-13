@@ -11,6 +11,8 @@ export const LEDGER_SALT_BYTES = 16;
 export const LEDGER_KEY_BYTES = 32;
 /** AES-GCM's 96-bit nonce, fresh from the browser's random source for every value sealed. */
 export const LEDGER_IV_BYTES = 12;
+/** AES-GCM's 128-bit tag, at the end of every ciphertext. */
+export const GCM_TAG_BYTES = 16;
 /** A key's id, carried by every value it seals, so a passphrase change knows which rows it has not reached. */
 export const LEDGER_KEY_ID_BYTES = 6;
 /** The shortest passphrase taken: long enough that a copied profile is not opened by guessing at PBKDF2's pace. */

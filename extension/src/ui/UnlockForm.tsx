@@ -10,12 +10,20 @@ async function sendUnlock(passphrase: string): Promise<CryptoResult> {
   return sendCrypto({ type: 'crypto.unlock', passphrase });
 }
 
-type UnlockStep = 'idle' | 'unlocking' | 'wrong' | 'failed';
+type UnlockStep = 'idle' | 'unlocking' | 'wrong' | 'damaged' | 'failed';
 
 const SAID: Readonly<Record<Exclude<UnlockStep, 'idle'>, string>> = {
   unlocking: 'Unlocking…',
   wrong: 'That passphrase does not open your records. Check it and try again.',
+  damaged:
+    'Attest’s record of your encryption is damaged, so no passphrase can open your records. Delete all data, in the options page, is the only way back.',
   failed: 'Attest could not unlock your records. Try again.',
+};
+
+/** What each refusal of an unlock says (Sprint 6 close, security review SEC-6: a damaged record is its own). */
+const REFUSED: Readonly<Partial<Record<string, UnlockStep>>> = {
+  wrong_passphrase: 'wrong',
+  damaged: 'damaged',
 };
 
 export interface UnlockFormProps {
@@ -39,7 +47,7 @@ export function UnlockForm({ unlock = sendUnlock }: UnlockFormProps) {
       (result) => {
         const opened = result.ok || result.code === 'off';
         if (opened) setPassphrase('');
-        setStep(opened ? 'idle' : result.code === 'wrong_passphrase' ? 'wrong' : 'failed');
+        setStep(opened ? 'idle' : (REFUSED[result.code] ?? 'failed'));
       },
       (error: unknown) => {
         log.warn('ui.unlock_failed', { error });

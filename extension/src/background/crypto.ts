@@ -19,7 +19,14 @@ import type {
   CryptoUnlockMessage,
   LedgerTable,
 } from '../bus/messages';
-import { LEDGER_KDF_ITERATIONS, MAX_KDF_ITERATIONS, MIN_KDF_ITERATIONS } from '../config-crypto';
+import {
+  GCM_TAG_BYTES,
+  LEDGER_IV_BYTES,
+  LEDGER_KDF_ITERATIONS,
+  LEDGER_SALT_BYTES,
+  MAX_KDF_ITERATIONS,
+  MIN_KDF_ITERATIONS,
+} from '../config-crypto';
 import { fromBase64, toBase64 } from '../crypto/bytes';
 import { deriveLedgerKey, newKeyId, newSalt, type LedgerKey } from '../crypto/kdf';
 import { isLocked, type HeldKeys } from '../crypto/keyring';
@@ -115,20 +122,46 @@ function oneAtATime(name: string, command: () => Promise<CryptoResult>): Promise
   return run;
 }
 
-/** The key `passphrase` gives under the ledger's salt, rounds and key id, when it opens the key check. */
-async function keyFor(passphrase: string, state: CryptoState): Promise<LedgerKey | undefined> {
+/** What a passphrase gives under the ledger's state: its key, or why not. */
+type Keyed = { readonly key: LedgerKey } | { readonly refused: 'wrong_passphrase' | 'damaged' };
+
+/**
+ * A key record that cannot be read (SEC-6, TECH-7): logged at error by the field, never its value, and refused as
+ * damaged, never as a wrong passphrase the person would type again and again.
+ */
+function damaged(field: string): { readonly refused: 'damaged' } {
+  log.error('crypto.key_record_invalid', { field });
+  return { refused: 'damaged' };
+}
+
+/** Base64 as Attest writes it: whole groups of four, padded. */
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+const bytesOf = (text: string): Uint8Array<ArrayBuffer> | undefined =>
+  BASE64.test(text) ? fromBase64(text) : undefined;
+
+/** Whether `check` reads as a key check (src/crypto/seal.ts `keyCheck`): a nonce and a ciphertext with its tag. */
+function isCheckText(check: string): boolean {
+  const [iv, ct, ...rest] = check.split('.');
+  const nonce = bytesOf(iv ?? '');
+  const sealed = bytesOf(ct ?? '');
+  return rest.length === 0 && nonce?.length === LEDGER_IV_BYTES && (sealed?.length ?? 0) > GCM_TAG_BYTES;
+}
+
+/**
+ * The key `passphrase` gives under the ledger's salt, rounds and key id, when it opens the key check; a record that
+ * cannot be read is damaged, told apart from a passphrase that does not give the key.
+ */
+async function keyFor(passphrase: string, state: CryptoState): Promise<Keyed> {
   const { salt, iterations, keyId, check } = state;
-  if (salt === undefined || keyId === undefined || check === undefined || iterations === undefined)
-    return undefined;
-  if (iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS) return undefined;
-  let saltBytes: Uint8Array<ArrayBuffer>;
-  try {
-    saltBytes = fromBase64(salt);
-  } catch {
-    return undefined;
+  if (keyId === undefined) return damaged('key_id');
+  const saltBytes = bytesOf(salt ?? '');
+  if (saltBytes?.length !== LEDGER_SALT_BYTES) return damaged('salt');
+  if (iterations === undefined || iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS) {
+    return damaged('iterations');
   }
+  if (check === undefined || !isCheckText(check)) return damaged('check');
   const key = await deriveLedgerKey(passphrase, saltBytes, keyId, iterations);
-  return opensCheck(key, check) ? key : undefined;
+  return opensCheck(key, check) ? { key } : { refused: 'wrong_passphrase' };
 }
 
 /** A new key from `passphrase`, with a new salt and id, and what `meta` keeps of it. */
@@ -165,12 +198,15 @@ export function onCryptoUnlock(message: CryptoUnlockMessage, deps: CryptoDeps): 
     const db = await deps.db();
     const state = await readCryptoState(db);
     if (!isGuarded(state)) return refused('off');
-    const key = await keyFor(message.passphrase, state);
-    if (key === undefined) {
-      log.info('crypto.unlock_refused');
-      return refused('wrong_passphrase');
+    const keyed = await keyFor(message.passphrase, state);
+    if ('refused' in keyed) {
+      if (keyed.refused === 'wrong_passphrase') log.info('crypto.unlock_refused');
+      return refused(keyed.refused);
     }
+    const { key } = keyed;
     const previous = state.previous === undefined ? undefined : unwrapKey(key, state.previous);
+    // The key before, mid-change, that the right key does not open: refused whole, never half the ledger unlocked.
+    if (state.previous !== undefined && previous === undefined) return refused(damaged('previous').refused);
     await hold({ current: key, ...(previous === undefined ? {} : { previous }) }, deps);
     log.info('crypto.unlocked');
     void resumeCryptoJob(deps);
@@ -200,8 +236,9 @@ export function onCryptoChange(message: CryptoChangeMessage, deps: CryptoDeps): 
     const state = await readCryptoState(db);
     if (!state.on) return refused('off');
     if (state.job !== undefined) return refused('busy');
-    const current = await keyFor(message.passphrase, state);
-    if (current === undefined) return refused('wrong_passphrase');
+    const keyed = await keyFor(message.passphrase, state);
+    if ('refused' in keyed) return refused(keyed.refused);
+    const current = keyed.key;
     const { key, record } = await newKey(message.next);
     await beginResealing(db, record, wrapKey(key, current));
     await hold({ current: key, previous: current }, deps);
@@ -218,10 +255,10 @@ export function onCryptoDisable(message: CryptoDisableMessage, deps: CryptoDeps)
     const state = await readCryptoState(db);
     if (!state.on) return refused('off');
     if (state.job !== undefined) return refused('busy');
-    const key = await keyFor(message.passphrase, state);
-    if (key === undefined) return refused('wrong_passphrase');
+    const keyed = await keyFor(message.passphrase, state);
+    if ('refused' in keyed) return refused(keyed.refused);
     await beginUnsealing(db);
-    await hold({ current: key }, deps);
+    await hold({ current: keyed.key }, deps);
     log.info('crypto.disabling');
     void resumeCryptoJob(deps);
     return OK;

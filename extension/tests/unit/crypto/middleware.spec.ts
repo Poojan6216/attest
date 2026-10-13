@@ -276,8 +276,9 @@ describe('keys across a change', () => {
     await putRequest(db, makeRequest({ textHint: 'Edited request', textHash: sha(7) }));
     const [request] = await rawRows(name, 'requests');
     expect(Reflect.get(request?.sealed ?? {}, 'k')).toBe(NEXT.id);
+    // The key before dropped while unlocked: its rows do not open, said as such, never as a lock (SEC-6).
     setKeyring({ sealing: true, guarded: true, current: NEXT });
-    await expectLedgerError(getClaim(db, CLAIM.id), 'locked');
+    await expectLedgerError(getClaim(db, CLAIM.id), 'unreadable');
   });
 
   it('writes plain rows while encryption is off, and still opens the sealed ones it holds a key for', async () => {

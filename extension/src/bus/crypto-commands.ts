@@ -40,10 +40,11 @@ export const CryptoDisableMessage = z.strictObject({
 });
 
 /**
- * Why a command was refused: the passphrase does not give the ledger's key (`wrong_passphrase`), a job is still
- * rewriting the rows (`busy`), encryption is already on (`already_on`) or is off (`off`), or it failed.
+ * Why a command was refused: the passphrase does not give the ledger's key (`wrong_passphrase`), the ledger's record
+ * of its key cannot be read, so no passphrase can open it (`damaged`; Sprint 6 close, security review SEC-6), a job is
+ * still rewriting the rows (`busy`), encryption is already on (`already_on`) or is off (`off`), or it failed.
  */
-export const CryptoCode = z.enum(['wrong_passphrase', 'busy', 'already_on', 'off', 'failed']);
+export const CryptoCode = z.enum(['wrong_passphrase', 'damaged', 'busy', 'already_on', 'off', 'failed']);
 
 /** The answer to each command: done, or why not. */
 export const CryptoResult = z.discriminatedUnion('ok', [

@@ -13,6 +13,7 @@ export const CRYPTO_LOG_EVENTS = [
   'crypto.job_failed',
   'crypto.job_paused',
   'crypto.keep_awake_failed',
+  'crypto.key_record_invalid',
   'crypto.locked',
   'crypto.session_clear_failed',
   'crypto.unlock_refused',

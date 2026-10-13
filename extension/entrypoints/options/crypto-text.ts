@@ -10,6 +10,8 @@ type Refusal = Extract<CommandStep, { kind: 'refused' }>['code'];
 
 export const REFUSALS: Readonly<Record<Refusal, string>> = {
   wrong_passphrase: 'That passphrase is not the one your records are sealed with.',
+  damaged:
+    'Attest’s record of your encryption is damaged, so no passphrase can open your records. Delete all data is the only way back.',
   busy: 'Attest is still rewriting your records. Try again when it has finished.',
   already_on: 'Encryption is already on.',
   off: 'Encryption is already off.',

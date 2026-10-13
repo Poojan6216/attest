@@ -86,12 +86,20 @@ function sealRow(codec: TableCodec, value: unknown): unknown {
   return { ...kept, sealed: seal(key, codec.aadOf(value), hidden) };
 }
 
-/** A row as read: whole again, or the read fails (`locked` without its key, `unreadable` when it does not open). */
+/**
+ * A row as read: whole again, or the read fails: `locked` while no key is held, `unreadable` when it does not open,
+ * or when it names a key other than the ones this context holds (Sprint 6 close, SEC-6: never read as a lock, which
+ * would ask for the passphrase again and again).
+ */
 function openRow(codec: TableCodec, value: unknown): unknown {
   if (!isRow(value) || !isSealed(value.sealed)) return value;
   const { sealed, ...kept } = value;
   const key = keyWithId(sealed.k);
-  if (key === undefined) throw codec.options.locked(codec.name);
+  if (key === undefined) {
+    throw keyring().current === undefined
+      ? codec.options.locked(codec.name)
+      : codec.options.unreadable(codec.name);
+  }
   let hidden: unknown;
   try {
     hidden = open(key, codec.aadOf(kept), sealed);
