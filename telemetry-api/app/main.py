@@ -5,14 +5,17 @@ of JSON (415 otherwise), never read past ``MAX_BODY_BYTES`` (413), that the payl
 input never echoed). Then the limits: per install, per client, and what is stored in a day (429, never stored). Then
 one document per install and day, ``{payload, received_at}`` with the arrival time to the hour; a day already stored
 is answered the same and not stored again (204). ``GET /health`` says whether the database answers (200, or 503).
-Nothing else: no docs pages, no other route (404), no auth, no cookies, no session. CORS allows the allowed
+``GET /v1/stats`` publishes the last 30 days' aggregates (app/stats.py; sprint_7 7.5): each agent's receipts and its
+VERIFIED, NOT_FOUND and UNASKED counts and rates, and how many installs reported, never an install id; nothing (204)
+below 50 installs; each answer kept an hour. Nothing else: no docs pages, no other route (404), no auth, no cookies,
+no session. CORS allows the allowed
 extensions' origins alone. Every error is ``{"success": false, "data": null, "error": "<a human message>"}``, never a
 stack trace, and an error nobody planned for is answered so and never handed on to the server's log. The address is
 used only to limit, through a salted hash, and the log holds event names and status codes alone.
 """
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -26,6 +29,7 @@ from app import logs
 from app.limits import Limits
 from app.schema import TelemetryPayload
 from app.settings import Settings
+from app.stats import CACHE_SECONDS, Stats, stats_of, window
 from app.store import MongoStore, Store, StoreError
 
 #: The message for each status the API answers with an error.
@@ -47,6 +51,27 @@ class Envelope(BaseModel):
     success: bool
     data: dict[str, str] | None
     error: str | None
+
+
+class StatsEnvelope(BaseModel):
+    """``GET /v1/stats``'s answer, in the same shape."""
+
+    success: bool
+    data: Stats
+    error: None
+
+
+class StatsCache:
+    """The last ``GET /v1/stats`` answer, and when it was made (app/stats.py ``CACHE_SECONDS``)."""
+
+    def __init__(self) -> None:
+        """Empty: the first read makes one."""
+        self.made: datetime | None = None
+        self.stats: Stats | None = None
+
+    def fresh(self, moment: datetime) -> bool:
+        """Whether the answer kept was made less than ``CACHE_SECONDS`` before ``moment``."""
+        return self.made is not None and moment - self.made < timedelta(seconds=CACHE_SECONDS)
 
 
 def envelope(status: int, data: dict[str, str] | None = None) -> JSONResponse:
@@ -138,7 +163,7 @@ def add_error_handlers(app: FastAPI) -> None:
 
 
 def add_routes(app: FastAPI, settings: Settings, store: Store, now: Callable[[], datetime]) -> None:
-    """The two routes (header)."""
+    """The three routes (header)."""
     limits = Limits(
         settings.install_limit_per_day,
         settings.ip_limit_per_day,
@@ -175,6 +200,26 @@ def add_routes(app: FastAPI, settings: Settings, store: Store, now: Callable[[],
             return envelope(200, {"status": "ok"})
         logs.log("health.database_down", status=503)
         return envelope(503)
+
+    cache = StatsCache()
+
+    @app.get("/v1/stats", response_model=None)
+    async def stats() -> Response:
+        moment = now()
+        if not cache.fresh(moment):
+            since, until = window(moment.date())
+            try:
+                totals = await store.totals(since, until)
+            except StoreError:
+                logs.log("stats.store_failed", status=503)
+                return envelope(503)
+            cache.made, cache.stats = moment, stats_of(totals, since, until)
+        headers = {"cache-control": f"public, max-age={CACHE_SECONDS}"}
+        if cache.stats is None:
+            logs.log("stats.withheld", status=204)
+            return Response(status_code=204, headers=headers)
+        logs.log("stats.served", status=200)
+        return JSONResponse(StatsEnvelope(success=True, data=cache.stats, error=None).model_dump(), headers=headers)
 
 
 def create_app(settings: Settings, store: Store, now: Callable[[], datetime] = utc_now) -> FastAPI:

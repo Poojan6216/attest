@@ -199,7 +199,8 @@ def test_cors_allows_the_extensions_origin_and_no_other() -> None:
 
 def test_has_no_other_route_and_answers_every_error_in_one_shape() -> None:
     api, _, _ = client()
-    for path in ("/", "/docs", "/openapi.json", "/v1/stats"):
+    # /v1/stats is the one route Sprint 7 adds (agents/backend_engineer.md rule 7; tests/test_stats.py).
+    for path in ("/", "/docs", "/openapi.json", "/v1/installs", "/v1/stats/muse"):
         answer = api.get(path)
         assert answer.status_code == 404, path
         assert answer.json() == {"success": False, "data": None, "error": "Nothing is here."}

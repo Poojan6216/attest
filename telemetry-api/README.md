@@ -1,11 +1,12 @@
 # Attest telemetry API
 
-Attest's one server. It takes the extension's opt-in daily usage numbers and stores them. Nothing else: no accounts, no cookies, no other route. The rules are [`agents/backend_engineer.md`](../agents/backend_engineer.md); the decisions are in [`Decisions.md`](../Decisions.md), under `[5.6]` and `[5.8]`.
+Attest's one server. It takes the extension's opt-in daily usage numbers, stores them, and publishes their totals across all installs. Nothing else: no accounts, no cookies, no other route. The rules are [`agents/backend_engineer.md`](../agents/backend_engineer.md); the decisions are in [`Decisions.md`](../Decisions.md), under `[5.6]` and `[5.8]`.
 
 | Route | What it does |
 |---|---|
 | `POST /v1/aggregate` | Takes one install's day, the payload of [`app/schema.py`](app/schema.py), sent as JSON and never read past 16 KB (413). A malformed payload is refused (422); one over the day's limits (24 per install id, 240 per client, an IPv6 client counted by its /64, and 100,000 stored a day in all) is refused (429). Neither is stored. An accepted one is stored as exactly `{payload, received_at}`, the arrival time to the hour, one document per install and day: the extension sends a day again when it did not see the answer, and a day already stored is answered the same (204) and not stored again. |
 | `GET /health` | 200 while the database answers, 503 otherwise. |
+| `GET /v1/stats` | The public aggregates ([`app/stats.py`](app/stats.py)): over the 30 days before today, each agent's receipts and its VERIFIED, NOT_FOUND and UNASKED counts and rates, and how many installs reported; never an install id. Nothing (204) while fewer than 50 installs report; each answer kept an hour (`Cache-Control: public, max-age=3600`). `uv run python scripts/reliability_report.py <its address>` writes the monthly report from it ([`../launch/reliability-report-v0.md`](../launch/reliability-report-v0.md)). |
 
 Every error answers `{"success": false, "data": null, "error": "<message>"}`, an error nobody planned for too (500), which is never handed on to the server's own log. CORS allows only the origins of the extension ids in `ALLOWED_EXT_IDS`. The client's address is used only to limit, as a salted hash kept in memory: it is never stored and never logged. The log is one JSON line per event, holding an event name and a status code.
 
