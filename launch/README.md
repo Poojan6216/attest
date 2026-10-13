@@ -14,7 +14,7 @@
 | [dm-template.md](dm-template.md) | The message to incident authors and commenters | Needs founder edit: each name, incident and the Loom link |
 | [weekly-posts.md](weekly-posts.md) | Four weeks of one post each | Needs founder edit: the incident links, and his own receipt screenshots when he has them |
 | [alerts.md](alerts.md) | Searches for people describing an agent acting unasked, and a three line reply | Ready |
-| [reliability-report-v0.md](reliability-report-v0.md) | The monthly Agent Reliability Report's template, filled from `GET /v1/stats` by `telemetry-api/scripts/reliability_report.py` | Ready; it never ships with fewer than 50 installs, and the endpoint publishes nothing until then |
+| [reliability-report-v0.md](reliability-report-v0.md) | The monthly Agent Reliability Report's template, filled from `GET /v1/stats` by `uv run python -m scripts.reliability_report` in `telemetry-api/`, which leaves its note out | Ready; it never ships with fewer than 50 installs, each reporting on at least 3 days of the month, and the endpoint publishes nothing until then. Before publishing, compare its installs with the store's count of users |
 | [launch-checklist.md](launch-checklist.md) | The launch day, hour by hour, the founder's steps marked | Ready |
 
 ## The weekly loop after launch

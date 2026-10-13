@@ -3,8 +3,12 @@
  * too), or none; the hosts
  * the extension may contact for each choice (src/config.ts `allowedHosts`: none with everything off, the telemetry host
  * only while telemetry is on, a vendor's only while the person's own key is on); and a store build refused while the
- * telemetry host is the `.invalid` stand-in (wxt.config.ts `assertReleasable`). Every value is invented.
+ * telemetry host is the `.invalid` stand-in, or while PRIVACY.md holds a blank to fill or does not name the host
+ * (wxt.config.ts `assertReleasable`; Sprint 7 close). Every value is invented.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -15,7 +19,9 @@ import {
   TELEMETRY_HOST,
 } from '../../../src/config';
 import { chromeMajorOf } from '../../../src/telemetry/facts';
-import { assertReleasable } from '../../../wxt.config';
+import { assertReleasable, POLICY_TO_FILL } from '../../../wxt.config';
+
+const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 
 // As in tests/unit/manifest-hosts.spec.ts: `defineConfig` returns its argument, so the stub never loads WXT.
 vi.mock('wxt', () => ({ defineConfig: (block: unknown) => block }));
@@ -52,16 +58,29 @@ describe('allowedHosts', () => {
 });
 
 describe('assertReleasable', () => {
+  const HOST = 'attest-telemetry.up.railway.app';
+  const POLICY = `reports go to Attest's own telemetry server, ${HOST}`;
+
   it('refuses a store build while the telemetry host is the .invalid stand-in, and allows any other build', () => {
     expect(TELEMETRY_HOST.endsWith('.invalid')).toBe(true);
     expect(() => {
-      assertReleasable(true, TELEMETRY_HOST);
+      assertReleasable(true, TELEMETRY_HOST, POLICY);
     }).toThrow(/telemetry host is still telemetry\.attest\.invalid/u);
     expect(() => {
-      assertReleasable(false, TELEMETRY_HOST);
+      assertReleasable(false, TELEMETRY_HOST, '');
     }).not.toThrow();
     expect(() => {
-      assertReleasable(true, 'attest-telemetry.up.railway.app');
+      assertReleasable(true, HOST, POLICY);
     }).not.toThrow();
+  });
+
+  it('refuses a store build while the privacy policy holds a blank to fill, or does not name the host', () => {
+    expect(() => {
+      assertReleasable(true, HOST, `${POLICY}. Contact: ${POLICY_TO_FILL}: a private contact address]`);
+    }).toThrow(/PRIVACY\.md still holds/u);
+    expect(() => {
+      assertReleasable(true, HOST, "reports go to Attest's own telemetry server");
+    }).toThrow(/does not name the telemetry host attest-telemetry\.up\.railway\.app/u);
+    expect(readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8')).toContain(POLICY_TO_FILL);
   });
 });

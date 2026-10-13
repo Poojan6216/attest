@@ -1,5 +1,5 @@
 # The telemetry API and its database on one machine (sprint_5 5.8): `docker compose up --build --wait`, then
-# `uv run python scripts/prove_flow.py`, then `docker compose down -v`. CI runs the first two, on a runner discarded
+# `uv run python -m scripts.prove_flow`, then `docker compose down -v`. CI runs the first two, on a runner discarded
 # after. Images pinned by digest. Mongo is published on 27117, not its usual 27017, so the stack never meets a Mongo
 # already running on the machine.
 services:

@@ -90,6 +90,9 @@ describe('the telemetry switch', () => {
     const toggle = await show(false, stand);
     expect(root.textContent).toContain(`Once a day, Attest sends ${TELEMETRY_HOST} the numbers below`);
     expect(root.textContent).toContain('never an address, a name, a subject or anything Attest read');
+    expect(root.textContent).toContain(
+      'Totals across all installs, a month at a time and never one install’s numbers, are published',
+    );
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Usage numbers are off.');
     expect(JSON.parse(root.querySelector('pre')?.textContent ?? '')).toEqual(PAYLOAD);
     expect(root.querySelector('figcaption')?.textContent).toBe(

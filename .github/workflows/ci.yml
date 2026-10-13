@@ -184,9 +184,10 @@ jobs:
       - name: Start the stack
         run: docker compose up --build --wait || { docker compose logs; exit 1; }
 
-      # sprint_5 5.8 done-when: the flow end to end, and no address in what is stored (scripts/prove_flow.py).
+      # sprint_5 5.8 done-when: the flow end to end, and no address in what is stored; Sprint 7 close: the days the API
+      # takes, its indexes, the stats and the month's sums run by MongoDB itself (scripts/prove_flow.py).
       - name: Prove the flow
-        run: uv run python scripts/prove_flow.py || { docker compose logs api; exit 1; }
+        run: uv run python -m scripts.prove_flow || { docker compose logs api; exit 1; }
 
   e2e:
     name: build · e2e

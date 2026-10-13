@@ -55,6 +55,12 @@ class AgentCounts(Strict):
     claude: GradeCounts
 
 
+#: The agents and the grades a payload counts, read from the models (Sprint 7 close, tech review TECH-4): the sums and
+#: the published answer list exactly these, so an agent added here is summed and published, never dropped.
+AGENTS: tuple[str, ...] = tuple(AgentCounts.model_fields)
+GRADES: tuple[str, ...] = tuple(GradeCounts.model_fields)
+
+
 class AdaptersEnabled(Strict):
     """Which agent readers are on."""
 

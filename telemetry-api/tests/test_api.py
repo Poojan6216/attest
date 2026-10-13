@@ -5,14 +5,15 @@ anything else (the test reads the document). Every malformed payload of payload-
 JSON, are refused (422) and nothing is stored; a body not sent as JSON is refused (415), and one larger than any
 payload too (413). The 25th payload of one install in a UTC day, and the client's payload over its own limit, are
 refused (429) and never stored, a payload one limit refuses counts against neither, and the next day each limit starts
-again. ``GET /health`` answers 200, or 503 when the
-database does not. CORS allows the allowed extensions' origins alone. Every error is ``{success, data, error}``,
-and there is no other route. The log holds event names and status codes, never an install id or an address.
+again (tests/test_api_close_7.py holds the days the API takes and the install ids a client may send for). ``GET
+/health`` answers 200, or 503 when the database does not. CORS allows the allowed extensions' origins alone. Every
+error is ``{success, data, error}``, and there is no other route. The log holds event names and status codes, never
+an install id or an address.
 """
 
 import copy
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -120,20 +121,21 @@ def test_refuses_a_body_not_sent_as_json_and_one_too_large() -> None:
 
 
 def day(n: int) -> dict[str, Any]:
-    """The valid payload about the ``n``-th day of September 2026 (each its own document)."""
-    return {**VALID, "dayBucket": f"2026-09-{n:02d}"}
+    """The valid payload about the ``n``-th day from 8 October 2026 (each its own document). On the clock's date the API
+    takes four days (app/days.py): ``day(0)`` to ``day(3)``."""
+    return {**VALID, "dayBucket": (date(2026, 10, 8) + timedelta(days=n)).isoformat()}
 
 
 def test_limits_each_install_to_its_day_and_starts_again_the_next() -> None:
     api, store, clock = client(install_limit_per_day=24)
-    for n in range(1, 25):
-        assert post(api, day(n)).status_code == 204
-    refused = post(api, day(25))
+    # The four days the API takes, then the same days again: each is taken and counted, and stored once.
+    assert [post(api, day(n % 4)).status_code for n in range(24)] == [204] * 24
+    refused = post(api, day(0))
     assert refused.status_code == 429
-    assert refused.json() == {"success": False, "data": None, "error": "Too many payloads today. Try again tomorrow."}
-    assert len(store.documents) == 24
+    assert refused.json() == {"success": False, "data": None, "error": "Too many requests today. Try again tomorrow."}
+    assert len(store.documents) == 4
     clock.at += timedelta(days=1)
-    assert post(api, day(25)).status_code == 204
+    assert post(api, day(4)).status_code == 204
 
 
 def test_stores_one_install_s_day_once_however_often_it_is_sent() -> None:
@@ -141,7 +143,7 @@ def test_stores_one_install_s_day_once_however_often_it_is_sent() -> None:
     api, store, _ = client()
     assert [post(api, VALID).status_code for _ in range(3)] == [204, 204, 204]
     assert len(store.documents) == 1
-    assert post(api, day(1)).status_code == 204
+    assert post(api, day(0)).status_code == 204
     assert len(store.documents) == 2
 
 

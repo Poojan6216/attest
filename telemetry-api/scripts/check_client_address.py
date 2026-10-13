@@ -6,8 +6,9 @@ first (Decisions.md [5.8]). This proves it. With ``IP_LIMIT_PER_DAY=1`` set on t
 
     uv run python scripts/check_client_address.py https://<the API's domain>
 
-It posts the valid payload of tests/payload-cases.json four times, each with its own invented install id and a
-made-up ``X-Forwarded-For`` (addresses kept for documentation, RFC 5737): the first two say the same address, the third
+It posts the valid payload of tests/payload-cases.json four times, about yesterday's UTC date (a day the API takes:
+app/days.py), each with its own invented install id and a made-up ``X-Forwarded-For`` (addresses kept for
+documentation, RFC 5737): the first two say the same address, the third
 another, and the fourth sends two such lines (Sprint 5 close, security review SEC-5). The API must take the first (204)
 and refuse the rest, all from one client whatever they said: the second and third with 429, the fourth with 429 or 400
 (a request with two lines is refused). A 204 for the second means the limit is not 1; a 204 for the third means the API
@@ -20,6 +21,7 @@ import json
 import sys
 import urllib.parse
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -50,9 +52,10 @@ def verdict(statuses: list[int]) -> tuple[bool, str]:
     return False, f"FAIL expected 204, 429, 429, 429 or 400, got {statuses}: a redeploy starts the day's counts again"
 
 
-def check(post: Post) -> tuple[bool, str]:
-    """Sends the four (header) through ``post``; the verdict."""
-    return verdict([post({**CASES["valid"], "installId": install_id}, lines) for install_id, lines in SENDS])
+def check(post: Post, day: str) -> tuple[bool, str]:
+    """Sends the four (header), each about ``day``, through ``post``; the verdict."""
+    payload = {**CASES["valid"], "dayBucket": day}
+    return verdict([post({**payload, "installId": install_id}, lines) for install_id, lines in SENDS])
 
 
 def over_http(api: str) -> Post:
@@ -83,7 +86,8 @@ def main(argv: list[str]) -> int:
     if len(argv) != 1 or not argv[0].startswith(("https://", "http://")):
         print("usage: check_client_address.py https://<the API's domain>")
         return 2
-    ok, said = check(over_http(argv[0]))
+    yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+    ok, said = check(over_http(argv[0]), yesterday)
     print(said)
     return 0 if ok else 1
 

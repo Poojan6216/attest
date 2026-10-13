@@ -1,7 +1,7 @@
 [project]
 name = "attest-telemetry-api"
 version = "0.1.0"
-description = "Attest's one server: the opt-in daily counts from the extension, validated and stored, and nothing else."
+description = "Attest's one server: the opt-in daily counts from the extension, validated, stored and summed into public monthly totals, and nothing else."
 requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 dependencies = [
@@ -32,9 +32,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ANN", "S", "BLE", "TRY"]
-ignore = ["S101", "N815", "TRY003"]
+ignore = ["S101", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
+# The payload's keys are the extension's, camelCase, so its JSON Schema matches (app/schema.py); nothing else is.
+"app/schema.py" = ["N815"]
 "tests/*" = ["ANN201", "ANN001"]
 
 [tool.mypy]

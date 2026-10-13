@@ -33,6 +33,8 @@ VALID: dict[str, Any] = CASES["valid"]
 EXTENSION = "a" * 32
 JSON_HEADERS = {"content-type": "application/json"}
 LIMIT = 16_384
+#: The day after the valid payload's day: a date the API takes it on (app/days.py).
+AT = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 
 
 def api(
@@ -48,7 +50,7 @@ def api(
         limit_keys_per_day=limit_keys_per_day,
         store_limit_per_day=store_limit_per_day,
     )
-    return TestClient(create_app(settings, store), raise_server_exceptions=True), store
+    return TestClient(create_app(settings, store, lambda: AT), raise_server_exceptions=True), store
 
 
 def install(n: int) -> dict[str, Any]:
@@ -65,7 +67,7 @@ def post(client: TestClient, payload: object, forwarded: str = "203.0.113.7") ->
 
 def run_asgi(headers: list[tuple[bytes, bytes]], chunks: list[bytes]) -> tuple[int, int]:
     """The app called directly over ASGI with ``chunks`` as its body; its status and how many chunks it read."""
-    app = create_app(Settings(mongo_url="mongodb://unused"), MemoryStore())
+    app = create_app(Settings(mongo_url="mongodb://unused"), MemoryStore(), lambda: AT)
     read = 0
     statuses: list[int] = []
 
@@ -181,7 +183,7 @@ class BrokenStore(MemoryStore):
 
 def test_an_unplanned_error_is_answered_and_never_handed_on_to_the_server(capsys: pytest.CaptureFixture[str]) -> None:
     settings = Settings(mongo_url="mongodb://unused", allowed_ext_ids=EXTENSION)
-    client = TestClient(create_app(settings, BrokenStore()), raise_server_exceptions=True)
+    client = TestClient(create_app(settings, BrokenStore(), lambda: AT), raise_server_exceptions=True)
     headers = {**JSON_HEADERS, "origin": f"chrome-extension://{EXTENSION}"}
     answer = client.post("/v1/aggregate", content=json.dumps(VALID), headers=headers)
     assert answer.status_code == 500

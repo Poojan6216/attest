@@ -51,7 +51,7 @@ class BrokenStore(MemoryStore):
 def test_an_unplanned_error_is_answered_500_in_the_one_shape_and_logged_by_event_and_status(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    api = TestClient(create_app(settings(), BrokenStore()), raise_server_exceptions=False)
+    api = TestClient(create_app(settings(), BrokenStore(), lambda: AT), raise_server_exceptions=False)
     answer = api.post("/v1/aggregate", content=json.dumps(VALID), headers=JSON)
     assert answer.status_code == 500
     assert answer.json() == {"success": False, "data": None, "error": "The request failed."}
@@ -65,7 +65,7 @@ def test_a_body_of_exactly_the_limit_is_read_and_one_byte_more_is_refused() -> N
     limit = settings().max_body_bytes
     payload = json.dumps(VALID)
     store = MemoryStore()
-    api = TestClient(create_app(settings(), store))
+    api = TestClient(create_app(settings(), store, lambda: AT))
     at_limit = payload + " " * (limit - len(payload.encode("utf-8")))
     assert len(at_limit.encode("utf-8")) == limit
     assert api.post("/v1/aggregate", content=at_limit, headers=JSON).status_code == 204
@@ -78,6 +78,11 @@ def test_a_body_of_exactly_the_limit_is_read_and_one_byte_more_is_refused() -> N
 
 class DownCollection:
     """A collection whose server never answers."""
+
+    async def create_index(self, keys: list[tuple[str, int]], **_options: object) -> None:
+        """Fails as motor does when no server answers."""
+        message = f"no server answered for an index of {len(keys)} keys"
+        raise ServerSelectionTimeoutError(message)
 
     async def insert_one(self, document: Document) -> None:
         """Fails as motor does when no server answers."""
@@ -131,7 +136,7 @@ def test_the_mongo_store_pings_false_when_the_database_is_down() -> None:
 
 
 def test_a_database_down_under_the_real_store_is_answered_503_and_health_says_so() -> None:
-    api = TestClient(create_app(settings(), down_store()))
+    api = TestClient(create_app(settings(), down_store(), lambda: AT))
     answer = api.post("/v1/aggregate", content=json.dumps(VALID), headers=JSON)
     assert answer.status_code == 503
     assert answer.json() == {"success": False, "data": None, "error": "The database does not answer."}

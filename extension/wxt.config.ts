@@ -112,14 +112,31 @@ export function releaseEntrypoints<T extends { readonly name: string }>(infos: T
   return release ? infos.filter((info) => !DEV_ENTRYPOINTS.includes(info.name)) : infos;
 }
 
+/** What PRIVACY.md holds where the founder has still to write something in before a release (MANUAL.md, Sprint 7). */
+export const POLICY_TO_FILL = '[to fill before release';
+
 /**
  * Refuses a release build whose telemetry host is still the `.invalid` stand-in (src/config.ts TELEMETRY_HOST; sprint_5
- * 5.7): a store build must post, when the person opts in, to the API the founder deployed (MANUAL.md, Sprint 5).
+ * 5.7): a store build must post, when the person opts in, to the API the founder deployed (MANUAL.md, Sprint 5). Also
+ * refuses one while `policy`, PRIVACY.md, still holds a blank to fill or does not name that host (Sprint 7 close, tech
+ * review TECH-6, privacy review gaps 7 and 8): the policy a store install points to says who runs the server, how to
+ * reach them privately, and where the numbers go.
  */
-export function assertReleasable(release: boolean, telemetryHost: string): void {
-  if (release && telemetryHost.endsWith('.invalid')) {
+export function assertReleasable(release: boolean, telemetryHost: string, policy: string): void {
+  if (!release) return;
+  if (telemetryHost.endsWith('.invalid')) {
     throw new Error(
       `pnpm build:release: the telemetry host is still ${telemetryHost}. Set src/config.ts TELEMETRY_HOST to the deployed telemetry API first (MANUAL.md, Sprint 5).`,
+    );
+  }
+  if (policy.includes(POLICY_TO_FILL)) {
+    throw new Error(
+      `pnpm build:release: PRIVACY.md still holds "${POLICY_TO_FILL}": write in the server's operator and the private contact first (MANUAL.md, Sprint 7).`,
+    );
+  }
+  if (!policy.includes(telemetryHost)) {
+    throw new Error(
+      `pnpm build:release: PRIVACY.md does not name the telemetry host ${telemetryHost}. Name it where it describes the usage numbers (MANUAL.md, Sprint 7).`,
     );
   }
 }
@@ -167,7 +184,9 @@ export default defineConfig({
       csp.extension_pages = withDevServer(csp.extension_pages ?? '', wxt.server.origin);
     },
     'entrypoints:found': (_wxt, infos) => {
-      assertReleasable(process.env.ATTEST_RELEASE === '1', TELEMETRY_HOST);
+      const release = process.env.ATTEST_RELEASE === '1';
+      const policy = release ? readFileSync(path.join(import.meta.dirname, '..', 'PRIVACY.md'), 'utf8') : '';
+      assertReleasable(release, TELEMETRY_HOST, policy);
       infos.push(...contentScripts());
       const kept = releaseEntrypoints([...infos], process.env.ATTEST_RELEASE === '1');
       infos.splice(0, infos.length, ...kept);

@@ -3,7 +3,8 @@
 ``MONGO_URL`` (required: where the aggregates are stored), ``MONGO_DB``, ``ALLOWED_EXT_IDS`` (the extension ids whose
 origin may post, comma-separated: CORS allows ``chrome-extension://<id>`` for each and nothing else), the two daily
 limits, the ceiling on what is stored in a day and how many keys each limit counts in a day (Sprint 5 close, security
-review SEC-5), ``TRUST_FORWARDED_FOR`` (true behind a proxy that writes the client's address first in
+review SEC-5), how many install ids one client may send for and how often it may read the stats in a day (Sprint 7
+close, SEC-2 and SEC-4), ``TRUST_FORWARDED_FOR`` (true behind a proxy that writes the client's address first in
 ``X-Forwarded-For`` and strips what the client sent there, as Railway's edge says it does;
 scripts/check_client_address.py proves it) and the largest body read. A value the settings refuse stops the app at
 start, never later.
@@ -30,6 +31,8 @@ class Settings(BaseSettings):
     ip_limit_per_day: int = Field(default=240, ge=1)
     store_limit_per_day: int = Field(default=100_000, ge=1)
     limit_keys_per_day: int = Field(default=100_000, ge=1)
+    installs_per_client_per_day: int = Field(default=5, ge=1)
+    stats_limit_per_day: int = Field(default=240, ge=1)
     trust_forwarded_for: bool = False
     max_body_bytes: int = Field(default=16_384, ge=1_024)
 

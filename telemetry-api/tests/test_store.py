@@ -1,6 +1,8 @@
 """The Mongo store (sprint_5 5.8; agents/backend_engineer.md rule 4), over mongomock's motor stand-in: one insert of
 exactly ``{payload, received_at}``, the document holding nothing else but its ``_id``, the hash of the install id and
-the day; one install's day stored once however often it comes (Sprint 5 close, tech review TECH-3); and a ping.
+the day; one install's day stored once however often it comes (Sprint 5 close, tech review TECH-3); a ping; and the two
+indexes the first call makes (Sprint 7 close, privacy review gap 8, security review SEC-4): one deletes a document
+``RETENTION_DAYS`` after it arrived, the other serves the sums' days.
 """
 
 import asyncio
@@ -8,7 +10,7 @@ from datetime import UTC, datetime
 
 from mongomock_motor import AsyncMongoMockClient
 
-from app.store import Document, MongoStore, document_id
+from app.store import RETENTION_DAYS, Document, MongoStore, document_id
 
 AT = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 PAYLOAD: dict[str, object] = {
@@ -51,3 +53,20 @@ def test_pings() -> None:
     mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
     store = MongoStore("mongodb://unused", "attest_telemetry", mock)
     assert asyncio.run(store.ping()) is True
+
+
+def test_the_first_call_makes_the_retention_and_day_indexes() -> None:
+    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
+    store = MongoStore("mongodb://unused", "attest_telemetry", mock)
+
+    async def run() -> dict[str, dict[str, object]]:
+        await store.insert(PAYLOAD, AT)
+        await store.insert({**PAYLOAD, "dayBucket": "2026-10-10"}, AT)
+        return dict(await mock["attest_telemetry"]["aggregates"].index_information())
+
+    indexes = asyncio.run(run())
+    keys = {str(index["key"]): index for index in indexes.values()}
+    assert RETENTION_DAYS == 90
+    assert keys["[('received_at', 1)]"]["expireAfterSeconds"] == RETENTION_DAYS * 86_400
+    assert "expireAfterSeconds" not in keys["[('payload.dayBucket', 1)]"]
+    assert len(indexes) == 3
