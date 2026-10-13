@@ -255,7 +255,7 @@ describe('the manifest audit', () => {
     expect(CONNECT_HOSTS).toEqual([
       'https://api.anthropic.com',
       'https://api.openai.com',
-      'https://telemetry.attest.invalid',
+      'https://attest-production-5149.up.railway.app',
     ]);
     expect(
       auditManifest({

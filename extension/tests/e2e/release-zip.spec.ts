@@ -24,6 +24,8 @@ const EXTENSION_DIR = path.resolve(import.meta.dirname, '../..');
 const TOOL = path.join(EXTENSION_DIR, 'tests', 'tools', 'check-release-zip.ts');
 /** A telemetry host as a release names one, in place of the build's `.invalid` stand-in. */
 const RELEASE_HOST = 'telemetry.example.com';
+/** A telemetry host as a build names one before the API is deployed, which a store zip must never name. */
+const PLACEHOLDER_HOST = 'telemetry.attest.invalid';
 
 /** Changes the manifest in `dir` by `change`. */
 function changeManifest(
@@ -103,7 +105,7 @@ test.describe('the store zip check (check-release-zip): what the zip holds', () 
   test('fails a zip whose manifest names a .invalid host', () => {
     const { status, output } = checkZipOfBuild((dir) => {
       const file = path.join(dir, 'manifest.json');
-      writeFileSync(file, readFileSync(file, 'utf8').replaceAll(RELEASE_HOST, TELEMETRY_HOST));
+      writeFileSync(file, readFileSync(file, 'utf8').replaceAll(RELEASE_HOST, PLACEHOLDER_HOST));
     });
     expect(output).toContain('its manifest names a .invalid host');
     expect(status).toBe(1);

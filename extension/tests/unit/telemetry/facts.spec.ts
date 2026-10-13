@@ -61,12 +61,11 @@ describe('assertReleasable', () => {
   const POLICY = `reports go to Attest's own telemetry server, ${HOST}`;
 
   it('refuses a store build while the telemetry host is the .invalid stand-in, and allows any other build', () => {
-    expect(TELEMETRY_HOST.endsWith('.invalid')).toBe(true);
     expect(() => {
-      assertReleasable(true, TELEMETRY_HOST, POLICY);
+      assertReleasable(true, 'telemetry.attest.invalid', POLICY);
     }).toThrow(/telemetry host is still telemetry\.attest\.invalid/u);
     expect(() => {
-      assertReleasable(false, TELEMETRY_HOST, '');
+      assertReleasable(false, 'telemetry.attest.invalid', '');
     }).not.toThrow();
     expect(() => {
       assertReleasable(true, HOST, POLICY);
@@ -82,5 +81,12 @@ describe('assertReleasable', () => {
     }).toThrow(/does not name the telemetry host attest-telemetry\.up\.railway\.app/u);
     // The founder filled both blanks on 2026-10-13 (MANUAL.md, Sprint 7): the policy itself holds none.
     expect(readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8')).not.toContain(POLICY_TO_FILL);
+  });
+
+  it('allows the store build Attest is configured for: the deployed host, named by the privacy policy', () => {
+    expect(TELEMETRY_HOST.endsWith('.invalid')).toBe(false);
+    expect(() => {
+      assertReleasable(true, TELEMETRY_HOST, readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8'));
+    }).not.toThrow();
   });
 });

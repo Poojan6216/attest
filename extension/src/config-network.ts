@@ -14,12 +14,12 @@
 export const NETWORK_ALLOWLIST: readonly string[] = [];
 
 /**
- * The one host the opt-in telemetry posts to (sprint_5 5.7; telemetry-api/), and its one endpoint. Until the founder
- * deploys the API and names its address (MANUAL.md, Sprint 5), the host is a name under `.invalid`, which never
- * resolves (RFC 6761): a build can deliver nothing to anyone, and `pnpm build:release` refuses to make a store build
- * with it (wxt.config.ts).
+ * The one host the opt-in telemetry posts to (sprint_5 5.7; telemetry-api/), and its one endpoint: the API the founder
+ * deployed on Railway on 2026-10-13 (MANUAL.md, Sprint 5; Decisions [7.0]). Until then it was a name under `.invalid`,
+ * which never resolves (RFC 6761), and `pnpm build:release` refuses a store build with such a host, or with a privacy
+ * policy that does not name this one (wxt.config.ts `assertReleasable`).
  */
-export const TELEMETRY_HOST = 'telemetry.attest.invalid';
+export const TELEMETRY_HOST = 'attest-production-5149.up.railway.app';
 export const TELEMETRY_ENDPOINT = `https://${TELEMETRY_HOST}/v1/aggregate`;
 
 /**

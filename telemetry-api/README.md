@@ -45,4 +45,4 @@ From the environment only ([`app/settings.py`](app/settings.py)):
 
 ## Deploy
 
-Railway builds the [`Dockerfile`](Dockerfile) and checks `/health` ([`railway.json`](railway.json)). The steps are in [`MANUAL.md`](../MANUAL.md), Sprint 5.
+It runs on Railway at `https://attest-production-5149.up.railway.app`, beside a MongoDB of the same project. Railway no longer reads [`railway.json`](railway.json) for a new service, so the service's settings in the dashboard say what that file says: root directory `/telemetry-api`, the [`Dockerfile`](Dockerfile) at `/telemetry-api/Dockerfile`, healthcheck `/health`, restart on failure, and a watch path of `/telemetry-api/**`, so only a change here redeploys it. Its variables are `MONGO_URL` (a reference to the MongoDB service) and `TRUST_FORWARDED_FOR=true`; `ALLOWED_EXT_IDS` joins them once the store gives the extension its id. The steps are in [`MANUAL.md`](../MANUAL.md), Sprint 5.
