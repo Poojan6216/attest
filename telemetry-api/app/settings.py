@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     ip_limit_per_day: int = Field(default=240, ge=1)
     store_limit_per_day: int = Field(default=100_000, ge=1)
     limit_keys_per_day: int = Field(default=100_000, ge=1)
-    installs_per_client_per_day: int = Field(default=5, ge=1)
+    installs_per_client_per_day: int = Field(default=4, ge=1)
     stats_limit_per_day: int = Field(default=240, ge=1)
     trust_forwarded_for: bool = False
     max_body_bytes: int = Field(default=16_384, ge=1_024)

@@ -7,8 +7,8 @@ nothing; an address that does not parse counts as one client with every other su
 refused (429), never stored and never counted.
 
 Sprint 7 close: a client may send for at most so many install ids a day (security review SEC-2), so one address cannot
-make up the installs that would pass the published floor in an afternoon; and each client may read the stats so many
-times a day (SEC-4).
+make up the installs that pass the published floor, in an afternoon or in a month (tests/test_api_close_7.py holds the
+default to that); and each client may read the stats so many times a day (SEC-4).
 """
 
 import hashlib

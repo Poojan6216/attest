@@ -20,8 +20,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.days import LATE_DAYS
 from app.main import create_app
 from app.settings import Settings
+from app.stats import MIN_DAYS, MIN_INSTALLS
 from tests.memory import MemoryStore
 from tests.support import CASES, Clock, install
 
@@ -102,3 +104,12 @@ def test_never_redirects_a_path_with_a_final_slash(method: str, path: str) -> No
     assert answer.json() == NOT_FOUND
     assert "location" not in answer.headers
     assert store.documents == []
+
+
+def test_one_client_alone_cannot_make_up_the_installs_that_pass_the_floor() -> None:
+    # A month's reports arrive on at most its 31 days, the day before it, and LATE_DAYS after it (app/days.py); an
+    # install counts once its reports arrived on MIN_DAYS of those dates; and one client sends for at most so many
+    # install ids a date. So one client can make at most this many installs count in a month, fewer than the floor.
+    dates = 31 + 1 + LATE_DAYS
+    per_date = Settings(mongo_url="mongodb://unused").installs_per_client_per_day
+    assert per_date * dates // MIN_DAYS < MIN_INSTALLS

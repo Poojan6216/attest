@@ -21,8 +21,8 @@ Start the stack with ``docker compose up --build --wait`` from telemetry-api/, t
    than 3 dates, a day outside the month and a count that is not a number all left out.
 
 The payloads carry an install id made for each proof, and only documents with it are counted: nothing is deleted but
-the database the proof made, so a proof never touches what it did not write. The API takes payloads for 5 install ids
-from one client a day, so a sixth proof against one stack in one UTC day is refused at step 2. ``PROVE_API``,
+the database the proof made, so a proof never touches what it did not write. The API takes payloads for 4 install ids
+from one client a day, so a fifth proof against one stack in one UTC day is refused at step 2. ``PROVE_API``,
 ``PROVE_MONGO_URL`` and ``PROVE_MONGO_DB`` name another stack (the defaults are docker-compose.yml's). Prints each
 step; exits 1 on the first that fails. Every value is invented.
 """
