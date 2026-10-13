@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-13
+
 ### Added
 
 - WXT + Manifest V3 + Preact + Tailwind scaffold with TypeScript strict, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`, and a strict extension CSP.
@@ -81,6 +83,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - An export of an encrypted ledger leaves out the encryption state (its salt, rounds and key check), so the file carries no way to test a guess of your passphrase.
 - The side panel's grade filter and the weekly digest say what an Unasked receipt cannot catch: a send is marked likely Unasked only when two different signs meet near it, so many sends an agent makes without claiming them are never flagged ([docs/attacks-that-work.md](docs/attacks-that-work.md), strategy 10).
 - An encryption job that stops (a record that does not open, or storage that refuses a write) says so and why in the options page, with Try again; Attest also tries it again on its own a few times, and Lock now stays available while a job runs.
+- `pnpm build:release` checks the store zip it makes, `extension/.output/attest-0.1.0.zip`, named from the version: its manifest audited, then the zip installed in Chromium with a new, empty profile, where the service worker must start and the popup, side panel and options page open with no console error, warning or uncaught exception ([scripts/check-release.ts](scripts/check-release.ts)). Its audit had pointed at a name the zip never has. `RESULTS.md` is checked with the unit tests to be exactly what the committed result files render, so a hand edit fails CI. The version is 0.1.0 everywhere: the manifest, the changelog and the privacy policy, which a test keeps in step.
 
 ### Changed
 
