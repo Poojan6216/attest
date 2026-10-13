@@ -2,7 +2,7 @@
  * The options page's Encryption (sprint_6 6.5): where the ledger's encryption stands, read from `meta` (readable while
  * locked) and this page's keyring, read again whenever `meta` changes (a command done, a job's next table) or this
  * page's keys do (src/ui/data.ts `onLedgerChanged`); and the commands, sent to the service worker. A passphrase goes
- * only to the service worker, never into a log.
+ * only to Attest's own contexts, the service worker alone acting on it, never into a log.
  */
 import { useState } from 'preact/hooks';
 

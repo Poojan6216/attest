@@ -8,7 +8,7 @@ One line each, for the listing's "Why" field. Each matches the manifest the buil
 
 | Permission | Why Attest asks for it |
 |---|---|
-| `storage` | Keeps Attest's install id and, while you have saved one, your own model key on this computer, closed to the pages you visit. |
+| `storage` | Keeps Attest's install id and, while you have saved one, your own model key on this computer, closed to the pages you visit; and, in Chrome's session memory, which empties when the browser closes, the key of an encrypted ledger while it is unlocked. |
 | `alarms` | Runs Attest's checks on a schedule: grading, the daily purge of old history, the weekly digest and the opt-in usage numbers. |
 | `scripting` | Starts and stops the Gmail and Calendar readers when you turn each one on or off in the settings. |
 | `notifications` | Shows one alert on this computer when a receipt ends Not found, Unasked or Over scope; it never names a person, an amount or a subject. |

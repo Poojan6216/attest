@@ -190,7 +190,8 @@ export async function sendSetting(
 
 /**
  * Sends one of the encryption commands (sprint_6 6.5: turn on, unlock, lock, change, turn off; `sendCommand`): the
- * passphrase goes to the service worker only, and is never logged.
+ * passphrase goes to Attest's own contexts only, and is never logged. Chrome hands the message to every open extension
+ * page as well, and each drops it (src/bus/listen.ts); the service worker alone acts on it (Sprint 6 close, SEC-9).
  */
 export async function sendCrypto(
   message:

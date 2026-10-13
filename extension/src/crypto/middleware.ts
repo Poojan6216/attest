@@ -38,8 +38,11 @@ export interface SealingOptions {
 
 const SEALED = new Set(SEALED_TABLES);
 
-/** The top-level fields `schema` keys and indexes `table` by, and its derived fields: the plain part of a row. */
-function plainFields(schema: DBCoreTableSchema, derived: readonly string[]): ReadonlySet<string> {
+/**
+ * The top-level fields `schema` keys and indexes `table` by, and its derived fields: the plain part of a row. Exported
+ * for the docs test that holds docs/privacy-architecture.md §12's table to it (tests/unit/docs/sealed-fields.spec.ts).
+ */
+export function plainFields(schema: DBCoreTableSchema, derived: readonly string[]): ReadonlySet<string> {
   const fields = new Set<string>(derived);
   for (const index of [schema.primaryKey, ...schema.indexes]) {
     const paths = Array.isArray(index.keyPath) ? index.keyPath : [index.keyPath];

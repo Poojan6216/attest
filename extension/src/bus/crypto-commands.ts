@@ -3,8 +3,9 @@
  * turn it on with a passphrase (`crypto.enable`), unlock the ledger (`crypto.unlock`), lock it now (`crypto.lock`),
  * change the passphrase (`crypto.change`), and turn it off (`crypto.disable`), each answered with a `CryptoResult`.
  * Only an extension page may send one (src/bus/listen.ts `EXTENSION_PAGE_ONLY`): a content script never sees a
- * passphrase. A passphrase crosses only from the page to the service worker, which derives the key and never logs
- * either (Hard Rule 10): a refused message is logged by its type alone. src/bus/messages.ts puts each in the bus union
+ * passphrase. A passphrase goes only to Attest's own contexts: Chrome hands a page's message to its other open pages
+ * too, which drop it, and the service worker alone acts on it, deriving the key and logging neither (Hard Rule 10;
+ * Sprint 6 close, SEC-9): a refused message is logged by its type alone. src/bus/messages.ts puts each in the bus union
  * and re-exports this module.
  */
 import { z } from 'zod';
