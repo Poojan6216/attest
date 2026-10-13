@@ -6,7 +6,7 @@
 import type { Page, Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 import { LEDGER_PLACE } from './ledger-place';
 import { loadSeeds, type Seed } from './leaks';
 

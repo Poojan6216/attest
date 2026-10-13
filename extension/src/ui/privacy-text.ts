@@ -3,7 +3,7 @@
  * your browser"). Nothing, while both options that send are off; otherwise each one that is on, and what it sends where.
  * Until the person's choices are read, the sentence that is true whatever they are.
  */
-import { BYO_VENDORS, type ByoVendor } from '../config';
+import { BYO_VENDORS, type ByoVendor } from '../config-network';
 
 /** The person's choices that send something. */
 export interface PrivacyState {

@@ -1,4 +1,5 @@
-import { BYO_VENDOR_NAMES, BYO_VENDORS, type ByoVendor } from '../../../src/config';
+import { BYO_VENDOR_NAMES } from '../../../src/config';
+import { BYO_VENDORS, type ByoVendor } from '../../../src/config-network';
 
 /** Whose key it is: one vendor of BYO_VENDOR_NAMES. */
 export function VendorChoice({

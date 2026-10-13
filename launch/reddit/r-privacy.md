@@ -1,10 +1,10 @@
 # r/privacy post
 
-**Purpose:** the r/privacy post, drafted 2026-10-13 (sprint_7 7.6; agents/launch_engineer.md item 5): the local only angle. Post only from an account older than six weeks with real comments in the subreddit. Needs the founder's edit: the `[link]`.
+**Purpose:** the r/privacy post, drafted 2026-10-13 (sprint_7 7.6; agents/launch_engineer.md item 5): the angle that it stays in your browser. Post only from an account older than six weeks with real comments in the subreddit. Needs the founder's edit: the `[link]`.
 
 ## Title
 
-I built a checker for AI agents that never sends your mail anywhere
+I built a checker for AI agents that keeps your mail in your browser
 
 ## Post
 

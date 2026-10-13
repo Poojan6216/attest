@@ -8,7 +8,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
+import { REPO_ROOT } from './copy-rules';
+
 const GIF = readFileSync(path.join(REPO_ROOT, 'launch', 'demo.gif'));
 const README = readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
 

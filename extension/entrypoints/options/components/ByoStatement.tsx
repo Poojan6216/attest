@@ -1,4 +1,4 @@
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 
 /**
  * What the person's own key sends, to whom, and what stays here (agents/intel_engineer.md rule 6), exactly: the one

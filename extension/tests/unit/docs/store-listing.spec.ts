@@ -13,20 +13,13 @@ import { describe, expect, it } from 'vitest';
 import { IntelCandidate, IntelClaim } from '../../../src/intel/input';
 import { TelemetryPayload } from '../../../src/telemetry/schema';
 import config from '../../../wxt.config';
+import { HYPE, missingLimits, read, REPO_ROOT, section as sectionOf } from './copy-rules';
 
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
-const LISTING = readFileSync(path.join(REPO_ROOT, 'launch', 'store-listing.md'), 'utf8');
-const PACKAGE = JSON.parse(readFileSync(path.join(REPO_ROOT, 'extension', 'package.json'), 'utf8')) as {
-  description: string;
-};
+const LISTING = read('launch/store-listing.md');
+const PACKAGE = JSON.parse(read('extension/package.json')) as { description: string };
 
-/** The text of section `heading`, up to the next `## `. */
-function section(heading: string): string {
-  const start = LISTING.indexOf(`\n## ${heading}\n`);
-  if (start === -1) throw new Error(`the listing has no section "${heading}"`);
-  const next = LISTING.indexOf('\n## ', start + 1);
-  return LISTING.slice(start + heading.length + 5, next === -1 ? undefined : next);
-}
+/** The listing's section `heading`, up to the next `## `. */
+const section = (heading: string): string => sectionOf(LISTING, heading);
 
 const field = (label: string): string =>
   new RegExp(`^- \\*\\*${label}:\\*\\* (.+)$`, 'mu').exec(LISTING)?.[1] ?? '';
@@ -91,15 +84,10 @@ describe('launch/store-listing.md', () => {
     ])
       expect(checks).toContain(grade);
     expect(limits).toMatch(/^What Attest cannot do\./u);
-    for (const limit of [
-      'only tabs you have open',
-      'Likely agent',
-      'Vendor pages change',
-      'Desktop Chrome only',
-    ])
-      expect(limits).toContain(limit);
+    expect(missingLimits(limits)).toEqual([]);
     const text = paragraphs.join('\n');
-    expect(text).not.toMatch(/\d|!|\b(?:powerful|seamless|revolutionary|magic|AI-powered|cutting-edge)\b/iu);
+    expect(text).not.toMatch(/\d|!/u);
+    expect(HYPE.exec(text)).toBeNull();
   });
 
   it('lists five 1280×800 screenshots, a 440×280 promo tile and the icon, each where it says', () => {

@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { ByoKey, ByoVendorName } from '../extension/src/bus/page-commands';
 import { isoWithLocalOffset } from '../extension/src/clock';
-import { BYO_VENDORS, type ByoVendor } from '../extension/src/config';
+import { BYO_VENDORS, type ByoVendor } from '../extension/src/config-network';
 import type { IntelProvider } from '../extension/src/intel';
 import { byoProvider } from '../extension/src/intel/providers/byo';
 import {

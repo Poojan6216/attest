@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkDocs, runCli, type DocProblem } from '../../../../scripts/check-docs';
+import { checkDocs, docFiles, runCli, type DocProblem } from '../../../../scripts/check-docs';
 import { pnpmInvocations, scriptOf } from '../../../../scripts/check-docs-commands';
 import { githubSlug, scanMarkdown } from '../../../../scripts/check-docs-markdown';
 
@@ -125,6 +125,30 @@ describe('check-docs: relative links and anchors', () => {
         '[a](https://x.example/y) [b](mailto:a@b.example) [c](//cdn.example/z) [d](docs/grading.md?x=1)\n',
     });
     expect(checkDocs(root)).toMatchObject({ problems: [], links: 6 });
+  });
+});
+
+describe('check-docs: the launch kit and the release documents (Sprint 7 close, TECH-18)', () => {
+  it('reads CHANGELOG.md, MANUAL.md, telemetry-api/README.md and every Markdown file under launch/ where they exist', () => {
+    const root = fixture({
+      'CHANGELOG.md': '# Changelog\n\n[README](README.md)\n',
+      'telemetry-api/README.md': '# API\n\n[the policy](../PRIVACY.md#nope)\n',
+      'launch/reddit/r-x.md': '# A post\n\n[the shots](../screenshots/1.png) and `pnpm record-x`\n',
+    });
+    expect(docFiles(root)).toEqual([
+      'docs/adapters.md',
+      'docs/grading.md',
+      'README.md',
+      'PRIVACY.md',
+      'CHANGELOG.md',
+      'telemetry-api/README.md',
+      'launch/reddit/r-x.md',
+    ]);
+    expect(problems(root).map((p) => [p.file, p.message.split(':')[0]])).toEqual([
+      ['launch/reddit/r-x.md', "'pnpm record-x'"],
+      ['launch/reddit/r-x.md', "broken link '../screenshots/1.png'"],
+      ['telemetry-api/README.md', "broken anchor '../PRIVACY.md#nope'"],
+    ]);
   });
 });
 

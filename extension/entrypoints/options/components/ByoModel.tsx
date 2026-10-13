@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 
 import type { SettingResult } from '../../../src/bus/messages';
-import { BYO_VENDORS, type ByoVendor } from '../../../src/config';
+import { BYO_VENDORS, type ByoVendor } from '../../../src/config-network';
 import { log } from '../../../src/log';
 import { Button } from '../../../src/ui/Button';
 import type { SettingCommand } from '../use-settings';

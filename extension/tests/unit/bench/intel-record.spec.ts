@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { byoRecording, keyFrom, recordArgs, recordByo } from '../../../../bench/intel-record';
 import { BENCH_INPUTS } from '../../../entrypoints/model-check/record';
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 import { byoProvider } from '../../../src/intel/providers/byo';
 import { setLogSink } from '../../../src/log';
 import { IntelRecording } from '../intel/corpus';

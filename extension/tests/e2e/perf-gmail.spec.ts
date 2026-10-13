@@ -22,7 +22,7 @@ const ROWS = PERF_GMAIL_ROWS;
 const PASS_GATE_MS = PERF_GMAIL_PASS_GATE_MS;
 const RUNS = PERF_GMAIL_PASS_RUNS;
 
-test('one pass of the Gmail Sent reader over 10,000 rows takes under 2 s', async () => {
+test('one pass of the Gmail Sent reader over 10,000 rows takes under 2 s', { tag: '@perf' }, async () => {
   test.setTimeout(5 * 60_000);
   const passes = await timeSentPasses(ROWS, RUNS);
   for (const pass of passes) {
@@ -36,9 +36,13 @@ test('one pass of the Gmail Sent reader over 10,000 rows takes under 2 s', async
   expect(median).toBeLessThan(PASS_GATE_MS);
 });
 
-test('the built extension reads the 10,000-row page twice and keeps each row once, in one window', async () => {
-  test.setTimeout(10 * 60_000);
-  const reads = await readTwice(ROWS);
-  console.log(`[perf-gmail] the extension stored ${String(ROWS)} rows in ${String(reads.storeMs)} ms`);
-  expect(reads).toMatchObject({ afterFirst: ROWS, afterSecond: ROWS, windows: 1 });
-});
+test(
+  'the built extension reads the 10,000-row page twice and keeps each row once, in one window',
+  { tag: '@perf' },
+  async () => {
+    test.setTimeout(10 * 60_000);
+    const reads = await readTwice(ROWS);
+    console.log(`[perf-gmail] the extension stored ${String(ROWS)} rows in ${String(reads.storeMs)} ms`);
+    expect(reads).toMatchObject({ afterFirst: ROWS, afterSecond: ROWS, windows: 1 });
+  },
+);

@@ -1,4 +1,4 @@
-import { AGENT_READERS } from '../../../src/config';
+import { AGENT_READERS } from '../../../src/config-agents';
 
 /** One agent's reader as the Adapters section shows it: whether it runs, and why not. */
 interface AgentReader {

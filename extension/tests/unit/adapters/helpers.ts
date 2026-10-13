@@ -4,7 +4,7 @@
  * vendor page (fixtures first; the real Muse, ChatGPT and Claude adapters are written against captures in 3.2 to 3.4).
  */
 import type { AgentAdapter, AgentRead, AgentTurn, HealthCheck } from '../../../src/adapters/types';
-import { AGENT_HOSTS } from '../../../src/config';
+import { AGENT_HOSTS } from '../../../src/config-agents';
 
 /** The pass instant tests use: ISO 8601 with an offset, as src/clock.ts writes it. */
 export const NOW = '2026-10-01T14:30:00.000-04:00';

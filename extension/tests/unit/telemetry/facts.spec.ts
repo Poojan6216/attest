@@ -17,7 +17,7 @@ import {
   NETWORK_ALLOWLIST,
   TELEMETRY_ENDPOINT,
   TELEMETRY_HOST,
-} from '../../../src/config';
+} from '../../../src/config-network';
 import { chromeMajorOf } from '../../../src/telemetry/facts';
 import { assertReleasable, POLICY_TO_FILL } from '../../../wxt.config';
 

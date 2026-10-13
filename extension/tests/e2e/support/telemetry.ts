@@ -9,7 +9,7 @@
 import { expect, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { TELEMETRY_ENDPOINT } from '../../../src/config';
+import { TELEMETRY_ENDPOINT } from '../../../src/config-network';
 import type { LaunchedExtension } from './extension';
 
 declare const chrome: WxtBrowser;

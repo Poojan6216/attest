@@ -30,56 +30,64 @@ import { MINUTE_MS } from './support/priya';
 const STORAGE_GATE_BYTES = PERF_STORAGE_GATE_BYTES;
 const POPUP_GATE_MS = PERF_POPUP_GATE_MS;
 const POPUP_RUNS = PERF_POPUP_RUNS;
-test('the 30-day ledger: under 50 MB, the popup paints in under 100 ms, the exports and the idle worker measured', async () => {
-  test.setTimeout(15 * 60_000);
-  const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
-  const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
-  try {
-    await seedLedger(extension, rows);
-    const bytes = await storageBytes(extension);
-    const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
-    const json = await timeExport(extension, 'Export ledger');
-    const csv = await timeExport(extension, 'Export receipts');
-    const idleHeap = await serviceWorkerHeapBytes(extension);
-    console.log(
-      `[perf-ledger] storage ${String(bytes)} B; popup first paint ${String(paint)} ms; ` +
-        `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B, peak heap +${String(json.peakHeapBytes)} B; ` +
-        `CSV export ${String(csv.ms)} ms, ${String(csv.bytes)} B, peak heap +${String(csv.peakHeapBytes)} B; ` +
-        `worker idle heap ${String(idleHeap)} B`,
-    );
-    expect(bytes).toBeGreaterThan(0);
-    expect(bytes).toBeLessThan(STORAGE_GATE_BYTES);
-    expect(paint).toBeLessThan(POPUP_GATE_MS);
-    expect(json.bytes).toBeGreaterThan(0);
-    expect(csv.bytes).toBeGreaterThan(0);
-    expect(idleHeap).toBeGreaterThan(0);
-  } finally {
-    await extension.close();
-  }
-});
+test(
+  'the 30-day ledger: under 50 MB, the popup paints in under 100 ms, the exports and the idle worker measured',
+  { tag: '@perf' },
+  async () => {
+    test.setTimeout(15 * 60_000);
+    const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
+    const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
+    try {
+      await seedLedger(extension, rows);
+      const bytes = await storageBytes(extension);
+      const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
+      const json = await timeExport(extension, 'Export ledger');
+      const csv = await timeExport(extension, 'Export receipts');
+      const idleHeap = await serviceWorkerHeapBytes(extension);
+      console.log(
+        `[perf-ledger] storage ${String(bytes)} B; popup first paint ${String(paint)} ms; ` +
+          `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B, peak heap +${String(json.peakHeapBytes)} B; ` +
+          `CSV export ${String(csv.ms)} ms, ${String(csv.bytes)} B, peak heap +${String(csv.peakHeapBytes)} B; ` +
+          `worker idle heap ${String(idleHeap)} B`,
+      );
+      expect(bytes).toBeGreaterThan(0);
+      expect(bytes).toBeLessThan(STORAGE_GATE_BYTES);
+      expect(paint).toBeLessThan(POPUP_GATE_MS);
+      expect(json.bytes).toBeGreaterThan(0);
+      expect(csv.bytes).toBeGreaterThan(0);
+      expect(idleHeap).toBeGreaterThan(0);
+    } finally {
+      await extension.close();
+    }
+  },
+);
 
-test('the 30-day ledger sealed: the job and rebuild timed, the popup paints in under 100 ms, the export measured (TECH-12)', async () => {
-  test.setTimeout(30 * 60_000);
-  const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
-  const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
-  try {
-    await seedLedger(extension, rows);
-    const seal = await sealLedger(extension, 'an invented passphrase for the sealed month');
-    const peak = await storageBytes(extension);
-    // Measured, not gated: sealed values do not compress (Decisions [6.close], TECH-12); the 50 MB gate above is the
-    // ledger's as it ships, unencrypted. Read once Chrome has compacted what the rebuild left, and the paint after it.
-    const bytes = await settledStorageBytes(extension);
-    const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
-    const json = await timeExport(extension, 'Export ledger');
-    console.log(
-      `[perf-ledger sealed] job ${String(seal.jobMs)} ms, with the rebuild ${String(seal.totalMs)} ms; ` +
-        `storage ${String(peak)} B at once, ${String(bytes)} B settled; popup first paint ${String(paint)} ms; ` +
-        `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B`,
-    );
-    expect(bytes).toBeGreaterThan(0);
-    expect(paint).toBeLessThan(POPUP_GATE_MS);
-    expect(json.bytes).toBeGreaterThan(0);
-  } finally {
-    await extension.close();
-  }
-});
+test(
+  'the 30-day ledger sealed: the job and rebuild timed, the popup paints in under 100 ms, the export measured (TECH-12)',
+  { tag: '@perf' },
+  async () => {
+    test.setTimeout(30 * 60_000);
+    const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
+    const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
+    try {
+      await seedLedger(extension, rows);
+      const seal = await sealLedger(extension, 'an invented passphrase for the sealed month');
+      const peak = await storageBytes(extension);
+      // Measured, not gated: sealed values do not compress (Decisions [6.close], TECH-12); the 50 MB gate above is the
+      // ledger's as it ships, unencrypted. Read once Chrome has compacted what the rebuild left, and the paint after it.
+      const bytes = await settledStorageBytes(extension);
+      const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
+      const json = await timeExport(extension, 'Export ledger');
+      console.log(
+        `[perf-ledger sealed] job ${String(seal.jobMs)} ms, with the rebuild ${String(seal.totalMs)} ms; ` +
+          `storage ${String(peak)} B at once, ${String(bytes)} B settled; popup first paint ${String(paint)} ms; ` +
+          `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B`,
+      );
+      expect(bytes).toBeGreaterThan(0);
+      expect(paint).toBeLessThan(POPUP_GATE_MS);
+      expect(json.bytes).toBeGreaterThan(0);
+    } finally {
+      await extension.close();
+    }
+  },
+);

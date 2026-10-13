@@ -6,7 +6,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { AGENT_HOSTS, AGENT_READERS, OBSERVER_HOSTS } from '../../src/config';
+import { OBSERVER_HOSTS } from '../../src/config';
+import { AGENT_HOSTS, AGENT_READERS } from '../../src/config-agents';
 import config, { EXTENSION_PAGES_CSP, withDevServer } from '../../wxt.config';
 
 // wxt.config.ts imports `defineConfig` from 'wxt', which loads WXT and, in the background, its optional `web-ext` peer

@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/core/tsconfig.json && tsc --noEmit -p tests/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "wxt build && playwright test",
+    "e2e": "wxt build && playwright test --grep-invert @perf && playwright test --grep @perf --workers=1",
     "bench": "tsx ../bench/run_bench.ts",
     "redteam": "tsx ../bench/run_bench.ts --only redteam",
     "capture": "tsx tests/tools/capture-fixture.ts",

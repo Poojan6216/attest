@@ -17,7 +17,7 @@ import {
 } from '../../../entrypoints/options/components/TelemetryToggle';
 import type { TelemetryView } from '../../../entrypoints/options/telemetry-preview';
 import type { SettingResult, TelemetrySendResult } from '../../../src/bus/messages';
-import { TELEMETRY_HOST } from '../../../src/config';
+import { TELEMETRY_HOST } from '../../../src/config-network';
 import { LedgerError } from '../../../src/ledger/errors';
 import { setLogSink } from '../../../src/log';
 import { TelemetryPayload } from '../../../src/telemetry/schema';

@@ -7,14 +7,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADAPTER_SITES,
-  AGENT_HOSTS,
-  AGENT_READERS,
   FEATURE_FLAG_DEFAULTS,
   FEATURE_FLAGS,
-  NETWORK_ALLOWLIST,
   OBSERVER_HOSTS,
   type FeatureFlag,
 } from '../../src/config';
+import { AGENT_HOSTS, AGENT_READERS } from '../../src/config-agents';
+import { NETWORK_ALLOWLIST } from '../../src/config-network';
 
 /** Chrome match pattern for exactly one https host and all of its paths. No wildcard hosts. */
 const EXACT_HOST_PATTERN = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\*$/;

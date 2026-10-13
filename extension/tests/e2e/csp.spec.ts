@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { allowedHosts, BYO_VENDORS, TELEMETRY_ENDPOINT } from '../../src/config';
+import { allowedHosts, BYO_VENDORS, TELEMETRY_ENDPOINT } from '../../src/config-network';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import { launchExtension } from './support/extension';
 import { netLogPathFor, readNetLogRequests } from './support/netlog';

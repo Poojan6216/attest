@@ -12,8 +12,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import config from '../../../wxt.config';
+import { REPO_ROOT } from './copy-rules';
 
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const LISTING = readFileSync(path.join(REPO_ROOT, 'launch', 'store-listing.md'), 'utf8');
 const SIDE_PANEL = existsSync(path.join(REPO_ROOT, 'extension', 'entrypoints', 'sidepanel'));
 

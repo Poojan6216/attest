@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { allowedHosts } from '../../src/config';
+import { allowedHosts } from '../../src/config-network';
 import { TelemetryPayload } from '../../src/telemetry/schema';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';

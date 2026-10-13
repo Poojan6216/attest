@@ -9,7 +9,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CHECK_INPUTS } from '../../../entrypoints/model-check/inputs';
-import { TELEMETRY_ENDPOINT, TELEMETRY_TIMEOUT_MS } from '../../../src/config';
+import { TELEMETRY_TIMEOUT_MS } from '../../../src/config';
+import { TELEMETRY_ENDPOINT } from '../../../src/config-network';
 import { byoProvider } from '../../../src/intel/providers/byo';
 import { saveFlag } from '../../../src/ledger/consent';
 import type { LedgerDb } from '../../../src/ledger/db';

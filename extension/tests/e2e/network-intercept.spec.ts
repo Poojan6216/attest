@@ -26,7 +26,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { allowedHosts, BYO_VENDORS, NETWORK_ALLOWLIST, TELEMETRY_HOST } from '../../src/config';
+import { allowedHosts, BYO_VENDORS, NETWORK_ALLOWLIST, TELEMETRY_HOST } from '../../src/config-network';
 import { type FixtureServer, startFixtureServer } from '../tools/serve-fixtures';
 import { recordConsole } from './support/channels';
 import { datedClock, pasteActivity } from './support/paste';

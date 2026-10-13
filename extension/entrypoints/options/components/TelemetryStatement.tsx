@@ -1,4 +1,4 @@
-import { TELEMETRY_HOST } from '../../../src/config';
+import { TELEMETRY_HOST } from '../../../src/config-network';
 
 /**
  * What the usage numbers send, to whom, how often, what is published from them, and how to stop (sprint_5 5.7; Sprint

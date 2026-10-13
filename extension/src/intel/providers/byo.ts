@@ -9,7 +9,7 @@
  * answer; a refused request throws an `IntelError` naming its kind, never its body, and the call contract logs it.
  * What the vendor keeps, it keeps under its own terms: the options page says so (Hard Rule 1).
  */
-import { BYO_VENDORS, type ByoVendor } from '../../config';
+import { BYO_VENDORS, type ByoVendor } from '../../config-network';
 import type { IntelProvider } from '..';
 import { dataBlock, SYSTEM_PROMPT } from '../prompt';
 import { parsedOrText } from '../schema';

@@ -6,18 +6,15 @@
  * policy never says no server runs, and names the telemetry host once it is a real one (wxt.config.ts
  * `assertReleasable` refuses a store build until it does).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-import { TELEMETRY_HOST } from '../../../src/config';
+import { TELEMETRY_HOST } from '../../../src/config-network';
 import { IntelCandidate, IntelClaim } from '../../../src/intel/input';
 import { TelemetryPayload } from '../../../src/telemetry/schema';
-import { REPO_ROOT } from './public-numbers';
+import { read } from './copy-rules';
 
-const POLICY = readFileSync(path.join(REPO_ROOT, 'PRIVACY.md'), 'utf8');
-const LISTING = readFileSync(path.join(REPO_ROOT, 'launch', 'store-listing.md'), 'utf8');
+const POLICY = read('PRIVACY.md');
+const LISTING = read('launch/store-listing.md');
 
 /** The paragraph of `text` that starts with `start`. */
 function paragraph(text: string, start: string): string {

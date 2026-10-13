@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CHECK_INPUTS } from '../../../entrypoints/model-check/inputs';
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 import { scoresFor } from '../../../src/intel';
 import type { IntelInput } from '../../../src/intel/input';
 import { dataBlock, SYSTEM_PROMPT } from '../../../src/intel/prompt';

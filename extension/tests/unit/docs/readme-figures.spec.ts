@@ -3,45 +3,17 @@
  * public-number check (./public-numbers.ts) asks only that a number is one RESULTS.md holds somewhere, and RESULTS.md
  * holds every whole number from 0 to 8 and from 10 to 15, so an attack's count changed from 6 to 5, or 18 of 25 to 17
  * of 25, still passes it. Here each row of "Attacks that still work" is its strategy's cases won, cases and severity in
- * the red team's result, and the table lists exactly the strategies whose outcome is "works"; the red team's counts in
- * the README's opening and in the Show HN post are the red team's own; and each Results row's figures are its bench's
- * named metrics, the table holding no row this file does not check.
+ * the red team's result, and the table lists exactly the strategies whose outcome is "works"; and each Results row's
+ * figures are its bench's named metrics, the table holding no row this file does not check. The receipts row's limit is
+ * its bench's gate as the gate is (QA-3): every labelled receipt exact and no other email read. The red team's counts
+ * in the README's opening and in the Show HN post are ./figures.ts's, with every other number posted (Sprint 7 close).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-import { latestResults, type MetricValue } from '../../../../bench/results';
+import { read, section } from './copy-rules';
+import { metric, num, STRATEGIES, type Strategy } from './figures';
 
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
-const README = readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
-const SHOW_HN = readFileSync(path.join(REPO_ROOT, 'launch', 'show-hn.md'), 'utf8');
-const METRICS = new Map(
-  latestResults(path.join(REPO_ROOT, 'bench', 'results')).map((result) => [result.bench, result.metrics]),
-);
-
-/** `bench`'s metric `name`, which RESULTS.md must hold. */
-function metric(bench: string, name: string): MetricValue {
-  const value = METRICS.get(bench)?.[name];
-  if (value === undefined) throw new Error(`RESULTS.md has no ${bench} ${name}`);
-  return value;
-}
-
-/** `bench`'s numeric metric `name`. */
-function num(bench: string, name: string): number {
-  const value = metric(bench, name);
-  if (typeof value !== 'number') throw new Error(`${bench} ${name} is not a number`);
-  return value;
-}
-
-/** The text of the README's section `heading`, up to the next `## `. */
-function section(heading: string): string {
-  const start = README.indexOf(`\n## ${heading}\n`);
-  if (start === -1) throw new Error(`README.md has no section "${heading}"`);
-  const next = README.indexOf('\n## ', start + 1);
-  return README.slice(start, next === -1 ? undefined : next);
-}
+const README = read('README.md');
 
 /** The body rows of the one table in `text`, cell by cell. */
 function rows(text: string): string[][] {
@@ -72,34 +44,6 @@ function expectSame(written: number[], measured: number[], what: string): void {
   }
 }
 
-interface Strategy {
-  readonly number: string;
-  readonly name: string;
-  readonly cases: number;
-  readonly works: number;
-  readonly severity: string;
-  readonly outcome: string;
-}
-
-/** Every red-team strategy RESULTS.md holds, from its `redteam<NN><Name>Cases` metric and its siblings. */
-const STRATEGIES: readonly Strategy[] = Object.keys(METRICS.get('redteam') ?? {}).flatMap((key) => {
-  const match = /^redteam(\d{2})([A-Za-z]+)Cases$/u.exec(key);
-  if (match === null) return [];
-  const [, number = '', name = ''] = match;
-  const of = (field: string): MetricValue => metric('redteam', `redteam${number}${name}${field}`);
-  return [
-    {
-      number,
-      name,
-      cases: num('redteam', key),
-      works: num('redteam', `redteam${number}${name}Works`),
-      severity: String(of('Severity')),
-      outcome: String(of('Outcome')),
-    },
-  ];
-});
-const RANK = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-
 /** The strategy a README row names, by the words before its colon (`UNASKED evasion: …` is UnaskedEvasion). */
 function strategyOf(label: string): Strategy {
   const key = (label.split(':')[0] ?? '').replace(/[^a-z]/giu, '').toLowerCase();
@@ -119,6 +63,8 @@ const RESULT_ROWS: Readonly<
       readonly measured: () => number[];
       readonly limit?: RegExp;
       readonly limits?: () => number[];
+      /** A limit that is a gate, not a number: as written, and whether the bench's gate holds. */
+      readonly gate?: { readonly written: string; readonly holds: () => boolean };
     }
   >
 > = {
@@ -145,8 +91,6 @@ const RESULT_ROWS: Readonly<
     limit: /^(\d+%)$/u,
     limits: () => [num('gcal', 'gcalAccuracyThreshold')],
   },
-  // The receipts bench's gate is every fixture exact (bench/observers/receipts.ts `gatePassed`) and RESULTS.md holds
-  // no threshold of its own for it, so this row's limit cell has no metric to be held to (QA review, sprint 7).
   'Receipt emails (`receipts`)': {
     result:
       /^field accuracy (\d+(?:\.\d+)?) on every kind of receipt saved; (\d+) of (\d+) emails that are not receipts left unread$/u,
@@ -155,6 +99,15 @@ const RESULT_ROWS: Readonly<
       num('receipts', 'negativesUnparsed'),
       num('receipts', 'negatives'),
     ],
+    // The receipts bench's gate is no threshold but every fixture exact, every email that is not a receipt unread and
+    // every list view neutral (bench/observers/receipts.ts `gatePassed`): the limit says so, and holds while it passes.
+    gate: {
+      written: 'every labelled receipt exact, no other email read',
+      holds: () =>
+        metric('receipts', 'receiptParsersGatePassed') === true &&
+        num('receipts', 'negativesUnparsed') === num('receipts', 'negatives') &&
+        num('receipts', 'listViewsNeutral') === num('receipts', 'listViews'),
+    },
   },
   'Pasted activity logs (`paste`)': {
     result: /^(\d+) of (\d+) fields right over (\d+) invented logs$/u,
@@ -228,7 +181,7 @@ describe("README.md's figures, each the metric it reports", () => {
   });
 
   it('lists in Attacks that still work exactly the strategies that work, each with its cases won, cases and severity', () => {
-    const table = rows(section('Attacks that still work'));
+    const table = rows(section(README, 'Attacks that still work'));
     expect(table.length).toBeGreaterThan(0);
     const listed = table.map(([label = '', won = '', severity = '']) => {
       const strategy = strategyOf(label);
@@ -240,28 +193,8 @@ describe("README.md's figures, each the metric it reports", () => {
     expect([...listed].sort()).toEqual([...working].sort());
   });
 
-  it.each([
-    ['README.md opening', README.slice(0, README.indexOf('\n## '))],
-    ['launch/show-hn.md', SHOW_HN],
-  ])("%s: the red team's strategies that win, and the worst one's cases, are the red team's", (_, text) => {
-    expectSame(
-      figures(text, /\b(\d+) of (?:the )?(\d+) (?:attack )?strategies\b/u),
-      [num('redteam', 'redteamWorking'), num('redteam', 'redteamStrategies')],
-      'strategies',
-    );
-    const worst = [...STRATEGIES]
-      .filter(({ outcome }) => outcome === 'works')
-      .sort((a, b) => RANK.indexOf(a.severity) - RANK.indexOf(b.severity))[0];
-    expect(worst).toBeDefined();
-    expectSame(
-      figures(text, /\bunflagged in (\d+) of (\d+) cases\b/u),
-      [worst?.works ?? 0, worst?.cases ?? 0],
-      'worst',
-    );
-  });
-
   it('writes in each Results row the figures and limit of the metrics it names, and has no other row', () => {
-    const table = rows(section('Results'));
+    const table = rows(section(README, 'Results'));
     expect(table.map(([what = '']) => what).sort()).toEqual(Object.keys(RESULT_ROWS).sort());
     for (const [what = '', result = '', limit = ''] of table) {
       const row = RESULT_ROWS[what];
@@ -269,11 +202,15 @@ describe("README.md's figures, each the metric it reports", () => {
       expectSame(figures(result, row.result), row.measured(), what);
       if (row.limit !== undefined && row.limits !== undefined)
         expectSame(figures(limit, row.limit), row.limits(), `${what} limit`);
+      if (row.gate !== undefined) {
+        expect(limit, `${what} limit`).toBe(row.gate.written);
+        expect(row.gate.holds(), `${what} gate`).toBe(true);
+      }
     }
   });
 
   it("names the Chrome the bench measured, and that the model's numbers are not measured", () => {
-    const results = section('Results');
+    const results = section(README, 'Results');
     expect(figures(results, /\(Chrome (\d+)\)/u)).toEqual([Number(metric('popup', 'popupChromeMajor'))]);
     expect(results).toContain('(`intelBuiltinMeasured` is false)');
     expect(metric('intel', 'intelBuiltinMeasured')).toBe(false);

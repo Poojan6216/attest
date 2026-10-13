@@ -8,7 +8,7 @@
  */
 import type { BrowserContext, Page } from '@playwright/test';
 
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 
 export interface VendorRequest {
   readonly method: string;

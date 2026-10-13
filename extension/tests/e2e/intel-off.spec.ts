@@ -13,7 +13,8 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
-import { ALARM_NAMES, allowedHosts } from '../../src/config';
+import { ALARM_NAMES } from '../../src/config';
+import { allowedHosts } from '../../src/config-network';
 import type { LedgerExport } from '../../src/ledger/export';
 import { startFixtureServer } from '../tools/serve-fixtures';
 import { saveKey } from './support/byo-key';

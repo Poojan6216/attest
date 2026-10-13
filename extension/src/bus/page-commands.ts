@@ -9,7 +9,8 @@
  */
 import { z } from 'zod';
 
-import { BYO_VENDOR_NAMES, READERS, RETENTION_CHOICES, SETTABLE_FLAGS, TELEMETRY_OUTCOMES } from '../config';
+import { READERS, RETENTION_CHOICES, SETTABLE_FLAGS, TELEMETRY_OUTCOMES } from '../config';
+import { BYO_VENDOR_NAMES } from '../config';
 import { GrantChoices, OverrideGrade, ReceiptOverride, Ulid } from '../core/schema';
 import { DAY_PATTERN } from '../core/schema-primitives';
 

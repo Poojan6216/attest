@@ -4,7 +4,7 @@
 
 ## Title drafts
 
-1. Show HN: Attest, receipts for what your AI agent did (local only, misses some)
+1. Show HN: Attest, receipts for what your AI agent did (runs locally, misses some)
 2. Show HN: Attest checks your AI agent's claims against your Gmail and Calendar
 3. Show HN: A browser extension that checks what your AI agent says it did
 4. Show HN: Attest, an AI agent audit that never leaves your browser
@@ -12,7 +12,7 @@
 
 ## Title
 
-Show HN: Attest, receipts for what your AI agent did (local only, misses some)
+Show HN: Attest, receipts for what your AI agent did (runs locally, misses some)
 
 Chosen over the others because it says the limitation in the title, as the launch engineer's rule asks.
 

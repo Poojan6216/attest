@@ -17,7 +17,8 @@ import type {
   SettingResult,
 } from '../../src/bus/messages';
 import { sendSetting } from '../../src/bus/send';
-import type { ByoVendor, ReaderId } from '../../src/config';
+import type { ReaderId } from '../../src/config';
+import type { ByoVendor } from '../../src/config-network';
 import type { AdapterHealth } from '../../src/ledger/types';
 import type { RetentionChoice } from '../../src/ledger/settings';
 import { log } from '../../src/log';

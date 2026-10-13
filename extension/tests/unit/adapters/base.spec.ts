@@ -12,7 +12,8 @@ import { ADAPTER_REASONS, assertAdapter, runAdapterPass, startAdapters } from '.
 import { AdapterError } from '../../../src/adapters/errors';
 import { BusMessage } from '../../../src/bus/messages';
 import { isoWithLocalOffset } from '../../../src/clock';
-import { AGENT_HOSTS, OBSERVER_DEBOUNCE_MS, OBSERVER_HOSTS } from '../../../src/config';
+import { OBSERVER_DEBOUNCE_MS, OBSERVER_HOSTS } from '../../../src/config';
+import { AGENT_HOSTS } from '../../../src/config-agents';
 import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { HealthReport, SCHEMA_LIMITS } from '../../../src/core/schema';
 import type { ObserverHandle, PassDeps } from '../../../src/observers/base';

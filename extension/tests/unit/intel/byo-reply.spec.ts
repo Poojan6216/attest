@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CHECK_INPUTS } from '../../../entrypoints/model-check/inputs';
-import { BYO_VENDORS } from '../../../src/config';
+import { BYO_VENDORS } from '../../../src/config-network';
 import { byoProvider, IntelError } from '../../../src/intel/providers/byo';
 
 const KEY = 'sk-ant-invented-reply-0123456789abcdef';

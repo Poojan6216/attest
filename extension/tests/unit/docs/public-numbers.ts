@@ -1,39 +1,71 @@
 /**
- * Sprint 7's rule that every number in public traces to RESULTS.md (sprints/sprint_7.md; agents/docs_writer.md rule 1,
- * agents/launch_engineer.md rule 1), as the README's and the launch kit's tests check it (./readme.spec.ts,
- * ./launch-kit.spec.ts): every number written must be a value RESULTS.md holds, a percentage a fraction there. A code
- * span, a link's target, a Chrome version Attest needs and a date ("Sept 19") are not figures, and are left out.
+ * The numbers a public text writes (Sprint 7's rule that every number in public traces to RESULTS.md; Sprint 7 close,
+ * tech review TECH-2, QA review QA-2), as ./figures.spec.ts reads them to hold each to the metric it quotes
+ * (./figures.ts). A number is read however it is written: plain or with a decimal part, grouped ("5,000"), as a
+ * percentage, with a unit or a word joined on ("10x", "37ms", "93MB", "a 37-day window"), and as a ratio spelled out
+ * ("seven in nine", "six of the thirteen"). Not figures, and so left out: a code span, a link's target, an ordered
+ * list's marker, the Chrome version Attest needs, and a date ("Sept 19", "2026-10-13"), as Decisions [7.6] reads them.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
-export const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
-const RESULTS = readFileSync(path.join(REPO_ROOT, 'RESULTS.md'), 'utf8');
-
-/** Every value RESULTS.md's tables hold that is a number. */
-export const RESULT_VALUES: readonly number[] = [...RESULTS.matchAll(/^\| [A-Za-z0-9]+ \| ([^|]+) \|$/gmu)]
-  .map(([, value = '']) => value.trim())
-  .filter((value) => /^-?\d+(?:\.\d+)?$/u.test(value))
-  .map(Number);
-
-const held = (value: number): boolean => RESULT_VALUES.some((result) => Math.abs(result - value) < 1e-9);
 
 const MONTH = String.raw`\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)[a-z]*\.? \d{1,2}\b`;
 
-/** The numbers written in `text` (header): `[as written, value, is a percentage]`. */
-export function numbersIn(text: string): (readonly [string, number, boolean])[] {
-  const prose = text
+/** The numbers a ratio may spell out. */
+const SPELLED: Readonly<Record<string, number>> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+  hundred: 100,
+};
+const WORD = `(${Object.keys(SPELLED).join('|')})`;
+const RATIO = new RegExp(String.raw`\b${WORD}\s+(?:in|of|out of)\s+(?:the\s+)?${WORD}\b`, 'giu');
+const DIGITS = /(?<![\p{L}\p{N}_.§,])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(%?)/gu;
+
+/** `text` without what is not a figure (header). */
+export function figuresOnly(text: string): string {
+  return text
     .replace(/`[^`]*`/gu, '')
     .replace(/\]\([^)]*\)/gu, ']')
+    .replace(/^\s*\d+\.\s/gmu, '')
     .replace(/\bChrome \d+/gu, 'Chrome')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/gu, 'a date')
     .replace(new RegExp(MONTH, 'gu'), 'a date');
-  return [...prose.matchAll(/(?<![\w.§-])(\d+(?:\.\d+)?)(%?)(?![\w-])/gu)].map(
-    ([written, digits = '', percent]) => [written, Number(digits), percent === '%'],
-  );
 }
 
-/** The numbers in `text` that RESULTS.md does not hold, as written. */
-export const unsourced = (text: string): string[] =>
-  numbersIn(text)
-    .filter(([, value, percent]) => !held(percent ? value / 100 : value))
-    .map(([written]) => written);
+/** The numbers written in `text` (header): `[as written, value, is a percentage]`. */
+export function numbersIn(text: string): (readonly [string, number, boolean])[] {
+  const prose = figuresOnly(text);
+  const written = [...prose.matchAll(DIGITS)].map(
+    ([all, whole = '', fraction = '', percent]) =>
+      [all, Number(`${whole.replaceAll(',', '')}${fraction}`), percent === '%'] as const,
+  );
+  const spelled = [...prose.matchAll(RATIO)].flatMap(([all, one = '', two = '']) => [
+    [all, SPELLED[one.toLowerCase()] ?? Number.NaN, false] as const,
+    [all, SPELLED[two.toLowerCase()] ?? Number.NaN, false] as const,
+  ]);
+  return [...written, ...spelled];
+}

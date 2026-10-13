@@ -7,7 +7,8 @@
 import { browser } from 'wxt/browser';
 
 import { ByoVendorName } from '../bus/page-commands';
-import { type ByoVendor, STORAGE_KEYS } from '../config';
+import { STORAGE_KEYS } from '../config';
+import { type ByoVendor } from '../config-network';
 import { readFlags } from '../ledger/consent';
 import { getLedger } from '../ledger/shared';
 import { onLedgerChanged } from './data';

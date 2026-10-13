@@ -1,7 +1,8 @@
 /**
  * `pnpm exec tsx scripts/check-docs.ts [--root <dir>]` — the docs check (agents/docs_writer.md rule 4).
  *
- * Over docs/*.md, README.md and PRIVACY.md it verifies that:
+ * Over docs/*.md, README.md and PRIVACY.md, and, where they exist, CHANGELOG.md, MANUAL.md, telemetry-api/README.md and
+ * every Markdown file under launch/ (Sprint 7 close, tech review TECH-18), it verifies that:
  * 1. every relative link resolves to a file or directory inside the repo, spelled with its exact letter case (as
  *    GitHub resolves it, even on a case-insensitive file system), and every `#anchor` (in the same document or
  *    in another Markdown file) names a heading or an HTML id there (GitHub's anchor rules);
@@ -64,6 +65,9 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const GRADING_DOC = 'docs/grading.md';
 const POLICY_FILE = 'policy/default.json';
 const ROOT_DOCS = ['README.md', 'PRIVACY.md'];
+/** Read too where they exist (header): what a release is made from, and the launch kit. */
+const RELEASE_DOCS = ['CHANGELOG.md', 'MANUAL.md', 'telemetry-api/README.md'];
+const LAUNCH_DIR = 'launch';
 const EXTERNAL = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|\/\/)/;
 
 type Report = (file: string, line: number, message: string) => void;
@@ -73,7 +77,20 @@ function byCodeUnit(a: string, b: string): number {
   return a < b ? -1 : 1;
 }
 
-/** The documents checked, relative to the root: docs/*.md (not recursive), README.md, PRIVACY.md. */
+/** Every Markdown file under `dir` (relative to `root`), at any depth, sorted, with forward slashes. */
+function markdownUnder(root: string, dir: string): string[] {
+  const full = path.join(root, dir);
+  if (!existsSync(full) || !statSync(full).isDirectory()) return [];
+  return readdirSync(full, { recursive: true, encoding: 'utf8' })
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => `${dir}/${name.split(path.sep).join('/')}`)
+    .sort(byCodeUnit);
+}
+
+/**
+ * The documents checked, relative to the root: docs/*.md (not recursive), README.md and PRIVACY.md, then those of
+ * RELEASE_DOCS that exist and every Markdown file under launch/.
+ */
 export function docFiles(root: string): string[] {
   const docsDir = path.join(root, 'docs');
   const docs = existsSync(docsDir)
@@ -82,7 +99,8 @@ export function docFiles(root: string): string[] {
         .sort()
         .map((name) => `docs/${name}`)
     : [];
-  return [...docs, ...ROOT_DOCS];
+  const release = RELEASE_DOCS.filter((file) => existsSync(path.join(root, file)));
+  return [...docs, ...ROOT_DOCS, ...release, ...markdownUnder(root, LAUNCH_DIR)];
 }
 
 function readText(root: string, file: string): string | null {

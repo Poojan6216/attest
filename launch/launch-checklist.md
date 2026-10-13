@@ -4,8 +4,8 @@
 
 ## Before the day
 
-- [ ] **MANUAL** The repository is public, under the license chosen (MANUAL.md, Sprint 7), and GitHub Pages serves `PRIVACY.md`.
-- [ ] **MANUAL** The telemetry API is deployed (MANUAL.md, Sprint 5), and `pnpm build:release` has made and checked the store zip.
+- [ ] **MANUAL** Before the repository goes public, the two clean-ups MANUAL.md names are done: the real captures cleaned (Sprint 7, the first item) and the old bench trace taken out of the history (Sprint 4 close). Then the repository is public, under the license chosen (MANUAL.md, Sprint 7), and GitHub Pages serves `PRIVACY.md`.
+- [ ] **MANUAL** The telemetry API is deployed (MANUAL.md, Sprint 5), `PRIVACY.md` names its host, its operator and a private contact (the blanks marked "to fill before release"), and `pnpm build:release` has made and checked the store zip.
 - [ ] **MANUAL** The store listing is live ([store-listing.md](store-listing.md)); its link replaces the placeholders in [show-hn.md](show-hn.md), [reddit/](reddit/) and the README.
 - [ ] **MANUAL** Each `[link]` in the posts is filled with the incident's source, read again that week.
 - [ ] `pnpm lint`, `pnpm test` and `pnpm e2e` pass on the commit the zip was built from.

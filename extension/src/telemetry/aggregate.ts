@@ -12,7 +12,7 @@
  * The install id and the two versions are the caller's (./facts.ts). The payload is parsed by its schema before it is
  * returned; a day it cannot describe gives none.
  */
-import { AGENT_READERS } from '../config';
+import { AGENT_READERS } from '../config-agents';
 import { instantMs } from '../core/normalize';
 import { AgentId, type ObservationSource, Receipt } from '../core/schema';
 import { MS_PER_HOUR } from '../core/units';

@@ -141,7 +141,7 @@ const MAY: Readonly<Record<ActionType, string>> = Object.freeze({
 
 /**
  * A grant in plain language (agents/ux_engineer.md rule 7): "Muse may: send email, create calendar events; write
- * only to company.com; spend up to $50.00."
+ * only to example.com; spend up to $50.00."
  */
 export function grantSentence(name: string, grant: GrantChoices): string {
   if (grant.allowedTypes.length === 0) return `${name} may do nothing Attest checks.`;

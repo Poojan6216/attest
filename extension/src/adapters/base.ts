@@ -31,7 +31,7 @@ import {
   type BusMessage,
   type BusMessageType,
 } from '../bus/messages';
-import { AGENT_HOSTS } from '../config';
+import { AGENT_HOSTS } from '../config-agents';
 import { AgentId, ComponentId, IsoTs, SCHEMA_LIMITS } from '../core/schema';
 import {
   type ObserverHandle,

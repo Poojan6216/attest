@@ -1,5 +1,7 @@
 /**
- * The hosts the extension may contact (Hard Rule 1), kept apart from src/config.ts, which re-exports them: none whatever
+ * The hosts the extension may contact (Hard Rule 1), kept apart from src/config.ts, which the Gmail and Calendar
+ * readers import, so their code carries none of these hosts (Sprint 7 close, privacy review gap 15; held by
+ * tests/e2e/built-bundle.spec.ts). Only the service worker and the extension's pages import this module: none whatever
  * the person chose (`NETWORK_ALLOWLIST`), the opt-in telemetry's one host (sprint_5 5.7), the model vendors a person
  * may bring their own key for (sprint_5 5.3), and `allowedHosts`, which says which of these each choice allows.
  */
@@ -59,9 +61,3 @@ export const BYO_VENDORS = Object.freeze({
 } as const);
 
 export type ByoVendor = keyof typeof BYO_VENDORS;
-
-/** The vendors in a fixed order, for their schema and the options page (tests/unit/config.spec.ts pins it to BYO_VENDORS). */
-export const BYO_VENDOR_NAMES = Object.freeze([
-  'anthropic',
-  'openai',
-] as const satisfies readonly ByoVendor[]);

@@ -17,14 +17,8 @@
  */
 import type { MessageSender } from '../bus/listen';
 import { ackRefused, type BusAck } from '../bus/messages';
-import {
-  ADAPTER_SITES,
-  type AdapterId,
-  AGENT_HOSTS,
-  OBSERVER_HOSTS,
-  OBSERVER_SITES,
-  type ObserverId,
-} from '../config';
+import { ADAPTER_SITES, type AdapterId, OBSERVER_HOSTS, OBSERVER_SITES, type ObserverId } from '../config';
+import { AGENT_HOSTS } from '../config-agents';
 import { log } from '../log';
 
 /** `https://host/*` → `https://host` (src/config.ts holds exact-host match patterns only, Hard Rule 8). */

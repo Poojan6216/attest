@@ -7,7 +7,8 @@
  * one send runs at a time, so the hourly alarm and the options page's button never send a day twice. The log says what
  * happened and the HTTP status, never the payload (Hard Rule 10).
  */
-import { TELEMETRY_ENDPOINT, type TELEMETRY_OUTCOMES, TELEMETRY_TIMEOUT_MS } from '../config';
+import { type TELEMETRY_OUTCOMES, TELEMETRY_TIMEOUT_MS } from '../config';
+import { TELEMETRY_ENDPOINT } from '../config-network';
 import { readFlags } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
 import { recordTelemetrySent, telemetrySentDay } from '../ledger/telemetry-sent';

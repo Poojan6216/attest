@@ -16,7 +16,7 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { TELEMETRY_HOST } from '../../src/config';
+import { TELEMETRY_HOST } from '../../src/config-network';
 import { DEV_ENTRYPOINTS } from '../../src/config-manifest';
 import { EXTENSION_PATH } from './support/extension';
 

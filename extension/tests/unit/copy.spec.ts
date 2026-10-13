@@ -29,15 +29,13 @@ import {
   visibleStrings,
   visibleStringsOf,
 } from './copy/visible-strings';
+import { HYPE } from './docs/copy-rules';
 import { makeClaim, makeObservation, makeReceipt, omit, ulid } from './ledger/fixtures';
 
 /** What no string a person reads may hold, each with why (ux_engineer copy rules; Hard Rules 5, 7). */
 const BANNED: readonly (readonly [string, RegExp])[] = [
   ['an exclamation mark', /!/u],
-  [
-    'hype',
-    /\b(?:magic(?:al)?|AI[- ]powered|powered by AI|revolutionary|seamless(?:ly)?|effortless(?:ly)?|cutting[- ]edge)\b/iu,
-  ],
+  ['hype', HYPE],
   [
     'false cheer',
     /\b(?:awesome|amazing|oops|whoops|uh[- ]oh|yay|woo-?hoo|hooray|great job|congrat(?:s|ulations))\b/iu,

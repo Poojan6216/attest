@@ -13,7 +13,10 @@
  *  - the extension never runs in incognito tabs (Decisions [2.close] S3, SEC-9);
  *  - each content script stays within its size budget, and no shipped script carries zod's JSON Schema code
  *    (TECH-17: wxt.config.ts `zodWithoutJsonSchema`);
- *  - the popup's start load stays within its budget (sprint_4 close, tech review TECH-5).
+ *  - the popup's start load stays within its budget (sprint_4 close, tech review TECH-5);
+ *  - the Gmail and Calendar content scripts hold no address the extension could send to, nor an agent's site: no model
+ *    vendor's host or endpoint, no telemetry host, no agent host (Sprint 7 close, privacy review gap 15), so a person
+ *    reading the code that reads their mail finds no other company's API in it.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,6 +24,8 @@ import { gzipSync } from 'node:zlib';
 
 import { expect, test } from '@playwright/test';
 
+import { AGENT_HOSTS } from '../../src/config-agents';
+import { BYO_VENDORS, TELEMETRY_HOST } from '../../src/config-network';
 import { EXTENSION_PATH } from './support/extension';
 import { OBSERVER_HARNESS_MARKER, SENT_PASS_HARNESS_MARKER } from './support/observer-harness-marker';
 
@@ -255,4 +260,22 @@ test('the build is a production build: no development JSX, no path of this machi
     return code.includes(repository) || /\bcolumnNumber\s*:/u.test(code);
   });
   expect(developing.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
+});
+
+test("the page readers hold no address Attest could send to, and no agent's site (privacy review gap 15)", () => {
+  const hosts = [
+    TELEMETRY_HOST,
+    ...Object.values(BYO_VENDORS).flatMap((vendor) => [vendor.host, vendor.endpoint]),
+    ...Object.values(AGENT_HOSTS).flatMap((patterns) =>
+      patterns.map((pattern) => new URL(pattern.replace('*', '')).host),
+    ),
+  ];
+  expect(hosts.length).toBeGreaterThan(5);
+  for (const name of ['gmail', 'gcal']) {
+    const code = readFileSync(path.join(EXTENSION_PATH, 'content-scripts', `${name}.js`), 'utf8');
+    expect(
+      hosts.filter((host) => code.includes(host)),
+      name,
+    ).toEqual([]);
+  }
 });

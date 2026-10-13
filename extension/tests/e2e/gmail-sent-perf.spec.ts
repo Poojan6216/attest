@@ -216,42 +216,50 @@ async function openBigPage(html: string, code: string): Promise<{ page: Page; cl
   return { page, close: () => context.close() };
 }
 
-test('perf gate (task 2.2): one Gmail Sent pass over a 10,000-row Sent list takes a median < 2 s of CPU in Chromium, and is right', async () => {
-  test.setTimeout(5 * 60_000);
-  const html = bigSentPage();
-  const code = await bundleEntry();
-  const runs: (RunResult & { readonly cpuMs: number })[] = [];
-  for (let i = 0; i < RUNS; i += 1) {
-    const { page, close } = await openBigPage(html, code);
-    try {
-      runs.push(await cpuTimedPass(page));
-    } finally {
-      await close();
+test(
+  'perf gate (task 2.2): one Gmail Sent pass over a 10,000-row Sent list takes a median < 2 s of CPU in Chromium, and is right',
+  { tag: '@perf' },
+  async () => {
+    test.setTimeout(5 * 60_000);
+    const html = bigSentPage();
+    const code = await bundleEntry();
+    const runs: (RunResult & { readonly cpuMs: number })[] = [];
+    for (let i = 0; i < RUNS; i += 1) {
+      const { page, close } = await openBigPage(html, code);
+      try {
+        runs.push(await cpuTimedPass(page));
+      } finally {
+        await close();
+      }
     }
-  }
-  const medianCpuMs = median(runs.map((run) => run.cpuMs));
-  const each = runs.map(
-    (run, i) => `run ${String(i + 1)} ${run.cpuMs.toFixed(1)} ms CPU / ${run.ms.toFixed(1)} ms wall`,
-  );
-  console.log(
-    `perf gate: Gmail Sent pass over ${String(ROWS)} rows: median ${medianCpuMs.toFixed(1)} ms CPU (${each.join('; ')})`,
-  );
-  const rowMessages = Math.ceil(ROWS / SCHEMA_LIMITS.BATCH);
-  for (const run of runs) {
-    expect({ ...run, ms: 0, cpuMs: 0 }).toEqual({
-      ms: 0,
-      cpuMs: 0,
-      status: 'OK',
-      observations: ROWS,
-      recipients: ROWS,
-      // The head of the list, which may go on (Older is enabled): from the minute after the oldest row's to the pass
-      // instant, since a send in the oldest row's own minute may be on the next page (docs/grading.md §3; QA-1).
-      windows: [[NEWEST_MS - (ROWS - 1) * 60_000 + 60_000, Date.parse(OBSERVED_AT)]],
-      types: ['adapter.health', ...Array<string>(rowMessages).fill('observer.observations'), 'coverage.ping'],
-    });
-  }
-  expect(medianCpuMs).toBeLessThan(GATE_MS);
-});
+    const medianCpuMs = median(runs.map((run) => run.cpuMs));
+    const each = runs.map(
+      (run, i) => `run ${String(i + 1)} ${run.cpuMs.toFixed(1)} ms CPU / ${run.ms.toFixed(1)} ms wall`,
+    );
+    console.log(
+      `perf gate: Gmail Sent pass over ${String(ROWS)} rows: median ${medianCpuMs.toFixed(1)} ms CPU (${each.join('; ')})`,
+    );
+    const rowMessages = Math.ceil(ROWS / SCHEMA_LIMITS.BATCH);
+    for (const run of runs) {
+      expect({ ...run, ms: 0, cpuMs: 0 }).toEqual({
+        ms: 0,
+        cpuMs: 0,
+        status: 'OK',
+        observations: ROWS,
+        recipients: ROWS,
+        // The head of the list, which may go on (Older is enabled): from the minute after the oldest row's to the pass
+        // instant, since a send in the oldest row's own minute may be on the next page (docs/grading.md §3; QA-1).
+        windows: [[NEWEST_MS - (ROWS - 1) * 60_000 + 60_000, Date.parse(OBSERVED_AT)]],
+        types: [
+          'adapter.health',
+          ...Array<string>(rowMessages).fill('observer.observations'),
+          'coverage.ping',
+        ],
+      });
+    }
+    expect(medianCpuMs).toBeLessThan(GATE_MS);
+  },
+);
 
 /** Every file under `dir`. */
 function filesUnder(dir: string): string[] {
@@ -261,7 +269,7 @@ function filesUnder(dir: string): string[] {
   });
 }
 
-test('the test-only perf entry never ships', () => {
+test('the test-only perf entry never ships', { tag: '@perf' }, () => {
   const shipped = filesUnder(EXTENSION_PATH).filter((file) =>
     readFileSync(file, 'utf8').includes(GMAIL_PERF_GLOBAL),
   );

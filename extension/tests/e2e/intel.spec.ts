@@ -21,7 +21,7 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { BYO_VENDORS } from '../../src/config';
+import { BYO_VENDORS } from '../../src/config-network';
 import { buildInput } from '../../src/intel/input';
 import { dataBlock, SYSTEM_PROMPT } from '../../src/intel/prompt';
 import type { LedgerExport } from '../../src/ledger/export';
