@@ -177,7 +177,8 @@ export default defineConfig({
   imports: false,
   manifestVersion: 3,
   manifest: {
-    name: 'Attest',
+    // The store shows the manifest's name as the item's title, and its description as the summary (launch/store-listing.md).
+    name: 'Attest — receipts for your AI agents',
     description: packageJson.description,
     minimum_chrome_version: String(MIN_CHROME_MAJOR),
     // Never in incognito tabs (Decisions [2.close] S3, SEC-9): the ledger is the regular profile's IndexedDB and

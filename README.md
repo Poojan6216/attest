@@ -29,7 +29,7 @@ With every option off, Attest makes no network request. Two tests enforce it on 
 
 Two options send something, each off until you turn it on, and each adds exactly one host while it is on:
 
-- **Your own model key** (Options, Model): a claim's kind, recipient, short subject, amount and time, and the same for the email or event it partly matched, go to Anthropic or OpenAI, whichever the key is for. Never a page, never what you asked an agent.
+- **Your own model key** (Options, Model): a claim's kind, recipient, short subject, amount and time, and the same for the email or event it partly matched, with Attest's id for it and, for a purchase, the merchant, go to Anthropic or OpenAI, whichever the key is for. Never a page, never what you asked an agent.
 - **Anonymous usage numbers** (Options, Privacy): once a day, counts about the day before go to Attest's telemetry server. No address, name, subject or amount.
 
 The extension's content security policy lets it reach those hosts and no other, a redirect's target included, and every page says which option is on. A third option, also off by default, seals what Attest keeps about your messages and events with a passphrase ([what it protects and what it does not](docs/privacy-architecture.md#12-encryption-at-rest)). The full account: [PRIVACY.md](PRIVACY.md) and [docs/privacy-architecture.md](docs/privacy-architecture.md).

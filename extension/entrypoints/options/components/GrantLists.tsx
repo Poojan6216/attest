@@ -17,7 +17,7 @@ export function GrantLists({ agent, draft, errors, edit }: GrantListsProps) {
       <GrantTextField
         id={`${agent}-recipients`}
         label="May write to"
-        hint="One domain (company.com) or address (priya@company.com) per line. Leave it empty for anyone."
+        hint="One domain (example.com) or address (priya@example.com) per line. Leave it empty for anyone."
         value={draft.recipients}
         error={errors.recipients}
         onInput={(recipients) => {

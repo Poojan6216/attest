@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>Attest: a receipt with a check mark</title>
+  <rect width="128" height="128" rx="28" fill="#202124"/>
+  <path d="M34 20 H94 V104 L86.5 97 L79 104 L71.5 97 L64 104 L56.5 97 L49 104 L41.5 97 L34 104 Z" fill="#ffffff"/>
+  <rect x="45" y="34" width="38" height="7" rx="3.5" fill="#bdc1c6"/>
+  <rect x="45" y="49" width="26" height="7" rx="3.5" fill="#bdc1c6"/>
+  <path d="M46 73 L57 84 L83 58" fill="none" stroke="#1e8e3e" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

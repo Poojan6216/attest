@@ -3,7 +3,7 @@
  * with inline errors, explicit Save): a draft the person edits, made from an agent's stored grant (or the default one,
  * every action allowed), and the grant it makes, or why not. Pure.
  *
- *  - Recipients: one per line, each a domain (`company.com`) or an address (`priya@company.com`), at most 200 of 320
+ *  - Recipients: one per line, each a domain (`example.com`) or an address (`priya@example.com`), at most 200 of 320
  *    characters; blank lines are skipped, repeats kept once, and a domain written in capitals is the same domain.
  *  - Spend ceiling: a whole number in the currency's main unit (dollars, euros, yen), stored in its minor units
  *    (cents), or blank for none.
@@ -80,7 +80,7 @@ function recipientsOf(text: string): string[] | string {
   );
   return wrong === undefined
     ? kept
-    : `“${wrong}” is not a domain, such as company.com, or an address, such as priya@company.com.`;
+    : `“${wrong}” is not a domain, such as example.com, or an address, such as priya@example.com.`;
 }
 
 /** The ceiling in minor units, null for none, or why it is not a whole number the ledger can hold. */

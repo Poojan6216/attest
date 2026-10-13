@@ -111,7 +111,7 @@ describe('Grants', () => {
     );
     const alerts = [...(muse?.querySelectorAll('[role="alert"]') ?? [])].map((alert) => alert.textContent);
     expect(alerts).toEqual([
-      '“not a domain” is not a domain, such as company.com, or an address, such as priya@company.com.',
+      '“not a domain” is not a domain, such as example.com, or an address, such as priya@example.com.',
       'Write a whole number, such as 50, or leave it blank for no ceiling.',
       'Not saved: fix the fields marked above.',
     ]);

@@ -17,6 +17,8 @@
     "check-docs": "tsx scripts/check-docs.ts",
     "audit:manifest": "tsx scripts/audit-manifest.ts",
     "record-demo": "tsx scripts/record-demo.ts",
+    "record-screenshots": "tsx scripts/record-screenshots.ts",
+    "render-icons": "pnpm --dir extension exec tsx tests/tools/render-icons.ts",
     "format": "pnpm --dir extension run format",
     "typecheck": "pnpm --dir extension run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "pnpm --dir extension run test && pnpm --dir extension run test:perf",
