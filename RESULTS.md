@@ -4,7 +4,7 @@
 
 ## core
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -12,20 +12,20 @@ Measured 2026-10-10 with `pnpm bench`.
 | claims | 5000 |
 | runs | 5 |
 | bucketMinutes | 15 |
-| lookupMedianMs | 448.6 |
-| lookupMinMs | 357 |
-| lookupMaxMs | 483.5 |
-| lookupCpuMedianMs | 451.7 |
-| indexBuildMedianMs | 162.5 |
-| buildPlusLookupMedianMs | 622.3 |
+| lookupMedianMs | 424.3 |
+| lookupMinMs | 358.1 |
+| lookupMaxMs | 525.3 |
+| lookupCpuMedianMs | 462.3 |
+| indexBuildMedianMs | 163.7 |
+| buildPlusLookupMedianMs | 595.3 |
 | candidatesReturned | 383354 |
 | gateMs | 2000 |
 | gateMetric | lookupCpuMedianMs |
 | gatePassed | true |
-| gradingMedianMs | 1159.4 |
-| gradingMinMs | 1069.8 |
-| gradingMaxMs | 1399.4 |
-| gradingCpuMedianMs | 1355.2 |
+| gradingMedianMs | 1183 |
+| gradingMinMs | 1093.8 |
+| gradingMaxMs | 1475.4 |
+| gradingCpuMedianMs | 1375.8 |
 | gradingReceipts | 5803 |
 | gradingVerified | 1883 |
 | gradingNotFound | 910 |
@@ -33,13 +33,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | gradingGateMs | 2000 |
 | gradingGateMetric | gradingCpuMedianMs |
 | gradingGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gcal
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -66,13 +66,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | gcalAccuracy | 1 |
 | gcalAccuracyThreshold | 0.95 |
 | gcalAccuracyGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## gmail-sent
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -98,13 +98,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | gmailSentSubjectHintMaxCodePoints | 80 |
 | gmailSentSubjectHintGatePassed | true |
 | gmailSentSeedsGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## intel
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -120,13 +120,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | intelByoOpenaiMeasured | false |
 | intelModelHelps | false |
 | intelCorpusInvented | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## paste
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -136,13 +136,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | pasteAccuracyThreshold | 0.95 |
 | pasteCorpusInvented | true |
 | pasteGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## patterns
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -161,74 +161,81 @@ Measured 2026-10-10 with `pnpm bench`.
 | patternsAccuracyThreshold | 0.9 |
 | patternsCorpusInvented | true |
 | patternsGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## perf
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
 | perfGmailRows | 10000 |
-| perfGmailPassMedianMs | 739 |
-| perfGmailPassMinMs | 734.4 |
-| perfGmailPassMaxMs | 788.7 |
+| perfGmailPassMedianMs | 676.1 |
+| perfGmailPassMinMs | 669.3 |
+| perfGmailPassMaxMs | 775.6 |
 | perfGmailPassGateMs | 2000 |
 | perfGmailPassGatePassed | true |
-| perfGmailStoreMs | 89113 |
+| perfGmailStoreMs | 86554 |
 | perfGmailRowsAfterTwoReads | 10000 |
 | perfGmailSentWindows | 1 |
 | perfMonthClaims | 5000 |
 | perfMonthObservations | 50000 |
-| perfMonthStorageBytes | 40209337 |
+| perfMonthStorageBytes | 40231771 |
 | perfMonthStorageGateBytes | 50000000 |
 | perfMonthStorageGatePassed | true |
-| perfMonthPopupFirstPaintMedianMs | 60 |
+| perfMonthPopupFirstPaintMedianMs | 72 |
 | perfMonthPopupGateMs | 100 |
 | perfMonthPopupGatePassed | true |
-| perfExportJsonMs | 2973 |
+| perfExportJsonMs | 3157 |
 | perfExportJsonBytes | 40143898 |
-| perfExportJsonPeakHeapBytes | 58245896 |
-| perfExportCsvMs | 1268 |
+| perfExportJsonPeakHeapBytes | 55965058 |
+| perfExportCsvMs | 1166 |
 | perfExportCsvBytes | 1206053 |
-| perfExportCsvPeakHeapBytes | 32433098 |
-| perfWorkerIdleHeapBytes | 3425432 |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| perfExportCsvPeakHeapBytes | 29260619 |
+| perfWorkerIdleHeapBytes | 3458452 |
+| perfMonthSealJobMs | 19524 |
+| perfMonthSealAndRebuildMs | 30685 |
+| perfMonthSealedStoragePeakBytes | 58828506 |
+| perfMonthSealedStorageBytes | 58777087 |
+| perfMonthSealedPopupFirstPaintMedianMs | 64 |
+| perfMonthSealedPopupGatePassed | true |
+| perfMonthSealedExportJsonMs | 6309 |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## popup
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
 | popupReceipts | 5000 |
 | popupRuns | 5 |
 | popupRows | 50 |
-| popupFirstPaintMedianMs | 68 |
-| popupFirstPaintMinMs | 60 |
-| popupFirstPaintMaxMs | 76 |
-| popupDayPaintMedianMs | 112 |
-| popupDayPaintMinMs | 104 |
-| popupDayPaintMaxMs | 124 |
-| popupCpuMedianMs | 90.2 |
-| popupCpuMinMs | 81.2 |
-| popupCpuMaxMs | 97.7 |
+| popupFirstPaintMedianMs | 60 |
+| popupFirstPaintMinMs | 52 |
+| popupFirstPaintMaxMs | 68 |
+| popupDayPaintMedianMs | 104 |
+| popupDayPaintMinMs | 84 |
+| popupDayPaintMaxMs | 108 |
+| popupCpuMedianMs | 81.9 |
+| popupCpuMinMs | 72.8 |
+| popupCpuMaxMs | 104.9 |
 | popupChromeMajor | 153 |
 | popupTrace | bench/traces/popup-paint.zip |
 | popupPaintGateMs | 100 |
 | popupPaintGateMetric | popupFirstPaintMedianMs |
 | popupPaintGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## receipts
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -269,13 +276,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | healthLabelled | 26 |
 | healthMatched | 26 |
 | receiptParsersGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## redteam
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -360,13 +367,13 @@ Measured 2026-10-10 with `pnpm bench`.
 | redteam15UnaskedFalseAccusationSeverity | MEDIUM |
 | redteam15UnaskedFalseAccusationOutcome | works |
 | redteam15UnaskedFalseAccusationGrades | UNASKED 6, UNVERIFIABLE 37 |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |
 
 ## ui
 
-Measured 2026-10-10 with `pnpm bench`.
+Measured 2026-10-13 with `pnpm bench`.
 
 | Metric | Value |
 |---|---|
@@ -375,17 +382,17 @@ Measured 2026-10-10 with `pnpm bench`.
 | uiPopupItems | 50 |
 | uiPopupReceiptRowsRead | 204 |
 | uiPopupFullScans | 0 |
-| uiPopupMedianMs | 15 |
-| uiPopupMinMs | 12.8 |
-| uiPopupMaxMs | 23.3 |
-| uiPopupCpuMedianMs | 18.2 |
-| uiTimelineCpuMedianMs | 14.3 |
-| uiFilteredCpuMedianMs | 16.4 |
-| uiDetailCpuMedianMs | 1.7 |
+| uiPopupMedianMs | 13.9 |
+| uiPopupMinMs | 12.1 |
+| uiPopupMaxMs | 20.4 |
+| uiPopupCpuMedianMs | 17.9 |
+| uiTimelineCpuMedianMs | 9.4 |
+| uiFilteredCpuMedianMs | 17.6 |
+| uiDetailCpuMedianMs | 1.6 |
 | uiGateMs | 50 |
 | uiGateMetric | uiPopupCpuMedianMs |
 | uiGatePassed | true |
 | uiTimelineGatePassed | true |
-| commit | 7d325729a59c30c9076919db061cf12422446e9a |
+| commit | 17a39e413186b2ae685c487a3f36b9a10041cdf9 |
 | commitDirty | false |
 | node | v22.14.0 |

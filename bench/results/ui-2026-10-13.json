@@ -1,0 +1,26 @@
+{
+  "bench": "ui",
+  "date": "2026-10-13",
+  "command": "pnpm bench",
+  "metrics": {
+    "uiReceipts": 5000,
+    "uiRuns": 5,
+    "uiPopupItems": 50,
+    "uiPopupReceiptRowsRead": 204,
+    "uiPopupFullScans": 0,
+    "uiPopupMedianMs": 13.9,
+    "uiPopupMinMs": 12.1,
+    "uiPopupMaxMs": 20.4,
+    "uiPopupCpuMedianMs": 17.9,
+    "uiTimelineCpuMedianMs": 9.4,
+    "uiFilteredCpuMedianMs": 17.6,
+    "uiDetailCpuMedianMs": 1.6,
+    "uiGateMs": 50,
+    "uiGateMetric": "uiPopupCpuMedianMs",
+    "uiGatePassed": true,
+    "uiTimelineGatePassed": true,
+    "commit": "17a39e413186b2ae685c487a3f36b9a10041cdf9",
+    "commitDirty": false,
+    "node": "v22.14.0"
+  }
+}
