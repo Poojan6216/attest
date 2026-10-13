@@ -216,8 +216,8 @@ function hostsOf(agent: AgentId): readonly string[] {
 
 /**
  * Throws `AdapterError('invalid_adapter')` unless the adapter's id, vendor and version are ComponentIds, its agent is
- * one Attest knows, its hosts are some of that agent's exact hosts (src/config.ts AGENT_HOSTS, Hard Rule 8), and its
- * `health`, `extract` and `attributes` are what the contract says.
+ * one Attest knows, its hosts are some of that agent's exact hosts (src/config-agents.ts AGENT_HOSTS, Hard Rule 8), and
+ * its `health`, `extract` and `attributes` are what the contract says.
  */
 export function assertAdapter(adapter: AgentAdapter): void {
   const agent = AgentId.safeParse(adapter.agent);

@@ -9,7 +9,7 @@
 
 An agent shows the person what it did: Muse keeps an activity log beside every chat, ChatGPT's agent mode lists its steps, and Claude shows each connector action in the thread. The person selects that log, copies it, and pastes it into Attest. Attest turns each reported action into a claim, checks it against the person's own Gmail Sent folder and Google Calendar as it does today, and issues receipts.
 
-Attest never visits, reads or loads the agent's site: it has no host permission and no content script for any agent (`AGENT_READERS` in [`extension/src/config.ts`](../extension/src/config.ts)). Copying from a page you are reading and pasting into another app is ordinary use of your own screen. This is not legal advice; the vendors' terms and the reading of them are in `Decisions.md` `[3.10]`.
+Attest never visits, reads or loads the agent's site: it has no host permission and no content script for any agent (`AGENT_READERS` in [`extension/src/config-agents.ts`](../extension/src/config-agents.ts)). Copying from a page you are reading and pasting into another app is ordinary use of your own screen. This is not legal advice; the vendors' terms and the reading of them are in `Decisions.md` `[3.10]`.
 
 ## 2. The flow
 

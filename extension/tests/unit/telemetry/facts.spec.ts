@@ -1,10 +1,9 @@
 /**
  * The telemetry's facts and guards (sprint_5 5.7): Chrome's major version read from a user agent (headless Chrome's
- * too), or none; the hosts
- * the extension may contact for each choice (src/config.ts `allowedHosts`: none with everything off, the telemetry host
- * only while telemetry is on, a vendor's only while the person's own key is on); and a store build refused while the
- * telemetry host is the `.invalid` stand-in, or while PRIVACY.md holds a blank to fill or does not name the host
- * (wxt.config.ts `assertReleasable`; Sprint 7 close). Every value is invented.
+ * too), or none; the hosts the extension may contact for each choice (src/config-network.ts `allowedHosts`: none with
+ * everything off, the telemetry host only while telemetry is on, a vendor's only while the person's own key is on); and
+ * a store build refused while the telemetry host is the `.invalid` stand-in, or while PRIVACY.md holds a blank to fill
+ * or does not name the host (wxt.config.ts `assertReleasable`; Sprint 7 close). Every value is invented.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

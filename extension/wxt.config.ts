@@ -14,8 +14,8 @@ import { DEV_ENTRYPOINTS, MANIFEST_NAME, MIN_CHROME_MAJOR } from './src/config-m
 // Hard Rule 8: permissions are minimal and justified in Decisions.md.
 // Hard Rule 9: CSP is strict; no remote code, no inline scripts, no eval.
 // Sprint 2.0: host_permissions is exactly the two observer hosts (Gmail, Google Calendar), read from src/config.ts
-// OBSERVER_HOSTS. An agent host (src/config.ts AGENT_HOSTS) enters only with the content script that reads it, and
-// only while its reader is on: every agent reader is off under its vendor's terms (AGENT_READERS; Decisions.md
+// OBSERVER_HOSTS. An agent host (src/config-agents.ts AGENT_HOSTS) enters only with the content script that reads it,
+// and only while its reader is on: every agent reader is off under its vendor's terms (AGENT_READERS; Decisions.md
 // [3.0], [3.10]). Pinned by tests/unit/manifest-hosts.spec.ts and the built manifest check in
 // tests/e2e/built-bundle.spec.ts (Decisions.md [2.0]).
 //
@@ -117,17 +117,17 @@ export function releaseEntrypoints<T extends { readonly name: string }>(infos: T
 export const POLICY_TO_FILL = '[to fill before release';
 
 /**
- * Refuses a release build whose telemetry host is still the `.invalid` stand-in (src/config.ts TELEMETRY_HOST; sprint_5
- * 5.7): a store build must post, when the person opts in, to the API the founder deployed (MANUAL.md, Sprint 5). Also
- * refuses one while `policy`, PRIVACY.md, still holds a blank to fill or does not name that host (Sprint 7 close, tech
- * review TECH-6, privacy review gaps 7 and 8): the policy a store install points to says who runs the server, how to
- * reach them privately, and where the numbers go.
+ * Refuses a release build whose telemetry host is still the `.invalid` stand-in (src/config-network.ts TELEMETRY_HOST;
+ * sprint_5 5.7): a store build must post, when the person opts in, to the API the founder deployed (MANUAL.md, Sprint
+ * 5). Also refuses one while `policy`, PRIVACY.md, still holds a blank to fill or does not name that host (Sprint 7
+ * close, tech review TECH-6, privacy review gaps 7 and 8): the policy a store install points to says who runs the
+ * server, how to reach them privately, and where the numbers go.
  */
 export function assertReleasable(release: boolean, telemetryHost: string, policy: string): void {
   if (!release) return;
   if (telemetryHost.endsWith('.invalid')) {
     throw new Error(
-      `pnpm build:release: the telemetry host is still ${telemetryHost}. Set src/config.ts TELEMETRY_HOST to the deployed telemetry API first (MANUAL.md, Sprint 5).`,
+      `pnpm build:release: the telemetry host is still ${telemetryHost}. Set src/config-network.ts TELEMETRY_HOST to the deployed telemetry API first (MANUAL.md, Sprint 5).`,
     );
   }
   if (policy.includes(POLICY_TO_FILL)) {

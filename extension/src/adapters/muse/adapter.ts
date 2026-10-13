@@ -1,8 +1,8 @@
 /**
  * The Muse adapter (sprint_3 3.2): Meta's assistant's chat, activity view and connected apps, read by the skeleton in
- * ../base.ts. Its hosts are src/config.ts AGENT_HOSTS.muse (`https://muse.ai/*`), but its reader is off under Meta's
- * terms (AGENT_READERS; Decisions [3.10]), so no content script runs it and no host is in the manifest (Hard Rule 8).
- * Its selectors are synthetic until Muse may be read and captured (./selectors.ts).
+ * ../base.ts. Its hosts are src/config-agents.ts AGENT_HOSTS.muse (`https://muse.ai/*`), but its reader is off under
+ * Meta's terms (AGENT_READERS; Decisions [3.10]), so no content script runs it and no host is in the manifest (Hard
+ * Rule 8). Its selectors are synthetic until Muse may be read and captured (./selectors.ts).
  */
 import { AGENT_HOSTS } from '../../config-agents';
 import type { AgentAdapter } from '../types';

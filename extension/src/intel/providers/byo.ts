@@ -1,13 +1,13 @@
 /**
  * The person's own model key as the advisory model's provider (sprint_5 5.3; agents/intel_engineer.md rules 6 and 7).
  * Off unless the person turns it on with a key they saved. Each call is one POST to the vendor's official endpoint
- * (src/config.ts BYO_VENDORS: Anthropic's Messages API or OpenAI's Chat Completions API), and nowhere else: this file
- * holds the extension's one network call besides the opt-in telemetry's (eslint-rules/fences.js
+ * (src/config-network.ts BYO_VENDORS: Anthropic's Messages API or OpenAI's Chat Completions API), and nowhere else:
+ * this file holds the extension's one network call besides the opt-in telemetry's (eslint-rules/fences.js
  * NETWORK_EXEMPT_FILES; tests/e2e/built-bundle.spec.ts). The body is the constant system prompt and the input's data
- * block (../prompt.ts), the same allowlisted facts the on-device model sees, and nothing else; the key goes only in
- * the vendor's auth header. No cookie, no referrer, no cache. An answer that is not the vendor's text reply is no
- * answer; a refused request throws an `IntelError` naming its kind, never its body, and the call contract logs it.
- * What the vendor keeps, it keeps under its own terms: the options page says so (Hard Rule 1).
+ * block (../prompt.ts), the same allowlisted facts the on-device model sees, and nothing else; the key goes only in the
+ * vendor's auth header. No cookie, no referrer, no cache. An answer that is not the vendor's text reply is no answer; a
+ * refused request throws an `IntelError` naming its kind, never its body, and the call contract logs it. What the
+ * vendor keeps, it keeps under its own terms: the options page says so (Hard Rule 1).
  */
 import { BYO_VENDORS, type ByoVendor } from '../../config-network';
 import type { IntelProvider } from '..';

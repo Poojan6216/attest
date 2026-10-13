@@ -1,15 +1,15 @@
 /**
  * Which site an observer or adapter message came from (SEC-V1, SEC-4; Hard Rules 5, 6).
  *
- * src/bus listen() already drops every message that is not from this extension, and only a content script can send
- * an observer message. But the extension has two content scripts on two sites, and before this check the service
- * worker took any observer id from either: a buggy or compromised Gmail content script could write a whole Calendar
- * pass (rows, a snapshot record, windows, first-look markers) or Calendar's health, and the reverse. Now an observer's
+ * src/bus listen() already drops every message that is not from this extension, and only a content script can send an
+ * observer message. But the extension has two content scripts on two sites, and before this check the service worker
+ * took any observer id from either: a buggy or compromised Gmail content script could write a whole Calendar pass
+ * (rows, a snapshot record, windows, first-look markers) or Calendar's health, and the reverse. Now an observer's
  * health, rows, pings and snapshots are accepted only from a page on its own site (src/config.ts OBSERVER_SITES and
- * OBSERVER_HOSTS), read from the sender Chrome sets (`sender.url`, and `sender.origin` when Chrome gives it, which
- * must agree), never from the message. An observer id the extension does not have is served by no site. An agent
- * adapter's health is held to the same rule, on its agent's site (src/config.ts ADAPTER_SITES and AGENT_HOSTS; sprint_3
- * 3.2): a Gmail tab cannot report Muse's health, nor a Muse tab Gmail's.
+ * OBSERVER_HOSTS), read from the sender Chrome sets (`sender.url`, and `sender.origin` when Chrome gives it, which must
+ * agree), never from the message. An observer id the extension does not have is served by no site. An agent adapter's
+ * health is held to the same rule, on its agent's site (src/config.ts ADAPTER_SITES and src/config-agents.ts
+ * AGENT_HOSTS; sprint_3 3.2): a Gmail tab cannot report Muse's health, nor a Muse tab Gmail's.
  *
  * A refusal is `invalid_input`, logged as `observer.wrong_site` with the message type and the observer id only (the
  * logger prints an id only if it is one of ours; Hard Rule 10). It does not turn the named observer DEGRADED: a page

@@ -61,7 +61,7 @@ export interface AgentAdapter {
   readonly agent: AgentId;
   readonly vendor: string;
   readonly version: string;
-  /** Exact host permissions (src/config.ts AGENT_HOSTS of its agent), never a wildcard (Hard Rule 8). */
+  /** Exact host permissions (src/config-agents.ts AGENT_HOSTS of its agent), never a wildcard (Hard Rule 8). */
   readonly hosts: readonly string[];
   /** Every attribute a read of the page depends on (../observers/types `Observer.attributes`). Absent: all. */
   readonly attributes?: readonly string[] | undefined;

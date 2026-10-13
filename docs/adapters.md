@@ -617,7 +617,7 @@ Sprint 3.0 adds the skeleton every Muse, ChatGPT/Dots and Claude adapter runs ([
 |---|---|
 | `id`, `vendor`, `version` | `ComponentId` tokens, as an observer's ([§2](#2-the-observer-contract)). |
 | `agent` | `muse`, `chatgpt`, `dots` or `claude`. |
-| `hosts` | Exact match patterns of that agent in `AGENT_HOSTS` ([`src/config.ts`](../extension/src/config.ts)); Dots runs on ChatGPT's. A host enters the manifest only with the content script that reads it, and only while its reader is on (`AGENT_READERS`): none is (Hard Rule 8; Decisions [3.10]). |
+| `hosts` | Exact match patterns of that agent in `AGENT_HOSTS` ([`src/config-agents.ts`](../extension/src/config-agents.ts)); Dots runs on ChatGPT's. A host enters the manifest only with the content script that reads it, and only while its reader is on (`AGENT_READERS`): none is (Hard Rule 8; Decisions [3.10]). |
 | `health(doc, ctx)` | As an observer's: OK, IDLE or DEGRADED with reason codes, never page text. |
 | `extract(doc, ctx)` | One `AgentRead` ([`types.ts`](../extension/src/adapters/types.ts)): the conversation's vendor id or null, its turns (`role`, `text`, `time` as the page shows it, optional `rowKey`), the activity entries (`text`, `time`, optional `rowKey`), and a settings page's `scopes` (null on any other page). Pure over the DOM: if a claim is not rendered, it is not read. |
 | `attributes` (optional) | As an observer's. |

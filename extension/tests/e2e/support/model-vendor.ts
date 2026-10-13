@@ -1,9 +1,9 @@
 /**
- * A stand-in for Anthropic's Messages API (sprint_5 5.4), so the end-to-end test runs the person's own key's real
- * call without reaching Anthropic: a route on exactly the endpoint the provider posts to (src/config.ts BYO_VENDORS),
- * registered after the route guard so it answers first, that records every request (method, headers, body) and
- * answers each POST as the API does, with a text block holding the model's JSON: every candidate it was given scored
- * `score`. A browser's CORS preflight is answered too, as the API answers one. Nothing reaches the network: the
+ * A stand-in for Anthropic's Messages API (sprint_5 5.4), so the end-to-end test runs the person's own key's real call
+ * without reaching Anthropic: a route on exactly the endpoint the provider posts to (src/config-network.ts
+ * BYO_VENDORS), registered after the route guard so it answers first, that records every request (method, headers,
+ * body) and answers each POST as the API does, with a text block holding the model's JSON: every candidate it was given
+ * scored `score`. A browser's CORS preflight is answered too, as the API answers one. Nothing reaches the network: the
  * browser also runs behind the dead proxy (./network-guard.ts).
  */
 import type { BrowserContext, Page } from '@playwright/test';

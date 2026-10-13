@@ -9,7 +9,8 @@ interface AgentReader {
 
 /**
  * The agents' readers (sprint_3 3.10). Each is off: its maker's terms forbid collecting data from its site by automated
- * means, and Attest reads none of them without written permission (src/config.ts AGENT_READERS; Decisions [3.10]).
+ * means, and Attest reads none of them without written permission (src/config-agents.ts AGENT_READERS; Decisions
+ * [3.10]).
  */
 export const AGENT_READER_NOTES: readonly AgentReader[] = [
   {

@@ -2,22 +2,22 @@
  * @mandatory — Hard Rule 1: nothing leaves the browser.
  *
  * Runs the real build through a scripted session (three fixture pages, the Gmail and Calendar fixtures with their
- * content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing) with Chromium's NetLog on,
- * then asserts that every request the extension or a page initiated went to an allowlisted host. With the opt-in
- * telemetry and the person's own model key off, as here, the allowlist is empty. Sprint 4's surfaces run first (sprint_4 close, QA review GAP 7; ./support/sprint4-surfaces.ts):
- * Check Gmail for me opening its tab, alerts, a receipt's share and image, the weekly digest with its page and share,
- * a grant saved, both exports, a reader turned off and on, and Delete all data. Sprint 5's follow, with both options that
- * send off (Sprint 5 close, QA GAP 2; ./support/sprint5-surfaces.ts): the Model section, an invented key saved and left
- * off, the usage numbers, the model-check page, and the grace alarm's model step. Then every page is reloaded in turn
- * for 5 minutes.
- * The negative control proves on every run that the guard sees a canary request from the service
- * worker, an extension page and a fixture page. The extension's own canaries go to hosts its content security policy
- * lets it reach (the model vendors', the telemetry host: wxt.config.ts `connectSources`), since Chrome now refuses any
- * other host, and every WebSocket, before a request is made (Sprint 5 close, SEC-3; tests/e2e/csp.spec.ts proves that
- * refusal). The WebSocket canary, which only NetLog can see, so comes from the fixture page. With every option off none
- * of them is allowed, so each must come back as a violation. This test is never skipped, retried, or weakened. (If
- * Chromium's own start-up hangs, the launcher replaces the browser before the session starts; every attempt
- * writes its own NetLog and every one is analysed: tests/e2e/support/extension.ts.)
+ * content scripts running (sprint_2 2.7), popup, options, side panel, an alarm firing) with Chromium's NetLog on, then
+ * asserts that every request the extension or a page initiated went to an allowlisted host. With the opt-in telemetry
+ * and the person's own model key off, as here, the allowlist is empty. Sprint 4's surfaces run first (sprint_4 close,
+ * QA review GAP 7; ./support/sprint4-surfaces.ts): Check Gmail for me opening its tab, alerts, a receipt's share and
+ * image, the weekly digest with its page and share, a grant saved, both exports, a reader turned off and on, and Delete
+ * all data. Sprint 5's follow, with both options that send off (Sprint 5 close, QA GAP 2;
+ * ./support/sprint5-surfaces.ts): the Model section, an invented key saved and left off, the usage numbers, the
+ * model-check page, and the grace alarm's model step. Then every page is reloaded in turn for 5 minutes. The negative
+ * control proves on every run that the guard sees a canary request from the service worker, an extension page and a
+ * fixture page. The extension's own canaries go to hosts its content security policy lets it reach (the model vendors',
+ * the telemetry host: wxt.config.ts `connectSources`), since Chrome now refuses any other host, and every WebSocket,
+ * before a request is made (Sprint 5 close, SEC-3; tests/e2e/csp.spec.ts proves that refusal). The WebSocket canary,
+ * which only NetLog can see, so comes from the fixture page. With every option off none of them is allowed, so each
+ * must come back as a violation. This test is never skipped, retried, or weakened. (If Chromium's own start-up hangs,
+ * the launcher replaces the browser before the session starts; every attempt writes its own NetLog and every one is
+ * analysed: tests/e2e/support/extension.ts.)
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -48,7 +48,7 @@ declare const chrome: WxtBrowser;
 
 /**
  * Empty: the session runs with the opt-in telemetry and the person's own model key off, so the extension may contact
- * no host (src/config.ts `allowedHosts` with both off). With either on, exactly its one host is allowed, and
+ * no host (src/config-network.ts `allowedHosts` with both off). With either on, exactly its one host is allowed, and
  * tests/e2e/telemetry.spec.ts and tests/e2e/intel.spec.ts hold the extension to that (sprint_5 5.4, 5.7).
  */
 const ALLOWLIST: readonly string[] = [];

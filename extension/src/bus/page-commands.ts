@@ -106,7 +106,7 @@ export const FlagSetMessage = z.strictObject({
   on: z.boolean(),
 });
 
-/** A model vendor a person may bring their own key for (src/config.ts BYO_VENDORS). */
+/** A model vendor a person may bring their own key for (src/config-network.ts BYO_VENDORS). */
 export const ByoVendorName = z.enum(BYO_VENDOR_NAMES);
 
 /**
