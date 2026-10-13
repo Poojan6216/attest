@@ -28,6 +28,7 @@
  * never throws.
  */
 import { type Browser, browser } from 'wxt/browser';
+import { isLedgerLocked } from '../ledger/errors';
 
 import { log } from '../log';
 import { BusError } from './errors';
@@ -163,7 +164,9 @@ async function deliver(message: BusMessage, run: () => unknown, sendResponse: Se
   try {
     response = answerOf(message, await run());
   } catch (error) {
-    log.error('bus.handler_failed', { type: message.type, error });
+    // A locked ledger is no failure (sprint_6 6.5; Sprint 6 close, tech review TECH-8): logged at info, by type alone.
+    if (isLedgerLocked(error)) log.info('bus.handler_locked', { type: message.type });
+    else log.error('bus.handler_failed', { type: message.type, error });
     response = failureOf(message);
   }
   try {

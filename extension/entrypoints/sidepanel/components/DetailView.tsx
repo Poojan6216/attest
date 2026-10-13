@@ -1,5 +1,6 @@
 import type { ReceiptEventMessage } from '../../../src/bus/messages';
 import { Button } from '../../../src/ui/Button';
+import { LockedNotice } from '../../../src/ui/LockedNotice';
 import { Skeleton } from '../../../src/ui/Skeleton';
 import type { Timeline } from '../use-timeline';
 import { ReceiptDetailPanel } from './ReceiptDetailPanel';
@@ -14,6 +15,8 @@ export interface DetailViewProps {
 export function DetailView({ timeline, lastBatchMs, onClose }: DetailViewProps) {
   const { detail } = timeline;
   if (detail === 'loading') return <Skeleton rows={4} label="Loading the receipt" />;
+  // A locked ledger (sprint_6 6.5; tech review TECH-8): the unlock, never a failure.
+  if (detail === 'locked') return <LockedNotice toShow="see this receipt" />;
   if (detail === 'failed' || detail === undefined) {
     return (
       <section class="space-y-2">

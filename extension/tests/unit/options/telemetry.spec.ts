@@ -18,6 +18,7 @@ import {
 import type { TelemetryView } from '../../../entrypoints/options/telemetry-preview';
 import type { SettingResult, TelemetrySendResult } from '../../../src/bus/messages';
 import { TELEMETRY_HOST } from '../../../src/config';
+import { LedgerError } from '../../../src/ledger/errors';
 import { setLogSink } from '../../../src/log';
 import { TelemetryPayload } from '../../../src/telemetry/schema';
 
@@ -155,6 +156,16 @@ describe('the telemetry numbers and failures', () => {
     await settle();
     expect(root.textContent).toContain('Not done. Try again.');
     expect(button('Turn off usage numbers')?.disabled).toBe(false);
+  });
+
+  it('says the records are locked, never that the numbers cannot be built (Sprint 6 close, TECH-8)', async () => {
+    const stand = sources({ ok: true, outcome: 'off', day: '2026-10-09' });
+    stand.preview.mockRejectedValue(new LedgerError('locked', 'The ledger is locked', { table: 'receipts' }));
+    await show(true, stand);
+    expect(root.textContent).toContain(
+      'Your records are locked. Unlock them to see the numbers the next send would hold.',
+    );
+    expect(root.textContent).not.toContain('cannot build');
   });
 
   it('says when no payload can be built here, and when the switch did not change', async () => {

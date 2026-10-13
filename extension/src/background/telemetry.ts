@@ -7,6 +7,7 @@
  */
 import type { LedgerTable, TelemetrySendResult } from '../bus/messages';
 import { getLedger } from '../ledger/repo';
+import { isLedgerLocked } from '../ledger/errors';
 import { log } from '../log';
 import { telemetryFacts } from '../telemetry/facts';
 import { sendTelemetry } from '../telemetry/send';
@@ -34,8 +35,10 @@ export async function onTelemetrySend(
     if (sent.outcome === 'sent') notify(['meta']);
     return { ok: true, ...sent };
   } catch (error) {
-    // Anything but the call itself (which send.ts logs as `telemetry.send_failed`): its own name (TECH-6).
-    log.error('telemetry.handler_failed', { error });
+    // Anything but the call itself (which send.ts logs as `telemetry.send_failed`): its own name (TECH-6). A locked
+    // ledger is no failure (Sprint 6 close, tech review TECH-8): the numbers wait for the unlock.
+    if (isLedgerLocked(error)) log.info('telemetry.locked');
+    else log.error('telemetry.handler_failed', { error });
     return { ok: false, code: 'failed' };
   }
 }

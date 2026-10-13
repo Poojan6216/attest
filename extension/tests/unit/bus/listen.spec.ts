@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
 import { listen } from '../../../src/bus/listen';
+import { LedgerError } from '../../../src/ledger/errors';
 import type { UiResult } from '../../../src/bus/messages';
 import { query, send } from '../../../src/bus/send';
 import {
@@ -356,5 +357,23 @@ describe('handler failures of acknowledged messages (sprint_2 2.7)', () => {
     expect(eventsAt(records, 'error').map((record) => record.event)).toEqual(['bus.handler_failed']);
     expect(records.some((record) => record.event === 'bus.send_failed')).toBe(false);
     expect(JSON.stringify(records)).not.toContain(SECRET);
+  });
+});
+
+describe('handler failures: a locked ledger (Sprint 6 close, tech review TECH-8)', () => {
+  it('a command that meets a locked ledger is logged at info by its type, never as a failure (TECH-8)', async () => {
+    connectAs(extensionPage());
+    listen({
+      'grant.save': () =>
+        Promise.reject(new LedgerError('locked', 'The ledger is locked', { table: 'grants' })),
+    });
+
+    await expect(send(VALID['grant.save'])).resolves.toEqual({ ok: false, code: 'failed' });
+    expect(eventsAt(records, 'error')).toEqual([]);
+    expect(records).toContainEqual({
+      level: 'info',
+      event: 'bus.handler_locked',
+      fields: { type: 'grant.save' },
+    });
   });
 });

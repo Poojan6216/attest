@@ -23,6 +23,9 @@ export const CRYPTO_LOG_EVENTS = [
   'alarm.locked',
   'ui.unlock_failed',
   'options.crypto_failed',
+  // A locked ledger met by a command or the usage numbers: no failure (Sprint 6 close, tech review TECH-8).
+  'bus.handler_locked',
+  'telemetry.locked',
   // The person's own model key, sealed while encryption is on (Sprint 6 close, SEC-2; src/background/byo.ts).
   'byo.key_opened',
   'byo.key_sealed',

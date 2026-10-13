@@ -25,7 +25,8 @@ import {
   Sha256,
 } from '../../../src/ledger/types';
 import type { ReceiptDetail, ReceiptItem, ReceiptPage, TimelineFilters } from '../../../src/ui/data';
-import { setLogSink } from '../../../src/log';
+import { LedgerError } from '../../../src/ledger/errors';
+import { type LogRecord, setLogSink } from '../../../src/log';
 import { claimId, makeClaim, makeGrant, makeReceipt, sha, ulid } from '../ledger/fixtures';
 
 const NOW = new Date(2026, 9, 9, 12, 0);
@@ -308,5 +309,40 @@ describe('a person’s mark on a receipt', () => {
     expect(root.querySelector('[role="alert"]')?.textContent).toBe(
       'Not undone: its evidence now belongs to another claim. Mark that claim instead.',
     );
+  });
+});
+
+describe('a ledger locked meanwhile (Sprint 6 close, tech review TECH-8)', () => {
+  const LOCKED = 'Your records are encrypted and locked';
+  const locked = () => new LedgerError('locked', 'The ledger is locked', { table: 'receipts' });
+
+  async function errorsLogged(act: () => Promise<void>): Promise<LogRecord[]> {
+    const records: LogRecord[] = [];
+    setLogSink((record) => {
+      records.push(record);
+    });
+    await act();
+    return records.filter((record) => record.level === 'error');
+  }
+
+  it('offers the unlock when older receipts meet it, never a failure', async () => {
+    await show();
+    sources.page.mockRejectedValueOnce(locked());
+    const errors = await errorsLogged(() => click(button('Show older receipts')));
+    expect(root.textContent).toContain(LOCKED);
+    expect(root.textContent).not.toMatch(/could not read/iu);
+    expect(errors).toEqual([]);
+  });
+
+  it("offers the unlock in a receipt's detail read while it is locked, never a failure", async () => {
+    await show();
+    detailFor = () => {
+      throw locked();
+    };
+    const id = LEDGER[2]?.receipt.id ?? '';
+    const errors = await errorsLogged(() => click(root.querySelector(`li[data-receipt="${id}"] button`)));
+    expect(root.textContent).toContain(LOCKED);
+    expect(root.textContent).not.toMatch(/could not read/iu);
+    expect(errors).toEqual([]);
   });
 });
