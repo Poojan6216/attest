@@ -85,7 +85,7 @@ test('the shipped manifest matches the decisions', () => {
   // connect-src (Sprint 5 close, SEC-3): Chrome refuses any host but these, a redirect's target included.
   expect(manifest.content_security_policy).toEqual({
     extension_pages:
-      "script-src 'self'; object-src 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
+      "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' blob:; form-action 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
   });
   expect(manifest).not.toHaveProperty('optional_host_permissions');
   // Decisions [2.close] S3 (SEC-9): never in incognito, so no incognito page's facts reach the persistent ledger.

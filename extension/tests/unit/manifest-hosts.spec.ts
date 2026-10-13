@@ -61,13 +61,13 @@ describe('wxt.config.ts host permissions (sprint_2 2.0, sprint_3, Hard Rule 8)',
     // host, so Chrome refuses every other host, a redirect's target included.
     expect(block.content_security_policy).toEqual({
       extension_pages:
-        "script-src 'self'; object-src 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
+        "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' blob:; form-action 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
     });
   });
 
   it('let the development server connect only in `pnpm dev`, never in a build', () => {
     expect(withDevServer(EXTENSION_PAGES_CSP, 'http://localhost:3000')).toBe(
-      "script-src 'self'; object-src 'none'; connect-src http://localhost:3000 ws://localhost:3000 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
+      "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' blob:; form-action 'none'; connect-src http://localhost:3000 ws://localhost:3000 'self' https://api.anthropic.com https://api.openai.com https://telemetry.attest.invalid",
     );
     expect(manifest().content_security_policy).toEqual({ extension_pages: EXTENSION_PAGES_CSP });
   });

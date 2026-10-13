@@ -12,7 +12,7 @@
     "prepare": "simple-git-hooks",
     "dev": "pnpm --dir extension run dev",
     "build": "pnpm --dir extension run build",
-    "build:release": "pnpm --dir extension run build:release",
+    "build:release": "pnpm --dir extension run build:release && pnpm audit:manifest extension/.output/attest-*-chrome.zip",
     "lint": "pnpm --dir extension run lint && eslint . --max-warnings 0 && prettier --check . && pnpm check-docs",
     "check-docs": "tsx scripts/check-docs.ts",
     "audit:manifest": "tsx scripts/audit-manifest.ts",
