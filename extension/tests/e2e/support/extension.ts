@@ -125,12 +125,27 @@ export async function waitForReaders(worker: Worker): Promise<void> {
   });
 }
 
+/**
+ * Deletes a profile this launcher made. Chromium's processes can still be writing into it for a moment after the
+ * browser is killed or closed, above all after a start-up that hung, so the folder can be found not empty: on a loaded
+ * machine the deletion failed with ENOTEMPTY and failed the very retry it was clearing the way for (QA review, sprint
+ * 7: a11y.spec.ts, 16.5 s). Node retries that itself; a folder that still cannot be deleted is left in the temporary
+ * folder and said so, never failing the test. Only clean-up is repeated here, never a test step.
+ */
+function removeProfile(userDataDir: string): void {
+  try {
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (error) {
+    console.warn('[e2e] a profile could not be deleted and is left in the temporary folder', error);
+  }
+}
+
 /** Closes a context and removes its profile; used when a launch fails after the browser started. */
 async function discard(context: BrowserContext, userDataDir: string, ownsProfile: boolean): Promise<void> {
   await context.close().catch((error: unknown) => {
     console.warn('[e2e] closing a failed launch also failed', error);
   });
-  if (ownsProfile) rmSync(userDataDir, { recursive: true, force: true });
+  if (ownsProfile) removeProfile(userDataDir);
 }
 
 /** Starts Chromium with the extension, replacing a start-up that hangs (see LAUNCH_TIMEOUT_MS). */
@@ -162,7 +177,7 @@ async function startBrowser(
       });
       return { context, userDataDir };
     } catch (error) {
-      if (options.userDataDir === undefined) rmSync(userDataDir, { recursive: true, force: true });
+      if (options.userDataDir === undefined) removeProfile(userDataDir);
       if (!(error instanceof errors.TimeoutError) || attempt + 1 >= LAUNCH_ATTEMPTS) throw error;
       console.warn(
         `[e2e] Chromium start-up hung for ${String(LAUNCH_TIMEOUT_MS / 1000)} s ` +
@@ -213,7 +228,7 @@ export async function launchExtension(options: LaunchOptions = {}): Promise<Laun
     },
     async close() {
       await context.close();
-      if (ownsProfile) rmSync(userDataDir, { recursive: true, force: true });
+      if (ownsProfile) removeProfile(userDataDir);
     },
   };
 }
