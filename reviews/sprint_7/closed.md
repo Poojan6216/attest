@@ -91,11 +91,11 @@ Each is in MANUAL.md with its steps.
 
 1. [ ] A public address for the privacy policy, and `homepage_url` → MANUAL.md, Sprint 7: the go-public item, then GitHub Pages (privacy review gap 1).
 2. [ ] The public repository, after both clean-ups (the real captures, Sprint 7; the bench trace in history, Sprint 4 close) and the license choice → MANUAL.md (gap 2, SEC-7).
-3. [ ] The store zip → deploy the API (MANUAL.md, Sprint 5), then "Release 0.1.0", whose steps now name the host in PRIVACY.md (gap 3, sprint_7 7.0).
+3. [x] Done later on 2026-10-13: the API is deployed on Railway, and `pnpm build:release` made `attest-0.1.0.zip`, which passes the audit, is a store build and installs clean; the zip was re-checked against gap 3's list (no development page, the CSP names the deployed host only, two `fetch(` sites in the service worker). The store zip → deploy the API (MANUAL.md, Sprint 5), then "Release 0.1.0" (gap 3, sprint_7 7.0).
 4. [ ] Certify the privacy practices form, with the draft categories → `launch/store-listing.md` (gap 4).
 5. [x] Re-read OpenAI's Terms of Use in a browser → done later on 2026-10-13, in the founder's Chrome: they read as `[3.10]` quoted them (gap 5). Meta's, Anthropic's and Google's were re-read the same day and stand (Decisions `[7.close]`).
 6. [x] Done later on 2026-10-13: the founder's name and address are in PRIVACY.md 0.11. Write the server's operator and a private contact into PRIVACY.md → MANUAL.md, Sprint 7 (gap 8). The release build refuses until you do.
-7. [ ] See what Railway's request logs hold, and for how long, when you deploy → MANUAL.md, Sprint 7 (gap 14).
+7. [x] Done later on 2026-10-13: Railway's HTTP log keeps each request's address, user agent, path, status and timings for 7 days (the Hobby plan); PRIVACY.md 0.13 says so (gap 14).
 8. [ ] Each month, before publishing the report, compare its installs with the store's users → MANUAL.md, after launch.
 
 ## ACCEPTED AS KNOWN LIMITATION
