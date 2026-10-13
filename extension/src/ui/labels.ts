@@ -111,10 +111,13 @@ export function excerpt(text: string, max = 120): string {
 }
 
 /**
- * What an Unasked receipt can and cannot catch (sprint_6 6.9; Decisions [6.9]): the red team's most severe attack that
- * works is a send an agent made and never claimed, with no agent activity near it (docs/attacks-that-work.md, strategy
- * 10). So where a person could read no Unasked receipt as no unasked action, the side panel's grade filter and the
- * weekly digest say this.
+ * What an Unasked receipt can and cannot catch (sprint_6 6.9; Decisions [6.9]), worded from the rule as the red team
+ * measured it (Sprint 6 close, security review SEC-8, tech review TECH-3; docs/attacks-that-work.md, strategy 10): a
+ * send is flagged only where two different signs met near it, the agent's pasted log active then together with
+ * another kind of action it claimed then (4 of 4), or with the person away (3 of 3). Every send with one sign or none
+ * was missed, 12 of the 18 of them with the agent active within ten minutes: one logged or claimed action, two logged
+ * ones (one sign), a send it claims beside it. So where a person could read no Unasked receipt as no unasked action,
+ * the side panel's grade filter and the weekly digest say this.
  */
 export const UNASKED_LIMIT =
-  'Attest marks a send as likely Unasked only when an agent was active near it, so a send with no agent activity near it is never flagged.';
+  'Attest marks a send as likely Unasked only when two different signs meet near it: your agent’s pasted log shows it active then, and it claimed another kind of action then, or you were away. One sign near a send, or none, is not enough, so many sends an agent makes without claiming them are never flagged.';

@@ -19,6 +19,7 @@ import type { DigestRecord } from '../../src/ledger/types';
 import { alertText } from '../../src/ui/alert-text';
 import { digestMarkdown } from '../../src/ui/digest-share';
 import { receiptMarkdown } from '../../src/ui/receipt-share';
+import { UNASKED_LIMIT } from '../../src/ui/labels';
 import { ReceiptRow } from '../../src/ui/ReceiptRow';
 import {
   type ButtonLabel,
@@ -279,5 +280,13 @@ describe('an UNASKED receipt says "likely" in every text made of it', () => {
       health: [],
     };
     expect(digestMarkdown(digest)).toMatch(/\blikely Muse\b/u);
+  });
+});
+
+describe('the Unasked notice (Sprint 6 close, security review SEC-8, tech review TECH-3)', () => {
+  it('states the rule as the red team measured it: two different signs, never one', () => {
+    expect(UNASKED_LIMIT).toBe(
+      'Attest marks a send as likely Unasked only when two different signs meet near it: your agent’s pasted log shows it active then, and it claimed another kind of action then, or you were away. One sign near a send, or none, is not enough, so many sends an agent makes without claiming them are never flagged.',
+    );
   });
 });
