@@ -72,10 +72,10 @@ Measured by `pnpm bench` on one Mac (Chrome 153), each number copied from [`RESU
 | Receipt emails (`receipts`) | field accuracy 1 on every kind of receipt saved; 7 of 7 emails that are not receipts left unread | every labelled receipt exact, no other email read |
 | Pasted activity logs (`paste`) | 111 of 111 fields right over 4 invented logs | 95% |
 | Action phrases (`patterns`) | 0.9559 of 68 Muse sentences given the right kind of action, 0.9552 for each other agent, 0 wrong actions | 90% |
-| Grading (`core`) | 5000 claims against 50000 observations in 1375.8 ms of CPU | 2000 ms |
+| Grading (`core`) | 5000 claims against 50000 observations in 1446.9 ms of CPU | 2000 ms |
 | Popup (`popup`) | first paint 60 ms over 5000 receipts | 100 ms |
-| A month of use (`perf`) | 40231771 bytes in Chrome, popup first paint 72 ms | 50000000 bytes, 100 ms |
-| Gmail Sent pass (`perf`) | 676.1 ms over 10000 rows | 2000 ms |
+| A month of use (`perf`) | 40208677 bytes in Chrome, popup first paint 60 ms | 50000000 bytes, 100 ms |
+| Gmail Sent pass (`perf`) | 776.2 ms over 10000 rows | 2000 ms |
 | Red team (`redteam`) | 131 cases in 13 strategies; 6 strategies still win | none |
 
 The optional model is not measured yet (`intelBuiltinMeasured` is false): its numbers need Chrome's on-device model on a real machine.
