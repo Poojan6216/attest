@@ -7,6 +7,8 @@
  * prove each fence through the real config.
  */
 
+import { builtinModules } from 'node:module';
+
 /** Extension code: everything that ships. Inline disables have no effect anywhere here (Hard Rules 1–4, 10). */
 export const APP = ['src/**', 'entrypoints/**'];
 
@@ -39,6 +41,10 @@ export const WORKER_SCOPES = [
   'src/intel/**',
   // The usage numbers' builder and sender (sprint_5 5.7; Sprint 5 close, tech review TECH-1).
   'src/telemetry/**',
+  // Encryption at rest, which the worker runs whole (sprint_6 6.5; Sprint 6 close, tech review TECH-9).
+  'src/crypto/**',
+  'src/config-crypto.ts',
+  'src/log-events-crypto.ts',
   'src/config.ts',
   'src/config-network.ts',
   'src/log-error-names.ts',
@@ -90,20 +96,10 @@ export const DEXIE_RESTRICTION = {
  * src/crypto (`../crypto/keyring`), which no Node module is (Decisions [6.5]; tests/unit/lint/fences-scopes.spec.ts).
  */
 export const NODE_BUILTINS = [
-  'fs',
-  'path',
-  'os',
-  'http',
-  'https',
-  'net',
-  'url',
-  'util',
-  'stream',
-  'buffer',
-  'child_process',
-  'crypto',
-  'worker_threads',
-];
+  // Every module Node ships, by its bare name, from Node itself (Sprint 6 close, tech review TECH-9): a subpath of one
+  // (`fs/promises`) is caught by the pattern's `/`.
+  ...new Set(builtinModules.map((name) => name.replace(/^node:/u, '').split('/')[0])),
+].sort();
 export const NODE_IMPORTS = {
   regex: `^(node:|(${NODE_BUILTINS.join('|')})(/|$))`,
   message: 'Extension code runs in Chrome: no Node built-ins.',
@@ -179,6 +175,21 @@ export const PAGE_RESTRICTED_IMPORTS = {
       group: ['**/crypto/session'],
       importNames: ['writeSessionKeys', 'clearSessionKeys'],
       message: `${ONE_WRITER} The service worker alone keeps the ledger's keys.`,
+    },
+  ],
+};
+
+/**
+ * src/crypto sits below the ledger, which runs its middleware (Sprint 6 close, tech review TECH-9): it imports neither the
+ * ledger, the service worker nor the UI.
+ */
+export const CRYPTO_RESTRICTED_IMPORTS = {
+  patterns: [
+    NODE_IMPORTS,
+    {
+      regex: '(^|/)(background|ui|ledger)(/|$)',
+      message:
+        'src/crypto imports neither the ledger, the service worker nor the UI (Sprint 6 close, tech review TECH-9).',
     },
   ],
 };

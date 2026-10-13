@@ -171,7 +171,7 @@ describe('code on a vendor page reaches the ledger only through the bus (TECH-2,
 });
 
 describe('storage is Dexie and chrome.storage only (TECH-V2, build_spec §5)', () => {
-  it('web storage fails everywhere; IndexedDB fails outside src/ledger and src/crypto', async () => {
+  it('web storage fails everywhere; IndexedDB fails outside src/ledger, src/crypto included (TECH-9)', async () => {
     await expectFence([
       ['src/ledger/repo.ts', "export const v = sessionStorage.getItem('k');\n", 'no-restricted-globals'],
       ['src/background/alarms.ts', "localStorage.setItem('k', 'v');\n", 'no-restricted-globals'],
@@ -180,6 +180,7 @@ describe('storage is Dexie and chrome.storage only (TECH-V2, build_spec §5)', (
       ['src/ui/probe.ts', "export const v = window.localStorage.getItem('k');\n", 'no-restricted-properties'],
       ['src/background/router.ts', "indexedDB.open('x');\n", 'no-restricted-globals'],
       ['entrypoints/options/App.tsx', "indexedDB.open('x');\n", 'no-restricted-globals'],
+      ['src/crypto/keyring.ts', "indexedDB.open('x');\n", 'no-restricted-globals'],
     ]);
     expect(await ruleIds('src/ledger/db.ts', "export const r = indexedDB.open('x');\n")).toEqual([]);
   });
@@ -192,6 +193,9 @@ describe('the service worker and the modules it shares have no DOM (TECH-V3)', (
       'entrypoints/background.ts',
       'src/ledger/repo.ts',
       'src/bus/send.ts',
+      // The worker runs src/crypto whole (Sprint 6 close, tech review TECH-9).
+      'src/crypto/keyring.ts',
+      'src/config-crypto.ts',
     ]) {
       expect(await ruleIds(file, 'export const t = document.title;\n'), file).toContain(
         'no-restricted-globals',
@@ -279,6 +283,23 @@ describe('extension code runs in Chrome, never Node (TECH-6)', () => {
       ['src/bus/send.ts', 'export let t: NodeJS.Timeout | undefined;\n', 'no-restricted-syntax'],
       ['src/ui/probe.ts', 'export let t: NodeJS.Timeout | undefined;\n', 'no-restricted-syntax'],
     ]);
+  });
+
+  it('src/crypto imports neither the ledger, the service worker nor the UI (Sprint 6 close, TECH-9)', async () => {
+    for (const from of ['../ledger/db', '../background/crypto', '../ui/labels']) {
+      const code = `import * as m from '${from}';\nexport const x = m;\n`;
+      expect(await ruleIds('src/crypto/probe.ts', code), from).toContain('no-restricted-imports');
+    }
+    expect(
+      await ruleIds('src/crypto/probe.ts', "import { seal } from './seal';\nexport const s = seal;\n"),
+    ).toEqual([]);
+  });
+
+  it('the built-ins are every module Node ships, the ones a short list missed among them (TECH-9)', () => {
+    expect(NODE_BUILTINS).toEqual(
+      expect.arrayContaining(['zlib', 'events', 'assert', 'vm', 'dns', 'tls', 'timers']),
+    );
+    expect(NODE_BUILTINS.length).toBeGreaterThan(40);
   });
 
   it('every built-in fails by its bare name, a subpath or node:, in each scope, and a project path named like one passes', async () => {

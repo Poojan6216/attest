@@ -25,6 +25,7 @@ import {
   HELPER_RESTRICTED_IMPORTS,
   HELPER_SCOPES,
   LEDGER_RESTRICTED_IMPORTS,
+  CRYPTO_RESTRICTED_IMPORTS,
   LISTENER_SCOPES,
   MESSAGING_SYNTAX,
   NETWORK_EXEMPT_FILES,
@@ -242,8 +243,12 @@ export default tseslint.config(
     rules: { 'no-restricted-imports': ['error', PAGE_RESTRICTED_IMPORTS] },
   },
   {
+    // The service worker runs src/crypto whole: no DOM, no raw IndexedDB, and below the ledger (tech review TECH-9).
     files: ['src/crypto/**'],
-    rules: appGlobals({ indexedDB: true, console: false, dom: true }),
+    rules: {
+      ...appGlobals({ indexedDB: false, console: false, dom: false }),
+      'no-restricted-imports': ['error', CRYPTO_RESTRICTED_IMPORTS],
+    },
   },
   {
     files: WORKER_SCOPES,
