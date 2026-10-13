@@ -8,11 +8,14 @@ import { ensureAlarms, handleAlarm } from '../src/background/alarms';
 import { closeStorage } from '../src/background/byo';
 import { catchUpAfterUnlock } from '../src/background/catch-up';
 import { holdKeysHere, onUnlocked } from '../src/background/crypto';
+import { resumeRebuild } from '../src/background/rebuild';
 import { type IdleApi, onPermissionsRemoved, watchIdle } from '../src/background/idle';
 import { onInstalled } from '../src/background/install';
 import { syncReaders } from '../src/background/readers';
-import { createHandlers } from '../src/background/router';
+import { announce, createHandlers } from '../src/background/router';
 import { listen } from '../src/bus/listen';
+import { nowIso } from '../src/clock';
+import { getLedger } from '../src/ledger/shared';
 import { log } from '../src/log';
 
 // Thin entrypoint (extension_engineer rule: business logic never lives here).
@@ -23,6 +26,9 @@ export default defineBackground({
     // First, before anything opens the ledger: the keys of an encrypted ledger live in this worker's memory only, so a
     // restart of the worker starts locked (sprint_6 6.5, src/background/crypto.ts).
     holdKeysHere();
+    // Then, before anything opens it either: a rebuild of the ledger's database a stop cut short is finished first, and
+    // one due is started (Sprint 6 close, security review SEC-1; src/background/rebuild.ts).
+    void resumeRebuild({ db: getLedger, notify: announce(nowIso) });
     onUnlocked(catchUpAfterUnlock);
     listen(createHandlers());
 

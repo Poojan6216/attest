@@ -37,6 +37,7 @@ export const SESSION_KEYS = {
   OPEN_RECEIPT: 'attest.openReceipt',
   /** The ledger's keys while it is unlocked, in memory only (sprint_6 6.5; src/crypto/session.ts). */
   LEDGER_KEYS: 'attest.ledgerKeys',
+  LEDGER_REBUILD: 'attest.ledgerRebuild', // While the ledger is rebuilt (Sprint 6 close; src/ledger/rebuild-mark.ts).
 } as const;
 
 /**

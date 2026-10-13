@@ -39,6 +39,7 @@ import { LedgerError } from '../ledger/errors';
 import { setKeySource } from '../ledger/shared';
 import { log } from '../log';
 import { keepAwake, letSleep } from './keep-awake';
+import { rebuildLedger } from './rebuild';
 
 export interface CryptoDeps {
   readonly db: () => Promise<LedgerDb>;
@@ -214,12 +215,16 @@ export function onCryptoDisable(message: CryptoDisableMessage, deps: CryptoDeps)
   });
 }
 
-/** After the job: once off, every key goes; after a new passphrase, the key before goes. */
+/**
+ * After the job: once off, every key goes; after a new passphrase, the key before goes. A job that sealed every row is
+ * followed by the rebuild of the ledger's database (./rebuild.ts), so Chrome's files keep no older copy of a row.
+ */
 async function jobDone(done: CryptoJob, deps: CryptoDeps): Promise<void> {
   if (done === 'unseal') await hold({}, deps);
   else if (done === 'reseal') await hold(held.current === undefined ? {} : { current: held.current }, deps);
   else deps.notify(['meta']);
   log.info('crypto.job_done', { job: done });
+  if (done !== 'unseal') await rebuildLedger(deps);
 }
 
 /** Runs the job under way, a step at a time, until it is done or the ledger is locked. */

@@ -13,6 +13,8 @@
  * a user, or storage. tests/unit/log-vocabulary.spec.ts checks that every enum the code logs is covered.
  */
 
+import { CRYPTO_LOG_EVENTS } from './log-events-crypto';
+
 export const LOG_EVENTS = [
   'alarm.done',
   'alarm.ensure_failed',
@@ -147,23 +149,7 @@ export const LOG_EVENTS = [
   'storage.close_failed',
   'ui.listen_failed',
   'ui.root_missing',
-  // Encryption at rest (sprint_6 6.5; src/background/crypto.ts, keep-awake.ts). Never a passphrase or a key.
-  'crypto.catch_up_failed',
-  'crypto.changed',
-  'crypto.command_failed',
-  'crypto.disabling',
-  'crypto.enabled',
-  'crypto.job_done',
-  'crypto.job_failed',
-  'crypto.job_paused',
-  'crypto.keep_awake_failed',
-  'crypto.locked',
-  'crypto.session_clear_failed',
-  'crypto.unlock_refused',
-  'crypto.unlocked',
-  'alarm.locked',
-  'ui.unlock_failed',
-  'options.crypto_failed',
+  ...CRYPTO_LOG_EVENTS,
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -206,6 +192,10 @@ export const LOG_VALUES = [
   'seal',
   'reseal',
   'unseal',
+  // Where a rebuild of the ledger's database failed (src/background/rebuild.ts).
+  'check',
+  'copy',
+  'restore',
   // A person's receipt events (src/background/user-events.ts): the kind and the refusal codes.
   'override',
   'revert',
@@ -251,6 +241,7 @@ export const LOG_VALUES = [
   'open_failed',
   'locked',
   'unreadable',
+  'rebuild_failed',
   'read_failed',
   'write_failed',
   // Acknowledgement codes (src/bus/messages.ts AckCode) not listed above, why a Calendar snapshot was skipped, and

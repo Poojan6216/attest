@@ -8,6 +8,7 @@ import { useState } from 'preact/hooks';
 
 import type { CryptoCode, CryptoResult } from '../../src/bus/messages';
 import { sendCrypto } from '../../src/bus/send';
+import { onRebuildMarkChanged } from '../../src/ledger/rebuild-mark';
 import { log } from '../../src/log';
 import { onLedgerChanged } from '../../src/ui/data';
 import { type CryptoStatus, loadCryptoStatus } from '../../src/ui/settings-data';
@@ -24,7 +25,17 @@ export interface CryptoSources {
 export const LIVE_CRYPTO: CryptoSources = {
   load: loadCryptoStatus,
   send: sendCrypto,
-  subscribe: (onChange) => onLedgerChanged(['meta'], onChange),
+  subscribe: (onChange) => {
+    const stopLedger = onLedgerChanged(['meta'], onChange);
+    // A rebuild of the ledger's database starting or ending (Sprint 6 close; src/ledger/rebuild-mark.ts).
+    const stopMark = onRebuildMarkChanged(() => {
+      onChange();
+    });
+    return () => {
+      stopLedger();
+      stopMark();
+    };
+  },
 };
 
 const logReadFailed = (error: unknown): void => {

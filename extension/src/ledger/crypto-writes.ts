@@ -34,7 +34,8 @@ async function startJob(
   entries: Readonly<Record<string, string | number | boolean>>,
 ): Promise<void> {
   await db.transaction('rw', db.meta, async () => {
-    await db.meta.bulkDelete([CRYPTO_KEYS.JOB_AFTER, CRYPTO_KEYS.PREVIOUS]);
+    // A rebuild due is due again once this job ends, or not at all once encryption is off (./rebuild.ts).
+    await db.meta.bulkDelete([CRYPTO_KEYS.JOB_AFTER, CRYPTO_KEYS.PREVIOUS, CRYPTO_KEYS.REBUILD]);
     await putMeta(db, { ...entries, [CRYPTO_KEYS.JOB]: job, [CRYPTO_KEYS.JOB_TABLE]: FIRST_TABLE });
   });
 }
@@ -67,7 +68,10 @@ export async function beginUnsealing(db: LedgerDb): Promise<void> {
   await startJob(db, 'unseal', {});
 }
 
-/** The job is done: its place and the key before go; once encryption is off, every `crypto.` key goes. */
+/**
+ * The job is done: its place and the key before go, and the rebuild of the ledger's database is due (./rebuild.ts),
+ * so Chrome's files lose the rows as they were before; once encryption is off, every `crypto.` key goes.
+ */
 export async function finishJob(db: LedgerDb, job: CryptoJob): Promise<void> {
   if (job === 'unseal') {
     await db.meta.where('key').startsWith(CRYPTO_PREFIX).delete();
@@ -79,4 +83,5 @@ export async function finishJob(db: LedgerDb, job: CryptoJob): Promise<void> {
     CRYPTO_KEYS.JOB_AFTER,
     CRYPTO_KEYS.PREVIOUS,
   ]);
+  await putMeta(db, { [CRYPTO_KEYS.REBUILD]: true });
 }

@@ -43,3 +43,12 @@ export const KEEP_AWAKE_MS = 20_000;
 /** The fewest and most PBKDF2 rounds a stored key may name: the sprint's floor, and a bound on the work one unlock does. */
 export const MIN_KDF_ITERATIONS = 600_000;
 export const MAX_KDF_ITERATIONS = 6_000_000;
+/**
+ * Rebuilding the ledger's database once a job has sealed its rows (Sprint 6 close, security review SEC-1;
+ * src/ledger/rebuild.ts): the copy the rows wait in while the ledger is deleted and made again, so Chrome compacts away
+ * every older copy of a row; and the small database made and deleted after, so Chrome removes the files left behind.
+ */
+export const REBUILD_DB_NAME = 'attest-rebuild';
+export const FLUSH_DB_NAME = 'attest-flush';
+/** Rows the rebuild copies per transaction. */
+export const REBUILD_PAGE = 500;

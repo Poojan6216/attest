@@ -9,6 +9,11 @@
  * an extension page reads the copy the service worker keeps for the pages in `chrome.storage.session`; the service
  * worker sets its own memory as its source at its start (src/background/crypto.ts), so it never takes a key it did
  * not unlock itself.
+ *
+ * While the service worker rebuilds the ledger's database (Sprint 6 close, security review SEC-1; ./rebuild.ts), every
+ * `getLedger()` waits: in the worker, until its rebuild releases the hold it took (`holdLedger`); in a page, while the
+ * session's mark is set (./rebuild-mark.ts), the page's own connection closed so it opens the rebuilt ledger after. So
+ * nothing reads a ledger half put back, and nothing writes one about to be deleted.
  */
 import { Dexie } from 'dexie';
 
@@ -19,6 +24,7 @@ import { onSessionKeysChanged, readSessionKeys } from '../crypto/session';
 import { loadKeyring } from './crypto-state';
 import type { LedgerDb } from './db';
 import { openLedger } from './migrations';
+import { onRebuildMarkChanged, readRebuildMark } from './rebuild-mark';
 
 /** Where this context's ledger keys come from (header). */
 export type KeySource = () => Promise<HeldKeys>;
@@ -28,6 +34,56 @@ let keySource: KeySource = readSessionKeys;
 let watching = false;
 let reloading: Promise<void> = Promise.resolve();
 const reloaded = new Set<() => void>();
+/** What every `getLedger()` waits for: open, unless a rebuild holds it (header). */
+let gate: Promise<void> = Promise.resolve();
+/** Whether this context follows the session's rebuild mark: every page; never the service worker, which sets it. */
+let followsMark = true;
+let markFollowed: Promise<void> | undefined;
+let releaseMarkHold: (() => void) | undefined;
+
+/** Holds every `getLedger()` of this context from now until the release it returns is called (header). */
+export function holdLedger(): () => void {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  gate = gate.then(() => held);
+  return release;
+}
+
+/** The service worker's start: it sets the rebuild mark itself, so it never waits on it. */
+export function ignoreRebuildMark(): void {
+  followsMark = false;
+}
+
+/** A page: the mark set holds its reads and closes its connection; the mark removed lets them go. */
+function onRebuildMark(on: boolean): void {
+  if (on && releaseMarkHold === undefined) {
+    releaseMarkHold = holdLedger();
+    void closeLedger();
+  } else if (!on && releaseMarkHold !== undefined) {
+    releaseMarkHold();
+    releaseMarkHold = undefined;
+  }
+}
+
+/** A page: reads the session's rebuild mark once, then follows each change of it (header). */
+function followRebuildMark(): Promise<void> {
+  if (!followsMark) return Promise.resolve();
+  markFollowed ??= (async () => {
+    let changed: boolean | undefined;
+    onRebuildMarkChanged((on) => {
+      changed = on;
+      onRebuildMark(on);
+    });
+    const on = await readRebuildMark();
+    // A change seen while the mark was being read is newer than what the read returned.
+    onRebuildMark(changed ?? on);
+  })().catch((error: unknown) => {
+    log.warn('ledger.rebuild_mark_unread', { error });
+  });
+  return markFollowed;
+}
 
 /** Calls `listener` after each reload of this context's keyring (the keys changed), so a page reads again; returns the stop. */
 export function onKeyringReloaded(listener: () => void): () => void {
@@ -72,11 +128,7 @@ async function openWithKeys(): Promise<LedgerDb> {
   return db;
 }
 
-/**
- * The extension's ledger (`DB_NAME`, latest migrations), opened once per context on first use, with its keyring
- * loaded. A failed open is not cached: the next call retries.
- */
-export function getLedger(): Promise<LedgerDb> {
+function ledgerNow(): Promise<LedgerDb> {
   if (shared !== undefined) return shared;
   const opening = openWithKeys();
   shared = opening;
@@ -85,6 +137,16 @@ export function getLedger(): Promise<LedgerDb> {
     log.warn('ledger.shared_open_reset', { error });
   });
   return opening;
+}
+
+/**
+ * The extension's ledger (`DB_NAME`, latest migrations), opened once per context on first use, with its keyring
+ * loaded, once no rebuild holds it (header). A failed open is not cached: the next call retries.
+ */
+export function getLedger(): Promise<LedgerDb> {
+  return followRebuildMark()
+    .then(() => gate)
+    .then(ledgerNow);
 }
 
 /** Closes the shared instance (if any) and forgets it; the next `getLedger()` reopens. */

@@ -172,6 +172,14 @@ export function assertValidMigrations(migrations: readonly Migration[]): void {
 const STORED_TABLES: ReadonlySet<string> = new Set([...LEDGER_TABLE_NAMES, ...REPLAY_TABLE_NAMES]);
 const isStoredTable = (table: string): table is StoredTableName => STORED_TABLES.has(table);
 
+export interface OpenOptions {
+  /**
+   * Rows read and written exactly as stored, without the sealing middleware: only the rebuild, which copies rows from
+   * one database to another and never makes one (./rebuild.ts; Sprint 6 close, security review SEC-1).
+   */
+  readonly asStored?: boolean;
+}
+
 /**
  * Opens (creating or upgrading as needed) the ledger database.
  * Rejects with `invalid_migrations` before touching IndexedDB, or `open_failed` if IndexedDB refuses.
@@ -179,17 +187,20 @@ const isStoredTable = (table: string): table is StoredTableName => STORED_TABLES
 export async function openLedger(
   name: string = DB_NAME,
   migrations: readonly Migration[] = MIGRATIONS,
+  options: OpenOptions = {},
 ): Promise<LedgerDb> {
   assertValidMigrations(migrations);
   const db = new LedgerDb(name);
   // Rows of the tables that hold content are sealed while encryption is on (sprint_6 6.5; src/crypto/middleware.ts).
-  db.use(
-    sealingMiddleware({
-      derivedFields: (table) => (isStoredTable(table) ? INDEX_FIELDS[table] : []),
-      locked: (table) => new LedgerError('locked', 'The ledger is locked', { table }),
-      unreadable: (table) => new LedgerError('unreadable', 'A sealed row did not open', { table }),
-    }),
-  );
+  if (options.asStored !== true) {
+    db.use(
+      sealingMiddleware({
+        derivedFields: (table) => (isStoredTable(table) ? INDEX_FIELDS[table] : []),
+        locked: (table) => new LedgerError('locked', 'The ledger is locked', { table }),
+        unreadable: (table) => new LedgerError('unreadable', 'A sealed row did not open', { table }),
+      }),
+    );
+  }
   for (const migration of migrations) {
     const version = db.version(migration.version).stores(migration.stores);
     if (migration.upgrade !== undefined) version.upgrade(migration.upgrade);

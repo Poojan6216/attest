@@ -27,6 +27,11 @@ export const CRYPTO_KEYS = Object.freeze({
   /** The table the job is in, and the key of the last row it rewrote there, as JSON. */
   JOB_TABLE: 'crypto.jobTable',
   JOB_AFTER: 'crypto.jobAfter',
+  /**
+   * True from the end of a job that sealed every row until the ledger's database is rebuilt (./rebuild.ts; Sprint 6
+   * close, security review SEC-1), so Chrome's files keep no older copy of a row.
+   */
+  REBUILD: 'crypto.rebuild',
 });
 
 export type CryptoJob = 'seal' | 'reseal' | 'unseal';
@@ -44,6 +49,8 @@ export interface CryptoState {
   readonly job?: CryptoJob;
   readonly jobTable?: string;
   readonly jobAfter?: string;
+  /** A job sealed every row, and the ledger's database is still to be rebuilt. */
+  readonly rebuild?: true;
 }
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
@@ -63,6 +70,7 @@ export async function readCryptoState(db: LedgerDb): Promise<CryptoState> {
     job: isCryptoJob(job) ? job : undefined,
     jobTable: text(value(CRYPTO_KEYS.JOB_TABLE)),
     jobAfter: text(value(CRYPTO_KEYS.JOB_AFTER)),
+    rebuild: value(CRYPTO_KEYS.REBUILD) === true ? (true as const) : undefined,
   };
   const present = Object.entries(fields).filter(([, field]) => field !== undefined);
   return { on: value(CRYPTO_KEYS.SEALING) === true, ...Object.fromEntries(present) };

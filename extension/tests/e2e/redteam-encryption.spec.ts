@@ -7,7 +7,10 @@
  *    every wrong passphrase refused, the near misses (a letter's case, a trailing space) among them, and nothing read;
  *    the passphrase itself opens the copy, the one thing encryption at rest does not stop (docs/attacks-that-work.md);
  *  - the passphrase changed while pages are open: they keep reading, every row is sealed again under one new key, and
- *    after a restart of the service worker the old passphrase is refused and the new one opens it.
+ *    after a restart of the service worker the old passphrase is refused and the new one opens it;
+ *  - both read the profile's files too, as a forensic tool reads a copy, without Chrome (Sprint 6 close, security
+ *    review SEC-1; ./support/profile-files.ts): every send is found in them before encryption is on, which proves the
+ *    reading; none once it is on, before the copy is opened or after; and no row under the old key after a change.
  */
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -25,6 +28,7 @@ import {
 } from './support/encryption';
 import { launchExtension } from './support/extension';
 import { MINUTE_MS, openSent } from './support/priya';
+import { scanProfileIndexedDb } from './support/profile-files';
 import { startVendorSession, endVendorSession, withVendorSession } from './support/session';
 import { FIXTURE_TIME_ZONE, readLedger } from './support/vendor-pages';
 
@@ -44,9 +48,14 @@ test('strategy 13: a copy of the profile opens nothing without the passphrase', 
     const { extension, routes, ledgerPage } = session;
     const nowMs = Date.now();
     await openSent(extension, routes, ledgerPage, nowMs, nowMs - 20 * MINUTE_MS);
+    // Read in the files before encryption is on: every send is there, so the reading below finds what is there.
+    expect(scanProfileIndexedDb(extension.userDataDir, SENT_VALUES).found).toEqual(SENT_VALUES);
     await turnOnEncryption(ledgerPage, PASSPHRASE);
     await extension.context.close();
     cpSync(extension.userDataDir, copyDir, { recursive: true });
+    const copied = scanProfileIndexedDb(copyDir, SENT_VALUES);
+    expect(copied).toMatchObject({ found: [], unparsed: [] });
+    expect(copied.decoded).toBeGreaterThan(0);
 
     copy = await launchExtension({ timezoneId: FIXTURE_TIME_ZONE, userDataDir: copyDir });
     const popup = await copy.openExtensionPage('popup.html');
@@ -61,6 +70,8 @@ test('strategy 13: a copy of the profile opens nothing without the passphrase', 
     // The passphrase itself, typed decomposed, opens the copy: encryption at rest stops a copy without it, not with it.
     await unlockIn(popup, SAME_DECOMPOSED);
     await expect(popup.getByText(LOCKED_TEXT)).toHaveCount(0);
+    await copy.context.close();
+    expect(scanProfileIndexedDb(copyDir, SENT_VALUES)).toMatchObject({ found: [], unparsed: [] });
   } finally {
     await copy?.close();
     rmSync(copyDir, { recursive: true, force: true });
@@ -99,6 +110,12 @@ test('strategy 13: a passphrase changed mid-session leaves every row under the n
       },
     );
     expect(await ledgerAtRest(ledgerPage, SENT_VALUES)).toMatchObject({ plain: 0, found: [] });
+    // In the files too, once Chrome has removed the ones the rebuild left: no send, and no row under the old key.
+    await expect
+      .poll(() => scanProfileIndexedDb(extension.userDataDir, [...SENT_VALUES, ...first.keyIds]).found, {
+        timeout: 15_000,
+      })
+      .toEqual([]);
     await popup.reload();
     await expect(popup.getByText(LOCKED_TEXT)).toHaveCount(0);
     expect((await readLedger(ledgerPage)).tables.observations.length).toBeGreaterThan(0);

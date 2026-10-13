@@ -1,8 +1,8 @@
 import { PRIVACY_DOC_URL } from '../../../src/config';
 
 /**
- * What encryption at rest does and does not protect, in plain words (sprint_6 6.5; docs/privacy-architecture.md §2):
- * shown whether it is on or off.
+ * What encryption at rest does and does not protect, in plain words (sprint_6 6.5; docs/privacy-architecture.md §12,
+ * which the link opens): shown whether it is on or off.
  */
 export function EncryptionStatement() {
   return (
@@ -22,6 +22,11 @@ export function EncryptionStatement() {
           settings.
         </li>
         <li>
+          Turning it on, or a new passphrase, ends with Attest rebuilding its database, so Chrome’s files keep
+          no copy of your records as they were before. A tool that recovers deleted files from the disk itself
+          may still find one: full-disk encryption covers that.
+        </li>
+        <li>
           While unlocked, anyone using this browser can see your records, as without encryption. Lock now
           locks them at once.
         </li>
@@ -31,7 +36,7 @@ export function EncryptionStatement() {
       </ul>
       <p class="text-sm">
         <a
-          href={`${PRIVACY_DOC_URL}#2-what-attest-cannot-hide`}
+          href={`${PRIVACY_DOC_URL}#12-encryption-at-rest`}
           target="_blank"
           rel="noopener noreferrer"
           class="underline"

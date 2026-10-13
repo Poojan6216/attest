@@ -10,6 +10,7 @@ import { SEALED_TABLES } from '../config-crypto';
 import { isLocked } from '../crypto/keyring';
 import { type CryptoJob, isGuarded, readCryptoState } from '../ledger/crypto-state';
 import { type Flags, readersOff, readFlags } from '../ledger/consent';
+import { readRebuildMark } from '../ledger/rebuild-mark';
 import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
 import { getLedger } from '../ledger/shared';
 import type { AdapterHealth } from '../ledger/types';
@@ -48,10 +49,19 @@ export interface CryptoStatus {
   readonly locked: boolean;
   /** The job rewriting the rows, if one is under way: which, and which table of how many it is in. */
   readonly job?: { readonly kind: CryptoJob; readonly table: number; readonly of: number };
+  /**
+   * The ledger's database is being rebuilt after a job, or will be (Sprint 6 close, security review SEC-1;
+   * src/ledger/rebuild.ts): reads wait meanwhile.
+   */
+  readonly rebuilding?: true;
 }
 
-/** The ledger's encryption state, and whether this page holds its key: `meta` only, readable while locked. */
+/**
+ * The ledger's encryption state, and whether this page holds its key: `meta` only, readable while locked. While the
+ * service worker rebuilds the ledger's database, that alone, from the session's mark: the ledger waits to be read.
+ */
 export async function loadCryptoStatus(): Promise<CryptoStatus> {
+  if (await readRebuildMark()) return { on: true, locked: isLocked(), rebuilding: true };
   const state = await readCryptoState(await getLedger());
   const on = isGuarded(state);
   const job =
@@ -62,5 +72,10 @@ export async function loadCryptoStatus(): Promise<CryptoStatus> {
           table: Math.max(0, SEALED_TABLES.indexOf(state.jobTable ?? '')) + 1,
           of: SEALED_TABLES.length,
         };
-  return { on, locked: on && isLocked(), ...(job === undefined ? {} : { job }) };
+  return {
+    on,
+    locked: on && isLocked(),
+    ...(job === undefined ? {} : { job }),
+    ...(state.rebuild === true ? { rebuilding: true as const } : {}),
+  };
 }

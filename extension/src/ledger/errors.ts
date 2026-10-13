@@ -34,6 +34,11 @@ export const LEDGER_ERROR_CODES = [
   'locked',
   /** A sealed row did not open with its own key: a changed byte, or a value moved from another row. */
   'unreadable',
+  /**
+   * Rebuilding the ledger's database (./rebuild.ts; Sprint 6 close, SEC-1) copied a table short: the ledger is not
+   * deleted, or the copy is kept to put back again.
+   */
+  'rebuild_failed',
 ] as const;
 
 export type LedgerErrorCode = (typeof LEDGER_ERROR_CODES)[number];

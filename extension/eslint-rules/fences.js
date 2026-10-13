@@ -142,7 +142,7 @@ export const PAGE_RESTRICTED_IMPORTS = {
     { regex: '(^|/)background(/|$)', message: `${ONE_WRITER} No page imports src/background.` },
     {
       regex:
-        '(^|/)ledger/(repo|upsert|grant-save|user-events|retention|retention-clock|retention-coverage|replay-records|coverage|calendar-snapshots|activity|clock-guard|clock-repairs|clock-high-water|batch-instant|migrations|crypto-writes|crypto-job)$',
+        '(^|/)ledger/(repo|upsert|grant-save|user-events|retention|retention-clock|retention-coverage|replay-records|coverage|calendar-snapshots|activity|clock-guard|clock-repairs|clock-high-water|batch-instant|migrations|crypto-writes|crypto-job|rebuild)$',
       message: ONE_WRITER,
     },
     { group: ['**/ledger/settings'], importNames: ['saveRetentionDays'], message: ONE_WRITER },
@@ -154,7 +154,13 @@ export const PAGE_RESTRICTED_IMPORTS = {
     },
     { group: ['**/ledger/consent'], importNames: ['saveReaderOff', 'saveFlag'], message: ONE_WRITER },
     { group: ['**/ledger/alerts'], importNames: ['queueAlerts', 'takeAlerts'], message: ONE_WRITER },
-    { group: ['**/ledger/shared'], importNames: ['deleteLedger'], message: ONE_WRITER },
+    {
+      group: ['**/ledger/shared'],
+      importNames: ['deleteLedger', 'holdLedger', 'ignoreRebuildMark'],
+      message: ONE_WRITER,
+    },
+    // Rebuilding the ledger's database (Sprint 6 close, security review SEC-1): the service worker alone marks it.
+    { group: ['**/ledger/rebuild-mark'], importNames: ['setRebuildMark'], message: ONE_WRITER },
     // Sprint 5's writers (Sprint 5 close, tech review TECH-1): the model's asks, the sent day, and the install id's
     // makers (a page reads the id with `readInstallId`; the reset is the person's own act, in the Danger zone).
     {

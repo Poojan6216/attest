@@ -4,6 +4,7 @@ import { type CryptoSources, LIVE_CRYPTO, useCryptoStatus } from '../use-crypto-
 import { CryptoJobLine } from './CryptoJobLine';
 import { EncryptionControls } from './EncryptionControls';
 import { EncryptionStatement } from './EncryptionStatement';
+import { RebuildLine } from './RebuildLine';
 import { Section } from './Section';
 import { TurnOnEncryption } from './TurnOnEncryption';
 
@@ -14,8 +15,8 @@ export interface EncryptionSectionProps {
 
 /**
  * The options page's Encryption (sprint_6 6.5): what it protects; off, the form that turns it on; on and locked, the
- * unlock prompt; on and unlocked, lock now, change the passphrase and turn it off; and while a job rewrites the
- * records, how far it has come.
+ * unlock prompt; on and unlocked, lock now, change the passphrase and turn it off; while a job rewrites the records,
+ * how far it has come; and while the ledger's database is rebuilt after it, that it is.
  */
 export function EncryptionSection({ sources = LIVE_CRYPTO }: EncryptionSectionProps) {
   const state = useCryptoStatus(sources);
@@ -30,6 +31,7 @@ export function EncryptionSection({ sources = LIVE_CRYPTO }: EncryptionSectionPr
         </p>
       ) : null}
       {status?.job === undefined ? null : <CryptoJobLine job={status.job} locked={status.locked} />}
+      {status?.rebuilding === true && status.job === undefined ? <RebuildLine /> : null}
       {status !== undefined && !status.on ? <TurnOnEncryption send={sources.send} /> : null}
       {status?.on === true && status.locked ? (
         <LockedNotice
@@ -37,7 +39,7 @@ export function EncryptionSection({ sources = LIVE_CRYPTO }: EncryptionSectionPr
           unlock={(passphrase) => sources.send({ type: 'crypto.unlock', passphrase })}
         />
       ) : null}
-      {status?.on === true && !status.locked && status.job === undefined ? (
+      {status?.on === true && !status.locked && status.job === undefined && status.rebuilding !== true ? (
         <EncryptionControls send={sources.send} />
       ) : null}
     </Section>

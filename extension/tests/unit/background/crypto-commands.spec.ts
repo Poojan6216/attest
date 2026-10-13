@@ -3,7 +3,8 @@ import 'fake-indexeddb/auto';
  * Encryption at rest in the service worker (src/background/crypto.ts; sprint_6 6.5 Done when: "round-trip tests; wrong
  * passphrase yields no plaintext (test reads IndexedDB directly); service-worker restart requires re-unlock"), on the
  * shared ledger in fake-indexeddb and WXT's fake browser, with the real 600,000 PBKDF2 rounds:
- *  - turned on, every row already stored is sealed by the job, and none of its content is readable in IndexedDB;
+ *  - turned on, every row already stored is sealed by the job, and none of its content is readable in IndexedDB; then
+ *    the ledger's database is rebuilt (src/background/rebuild.ts), no copy left;
  *  - locked, every read fails; a wrong passphrase leaves it locked and reads nothing; the right one unlocks it;
  *  - a restart of the worker forgets the keys and the pages' copy: locked until the passphrase is typed again;
  *  - a new passphrase seals every row again under the new key, the old passphrase no longer opens it, and a change a
@@ -11,6 +12,7 @@ import 'fake-indexeddb/auto';
  *  - turned off, every row is plain again and every `crypto.` key is gone;
  *  - a command while a job is under way is `busy`, and the worker is kept running only while unlocked.
  */
+import { Dexie } from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
@@ -107,6 +109,15 @@ describe('turned on', () => {
     expect((await readCryptoState(await getLedger())).job).toBeUndefined();
     expect(keptAwake()).toBe(true);
     expect((await readSessionKeys()).current?.id).toBe([...rest.keyIds][0]);
+  });
+
+  it("then rebuilds the ledger's database, sealed rows and all, and leaves no copy and no rebuild due", async () => {
+    await enable();
+    const state = await readCryptoState(await getLedger());
+    expect([state.on, state.job, state.rebuild]).toEqual([true, undefined, undefined]);
+    expect(await Dexie.getDatabaseNames()).toEqual([DB_NAME]);
+    expect((await atRest()).plain).toBe(0);
+    expect(await getRequest(await getLedger(), REQUEST.id)).toEqual(REQUEST);
   });
 
   it('is refused while on', async () => {

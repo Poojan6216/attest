@@ -4,7 +4,8 @@
  * (`chrome.scripting.unregisterContentScripts`), so a Calendar page opened then stores nothing while Gmail, still on, is
  * read; turning it on registers it again and the page is read. The choice is in the ledger (security review SEC-3).
  * The retention window is saved in the ledger. Delete all data, asked twice, leaves the ledger and
- * `chrome.storage.local` empty but for the one choice it keeps: a reader the person turned off stays off (SEC-6).
+ * `chrome.storage.local` empty but for the one choice it keeps: a reader the person turned off stays off (SEC-6); and,
+ * within seconds, nothing of what was deleted in the profile's files either (Sprint 6 close, security review SEC-1).
  */
 import { readFileSync } from 'node:fs';
 
@@ -13,6 +14,7 @@ import type { WxtBrowser } from 'wxt/browser';
 
 import { DEMO_LOG, demoSentPage } from './support/demo';
 import { pasteActivity } from './support/paste';
+import { scanProfileIndexedDb } from './support/profile-files';
 import { withVendorSession } from './support/session';
 import {
   fixtureUrl,
@@ -116,11 +118,17 @@ test('the retention window is saved, and Delete all data leaves the ledger and s
     await expect.poll(() => ids(worker)).toEqual(['gcal']);
     const before = await readLedger(options);
     expect(before.tables.claims).toHaveLength(2);
+    // What the claims hold is in the profile's files, read without Chrome; after Delete all data it must not be.
+    const IMPORTED = ['Priya', 'Q3 review'];
+    expect(scanProfileIndexedDb(extension.userDataDir, IMPORTED).found).toEqual(IMPORTED);
 
     await options.getByRole('button', { name: 'Delete all data' }).click();
     await options.getByRole('checkbox', { name: 'I understand that everything is deleted for good' }).check();
     await options.getByRole('button', { name: 'Delete everything' }).click();
     await expect(options.locator('#danger-zone').getByText('Deleted. Attest keeps nothing')).toBeVisible();
+    await expect
+      .poll(() => scanProfileIndexedDb(extension.userDataDir, IMPORTED), { timeout: 15_000 })
+      .toMatchObject({ found: [], unparsed: [] });
 
     const after = await readLedger(options);
     // A grading batch the alarm runs on the new ledger records only its instant; nothing else comes back.

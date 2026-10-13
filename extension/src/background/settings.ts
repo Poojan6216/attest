@@ -21,6 +21,7 @@ import { LedgerTable, type RetentionSaveMessage, type SettingResult } from '../b
 import { type ReaderId, READERS } from '../config';
 import { readersOff, saveReaderOff } from '../ledger/consent';
 import type { LedgerDb } from '../ledger/db';
+import { deleteAndCompact, deleteLedgerCopy, flushChromeFiles } from '../ledger/rebuild';
 import { saveRetentionDays } from '../ledger/settings';
 import { deleteLedger, getLedger } from '../ledger/shared';
 import { log } from '../log';
@@ -84,7 +85,13 @@ export async function onLedgerWipe(deps: WipeDeps): Promise<SettingResult> {
   try {
     const off = await readersToKeepOff();
     await forgetKeys();
-    await deleteLedger();
+    // Chrome's files keep a deleted row until a compaction rewrites them (Sprint 6 close, security review SEC-1): the
+    // deletions are made so that Chrome compacts them away, and a rebuild's copy goes too (src/ledger/rebuild.ts).
+    await deleteAndCompact(async () => {
+      await deleteLedger();
+      await deleteLedgerCopy();
+    });
+    await flushChromeFiles();
     await (deps.clearStorage ?? clearBrowserStorage)();
     const db = await getLedger();
     for (const reader of off) await saveReaderOff(db, reader, true);
