@@ -246,3 +246,13 @@ test('the popup’s start load carries no cipher, which loads only for an encryp
     true,
   );
 });
+
+test('the build is a production build: no development JSX, no path of this machine (QA-2)', () => {
+  // Preact's development JSX passes each element's source file and place: its column key, and the file's absolute path.
+  const repository = path.resolve(import.meta.dirname, '../../..');
+  const developing = scripts(EXTENSION_PATH).filter((file) => {
+    const code = readFileSync(file, 'utf8');
+    return code.includes(repository) || /\bcolumnNumber\s*:/u.test(code);
+  });
+  expect(developing.map((file) => path.relative(EXTENSION_PATH, file))).toEqual([]);
+});

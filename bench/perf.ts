@@ -11,9 +11,6 @@
  * The grading pass's gate, 5,000 claims against 50,000 observations, is the core bench's (`gradingGatePassed`). The same
  * measures gate the end-to-end tests extension/tests/e2e/perf-gmail.spec.ts and perf-ledger.spec.ts.
  */
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { launchExtension } from '../extension/tests/e2e/support/extension';
 import { readTwice, timeSentPasses } from '../extension/tests/e2e/support/perf-gmail';
@@ -28,9 +25,7 @@ import {
 import { measurePopupPaint, medianOf } from '../extension/tests/e2e/support/popup-paint';
 import type { MetricValue } from './results';
 import { round } from './timing';
-
-const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
-const EXTENSION_DIR = path.join(BENCH_DIR, '../extension');
+import { buildExtension } from '../extension/tests/tools/build-extension';
 
 export const PERF_GMAIL_ROWS = 10_000;
 export const PERF_GMAIL_PASS_GATE_MS = 2_000;
@@ -90,6 +85,6 @@ async function monthMetrics(): Promise<Record<string, MetricValue>> {
 }
 
 export async function runPerfBench(): Promise<Readonly<Record<string, MetricValue>>> {
-  execFileSync('pnpm', ['build'], { cwd: EXTENSION_DIR, stdio: 'ignore' });
+  buildExtension();
   return { ...(await gmailMetrics()), ...(await monthMetrics()) };
 }

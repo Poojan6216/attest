@@ -7,7 +7,6 @@
  * An attack that works is reported, never hidden (sprint_6: publish the losses), so this bench has no gate of its own:
  * the sprint's gate reads its rows, and docs/attacks-that-work.md reports them.
  */
-import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +16,7 @@ import { type CaseRunner, type RedteamReport, runRedteam } from '../extension/te
 import type { StrategyRow } from '../extension/tests/redteam/outcome';
 import { startFixtureServer } from '../extension/tests/tools/serve-fixtures';
 import type { MetricValue } from './results';
+import { buildExtension } from '../extension/tests/tools/build-extension';
 
 const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
 const EXTENSION_DIR = path.join(BENCH_DIR, '../extension');
@@ -59,7 +59,7 @@ export function caseLines(report: RedteamReport): string[] {
 
 /** The browser runner: the extension built from this tree and the fixture server up, for the length of `use`. */
 async function withBrowser<T>(use: (runCase: CaseRunner) => Promise<T>): Promise<T> {
-  execFileSync('pnpm', ['build'], { cwd: EXTENSION_DIR, stdio: 'ignore' });
+  buildExtension();
   const server = await startFixtureServer();
   try {
     return await use((strategy, attackCase) => runAttackCase(strategy, attackCase, server.origin));

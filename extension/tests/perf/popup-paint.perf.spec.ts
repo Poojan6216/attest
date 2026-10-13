@@ -10,24 +10,22 @@
  * end-to-end workers pushed the first paint to 100-120 ms): it is timed here, with the other perf gates, serial and in
  * one process (vitest.perf.config.ts), never in the parallel end-to-end run.
  */
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { POPUP_RECEIPT_LIMIT } from '../../src/config';
 import { launchExtension, type LaunchedExtension } from '../e2e/support/extension';
 import { describePaints, measurePopupPaint, medianOf, seedReceipts } from '../e2e/support/popup-paint';
+import { buildExtension } from '../tools/build-extension';
 
 /** The popup's paint budget, from its navigation start (sprint_4 4.2). */
 const PAINT_GATE_MS = 100;
 const RUNS = 5;
-const EXTENSION_DIR = path.resolve(import.meta.dirname, '../..');
 
 let extension: LaunchedExtension | undefined;
 
 beforeAll(async () => {
-  execFileSync('pnpm', ['build'], { cwd: EXTENSION_DIR, stdio: 'ignore' });
+  buildExtension();
   extension = await launchExtension();
   await seedReceipts(extension);
 }, 300_000);
