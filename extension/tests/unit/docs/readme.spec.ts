@@ -9,9 +9,10 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { numbersIn, RESULT_VALUES, unsourced } from './public-numbers';
+
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const README = readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
-const RESULTS = readFileSync(path.join(REPO_ROOT, 'RESULTS.md'), 'utf8');
 
 /** The docs writer's order (agents/docs_writer.md), after the opening and the demo. */
 const ORDER = [
@@ -42,28 +43,6 @@ function section(heading: string): string {
   return README.slice(start, next === -1 ? undefined : next);
 }
 
-/** Every value RESULTS.md's tables hold that is a number. */
-const RESULT_VALUES: readonly number[] = [...RESULTS.matchAll(/^\| [A-Za-z0-9]+ \| ([^|]+) \|$/gmu)]
-  .map(([, value = '']) => value.trim())
-  .filter((value) => /^-?\d+(?:\.\d+)?$/u.test(value))
-  .map(Number);
-
-const held = (value: number): boolean => RESULT_VALUES.some((result) => Math.abs(result - value) < 1e-9);
-
-/**
- * The numbers written in `text`, a code span's, a link target's and a Chrome version's left out (a version Attest needs
- * is a requirement, not a figure): `[text, value, isPercentage]`.
- */
-function numbersIn(text: string): (readonly [string, number, boolean])[] {
-  const prose = text
-    .replace(/`[^`]*`/gu, '')
-    .replace(/\]\([^)]*\)/gu, ']')
-    .replace(/\bChrome \d+/gu, 'Chrome');
-  return [...prose.matchAll(/(?<![\w.§-])(\d+(?:\.\d+)?)(%?)(?![\w-])/gu)].map(
-    ([written, digits = '', percent]) => [written, Number(digits), percent === '%'],
-  );
-}
-
 describe('README.md', () => {
   it('says on its first screen what Attest cannot see, and links the attacks that still work', () => {
     expect(opening).toContain('**Attest cannot see everything.**');
@@ -84,11 +63,7 @@ describe('README.md', () => {
   it('writes in its opening, Results and Attacks that still work only numbers RESULTS.md holds', () => {
     expect(RESULT_VALUES.length).toBeGreaterThan(100);
     const text = [opening, section('Results'), section('Attacks that still work')].join('\n');
-    const written = numbersIn(text);
-    expect(written.length).toBeGreaterThan(20);
-    const unsourced = written
-      .filter(([, value, percent]) => !held(percent ? value / 100 : value))
-      .map(([raw]) => raw);
-    expect(unsourced).toEqual([]);
+    expect(numbersIn(text).length).toBeGreaterThan(20);
+    expect(unsourced(text)).toEqual([]);
   });
 });
