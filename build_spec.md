@@ -128,7 +128,7 @@ Don't re-litigate these. Change only with a `Decisions.md` entry that names the 
 | Package manager | **pnpm**. Node 22 LTS. |
 | Optional matcher model | **Chrome built-in on-device model (Prompt API)** first, if available on the user's Chrome. **BYO key** (Anthropic or OpenAI) second. Both off by default, both advisory only (Hard Rule 4). |
 | Telemetry backend | **FastAPI + MongoDB** on Railway. One endpoint. Strict Pydantic schema. Rate-limited. Public aggregate stats later. |
-| Encryption at rest | Optional passphrase: WebCrypto AES-GCM, key from PBKDF2 (600k iterations). Off by default; on = ledger unreadable without the passphrase. |
+| Encryption at rest | Optional passphrase: AES-GCM, key from PBKDF2 (600k iterations). Off by default; on = ledger unreadable without the passphrase. (Amended: AES-256-GCM is computed by `@noble/ciphers`, not WebCrypto, so rows seal inside IndexedDB transactions; the key is still WebCrypto's PBKDF2. Decisions [6.5] and [6.close], Hard Rules 2 and 9.) |
 | Grading policy | `policy/default.json`, versioned. Thresholds and windows live here, never in code. |
 | License | **Apache-2.0**. |
 | Repo | `github.com/Poojan6216/attest`, public from the first commit. |
