@@ -15,7 +15,7 @@ export function EncryptionStatement() {
       <ul class="list-disc space-y-1 pl-5 text-sm">
         <li>
           Sealed: addresses, subjects, amounts, merchants, what your agents claimed, your grants and marks,
-          and every receipt's detail.
+          every receipt's detail, and your own model key if you saved one.
         </li>
         <li>
           Not sealed: ids, hashes, dates, grades and states, which Attest needs to find your records, and your

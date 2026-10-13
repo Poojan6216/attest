@@ -20,6 +20,11 @@ export const CRYPTO_LOG_EVENTS = [
   'alarm.locked',
   'ui.unlock_failed',
   'options.crypto_failed',
+  // The person's own model key, sealed while encryption is on (Sprint 6 close, SEC-2; src/background/byo.ts).
+  'byo.key_opened',
+  'byo.key_sealed',
+  'byo.save_locked',
+  'byo.seal_failed',
   // Rebuilding the ledger's database (Sprint 6 close, security review SEC-1; src/background/rebuild.ts).
   'ledger.rebuilt',
   'ledger.rebuild_failed',

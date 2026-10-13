@@ -99,3 +99,32 @@ export function unwrapKey(outer: LedgerKey, wrapped: string): LedgerKey | undefi
     return undefined;
   }
 }
+
+/** Text `sealText` wrote: the sealing key's id, then the nonce and ciphertext, base64, joined by dots. */
+const SEALED_TEXT = /^([0-9a-f]{12})\.([A-Za-z0-9+/]+={0,2})\.([A-Za-z0-9+/]+={0,2})$/u;
+
+/**
+ * `text` sealed under `key` for `aad`, as text: the key's id, then the nonce and ciphertext, base64, joined by dots.
+ * The person's own model key is kept this way while encryption is on (src/background/byo.ts; Sprint 6 close, SEC-2).
+ */
+export function sealText(key: LedgerKey, aad: string, text: string): string {
+  const sealed = seal(key, aad, text);
+  return `${key.id}.${toBase64(sealed.iv)}.${toBase64(sealed.ct)}`;
+}
+
+/** The id of the key that sealed `value`, when it is text `sealText` wrote; undefined for anything else. */
+export function sealedTextKeyId(value: string): string | undefined {
+  return SEALED_TEXT.exec(value)?.[1];
+}
+
+/** The text `sealed` holds, opened with `key` for `aad`; undefined for a wrong key, or a changed or malformed value. */
+export function openText(key: LedgerKey, aad: string, sealed: string): string | undefined {
+  const [, id, iv, ct] = SEALED_TEXT.exec(sealed) ?? [];
+  if (id !== key.id || iv === undefined || ct === undefined) return undefined;
+  try {
+    const text = open(key, aad, { v: 1, k: id, iv: fromBase64(iv), ct: fromBase64(ct) });
+    return typeof text === 'string' ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}

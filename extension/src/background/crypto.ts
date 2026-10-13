@@ -38,6 +38,7 @@ import type { LedgerDb } from '../ledger/db';
 import { LedgerError } from '../ledger/errors';
 import { setKeySource } from '../ledger/shared';
 import { log } from '../log';
+import { sealSavedKey } from './byo';
 import { keepAwake, letSleep } from './keep-awake';
 import { rebuildLedger } from './rebuild';
 
@@ -83,11 +84,17 @@ export async function forgetKeys(): Promise<void> {
   await clearSessionKeys();
 }
 
-/** Keeps `keys` here and for the pages (none: locked), and reloads this worker's keyring with them. */
+/**
+ * Keeps `keys` here and for the pages (none: locked), reloads this worker's keyring with them, and keeps the person's
+ * saved model key as the ledger's state now asks (./byo.ts `sealSavedKey`; Sprint 6 close, SEC-2).
+ */
 async function hold(keys: HeldKeys, deps: CryptoDeps): Promise<void> {
   held = keys;
   await (keys.current === undefined ? clearSessionKeys() : writeSessionKeys(keys));
   await loadKeyring(await deps.db(), () => Promise.resolve(held));
+  await sealSavedKey().catch((error: unknown) => {
+    log.error('byo.seal_failed', { error });
+  });
   if (keys.current === undefined) letSleep();
   else keepAwake();
   deps.notify(['meta']);
