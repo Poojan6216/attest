@@ -32,6 +32,7 @@ Your knowledge of what your AI agents did. For each action an agent claims, in t
 - **What no open tab shows.** Messenger, phone calls, purchases without an email receipt, anything on mobile, and any account never opened in this browser are invisible, and their claims are UNVERIFIABLE (the [README](../README.md)'s known limitations).
 - **The agent's log.** The log you paste is the agent's claim. Attest grades it and never trusts it, but an action the log leaves out is found only by the UNASKED signals, at the rate the red team measured ([§5.2](#52-attribution-heuristics)).
 - **Which account an agent used.** Attest cannot see which Google account an agent acted through, so a Sent list of any account you open can vouch for a window ([§6](#6-assumptions)).
+- **Deleted files on the disk itself.** Chrome deletes the files it no longer uses without overwriting them. Attest rebuilds its database so that a copy of the profile holds no record as it was before encryption, and deletes so that Chrome compacts its files ([`privacy-architecture.md` §12](privacy-architecture.md#12-encryption-at-rest)), but a tool that recovers deleted files from the disk may still find an older copy. Full-disk encryption covers that; Attest cannot.
 
 ## 3. Who it defends against
 
@@ -56,7 +57,7 @@ The diagram ([`docs/assets/trust-boundaries.svg`](assets/trust-boundaries.svg)) 
 2. **Content script → service worker.** The typed bus ([`adapters.md` §9](adapters.md#9-message-bus)): every message is parsed on both ends; an observer's message is taken only from a page on that observer's own site; a command is taken only from an extension page. The service worker is the ledger's one writer, and grades with a pure core that reads no clock and no page (Hard Rule 4).
 3. **Browser → network.** Crossed only by an option you turn on: your own model key, to that model company, and the anonymous usage numbers, to Attest's server. Each adds one host, the CSP allows no other, and no redirect is followed ([`privacy-architecture.md` §1](privacy-architecture.md#1-what-leaves-the-browser)).
 
-The ledger at rest is IndexedDB in the extension's own origin: websites and other extensions cannot read it, and anyone who can read your Chrome profile can, unless encryption at rest is on ([`privacy-architecture.md` §2](privacy-architecture.md#2-what-attest-cannot-hide), [§12](privacy-architecture.md#12-encryption-at-rest)).
+The ledger at rest is IndexedDB in the extension's own origin: websites and other extensions cannot read it, and anyone who can read your Chrome profile can, unless encryption at rest is on ([`privacy-architecture.md` §2](privacy-architecture.md#2-what-attest-cannot-hide), [§12](privacy-architecture.md#12-encryption-at-rest)). With it on, the profile's files hold sealed rows only: once a job has sealed every row, Attest rebuilds its database, so Chrome's files keep no copy of a row as it was before (red team 13, fixed in the Sprint 6 close).
 
 ## 5. The weakest links
 
@@ -97,7 +98,7 @@ The red team attacked Attest as an agent that wants to look good, a vendor that 
 | 2 | A true send claimed in other words | UNVERIFIABLE, never NOT FOUND | LOW | [§5.3](#53-coverage-gaps) |
 | 8 | A false claim buried under newer sends | UNVERIFIABLE, never NOT FOUND | LOW | [§5.3](#53-coverage-gaps) |
 
-Their rates, commits and status are in [`docs/attacks-that-work.md`](attacks-that-work.md#the-red-team-sprint-6). Caught: claim inflation (1), look-alike addresses (3), time tricks (4), DOM spoofing (5), prompt injection into the model (6), the other coverage lies (7), the other starvation cases (8), duplicate claims (9), grant bypass (11), data exfiltration (12, by the secret-seed test), encryption at rest (13) and forged evidence (14). What could not be tested, and why, is listed there too.
+Their rates, commits and status are in [`docs/attacks-that-work.md`](attacks-that-work.md#the-red-team-sprint-6). Caught: claim inflation (1), look-alike addresses (3), time tricks (4), DOM spoofing (5), prompt injection into the model (6), the other coverage lies (7), the other starvation cases (8), duplicate claims (9), grant bypass (11), data exfiltration (12, by the secret-seed test), encryption at rest (13; its reading of the profile's files fixed in the Sprint 6 close) and forged evidence (14). What could not be tested, and why, is listed there too.
 
 ## 8. How each Hard Rule holds
 
