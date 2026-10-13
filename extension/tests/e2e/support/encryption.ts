@@ -7,22 +7,13 @@
 import { expect, type Page } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
+import { SEALED_TABLES } from '../../../src/config-crypto';
 import type { LaunchedExtension } from './extension';
 
 declare const chrome: WxtBrowser;
 
-/** The tables whose rows are sealed (src/config-crypto.ts SEALED_TABLES), written out: the page evaluates this alone. */
-const SEALED = [
-  'requests',
-  'claims',
-  'observations',
-  'grants',
-  'receipts',
-  'calendarSnapshots',
-  'receiptInputs',
-  'digests',
-  'modelAnswers',
-];
+/** The tables whose rows are sealed, from the code itself, passed to the page (tech review TECH-13). */
+const SEALED = [...SEALED_TABLES];
 
 export interface AtRest {
   /** Rows of the sealed tables stored sealed, and stored plain. */

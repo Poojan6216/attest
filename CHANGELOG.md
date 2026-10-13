@@ -80,6 +80,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - While encryption is on, your own model key is sealed too, under the same key: sealed when you turn encryption on, sealed again under a new passphrase, opened for good when you turn it off. While Attest is locked it does not open and nothing goes to the model, and a key cannot be saved until you unlock ([docs/privacy-architecture.md §12](docs/privacy-architecture.md#12-encryption-at-rest)).
 - An export of an encrypted ledger leaves out the encryption state (its salt, rounds and key check), so the file carries no way to test a guess of your passphrase.
 - The side panel's grade filter and the weekly digest say what an Unasked receipt cannot catch: a send is marked likely Unasked only when two different signs meet near it, so many sends an agent makes without claiming them are never flagged ([docs/attacks-that-work.md](docs/attacks-that-work.md), strategy 10).
+- An encryption job that stops (a record that does not open, or storage that refuses a write) says so and why in the options page, with Try again; Attest also tries it again on its own a few times, and Lock now stays available while a job runs.
 
 ### Changed
 

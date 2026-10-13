@@ -23,7 +23,14 @@ import { healthReports } from '../ledger/views';
 import { onCalendarSnapshot } from './calendar-pass';
 import { type ImportContext, onClaimsImport } from './claims-import';
 import { onByoForget, onByoSave } from './byo';
-import { onCryptoChange, onCryptoDisable, onCryptoEnable, onCryptoLock, onCryptoUnlock } from './crypto';
+import {
+  onCryptoChange,
+  onCryptoDisable,
+  onCryptoResume,
+  onCryptoEnable,
+  onCryptoLock,
+  onCryptoUnlock,
+} from './crypto';
 import { onFlagSet } from './flags';
 import { lockedAck } from './locked';
 import { onGrantSave } from './grant-save';
@@ -111,6 +118,7 @@ export function createHandlers(
     'crypto.lock': () => onCryptoLock(settings),
     'crypto.change': (message) => onCryptoChange(message, settings),
     'crypto.disable': (message) => onCryptoDisable(message, settings),
+    'crypto.resume': () => onCryptoResume(settings),
     'adapter.health': async (message, sender) =>
       wrongSite(sender, message.health.adapterId, message.type) ??
       (await readerOff(message.health.adapterId, readers)) ??

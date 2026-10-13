@@ -27,6 +27,7 @@ import { getLedger } from '../ledger/repo';
 import type { LedgerTable } from '../bus/messages';
 import { BROWSER_ALERTS, deliverAlerts } from './alerts';
 import { autoCheckGmail, browserAutoCheck } from './auto-check';
+import { resumeStoppedWork } from './crypto';
 import { browserDigest, runWeeklyDigest } from './digest';
 import { ledgerLocked } from './locked';
 import { syncReaders } from './readers';
@@ -85,16 +86,19 @@ export async function runGraceBatch(
  * runs on its own, and a failure is logged under its own event; the next alarm tries again.
  */
 export async function graceUpkeep(): Promise<void> {
-  const [alerts, alarms, readers] = await Promise.allSettled([
+  const [alerts, alarms, readers, crypto] = await Promise.allSettled([
     getLedger().then(async (db) =>
       (await pendingAlertCount(db)) > 0 ? deliverAlerts(db, BROWSER_ALERTS) : 0,
     ),
     ensureAlarms(),
     syncReaders(),
+    // A stopped encryption job, or a rebuild due, tried again (./crypto.ts; Sprint 6 close, tech review TECH-2).
+    resumeStoppedWork({ db: getLedger, notify: announce(nowIso) }),
   ]);
   if (alerts.status === 'rejected') log.error('alerts.deliver_failed', { error: alerts.reason });
   if (alarms.status === 'rejected') log.error('alarm.ensure_failed', { error: alarms.reason });
   if (readers.status === 'rejected') log.error('readers.sync_failed', { error: readers.reason });
+  if (crypto.status === 'rejected') log.error('crypto.job_failed', { error: crypto.reason });
 }
 
 /** The weekly digest (sprint_4 4.7; ./digest.ts), whose handler sets the next one. */

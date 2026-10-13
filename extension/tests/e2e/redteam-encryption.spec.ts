@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
+import type { WxtBrowser } from 'wxt/browser';
 
 import {
   LOCKED_TEXT,
@@ -31,6 +32,8 @@ import { MINUTE_MS, openSent } from './support/priya';
 import { scanProfileIndexedDb } from './support/profile-files';
 import { startVendorSession, endVendorSession, withVendorSession } from './support/session';
 import { FIXTURE_TIME_ZONE, readLedger } from './support/vendor-pages';
+
+declare const chrome: WxtBrowser;
 
 /** Invented passphrases only. The first carries an accent, written composed; a decomposed copy is the same one. */
 const PASSPHRASE = 'un café invented passphrase';
@@ -61,11 +64,18 @@ test('strategy 13: a copy of the profile opens nothing without the passphrase', 
     const popup = await copy.openExtensionPage('popup.html');
     await expect(popup.getByText(LOCKED_TEXT)).toBeVisible();
     expect(await ledgerAtRest(popup, SENT_VALUES)).toMatchObject({ plain: 0, found: [] });
+    // Each near miss answered on its own, never read off the answer before it (tech review TECH-13); then one through
+    // the popup's prompt, as a person types it.
     for (const wrong of WRONG) {
-      await unlockIn(popup, wrong);
-      await expect(popup.getByText('That passphrase does not open your records')).toBeVisible();
-      await expect(popup.getByText(LOCKED_TEXT)).toBeVisible();
+      const answer: unknown = await popup.evaluate(
+        (passphrase) => chrome.runtime.sendMessage({ type: 'crypto.unlock', passphrase }),
+        wrong,
+      );
+      expect(answer, wrong).toEqual({ ok: false, code: 'wrong_passphrase' });
     }
+    await unlockIn(popup, WRONG[0] ?? '');
+    await expect(popup.getByText('That passphrase does not open your records')).toBeVisible();
+    await expect(popup.getByText(LOCKED_TEXT)).toBeVisible();
     expect(await ledgerAtRest(popup, SENT_VALUES)).toMatchObject({ plain: 0, found: [] });
     // The passphrase itself, typed decomposed, opens the copy: encryption at rest stops a copy without it, not with it.
     await unlockIn(popup, SAME_DECOMPOSED);

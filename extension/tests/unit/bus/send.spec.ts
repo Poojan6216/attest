@@ -88,6 +88,7 @@ function typedButInvalid(): Record<BusMessageType, BusMessage> {
     'crypto.lock': { type: 'crypto.lock', ...{ passphrase: SECRET } },
     'crypto.change': { ...VALID['crypto.change'], next: ' '.repeat(12) },
     'crypto.disable': { type: 'crypto.disable', passphrase: 'x'.repeat(1_025) },
+    'crypto.resume': { type: 'crypto.resume', ...{ passphrase: SECRET } },
   };
 }
 

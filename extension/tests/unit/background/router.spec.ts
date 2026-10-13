@@ -56,6 +56,7 @@ describe('createHandlers', () => {
         'crypto.disable',
         'crypto.enable',
         'crypto.lock',
+        'crypto.resume',
         'crypto.unlock',
         'flag.set',
         'grant.save',

@@ -8,7 +8,7 @@
 import type { ReaderId } from '../config';
 import { SEALED_TABLES } from '../config-crypto';
 import { isLocked } from '../crypto/keyring';
-import { type CryptoJob, isGuarded, readCryptoState } from '../ledger/crypto-state';
+import { type CryptoJob, isGuarded, type JobFailure, readCryptoState } from '../ledger/crypto-state';
 import { type Flags, readersOff, readFlags } from '../ledger/consent';
 import { readRebuildMark } from '../ledger/rebuild-mark';
 import { readRetentionDays, type RetentionChoice } from '../ledger/settings';
@@ -47,8 +47,16 @@ export interface CryptoStatus {
   readonly on: boolean;
   /** On, and this page holds no key: nothing sealed can be read. */
   readonly locked: boolean;
-  /** The job rewriting the rows, if one is under way: which, and which table of how many it is in. */
-  readonly job?: { readonly kind: CryptoJob; readonly table: number; readonly of: number };
+  /**
+   * The job rewriting the rows, if one is under way: which, which table of how many it is in, and, when its last step
+   * failed, why (tech review TECH-2): it has stopped, and waits for the grace alarm or the person's Try again.
+   */
+  readonly job?: {
+    readonly kind: CryptoJob;
+    readonly table: number;
+    readonly of: number;
+    readonly stopped?: JobFailure;
+  };
   /**
    * The ledger's database is being rebuilt after a job, or will be (Sprint 6 close, security review SEC-1;
    * src/ledger/rebuild.ts): reads wait meanwhile.
@@ -71,6 +79,7 @@ export async function loadCryptoStatus(): Promise<CryptoStatus> {
           kind: state.job,
           table: Math.max(0, SEALED_TABLES.indexOf(state.jobTable ?? '')) + 1,
           of: SEALED_TABLES.length,
+          ...(state.jobFailed === undefined ? {} : { stopped: state.jobFailed }),
         };
   return {
     on,

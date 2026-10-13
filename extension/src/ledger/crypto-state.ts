@@ -41,7 +41,18 @@ export const CRYPTO_KEYS = Object.freeze({
    * close, security review SEC-1), so Chrome's files keep no older copy of a row.
    */
   REBUILD: 'crypto.rebuild',
+  /**
+   * Why the job's last step failed, as a word, never a value (`unreadable`: a row did not open; `storage`: IndexedDB
+   * refused), and how many steps have failed since the job started or the person asked it to try again (tech review
+   * TECH-2): the grace alarm retries it while fewer than MAX_JOB_TRIES have.
+   */
+  JOB_FAILED: 'crypto.jobFailed',
+  JOB_TRIES: 'crypto.jobTries',
 });
+
+/** Why a job's step failed (`CRYPTO_KEYS.JOB_FAILED`). */
+export type JobFailure = 'unreadable' | 'storage';
+const isJobFailure = (value: unknown): value is JobFailure => value === 'unreadable' || value === 'storage';
 
 export type CryptoJob = 'seal' | 'reseal' | 'unseal';
 export const isCryptoJob = (value: unknown): value is CryptoJob =>
@@ -60,6 +71,9 @@ export interface CryptoState {
   readonly jobAfter?: string;
   /** A job sealed every row, and the ledger's database is still to be rebuilt. */
   readonly rebuild?: true;
+  /** Why the job's last step failed, and how many have failed in a row (`CRYPTO_KEYS.JOB_FAILED`). */
+  readonly jobFailed?: JobFailure;
+  readonly jobTries?: number;
 }
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
@@ -70,6 +84,7 @@ export async function readCryptoState(db: LedgerDb): Promise<CryptoState> {
   const value = (key: string): unknown => rows.find((row) => row.key === key)?.value;
   const iterations = value(CRYPTO_KEYS.ITERATIONS);
   const job = value(CRYPTO_KEYS.JOB);
+  const tries = value(CRYPTO_KEYS.JOB_TRIES);
   const fields = {
     keyId: text(value(CRYPTO_KEYS.KEY_ID)),
     salt: text(value(CRYPTO_KEYS.SALT)),
@@ -80,6 +95,10 @@ export async function readCryptoState(db: LedgerDb): Promise<CryptoState> {
     jobTable: text(value(CRYPTO_KEYS.JOB_TABLE)),
     jobAfter: text(value(CRYPTO_KEYS.JOB_AFTER)),
     rebuild: value(CRYPTO_KEYS.REBUILD) === true ? (true as const) : undefined,
+    jobFailed: isJobFailure(value(CRYPTO_KEYS.JOB_FAILED))
+      ? (value(CRYPTO_KEYS.JOB_FAILED) as JobFailure)
+      : undefined,
+    jobTries: typeof tries === 'number' && Number.isSafeInteger(tries) && tries > 0 ? tries : undefined,
   };
   const present = Object.entries(fields).filter(([, field]) => field !== undefined);
   return { on: value(CRYPTO_KEYS.SEALING) === true, ...Object.fromEntries(present) };

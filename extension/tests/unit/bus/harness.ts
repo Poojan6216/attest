@@ -21,6 +21,7 @@ import {
   CoveragePingMessage,
   CryptoChangeMessage,
   CryptoDisableMessage,
+  CryptoResumeMessage,
   CryptoEnableMessage,
   CryptoLockMessage,
   CryptoUnlockMessage,
@@ -215,6 +216,8 @@ export const IMPORTED_CLAIM: Claim = (() => {
 
 /** An invented passphrase (sprint_6 6.5): no test uses a real one. */
 export const PASSPHRASE = 'an invented passphrase';
+/** A passphrase past the longest taken (MAX_PASSPHRASE_LENGTH), made of the secret. */
+export const TOO_LONG_SECRET = SECRET.repeat(Math.ceil(1_025 / SECRET.length));
 
 /** One valid message per type. The mapped type makes the compiler demand every one. */
 export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
@@ -320,6 +323,7 @@ export const VALID: { readonly [T in BusMessageType]: BusMessageOf<T> } = {
     next: 'another invented passphrase',
   }),
   'crypto.disable': CryptoDisableMessage.parse({ type: 'crypto.disable', passphrase: PASSPHRASE }),
+  'crypto.resume': CryptoResumeMessage.parse({ type: 'crypto.resume' }),
 };
 
 /**
@@ -361,9 +365,12 @@ export const MALFORMED: Readonly<Record<BusMessageType, unknown>> = {
   'byo.forget': { type: 'byo.forget', key: SECRET },
   'telemetry.send': { type: 'telemetry.send', payload: SECRET },
   'ledger.wipe': { type: 'ledger.wipe', confirm: SECRET },
-  'crypto.enable': { type: 'crypto.enable', passphrase: 'short' },
+  // Each carries the secret, so a drop that logged it would fail the round trip (tech review TECH-13): a passphrase made
+  // of it past the longest taken, a smuggled field, or the current passphrase beside a new one of spaces only.
+  'crypto.enable': { type: 'crypto.enable', passphrase: TOO_LONG_SECRET },
   'crypto.unlock': { ...VALID['crypto.unlock'], key: SECRET },
   'crypto.lock': { type: 'crypto.lock', passphrase: SECRET },
-  'crypto.change': { ...VALID['crypto.change'], next: ' '.repeat(12) },
-  'crypto.disable': { type: 'crypto.disable', passphrase: '' },
+  'crypto.change': { ...VALID['crypto.change'], passphrase: SECRET, next: ' '.repeat(12) },
+  'crypto.disable': { type: 'crypto.disable', passphrase: TOO_LONG_SECRET },
+  'crypto.resume': { type: 'crypto.resume', passphrase: SECRET },
 };

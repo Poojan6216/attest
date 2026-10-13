@@ -40,6 +40,7 @@ import { CRYPTO_PREFIX, readCryptoState } from '../../../src/ledger/crypto-state
 import { beginResealing, beginUnsealing } from '../../../src/ledger/crypto-writes';
 import { closeLedger, getClaim, getLedger, getRequest } from '../../../src/ledger/repo';
 import { deleteLedger } from '../../../src/ledger/shared';
+import { type LogRecord, setLogSink } from '../../../src/log';
 import { expectLedgerError, makeClaim, pinClock, releaseClock } from '../ledger/fixtures';
 import { rawRows, textsIn } from '../crypto/raw-store';
 import { CLAIM, CONTENT, REQUEST, SEALED_STORES, seedLedger } from './crypto-fixtures';
@@ -280,3 +281,34 @@ async function upsertAnother(): Promise<void> {
   const { upsertClaim } = await import('../../../src/ledger/repo');
   await upsertClaim(await getLedger(), makeClaim({ rawHash: 'b'.repeat(64) }));
 }
+
+describe('the logs (Hard Rule 10; tech review TECH-13, QA-6)', () => {
+  it('hold no passphrase over turning on, a wrong unlock, an unlock, a change and turning off', async () => {
+    const records: LogRecord[] = [];
+    const restore = setLogSink((record) => {
+      records.push(record);
+    });
+    try {
+      await enable();
+      expect(await onCryptoLock(deps)).toEqual({ ok: true });
+      const wrong = 'a wrong invented passphrase';
+      expect(await onCryptoUnlock({ type: 'crypto.unlock', passphrase: wrong }, deps)).toMatchObject({
+        ok: false,
+      });
+      expect(await onCryptoUnlock({ type: 'crypto.unlock', passphrase: FIRST }, deps)).toEqual({ ok: true });
+      expect(await onCryptoChange({ type: 'crypto.change', passphrase: FIRST, next: SECOND }, deps)).toEqual({
+        ok: true,
+      });
+      await resumeCryptoJob(deps);
+      expect(await onCryptoDisable({ type: 'crypto.disable', passphrase: SECOND }, deps)).toEqual({
+        ok: true,
+      });
+      await resumeCryptoJob(deps);
+      const logged = JSON.stringify(records);
+      expect(records.length).toBeGreaterThan(0);
+      for (const passphrase of [FIRST, SECOND, wrong]) expect(logged).not.toContain(passphrase);
+    } finally {
+      restore();
+    }
+  });
+});

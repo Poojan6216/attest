@@ -24,6 +24,7 @@ import {
   LEDGER_IV_BYTES,
   LEDGER_KDF_ITERATIONS,
   LEDGER_SALT_BYTES,
+  MAX_JOB_TRIES,
   MAX_KDF_ITERATIONS,
   MIN_KDF_ITERATIONS,
 } from '../config-crypto';
@@ -41,7 +42,13 @@ import {
   type CryptoJob,
   type CryptoState,
 } from '../ledger/crypto-state';
-import { beginResealing, beginSealing, beginUnsealing } from '../ledger/crypto-writes';
+import {
+  beginResealing,
+  beginSealing,
+  beginUnsealing,
+  clearJobFailure,
+  recordJobFailure,
+} from '../ledger/crypto-writes';
 import type { LedgerDb } from '../ledger/db';
 import { LedgerError } from '../ledger/errors';
 import { setKeySource } from '../ledger/shared';
@@ -301,15 +308,59 @@ async function runJob(deps: CryptoDeps): Promise<void> {
   }
 }
 
+/**
+ * A step that failed for any reason but the lock (tech review TECH-2): recorded in `meta`, why as a word, so the page
+ * says the job stopped, and the grace alarm retries it, up to MAX_JOB_TRIES failures in a row.
+ */
+async function jobFailed(error: unknown, deps: CryptoDeps): Promise<void> {
+  log.error('crypto.job_failed', { error });
+  const reason = error instanceof LedgerError && error.code === 'unreadable' ? 'unreadable' : 'storage';
+  try {
+    await recordJobFailure(await deps.db(), reason);
+  } catch (recordError) {
+    log.error('crypto.job_record_failed', { error: recordError });
+  }
+  deps.notify(['meta']);
+}
+
 /** Starts the job under way, if any and not already running; a lock pauses it, and the next unlock resumes it. */
 export function resumeCryptoJob(deps: CryptoDeps): Promise<void> {
   job ??= runJob(deps)
-    .catch((error: unknown) => {
+    .catch(async (error: unknown) => {
       if (error instanceof LedgerError && error.code === 'locked') log.info('crypto.job_paused');
-      else log.error('crypto.job_failed', { error });
+      else await jobFailed(error, deps);
     })
     .finally(() => {
       job = undefined;
     });
   return job;
+}
+
+/** Tries a stopped job again at the person's word: the failures counted so far go, and the job resumes (TECH-2). */
+export function onCryptoResume(deps: CryptoDeps): Promise<CryptoResult> {
+  return oneAtATime('crypto.resume', async () => {
+    if (held.current === undefined) return refused('failed');
+    const db = await deps.db();
+    if ((await readCryptoState(db)).job === undefined) return OK;
+    await clearJobFailure(db);
+    deps.notify(['meta']);
+    log.info('crypto.job_resumed');
+    void resumeCryptoJob(deps);
+    return OK;
+  });
+}
+
+/**
+ * At each grace alarm while the ledger is unlocked (./alarms.ts `graceUpkeep`; tech review TECH-2): a job recorded and
+ * not running resumes, while fewer than MAX_JOB_TRIES of its steps have failed in a row; then it waits for the person's
+ * Try again. And a rebuild of the ledger's database that is due, with no job under way, runs (./rebuild.ts).
+ */
+export async function resumeStoppedWork(deps: CryptoDeps): Promise<void> {
+  if (held.current === undefined || job !== undefined) return;
+  const state = await readCryptoState(await deps.db());
+  if (state.job !== undefined) {
+    if ((state.jobTries ?? 0) < MAX_JOB_TRIES) await resumeCryptoJob(deps);
+    return;
+  }
+  if (state.rebuild === true) await rebuildLedger(deps);
 }

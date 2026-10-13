@@ -27,7 +27,7 @@ describe('BUS_MESSAGE_TYPES', () => {
   it('is frozen, so no consumer can reorder or extend it', () => {
     expect(Object.isFrozen(BUS_MESSAGE_TYPES)).toBe(true);
     expect(() => Reflect.apply(Array.prototype.push, BUS_MESSAGE_TYPES, ['ledger.erase'])).toThrow(TypeError);
-    expect(BUS_MESSAGE_TYPES).toHaveLength(24);
+    expect(BUS_MESSAGE_TYPES).toHaveLength(25);
   });
 });
 
@@ -45,6 +45,7 @@ const EXPECTED_TYPES = [
   'crypto.disable',
   'crypto.enable',
   'crypto.lock',
+  'crypto.resume',
   'crypto.unlock',
   'flag.set',
   'grant.save',

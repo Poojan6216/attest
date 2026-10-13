@@ -31,6 +31,7 @@ import {
   type CryptoEnableMessage,
   type CryptoLockMessage,
   type CryptoResult,
+  type CryptoResumeMessage,
   type CryptoUnlockMessage,
   type TelemetrySendResult,
   type ClaimsImportResult,
@@ -199,7 +200,8 @@ export async function sendCrypto(
     | CryptoUnlockMessage
     | CryptoLockMessage
     | CryptoChangeMessage
-    | CryptoDisableMessage,
+    | CryptoDisableMessage
+    | CryptoResumeMessage,
 ): Promise<CryptoResult> {
   return sendCommand(message);
 }

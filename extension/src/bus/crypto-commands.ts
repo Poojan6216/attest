@@ -1,7 +1,8 @@
 /**
  * The commands an extension page sends for the ledger's encryption at rest (sprint_6 6.5; src/background/crypto.ts):
  * turn it on with a passphrase (`crypto.enable`), unlock the ledger (`crypto.unlock`), lock it now (`crypto.lock`),
- * change the passphrase (`crypto.change`), and turn it off (`crypto.disable`), each answered with a `CryptoResult`.
+ * change the passphrase (`crypto.change`), turn it off (`crypto.disable`), and try a stopped job again
+ * (`crypto.resume`; Sprint 6 close, tech review TECH-2), each answered with a `CryptoResult`.
  * Only an extension page may send one (src/bus/listen.ts `EXTENSION_PAGE_ONLY`): a content script never sees a
  * passphrase. A passphrase goes only to Attest's own contexts: Chrome hands a page's message to its other open pages
  * too, which drop it, and the service worker alone acts on it, deriving the key and logging neither (Hard Rule 10;
@@ -30,6 +31,8 @@ export const CryptoUnlockMessage = z.strictObject({
   passphrase: Passphrase,
 });
 export const CryptoLockMessage = z.strictObject({ type: z.literal('crypto.lock') });
+/** Try the job again after it stopped (tech review TECH-2): no passphrase, the ledger already unlocked. */
+export const CryptoResumeMessage = z.strictObject({ type: z.literal('crypto.resume') });
 export const CryptoChangeMessage = z.strictObject({
   type: z.literal('crypto.change'),
   passphrase: Passphrase,
@@ -60,6 +63,7 @@ export const CRYPTO_COMMAND_RESULTS = Object.freeze({
   'crypto.lock': CryptoResult,
   'crypto.change': CryptoResult,
   'crypto.disable': CryptoResult,
+  'crypto.resume': CryptoResult,
 } as const);
 
 /** The commands' types, for src/bus/messages.ts `BusMessageType`. */
@@ -69,6 +73,7 @@ export const CRYPTO_COMMAND_TYPES = [
   'crypto.lock',
   'crypto.change',
   'crypto.disable',
+  'crypto.resume',
 ] as const;
 
 /** The commands' schemas, for the bus union. */
@@ -78,6 +83,7 @@ export const CRYPTO_COMMANDS = [
   CryptoLockMessage,
   CryptoChangeMessage,
   CryptoDisableMessage,
+  CryptoResumeMessage,
 ] as const;
 
 export type CryptoEnableMessage = z.infer<typeof CryptoEnableMessage>;
@@ -85,6 +91,7 @@ export type CryptoUnlockMessage = z.infer<typeof CryptoUnlockMessage>;
 export type CryptoLockMessage = z.infer<typeof CryptoLockMessage>;
 export type CryptoChangeMessage = z.infer<typeof CryptoChangeMessage>;
 export type CryptoDisableMessage = z.infer<typeof CryptoDisableMessage>;
+export type CryptoResumeMessage = z.infer<typeof CryptoResumeMessage>;
 export type CryptoCommand = (typeof CRYPTO_COMMAND_TYPES)[number];
 export type CryptoCode = z.infer<typeof CryptoCode>;
 export type CryptoResult = z.infer<typeof CryptoResult>;

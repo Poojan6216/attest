@@ -226,7 +226,7 @@ test('a DOM change makes another pass; the user-activity flag follows real input
 /** How long the page below changes, 100 times a second (sprint_6 6.4). */
 const CHURN_MS = 6_000;
 
-test('under 100 DOM changes a second the skeleton reads once per max wait, and still reads (sprint_6 6.4)', async () => {
+test('under a page changing every 10 ms (100 a second asked, more than 50 held) the skeleton reads once per max wait, and still reads (sprint_6 6.4)', async () => {
   const page = await open('synthetic-observer.html');
   await expect.poll(async () => types(await posts(page)), { timeout: 5_000 }).toContain('coverage.ping');
   const start = await page.evaluate(() => performance.now());
@@ -253,6 +253,8 @@ test('under 100 DOM changes a second the skeleton reads once per max wait, and s
   console.log(
     `[observer-batching] ${String(changes)} changes in ${String(CHURN_MS)} ms: ${String(passes)} passes`,
   );
+  // The page asks for 100 changes a second; a loaded machine's timers give fewer, so this holds more than 50 a second,
+  // which the title says (Sprint 6 close, tech review TECH-13).
   expect(changes).toBeGreaterThan(CHURN_MS / 20);
   // At most one pass per max wait while the page never settles, and at least one each max wait but the last.
   expect(passes).toBeLessThanOrEqual(Math.ceil(CHURN_MS / OBSERVER_MAX_WAIT_MS) + 1);

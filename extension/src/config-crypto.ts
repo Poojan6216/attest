@@ -37,6 +37,11 @@ export const SEALED_TABLES: readonly string[] = Object.freeze([
 /** Rows a sealing job rewrites per transaction, and so per step it resumes from. */
 export const SEAL_JOB_PAGE = 200;
 /**
+ * Failed steps of a job, in a row, after which the grace alarm stops retrying it and waits for the person's Try again
+ * (tech review TECH-2): a fault that passes is retried; one that stays is said, never retried for ever.
+ */
+export const MAX_JOB_TRIES = 3;
+/**
  * While the ledger is unlocked, how often the service worker calls a cheap extension API, which restarts Chrome's
  * 30-second idle timer (Chrome 110 and later), so it is not stopped, and the ledger locked, while the person uses it
  * (src/background/keep-awake.ts).

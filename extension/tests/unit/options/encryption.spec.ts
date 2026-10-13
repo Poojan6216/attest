@@ -176,3 +176,37 @@ describe('a damaged key record (Sprint 6 close, SEC-6)', () => {
     expect(text()).not.toMatch(/try again/iu);
   });
 });
+
+describe('a job that stopped (Sprint 6 close, tech review TECH-2)', () => {
+  const button = (name: string) =>
+    [...root.querySelectorAll('button')].find((each) => each.textContent.trim() === name);
+
+  it('says it stopped and why, never progress, and Try again sends crypto.resume', async () => {
+    const { sources, send } = sourcesOf({
+      on: true,
+      locked: false,
+      job: { kind: 'reseal', table: 3, of: 9, stopped: 'unreadable' },
+    });
+    await show(sources);
+    expect(text()).toContain(
+      'Sealing your records again under the new passphrase stopped at table 3 of 9: a record did not open with its key.',
+    );
+    expect(text()).not.toContain('You can keep using Attest meanwhile');
+    await act(() => {
+      button('Try again')?.click();
+    });
+    await settle();
+    expect(send).toHaveBeenCalledWith({ type: 'crypto.resume' });
+  });
+
+  it('offers Lock now while a job runs, and nothing that would be refused as busy', async () => {
+    const { sources, send } = sourcesOf({ on: true, locked: false, job: { kind: 'seal', table: 2, of: 9 } });
+    await show(sources);
+    expect(button('Change passphrase')).toBeUndefined();
+    await act(() => {
+      button('Lock now')?.click();
+    });
+    await settle();
+    expect(send).toHaveBeenCalledWith({ type: 'crypto.lock' });
+  });
+});

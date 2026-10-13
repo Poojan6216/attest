@@ -6,7 +6,7 @@
  * check, and the key before sealed under the new one.
  */
 import { SEALED_TABLES } from '../config-crypto';
-import { CRYPTO_KEYS, CRYPTO_PREFIX, type CryptoJob } from './crypto-state';
+import { CRYPTO_KEYS, CRYPTO_PREFIX, type CryptoJob, type JobFailure, readCryptoState } from './crypto-state';
 import type { LedgerDb } from './db';
 import { MetaEntry } from './types';
 
@@ -35,7 +35,13 @@ async function startJob(
 ): Promise<void> {
   await db.transaction('rw', db.meta, async () => {
     // A rebuild due is due again once this job ends, or not at all once encryption is off (./rebuild.ts).
-    await db.meta.bulkDelete([CRYPTO_KEYS.JOB_AFTER, CRYPTO_KEYS.PREVIOUS, CRYPTO_KEYS.REBUILD]);
+    await db.meta.bulkDelete([
+      CRYPTO_KEYS.JOB_AFTER,
+      CRYPTO_KEYS.PREVIOUS,
+      CRYPTO_KEYS.REBUILD,
+      CRYPTO_KEYS.JOB_FAILED,
+      CRYPTO_KEYS.JOB_TRIES,
+    ]);
     await putMeta(db, { ...entries, [CRYPTO_KEYS.JOB]: job, [CRYPTO_KEYS.JOB_TABLE]: FIRST_TABLE });
   });
 }
@@ -82,6 +88,21 @@ export async function finishJob(db: LedgerDb, job: CryptoJob): Promise<void> {
     CRYPTO_KEYS.JOB_TABLE,
     CRYPTO_KEYS.JOB_AFTER,
     CRYPTO_KEYS.PREVIOUS,
+    CRYPTO_KEYS.JOB_FAILED,
+    CRYPTO_KEYS.JOB_TRIES,
   ]);
   await putMeta(db, { [CRYPTO_KEYS.REBUILD]: true });
+}
+
+/** A step of the job failed (tech review TECH-2): why, and one more try failed in a row. */
+export async function recordJobFailure(db: LedgerDb, reason: JobFailure): Promise<void> {
+  await db.transaction('rw', db.meta, async () => {
+    const tries = (await readCryptoState(db)).jobTries ?? 0;
+    await putMeta(db, { [CRYPTO_KEYS.JOB_FAILED]: reason, [CRYPTO_KEYS.JOB_TRIES]: tries + 1 });
+  });
+}
+
+/** The person asked the job to try again: the failure and its count go. */
+export async function clearJobFailure(db: LedgerDb): Promise<void> {
+  await db.meta.bulkDelete([CRYPTO_KEYS.JOB_FAILED, CRYPTO_KEYS.JOB_TRIES]);
 }

@@ -73,6 +73,7 @@ const SENDER_OF: Readonly<Record<BusMessageType, () => MessageSender>> = {
   'crypto.lock': () => extensionPage('/options.html'),
   'crypto.change': () => extensionPage('/options.html'),
   'crypto.disable': () => extensionPage('/options.html'),
+  'crypto.resume': () => extensionPage('/options.html'),
 };
 
 function sendFailures(): number {

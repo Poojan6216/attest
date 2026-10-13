@@ -4,6 +4,7 @@ import { type CryptoSources, LIVE_CRYPTO, useCryptoStatus } from '../use-crypto-
 import { CryptoJobLine } from './CryptoJobLine';
 import { EncryptionControls } from './EncryptionControls';
 import { EncryptionStatement } from './EncryptionStatement';
+import { LockNow } from './LockNow';
 import { RebuildLine } from './RebuildLine';
 import { Section } from './Section';
 import { TurnOnEncryption } from './TurnOnEncryption';
@@ -30,7 +31,12 @@ export function EncryptionSection({ sources = LIVE_CRYPTO }: EncryptionSectionPr
           Attest could not read its encryption setting. Reload the page.
         </p>
       ) : null}
-      {status?.job === undefined ? null : <CryptoJobLine job={status.job} locked={status.locked} />}
+      {status?.job === undefined ? null : (
+        <CryptoJobLine job={status.job} locked={status.locked} send={sources.send} />
+      )}
+      {status?.on === true && !status.locked && (status.job !== undefined || status.rebuilding === true) ? (
+        <LockNow send={sources.send} />
+      ) : null}
       {status?.rebuilding === true && status.job === undefined ? <RebuildLine /> : null}
       {status !== undefined && !status.on ? <TurnOnEncryption send={sources.send} /> : null}
       {status?.on === true && status.locked ? (
