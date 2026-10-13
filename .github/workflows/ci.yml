@@ -42,6 +42,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # `pnpm test` ends with the serial perf gates, and the popup-paint gate among them launches the built extension in
+      # Playwright's Chromium (extension/tests/perf/popup-paint.perf.spec.ts), as the e2e job does.
+      - name: Install Playwright Chromium
+        run: pnpm --dir extension exec playwright install --with-deps chromium
+
       - name: Unit + property tests
         run: pnpm test
 
