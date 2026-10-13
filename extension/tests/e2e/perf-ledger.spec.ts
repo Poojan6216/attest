@@ -7,14 +7,19 @@
  * the popup's first paint, under 100 ms (the median of five, as the 5,000-receipt gate takes it). The grading pass is
  * gated in tests/perf/grading.perf.spec.ts (5,000 claims against 50,000 observations). Measured and logged, and
  * recorded by `pnpm bench` (bench/perf.ts): both exports' time, size and peak page heap, and the worker's idle heap.
+ * And the same ledger sealed (Sprint 6 close, tech review TECH-12): the popup's first paint, gated as above; the time
+ * to seal it and rebuild its database, its storage and the JSON export, measured.
  */
 import { expect, test } from '@playwright/test';
 
 import { launchExtension } from './support/extension';
+import { PERF_POPUP_GATE_MS, PERF_POPUP_RUNS, PERF_STORAGE_GATE_BYTES } from './support/perf-gates';
 import {
   buildMonthRows,
   PERF_ARGS,
+  sealLedger,
   seedLedger,
+  settledStorageBytes,
   serviceWorkerHeapBytes,
   storageBytes,
   timeExport,
@@ -22,11 +27,9 @@ import {
 import { measurePopupPaint, medianOf } from './support/popup-paint';
 import { MINUTE_MS } from './support/priya';
 
-/** The sprint's bound on the ledger's size, in bytes: 50 MB, counted in thousands, the stricter count. */
-const STORAGE_GATE_BYTES = 50_000_000;
-/** The popup's paint budget (sprint_4 4.2), now at the month's ledger. */
-const POPUP_GATE_MS = 100;
-const POPUP_RUNS = 5;
+const STORAGE_GATE_BYTES = PERF_STORAGE_GATE_BYTES;
+const POPUP_GATE_MS = PERF_POPUP_GATE_MS;
+const POPUP_RUNS = PERF_POPUP_RUNS;
 test('the 30-day ledger: under 50 MB, the popup paints in under 100 ms, the exports and the idle worker measured', async () => {
   test.setTimeout(15 * 60_000);
   const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
@@ -50,6 +53,32 @@ test('the 30-day ledger: under 50 MB, the popup paints in under 100 ms, the expo
     expect(json.bytes).toBeGreaterThan(0);
     expect(csv.bytes).toBeGreaterThan(0);
     expect(idleHeap).toBeGreaterThan(0);
+  } finally {
+    await extension.close();
+  }
+});
+
+test('the 30-day ledger sealed: the job and rebuild timed, the popup paints in under 100 ms, the export measured (TECH-12)', async () => {
+  test.setTimeout(30 * 60_000);
+  const rows = buildMonthRows(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS);
+  const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
+  try {
+    await seedLedger(extension, rows);
+    const seal = await sealLedger(extension, 'an invented passphrase for the sealed month');
+    const peak = await storageBytes(extension);
+    // Measured, not gated: sealed values do not compress (Decisions [6.close], TECH-12); the 50 MB gate above is the
+    // ledger's as it ships, unencrypted. Read once Chrome has compacted what the rebuild left, and the paint after it.
+    const bytes = await settledStorageBytes(extension);
+    const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
+    const json = await timeExport(extension, 'Export ledger');
+    console.log(
+      `[perf-ledger sealed] job ${String(seal.jobMs)} ms, with the rebuild ${String(seal.totalMs)} ms; ` +
+        `storage ${String(peak)} B at once, ${String(bytes)} B settled; popup first paint ${String(paint)} ms; ` +
+        `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B`,
+    );
+    expect(bytes).toBeGreaterThan(0);
+    expect(paint).toBeLessThan(POPUP_GATE_MS);
+    expect(json.bytes).toBeGreaterThan(0);
   } finally {
     await extension.close();
   }

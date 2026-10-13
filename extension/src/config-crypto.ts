@@ -57,5 +57,5 @@ export const MAX_KDF_ITERATIONS = 6_000_000;
  */
 export const REBUILD_DB_NAME = 'attest-rebuild';
 export const FLUSH_DB_NAME = 'attest-flush';
-/** Rows the rebuild copies per transaction. */
-export const REBUILD_PAGE = 500;
+/** Rows the rebuild copies per transaction: read whole, a page of raw rows a couple of MB at most. */
+export const REBUILD_PAGE = 2_000;

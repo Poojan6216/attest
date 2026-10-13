@@ -8,7 +8,7 @@
  */
 import { nowIso } from '../../src/clock';
 import { receiptsCsvBlob } from '../../src/ledger/export-csv';
-import { isLedgerLocked } from '../../src/ledger/errors';
+import { readFailure } from '../../src/ui/read-failure';
 import { exportLedgerBlob } from '../../src/ledger/export-file';
 import { getLedger } from '../../src/ledger/shared';
 import { log } from '../../src/log';
@@ -67,8 +67,9 @@ export async function exportFile(
     save(fileName, file);
     return { fileName };
   } catch (error) {
-    if (isLedgerLocked(error)) return 'locked';
-    log.error('options.export_failed', { error });
-    return null;
+    const failure = readFailure(error, (failed) => {
+      log.error('options.export_failed', { error: failed });
+    });
+    return failure === 'locked' ? 'locked' : null;
   }
 }

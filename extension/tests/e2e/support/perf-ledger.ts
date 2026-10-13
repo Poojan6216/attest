@@ -5,14 +5,13 @@
  * with `--enable-precise-memory-info`, so a page's heap figure is exact rather than bucketed, and a DevTools port of
  * its choosing (`PERF_ARGS`), written to the profile's `DevToolsActivePort`; Node talks to it on 127.0.0.1 only.
  */
+import { putRawRows } from './raw-ledger';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import type { Page } from '@playwright/test';
 
 import type { LaunchedExtension } from './extension';
 
@@ -45,37 +44,6 @@ export const PERF_ARGS = ['--enable-precise-memory-info', '--remote-debugging-po
 /** Rows written per transaction. */
 const CHUNK = 2_000;
 
-/** Writes `rows` into the ledger's `store`, which the extension's own code created. */
-async function putRows(page: Page, store: string, rows: readonly unknown[]): Promise<void> {
-  await page.evaluate(
-    ({ name, chunk }) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-        // Never create the ledger here: only the extension's own code creates it, with every store.
-        open.onupgradeneeded = () => {
-          open.transaction?.abort();
-          reject(new Error('the ledger does not exist yet'));
-        };
-        open.onsuccess = () => {
-          const tx = open.result.transaction(name, 'readwrite');
-          for (const row of chunk) tx.objectStore(name).put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onabort = () => {
-            open.result.close();
-            reject(new Error(`the ${name} were not stored`));
-          };
-        };
-      }),
-    { name: store, chunk: rows },
-  );
-}
-
 /** Writes every table of `rows` into the extension's ledger, after its popup has opened (and so created) it. */
 export async function seedLedger(
   extension: LaunchedExtension,
@@ -85,7 +53,7 @@ export async function seedLedger(
   await page.goto(`chrome-extension://${extension.extensionId}/popup.html`);
   await page.getByRole('status').first().waitFor();
   for (const [store, list] of Object.entries(rows)) {
-    for (let at = 0; at < list.length; at += CHUNK) await putRows(page, store, list.slice(at, at + CHUNK));
+    for (let at = 0; at < list.length; at += CHUNK) await putRawRows(page, store, list.slice(at, at + CHUNK));
   }
   await page.close();
 }
@@ -174,4 +142,55 @@ export async function serviceWorkerHeapBytes(extension: LaunchedExtension): Prom
   await devtools(wsUrl, 'HeapProfiler.collectGarbage');
   const usage = await devtools(wsUrl, 'Runtime.getHeapUsage');
   return Number(Reflect.get(usage ?? {}, 'usedSize'));
+}
+
+/** How long turning encryption on took: the job sealing every row, and with the rebuild of the database after it. */
+export interface SealRun {
+  /** Until the page said the database was being rebuilt; null when it never showed that before the end. */
+  readonly jobMs: number | null;
+  readonly totalMs: number;
+}
+
+/**
+ * Turns encryption on over the seeded ledger from the options page (Sprint 6 close, tech review TECH-12), and how long
+ * the job and the rebuild after it took, by what the page says.
+ */
+export async function sealLedger(extension: LaunchedExtension, passphrase: string): Promise<SealRun> {
+  const options = await extension.openExtensionPage('options.html');
+  const section = options.locator('#encryption');
+  await section.getByLabel('New passphrase').fill(passphrase);
+  await section.getByLabel('Type it again').fill(passphrase);
+  await section.getByLabel(/I understand/u).check();
+  const rebuilding = section.getByText('Clearing the older copies of your records');
+  const sealed = section.getByText('Your records are sealed, and unlocked in this browser now.');
+  const started = Date.now();
+  await section.getByRole('button', { name: 'Turn on encryption' }).click();
+  let jobMs: number | null = null;
+  for (const deadline = started + 15 * 60_000; Date.now() < deadline;) {
+    if (jobMs === null && (await rebuilding.isVisible())) jobMs = Date.now() - started;
+    if (await sealed.isVisible()) break;
+    await options.waitForTimeout(250);
+  }
+  await sealed.waitFor({ timeout: 1_000 });
+  const totalMs = Date.now() - started;
+  await options.close();
+  return { jobMs, totalMs };
+}
+
+/**
+ * The origin's storage once Chrome has compacted what a rebuild left (tech review TECH-12): Chrome starts some seconds
+ * after and takes a while, so this reads the count every ten seconds, for a minute at least, until two reads in a row
+ * are within one percent, for three minutes at most.
+ */
+export async function settledStorageBytes(extension: LaunchedExtension): Promise<number> {
+  const started = Date.now();
+  let bytes = await storageBytes(extension);
+  while (Date.now() - started < 180_000) {
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    const next = await storageBytes(extension);
+    const steady = Math.abs(next - bytes) <= bytes * 0.01;
+    bytes = next;
+    if (steady && Date.now() - started >= 60_000) break;
+  }
+  return bytes;
 }

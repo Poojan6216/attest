@@ -12,12 +12,23 @@
  * measures gate the end-to-end tests extension/tests/e2e/perf-gmail.spec.ts and perf-ledger.spec.ts.
  */
 
+import {
+  medianMs,
+  PERF_GMAIL_PASS_GATE_MS,
+  PERF_GMAIL_PASS_RUNS,
+  PERF_GMAIL_ROWS,
+  PERF_POPUP_GATE_MS,
+  PERF_POPUP_RUNS,
+  PERF_STORAGE_GATE_BYTES,
+} from '../extension/tests/e2e/support/perf-gates';
 import { launchExtension } from '../extension/tests/e2e/support/extension';
 import { readTwice, timeSentPasses } from '../extension/tests/e2e/support/perf-gmail';
 import {
   buildMonthRows,
   PERF_ARGS,
+  sealLedger,
   seedLedger,
+  settledStorageBytes,
   serviceWorkerHeapBytes,
   storageBytes,
   timeExport,
@@ -25,20 +36,22 @@ import {
 import { measurePopupPaint, medianOf } from '../extension/tests/e2e/support/popup-paint';
 import type { MetricValue } from './results';
 import { round } from './timing';
-import { buildExtension } from '../extension/tests/tools/build-extension';
+import { buildExtensionOnce } from '../extension/tests/tools/build-extension';
 
-export const PERF_GMAIL_ROWS = 10_000;
-export const PERF_GMAIL_PASS_GATE_MS = 2_000;
-export const PERF_STORAGE_GATE_BYTES = 50_000_000;
-export const PERF_POPUP_GATE_MS = 100;
-const PASS_RUNS = 3;
-const POPUP_RUNS = 5;
+export {
+  PERF_GMAIL_PASS_GATE_MS,
+  PERF_GMAIL_ROWS,
+  PERF_POPUP_GATE_MS,
+  PERF_STORAGE_GATE_BYTES,
+} from '../extension/tests/e2e/support/perf-gates';
+const PASS_RUNS = PERF_GMAIL_PASS_RUNS;
+const POPUP_RUNS = PERF_POPUP_RUNS;
 
 async function gmailMetrics(): Promise<Record<string, MetricValue>> {
   const times = (await timeSentPasses(PERF_GMAIL_ROWS, PASS_RUNS))
     .map((pass) => pass.ms)
     .sort((a, b) => a - b);
-  const median = times[Math.floor(PASS_RUNS / 2)] ?? Number.POSITIVE_INFINITY;
+  const median = medianMs(times);
   const reads = await readTwice(PERF_GMAIL_ROWS);
   return {
     perfGmailRows: PERF_GMAIL_ROWS,
@@ -84,7 +97,36 @@ async function monthMetrics(): Promise<Record<string, MetricValue>> {
   }
 }
 
+/**
+ * The same month sealed (Sprint 6 close, tech review TECH-12): the job's time and the rebuild's after it; the storage
+ * right after and once Chrome has compacted, measured, not gated, since sealed values do not compress; the popup's
+ * first paint while unlocked, after that, gated as the plain month's; and the JSON export.
+ */
+async function sealedMonthMetrics(): Promise<Record<string, MetricValue>> {
+  const rows = buildMonthRows(Math.floor(Date.now() / 60_000) * 60_000);
+  const extension = await launchExtension({ extraArgs: [...PERF_ARGS] });
+  try {
+    await seedLedger(extension, rows);
+    const seal = await sealLedger(extension, 'an invented passphrase for the sealed month');
+    const peak = await storageBytes(extension);
+    const settled = await settledStorageBytes(extension);
+    const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
+    const json = await timeExport(extension, 'Export ledger');
+    return {
+      perfMonthSealJobMs: seal.jobMs ?? -1,
+      perfMonthSealAndRebuildMs: seal.totalMs,
+      perfMonthSealedStoragePeakBytes: peak,
+      perfMonthSealedStorageBytes: settled,
+      perfMonthSealedPopupFirstPaintMedianMs: round(paint),
+      perfMonthSealedPopupGatePassed: paint < PERF_POPUP_GATE_MS,
+      perfMonthSealedExportJsonMs: json.ms,
+    };
+  } finally {
+    await extension.close();
+  }
+}
+
 export async function runPerfBench(): Promise<Readonly<Record<string, MetricValue>>> {
-  buildExtension();
-  return { ...(await gmailMetrics()), ...(await monthMetrics()) };
+  buildExtensionOnce();
+  return { ...(await gmailMetrics()), ...(await monthMetrics()), ...(await sealedMonthMetrics()) };
 }

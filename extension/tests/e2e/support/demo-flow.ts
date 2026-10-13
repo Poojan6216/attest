@@ -3,6 +3,7 @@
  * tests/e2e/alerts.spec.ts): the demo's Gmail Sent head and Calendar week opened and read, and the away interval of
  * 6 October stored, so that pasting Muse's log (./demo.ts DEMO_LOG) grades VERIFIED, NOT_FOUND and UNASKED, all FINAL.
  */
+import { putRawRows } from './raw-ledger';
 import { readFileSync } from 'node:fs';
 
 import type { Page } from '@playwright/test';
@@ -37,26 +38,5 @@ export async function openDemoPages(session: VendorSession): Promise<readonly Pa
 
 /** Stores the away interval of 6 October in the extension's own IndexedDB, from its service worker (DEMO_AWAY). */
 export async function writeAway(session: VendorSession): Promise<void> {
-  const worker = await session.extension.serviceWorker();
-  await worker.evaluate(
-    (row) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-        open.onsuccess = () => {
-          const tx = open.result.transaction('activity', 'readwrite');
-          tx.objectStore('activity').put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            reject(new Error('the away interval was not stored'));
-          };
-        };
-      }),
-    DEMO_AWAY,
-  );
+  await putRawRows(await session.extension.serviceWorker(), 'activity', [DEMO_AWAY]);
 }

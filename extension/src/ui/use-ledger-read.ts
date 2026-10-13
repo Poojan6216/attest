@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { isLedgerLocked } from '../ledger/errors';
+import { readFailure } from './read-failure';
 import { serial } from './serial';
 
 export type LedgerRead<T> =
@@ -33,10 +33,8 @@ export function useLedgerRead<T>(
           const value = await load();
           if (current.current === load) setState({ status: 'ready', value });
         } catch (error) {
-          // A locked ledger (sprint_6 6.5) is no failure: the page says so and offers the unlock.
-          const locked = isLedgerLocked(error);
-          if (!locked) onError(error);
-          if (current.current === load) setState({ status: locked ? 'locked' : 'failed' });
+          const failure = readFailure(error, onError);
+          if (current.current === load) setState({ status: failure });
         }
       }),
     [load, onError],

@@ -11,11 +11,16 @@ import { expect, test } from '@playwright/test';
 
 import { SENT_PASS_HARNESS_MARKER } from './support/observer-harness-marker';
 import { readTwice, timeSentPasses } from './support/perf-gmail';
+import {
+  medianMs,
+  PERF_GMAIL_PASS_GATE_MS,
+  PERF_GMAIL_PASS_RUNS,
+  PERF_GMAIL_ROWS,
+} from './support/perf-gates';
 
-const ROWS = 10_000;
-/** The sprint's bound on one pass, in milliseconds. */
-const PASS_GATE_MS = 2_000;
-const RUNS = 3;
+const ROWS = PERF_GMAIL_ROWS;
+const PASS_GATE_MS = PERF_GMAIL_PASS_GATE_MS;
+const RUNS = PERF_GMAIL_PASS_RUNS;
 
 test('one pass of the Gmail Sent reader over 10,000 rows takes under 2 s', async () => {
   test.setTimeout(5 * 60_000);
@@ -24,7 +29,7 @@ test('one pass of the Gmail Sent reader over 10,000 rows takes under 2 s', async
     expect(pass).toMatchObject({ status: 'OK', observations: ROWS, marker: SENT_PASS_HARNESS_MARKER });
   }
   const times = passes.map((pass) => Math.round(pass.ms)).sort((a, b) => a - b);
-  const median = times[Math.floor(RUNS / 2)] ?? Number.POSITIVE_INFINITY;
+  const median = medianMs(times);
   console.log(
     `[perf-gmail] one pass over ${String(ROWS)} rows: median ${String(median)} ms (${times.join(', ')})`,
   );

@@ -18,7 +18,7 @@ import { localDate } from '../../src/ledger/digest-week';
 import { AgentId } from '../../src/ledger/types';
 import { log } from '../../src/log';
 import { serial } from '../../src/ui/serial';
-import { isLedgerLocked } from '../../src/ledger/errors';
+import { readFailure } from '../../src/ui/read-failure';
 import {
   loadOverview,
   loadReceipt,
@@ -147,7 +147,7 @@ function useReceiptList(sources: TimelineSources, filters: TimelineFilters): Rec
           if (current.current !== filters) return;
           setList({ status: 'ready', items: page.items, next: page.next, more: 'idle' });
         } catch (error) {
-          const failure = readFailure(error);
+          const failure = panelReadFailure(error);
           if (current.current === filters) setList({ status: failure });
         }
       }),
@@ -176,7 +176,7 @@ function useReceiptList(sources: TimelineSources, filters: TimelineFilters): Rec
       (error: unknown) => {
         // Locked meanwhile (tech review TECH-8): the whole list offers the unlock, as its first read would.
         const failed: ListState =
-          readFailure(error) === 'locked' ? { status: 'locked' } : { ...extending, more: 'failed' };
+          panelReadFailure(error) === 'locked' ? { status: 'locked' } : { ...extending, more: 'failed' };
         setList((shownList) => (shownList === extending ? failed : shownList));
       },
     );
@@ -184,15 +184,11 @@ function useReceiptList(sources: TimelineSources, filters: TimelineFilters): Rec
   return { list, overview: top.overview, nowMs, reread, rereadOverview: top.reread, loadMore };
 }
 
-/**
- * What a read that failed shows (sprint_6 6.5; Sprint 6 close, tech review TECH-8 and TECH-14): a locked ledger is no
- * failure, so it is never logged as one, and the panel offers the unlock; anything else is logged and said.
- */
-function readFailure(error: unknown): 'locked' | 'failed' {
-  if (isLedgerLocked(error)) return 'locked';
-  log.error('sidepanel.read_failed', { error });
-  return 'failed';
-}
+/** A read that failed (src/ui/read-failure.ts), logged under the panel's own event when it is not the lock. */
+const panelReadFailure = (error: unknown): 'locked' | 'failed' =>
+  readFailure(error, (failed) => {
+    log.error('sidepanel.read_failed', { error: failed });
+  });
 
 /** The detail of the receipt `openId`, read again by `reread` (header). */
 function useReceiptDetail(
@@ -211,7 +207,7 @@ function useReceiptDetail(
           const read = await sources.receipt(openId);
           if (current.current === openId) setDetail(read);
         } catch (error) {
-          const failure = readFailure(error);
+          const failure = panelReadFailure(error);
           if (current.current === openId) setDetail(failure);
         }
       }),

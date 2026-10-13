@@ -47,7 +47,11 @@ function outboundKeys(table: string, keys: readonly IndexableType[]): readonly (
   return simple;
 }
 
-/** Copies every row of every table of `from` into `to`, as stored, one page per transaction, keys kept. */
+/**
+ * Copies every row of every table of `from` into `to`, as stored, one page per transaction, keys kept. Each page is read
+ * whole, its rows and its keys in one read each, never a step at a time: a month's ledger copies in seconds, where a
+ * cursor's steps took most of a minute (Sprint 6 close, tech review TECH-12).
+ */
 async function copyRows(from: LedgerDb, to: LedgerDb): Promise<void> {
   for (const { name } of from.tables) {
     const source = from.table<unknown>(name);
@@ -57,13 +61,12 @@ async function copyRows(from: LedgerDb, to: LedgerDb): Promise<void> {
     const outbound = typeof keyPath !== 'string' && !Array.isArray(keyPath);
     let after: IndexableType | undefined;
     for (;;) {
-      const keys: IndexableType[] = [];
-      const values: unknown[] = [];
-      const page = after === undefined ? source.orderBy(':id') : source.where(':id').above(after);
-      await page.limit(REBUILD_PAGE).each((value: unknown, cursor) => {
-        keys.push(cursor.primaryKey);
-        values.push(value);
-      });
+      const page = (after === undefined ? source.orderBy(':id') : source.where(':id').above(after)).limit(
+        REBUILD_PAGE,
+      );
+      const [values, keys] = await from.transaction('r', source, () =>
+        Promise.all([page.toArray(), page.primaryKeys()]),
+      );
       if (values.length > 0) {
         await (outbound ? target.bulkPut(values, outboundKeys(name, keys)) : target.bulkPut(values));
       }

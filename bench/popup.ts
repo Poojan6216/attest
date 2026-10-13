@@ -11,12 +11,12 @@
  * bench/traces/popup-paint.zip, with this machine's paths written as placeholders (./trace-scrub.ts), and committed with
  * the results.
  */
-import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchExtension } from '../extension/tests/e2e/support/extension';
+import { buildExtensionOnce } from '../extension/tests/tools/build-extension';
 import {
   measurePopupPaint,
   medianOf,
@@ -32,7 +32,6 @@ import { machinePlaces, scrubTrace } from './trace-scrub';
 export const POPUP_PAINT_GATE_MS = 100;
 const RUNS = 5;
 const BENCH_DIR = path.dirname(fileURLToPath(import.meta.url));
-const EXTENSION_DIR = path.join(BENCH_DIR, '../extension');
 /** The trace of the measured runs, committed with the results. */
 export const POPUP_TRACE = 'bench/traces/popup-paint.zip';
 
@@ -46,7 +45,7 @@ const spread = (runs: readonly PaintRun[], paint: 'cpuMs' | 'firstPaintMs' | 'da
 };
 
 export async function runPopupBench(): Promise<Readonly<Record<string, MetricValue>>> {
-  execFileSync('pnpm', ['build'], { cwd: EXTENSION_DIR, stdio: 'ignore' });
+  buildExtensionOnce();
   const extension = await launchExtension();
   try {
     await seedReceipts(extension);

@@ -50,7 +50,7 @@ import {
   recordJobFailure,
 } from '../ledger/crypto-writes';
 import type { LedgerDb } from '../ledger/db';
-import { LedgerError } from '../ledger/errors';
+import { isLedgerLocked, LedgerError } from '../ledger/errors';
 import { setKeySource } from '../ledger/shared';
 import { log } from '../log';
 import { sealSavedKey } from './byo';
@@ -327,7 +327,7 @@ async function jobFailed(error: unknown, deps: CryptoDeps): Promise<void> {
 export function resumeCryptoJob(deps: CryptoDeps): Promise<void> {
   job ??= runJob(deps)
     .catch(async (error: unknown) => {
-      if (error instanceof LedgerError && error.code === 'locked') log.info('crypto.job_paused');
+      if (isLedgerLocked(error)) log.info('crypto.job_paused');
       else await jobFailed(error, deps);
     })
     .finally(() => {

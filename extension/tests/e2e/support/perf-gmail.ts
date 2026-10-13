@@ -7,6 +7,7 @@
  *    took to reach the ledger, and what the ledger holds after each.
  * Every request but the page is refused, and both browsers run behind the dead proxy.
  */
+import type { TimedPass as HarnessTimedPass } from './sent-pass-harness';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,8 +31,8 @@ const TimedPass = z.strictObject({
   status: z.string(),
   observations: z.number(),
   marker: z.string(),
-});
-export type TimedPass = z.infer<typeof TimedPass>;
+}) satisfies z.ZodType<HarnessTimedPass>;
+export type TimedPass = HarnessTimedPass;
 
 const nowMinute = () => Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
 

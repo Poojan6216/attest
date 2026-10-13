@@ -13,7 +13,6 @@ import 'fake-indexeddb/auto';
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { DEFAULT_POLICY } from '../../../src/core/policy';
 import { loadCipher } from '../../../src/crypto/cipher';
 import { clearKeyring, setKeyring, type Keyring } from '../../../src/crypto/keyring';
 import type { LedgerKey } from '../../../src/crypto/kdf';
@@ -32,26 +31,23 @@ import {
   getRequest,
   putAdapterHealth,
   putGrant,
-  putReceipt,
   putRequest,
   receiptsByAgentAndDate,
   setMeta,
   upsertClaim,
-  upsertObservation,
 } from '../../../src/ledger/repo';
 import {
   expectLedgerError,
   makeClaim,
   makeGrant,
   makeHealth,
-  makeObservation,
-  makeReceipt,
   makeRequest,
   pinClock,
   releaseClock,
   sha,
   uniqueDbName,
 } from '../ledger/fixtures';
+import { CLAIM, CONTENT, OBSERVATION, RECEIPT, REQUEST, seedLedger } from '../background/crypto-fixtures';
 import { rawPut, rawRows, textsIn } from './raw-store';
 
 const keyOf = (fill: number, id: string): LedgerKey => ({
@@ -62,26 +58,12 @@ const KEY = keyOf(3, 'aaaaaaaaaaaa');
 const NEXT = keyOf(4, 'bbbbbbbbbbbb');
 const SEALING: Keyring = { sealing: true, guarded: true, current: KEY };
 const LOCKED: Keyring = { sealing: true, guarded: true };
-/** The fixtures' invented content, which must never be readable at rest. */
-const CONTENT = ['alice@example.com', 'Quarterly numbers', 'Email Alice', 'example.com', 'muse.activity'];
 const EXPORTED_AT = '2026-10-02T00:00:00Z';
-
-const CLAIM = makeClaim();
-const OBSERVATION = makeObservation();
-const REQUEST = makeRequest();
-const RECEIPT = makeReceipt();
-const GRANT = makeGrant();
+/** The encryption fixtures' rows and their invented content, one module for both suites (tech review TECH-14). */
+const seed = seedLedger;
 
 let name: string;
 let db: LedgerDb;
-
-async function seed(target: LedgerDb): Promise<void> {
-  await putRequest(target, REQUEST);
-  await upsertClaim(target, CLAIM);
-  await upsertObservation(target, OBSERVATION, DEFAULT_POLICY);
-  await putReceipt(target, RECEIPT);
-  await putGrant(target, GRANT);
-}
 
 const keysOf = async (store: string) => (await rawRows(name, store)).map((row) => Object.keys(row).sort());
 

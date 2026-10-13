@@ -5,7 +5,8 @@
 export function RebuildLine() {
   return (
     <p role="status" class="text-sm">
-      Clearing the older copies of your records from Chrome’s files. Attest pauses for a moment meanwhile.
+      Clearing the older copies of your records from Chrome’s files: up to a minute for a month of records.
+      Attest pauses meanwhile.
     </p>
   );
 }

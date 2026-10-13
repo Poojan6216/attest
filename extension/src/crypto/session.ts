@@ -13,14 +13,10 @@ import { SESSION_KEYS } from '../config';
 import { LEDGER_KEY_BYTES } from '../config-crypto';
 import { fromBase64, toBase64 } from './bytes';
 import type { LedgerKey } from './kdf';
+import type { HeldKeys } from './keyring';
 
 const StoredKey = z.strictObject({ id: z.string().regex(/^[0-9a-f]{12}$/u), key: z.string().max(64) });
 const StoredKeys = z.strictObject({ current: StoredKey.optional(), previous: StoredKey.optional() });
-
-export interface SessionKeys {
-  readonly current?: LedgerKey;
-  readonly previous?: LedgerKey;
-}
 
 const keyOf = (stored: z.infer<typeof StoredKey> | undefined): LedgerKey | undefined => {
   if (stored === undefined) return undefined;
@@ -29,7 +25,7 @@ const keyOf = (stored: z.infer<typeof StoredKey> | undefined): LedgerKey | undef
 };
 
 /** The keys this session holds: none when the ledger is locked or encryption is off; a malformed entry is none. */
-export async function readSessionKeys(): Promise<SessionKeys> {
+export async function readSessionKeys(): Promise<HeldKeys> {
   const held = await browser.storage.session.get(SESSION_KEYS.LEDGER_KEYS);
   const parsed = StoredKeys.safeParse(held[SESSION_KEYS.LEDGER_KEYS]);
   if (!parsed.success) return {};
@@ -39,7 +35,7 @@ export async function readSessionKeys(): Promise<SessionKeys> {
 }
 
 /** Keeps `keys` for this session, replacing any held. */
-export async function writeSessionKeys(keys: SessionKeys): Promise<void> {
+export async function writeSessionKeys(keys: HeldKeys): Promise<void> {
   const text = (key: LedgerKey | undefined) =>
     key === undefined ? {} : { id: key.id, key: toBase64(key.bytes) };
   await browser.storage.session.set({

@@ -122,12 +122,25 @@ function openRow(codec: TableCodec, value: unknown): unknown {
  * through it, and `key`, `primaryKey` and `value` are read from the cursor itself. A browser's IDBCursor reads those
  * three through getters that refuse any other object, so the wrapper must never leave them to its prototype.
  */
-const openingCursor = (codec: TableCodec, cursor: DBCoreCursor): DBCoreCursor =>
-  Object.create(cursor, {
+function openingCursor(codec: TableCodec, cursor: DBCoreCursor): DBCoreCursor {
+  // Opened once per position (Sprint 6 close, tech review TECH-12): Dexie reads `value` more than once on a filtered
+  // walk, and each read of the stored value is a new object, so a new one is opened again.
+  let stored: unknown;
+  let opened: unknown;
+  const value = (): unknown => {
+    const now: unknown = cursor.value;
+    if (now !== stored) {
+      opened = openRow(codec, now);
+      stored = now;
+    }
+    return opened;
+  };
+  return Object.create(cursor, {
     key: { get: (): unknown => cursor.key },
     primaryKey: { get: (): unknown => cursor.primaryKey },
-    value: { get: () => openRow(codec, cursor.value) },
+    value: { get: value },
   }) as DBCoreCursor;
+}
 
 function sealingTable(table: DBCoreTable, options: SealingOptions): DBCoreTable {
   const codec = tableCodec(table, options);

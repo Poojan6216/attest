@@ -3,6 +3,7 @@
  * sets one, and the spans the person was away, written into the ledger's activity store from the service worker as the
  * §2 demo's test writes one (./demo-flow.ts `writeAway`), since Chrome reports idle only live. Every value is invented.
  */
+import { putRawRows } from './raw-ledger';
 import { AGENT_NAMES, claimTypeLabel } from '../../../src/ui/labels';
 import type { AttackCase, AttackGrant } from '../../redteam/attack-schema';
 import type { LaunchedExtension } from './extension';
@@ -69,26 +70,5 @@ export async function writeAway(
   nowMs: number,
 ): Promise<void> {
   if (spans.length === 0) return;
-  const worker = await extension.serviceWorker();
-  await worker.evaluate(
-    (rows) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('attest');
-        open.onerror = () => {
-          reject(new Error('the ledger did not open'));
-        };
-        open.onsuccess = () => {
-          const tx = open.result.transaction('activity', 'readwrite');
-          for (const row of rows) tx.objectStore('activity').put(row);
-          tx.oncomplete = () => {
-            open.result.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            reject(new Error('the away spans were not stored'));
-          };
-        };
-      }),
-    awayRows(spans, nowMs),
-  );
+  await putRawRows(await extension.serviceWorker(), 'activity', awayRows(spans, nowMs));
 }
