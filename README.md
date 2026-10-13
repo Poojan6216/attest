@@ -4,6 +4,9 @@
 
 Receipts for your AI agents.
 
+**Who this is for:** anyone deciding whether to install Attest, and anyone who wants to build it or check its claims.
+**What you'll know after:** what Attest checks and what it cannot see, how to install it, what it sends and when, how well it does, which attacks still work, and how to contribute.
+
 Attest is a Chrome extension that checks what your AI agents (Meta Muse, ChatGPT and Dots, Claude) said they did against evidence in your own Gmail and Google Calendar tabs, and gives every task a graded receipt: verified, partial, not found, unasked, over scope, or unverifiable. It runs in your browser, sends nothing unless you turn on an option that sends, and never acts on any page. **Attest cannot see everything.** It sees only what is in tabs you have open: actions inside Messenger, phone calls, purchases without an email receipt, and anything on your phone are invisible to it, and those receipts say UNVERIFIABLE. When it flags something you did not ask for, it says "likely agent", because it cannot prove who pressed send. It does not read your AI agents' own pages, because their makers' terms do not allow it: you paste an agent's activity log into Attest instead. Vendor pages change; when a reader stops matching, Attest marks it DEGRADED and tells you instead of going quiet. Desktop Chrome 122 or later only.
 
 **Attacks that still work.** Attest has been attacked on purpose, and 6 of the 13 attack strategies in its red-team harness still win in some cases: worst, an agent's send it never claimed goes unflagged in 18 of 25 cases. Every attack, its rate and why it works: [docs/attacks-that-work.md](docs/attacks-that-work.md). What Attest defends and what it does not: [docs/threat-model.md](docs/threat-model.md).

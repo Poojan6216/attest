@@ -1,5 +1,8 @@
 # Attacks that work
 
+**Who this is for:** anyone deciding how far to trust a receipt from Attest, and anyone attacking or hardening it.
+**What you'll know after:** every attack the red team tried, the rate at which each one works, why it works, and whether it is fixed, accepted or deferred.
+
 What Attest knowingly does not catch, with the rate we measured. The losses are published on purpose: an attack is never fixed and hidden, and one that is fixed keeps the number it had before the fix, next to the commit that fixed it.
 
 ## The red team (Sprint 6)
@@ -8,7 +11,7 @@ Attest attacked the way an agent that wants to look good, a vendor that wants to
 
 ### Attacks that work
 
-Most severe first. Every number is from `pnpm redteam` at `b2d2028` (131 cases), unless a row says otherwise, and was measured again, unchanged in every row, at `7d32572`, after the hardening pass (Sprint 6.9): no fix moved a number, so the numbers before it are the numbers now.
+Most severe first. Every number is from `pnpm redteam` at `b2d2028` (131 cases), unless a row says otherwise, and was measured again, unchanged in every row, at `7d32572`, after the hardening pass (Sprint 6.9), and at `17a39e4`, the Sprint 6 close (`pnpm bench`, [`RESULTS.md`](../RESULTS.md)): no fix moved a number, so the numbers before it are the numbers now.
 
 | # | Strategy | Attest's result | Rate | Severity | Status (commit) |
 |---|---|---|---|---|---|

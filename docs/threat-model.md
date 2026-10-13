@@ -3,7 +3,7 @@
 **Who this is for:** anyone deciding whether to trust a receipt from Attest, and anyone changing code at one of its trust boundaries: reviewers, contributors, the security and privacy reviews.
 **What you'll know after:** what Attest defends and what it does not, who it defends against, where its trust boundaries are, which links are weakest, what it assumes about your browser and accounts, and which attacks the red team found still work.
 
-> Status: **v1** (Sprint 6, task 6.8). It describes Attest as of Sprint 6: the Gmail and Calendar readers, pasted agent activity logs (the agents' own readers are off, [Decisions `[3.10]`](../Decisions.md)), grading, the optional model and usage numbers, and the optional encryption at rest. The red team's numbers are in [`docs/attacks-that-work.md`](attacks-that-work.md); this page says what they mean.
+> Status: **v1.1** (Sprint 6, task 6.8, and its close). It describes Attest 0.1.0: the Gmail and Calendar readers, pasted agent activity logs (the agents' own readers are off, [Decisions `[3.10]`](../Decisions.md)), grading, the optional model and usage numbers, and the optional encryption at rest. The red team's numbers are in [`docs/attacks-that-work.md`](attacks-that-work.md); this page says what they mean.
 
 ## Contents
 
