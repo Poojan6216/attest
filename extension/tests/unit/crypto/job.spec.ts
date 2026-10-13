@@ -6,9 +6,10 @@ import 'fake-indexeddb/auto';
  * not parse starts its table again rather than skip rows; a row that does not open fails its step whole and leaves the
  * place where it was; and the last step clears the job, every row sealed.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { LEDGER_KDF_ITERATIONS, SEAL_JOB_PAGE, SEALED_TABLES } from '../../../src/config-crypto';
+import { loadCipher } from '../../../src/crypto/cipher';
 import { clearKeyring, setKeyring } from '../../../src/crypto/keyring';
 import type { LedgerKey } from '../../../src/crypto/kdf';
 import { isSealed } from '../../../src/crypto/seal';
@@ -31,6 +32,9 @@ let db: LedgerDb;
 async function sealedCount(store: string): Promise<number> {
   return (await rawRows(name, store)).filter((row) => isSealed(row.sealed)).length;
 }
+
+// As src/ledger/crypto-state.ts `loadKeyring` loads it for a ledger that may hold sealed rows (TECH-1).
+beforeAll(loadCipher);
 
 beforeEach(async () => {
   name = uniqueDbName('crypto-job');

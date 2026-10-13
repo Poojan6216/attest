@@ -10,14 +10,9 @@ import { gcm } from '@noble/ciphers/aes.js';
 import { LEDGER_IV_BYTES, LEDGER_KEY_BYTES } from '../config-crypto';
 import { fromBase64, randomBytes, toBase64 } from './bytes';
 import type { LedgerKey } from './kdf';
+import type { Sealed } from './sealed';
 
-/** A sealed value: the format's version, the id of the key that sealed it, its nonce, its ciphertext and tag. */
-export interface Sealed {
-  readonly v: 1;
-  readonly k: string;
-  readonly iv: Uint8Array;
-  readonly ct: Uint8Array;
-}
+export { isSealed, type Sealed } from './sealed';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -35,17 +30,6 @@ export function open(key: LedgerKey, aad: string, sealed: Sealed): unknown {
     Uint8Array.from(sealed.ct),
   );
   return JSON.parse(decoder.decode(plain));
-}
-
-/** Whether `value` is a sealed value as ./seal.ts writes one. */
-export function isSealed(value: unknown): value is Sealed {
-  if (typeof value !== 'object' || value === null) return false;
-  return (
-    Reflect.get(value, 'v') === 1 &&
-    typeof Reflect.get(value, 'k') === 'string' &&
-    Reflect.get(value, 'iv') instanceof Uint8Array &&
-    Reflect.get(value, 'ct') instanceof Uint8Array
-  );
 }
 
 /** What the key check seals: opening it proves a passphrase gives the ledger's key, before any row is read. */

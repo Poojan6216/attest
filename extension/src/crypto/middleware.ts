@@ -25,7 +25,8 @@ import type {
 
 import { SEALED_TABLES } from '../config-crypto';
 import { isLocked, keyring, keyWithId } from './keyring';
-import { isSealed, open, seal } from './seal';
+import { cipher } from './cipher';
+import { isSealed } from './sealed';
 
 export interface SealingOptions {
   /** The ledger's derived index fields of `table`, which stay in the clear beside its index key paths. */
@@ -79,14 +80,15 @@ function sealRow(codec: TableCodec, value: unknown): unknown {
   const ring = keyring();
   if (!ring.sealing || !isRow(value) || isSealed(value.sealed)) return value;
   const key = ring.current;
-  if (key === undefined) throw codec.options.locked(codec.name);
+  const sealing = cipher();
+  if (key === undefined || sealing === undefined) throw codec.options.locked(codec.name);
   const kept: Row = {};
   const hidden: Row = {};
   for (const [field, fieldValue] of Object.entries(value)) {
     if (codec.plain.has(field)) kept[field] = fieldValue;
     else hidden[field] = fieldValue;
   }
-  return { ...kept, sealed: seal(key, codec.aadOf(value), hidden) };
+  return { ...kept, sealed: sealing.seal(key, codec.aadOf(value), hidden) };
 }
 
 /**
@@ -103,9 +105,11 @@ function openRow(codec: TableCodec, value: unknown): unknown {
       ? codec.options.locked(codec.name)
       : codec.options.unreadable(codec.name);
   }
+  const opening = cipher();
+  if (opening === undefined) throw codec.options.locked(codec.name);
   let hidden: unknown;
   try {
-    hidden = open(key, codec.aadOf(kept), sealed);
+    hidden = opening.open(key, codec.aadOf(kept), sealed);
   } catch {
     throw codec.options.unreadable(codec.name);
   }

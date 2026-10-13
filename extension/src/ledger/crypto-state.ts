@@ -6,6 +6,7 @@
  * memory only (src/crypto/keyring.ts). `loadKeyring` sets this context's keyring from this state and the keys this
  * context holds or is given.
  */
+import { loadCipher } from '../crypto/cipher';
 import { lockKeyring, setKeyring, type HeldKeys } from '../crypto/keyring';
 import type { LedgerDb } from './db';
 
@@ -100,6 +101,8 @@ export async function loadKeyring(db: LedgerDb, keys: () => Promise<HeldKeys>): 
   lockKeyring();
   const state = await readCryptoState(db);
   const guarded = isGuarded(state);
+  // The cipher loads only for a ledger that may hold sealed rows (src/crypto/cipher.ts; tech review TECH-1).
+  if (guarded) await loadCipher();
   setKeyring({ sealing: sealsNow(state), guarded, ...(guarded ? await keys() : {}) });
   return state;
 }

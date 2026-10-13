@@ -148,6 +148,7 @@ export const LOG_EVENTS = [
   'sidepanel.read_failed',
   'storage.close_failed',
   'ui.listen_failed',
+  'ui.load_failed',
   'ui.root_missing',
   ...CRYPTO_LOG_EVENTS,
 ] as const;

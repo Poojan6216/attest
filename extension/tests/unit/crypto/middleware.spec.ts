@@ -11,9 +11,10 @@ import 'fake-indexeddb/auto';
  *  - a row written before encryption was on reads as it is, and during a passphrase change the previous key opens
  *    what the new one has not sealed yet.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_POLICY } from '../../../src/core/policy';
+import { loadCipher } from '../../../src/crypto/cipher';
 import { clearKeyring, setKeyring, type Keyring } from '../../../src/crypto/keyring';
 import type { LedgerKey } from '../../../src/crypto/kdf';
 import { isSealed } from '../../../src/crypto/seal';
@@ -83,6 +84,9 @@ async function seed(target: LedgerDb): Promise<void> {
 }
 
 const keysOf = async (store: string) => (await rawRows(name, store)).map((row) => Object.keys(row).sort());
+
+// As src/ledger/crypto-state.ts `loadKeyring` loads it for a ledger that may hold sealed rows (TECH-1).
+beforeAll(loadCipher);
 
 beforeEach(async () => {
   pinClock();

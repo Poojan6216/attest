@@ -30,7 +30,8 @@ import {
 import { fromBase64, toBase64 } from '../crypto/bytes';
 import { deriveLedgerKey, newKeyId, newSalt, type LedgerKey } from '../crypto/kdf';
 import { isLocked, type HeldKeys } from '../crypto/keyring';
-import { keyCheck, opensCheck, unwrapKey, wrapKey } from '../crypto/seal';
+import { provideCipher } from '../crypto/cipher';
+import { keyCheck, open, opensCheck, seal, unwrapKey, wrapKey } from '../crypto/seal';
 import { clearSessionKeys, writeSessionKeys } from '../crypto/session';
 import { stepCryptoJob } from '../ledger/crypto-job';
 import {
@@ -79,6 +80,8 @@ export function onUnlocked(run: () => Promise<void>): void {
 export function holdKeysHere(): void {
   held = {};
   setKeySource(() => Promise.resolve(held));
+  // The cipher from this worker's own static import: Chrome refuses `import()` in a service worker (TECH-1).
+  provideCipher({ seal, open });
   // Before any command runs, and tried again once (Sprint 6 close, security review SEC-5): a copy a previous start
   // kept and this one failed to clear would leave every page unlocked.
   commands = clearSessionKeys()

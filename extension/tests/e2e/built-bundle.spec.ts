@@ -231,3 +231,18 @@ test('the popup’s start load is within its budget (TECH-5)', () => {
   );
   expect(size).toBeLessThanOrEqual(POPUP_START_BUDGET_GZIP);
 });
+
+/** A string of @noble/ciphers' AES that minifying keeps: where it is, the cipher is. */
+const CIPHER_MARKER = 'expected Uint8Array of length 16/24/32';
+
+test('the popup’s start load carries no cipher, which loads only for an encrypted ledger (TECH-1)', () => {
+  const read = (file: string) => readFileSync(path.join(EXTENSION_PATH, file), 'utf8');
+  const carrying = startLoad('popup.html').filter(
+    (file) => file.endsWith('.js') && read(file).includes(CIPHER_MARKER),
+  );
+  expect(carrying).toEqual([]);
+  // The marker is the cipher's: the build holds it, in the chunk loaded when a ledger may hold sealed rows.
+  expect(scripts(EXTENSION_PATH).some((file) => readFileSync(file, 'utf8').includes(CIPHER_MARKER))).toBe(
+    true,
+  );
+});

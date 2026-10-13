@@ -181,7 +181,10 @@ describe('the popup when the day is empty, the read fails, or the ledger changes
   it('asks for the passphrase while the ledger is encrypted and locked, and reads again once it is not', async () => {
     const stand = sources(new LedgerError('locked', 'The ledger is locked', { table: 'receipts' }), view([]));
     await show(stand.given);
-    expect(root.textContent).toContain('Your records are encrypted and locked');
+    // The prompt loads when the ledger is first found locked (tech review TECH-1).
+    await vi.waitFor(() => {
+      expect(root.textContent).toContain('Your records are encrypted and locked');
+    });
     expect(root.querySelector('input[type="password"]')).not.toBeNull();
     expect(root.querySelector('[role="alert"]')).toBeNull();
     expect(root.textContent).not.toContain('No receipts today');
