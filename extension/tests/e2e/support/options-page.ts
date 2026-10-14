@@ -6,6 +6,7 @@ import type { Page, Worker } from '@playwright/test';
 import type { WxtBrowser } from 'wxt/browser';
 
 import { STORAGE_KEYS } from '../../../src/config';
+import { PRIVACY_UNKNOWN } from '../../../src/ui/privacy-text';
 import type { LaunchedExtension } from './extension';
 import { expect } from './test';
 
@@ -50,15 +51,19 @@ export async function openOptions(attest: LaunchedExtension): Promise<OpenedOpti
   });
   await page.goto(`chrome-extension://${attest.extensionId}/options.html`);
   await expect(page.locator('#install-id-value')).toHaveText(UUID_V4);
+  await expectSettled(page);
   return { page, errors };
 }
 
 /**
- * Waits for every read the page starts when it opens: each section's skeleton gone, the usage numbers read, and Chrome's
- * answer on away detection. Each one adds controls when it answers, so a test that counts every control waits for all
- * three (on a slow runner the install id can arrive first).
+ * Waits for every read the page starts when it opens: the person's choices behind the privacy line, each section's
+ * skeleton gone, the usage numbers read, and Chrome's answer on away detection. Each one changes the page when it
+ * answers, so `openOptions` waits for all four: on a slow runner the install id can arrive first, and a test that read
+ * the page then saw the line's wording for choices not yet known, or counted controls a section had still to add (CI
+ * runs 38487321880 and 38498796045).
  */
 export async function expectSettled(page: Page): Promise<void> {
+  await expect(page.getByText(PRIVACY_UNKNOWN, { exact: true })).toHaveCount(0);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(page.getByText('Reading the numbers the next send would hold.')).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'When you are away' }).getByRole('status')).not.toHaveText('');

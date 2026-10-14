@@ -9,7 +9,6 @@ import type { WxtBrowser } from 'wxt/browser';
 
 import {
   contrast,
-  expectSettled,
   expectVisibleFocus,
   focusState,
   installedId,
@@ -134,8 +133,6 @@ test.describe('options page: keyboard', () => {
       await installedId(attest);
       const { page, errors } = await openOptions(attest);
       await page.emulateMedia({ colorScheme });
-      // Marked before a read answers, a control it adds later is a tab stop with no marker (CI, run 38487321880).
-      await expectSettled(page);
 
       const labels = await page.evaluate((selector) => {
         const elements = [...document.querySelectorAll<HTMLElement>(selector)];
