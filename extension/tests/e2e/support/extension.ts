@@ -184,7 +184,12 @@ async function startBrowser(
         channel: 'chromium',
         headless: true,
         timeout: LAUNCH_TIMEOUT_MS,
-        ...(options.timezoneId === undefined ? {} : { timezoneId: options.timezoneId }),
+        // Playwright sets a page's zone alone; the service worker keeps the browser process's. A real browser's pages and
+        // worker share one zone, so the whole browser takes it too, or a test whose pages and worker disagree on the date
+        // (between 00:00 and 04:00 UTC on CI, for New York) fails for no fault of the extension's.
+        ...(options.timezoneId === undefined
+          ? {}
+          : { timezoneId: options.timezoneId, env: { ...process.env, TZ: options.timezoneId } }),
         args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, ...args],
       });
       return { context, userDataDir };

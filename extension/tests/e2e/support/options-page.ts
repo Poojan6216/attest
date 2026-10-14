@@ -53,6 +53,17 @@ export async function openOptions(attest: LaunchedExtension): Promise<OpenedOpti
   return { page, errors };
 }
 
+/**
+ * Waits for every read the page starts when it opens: each section's skeleton gone, the usage numbers read, and Chrome's
+ * answer on away detection. Each one adds controls when it answers, so a test that counts every control waits for all
+ * three (on a slow runner the install id can arrive first).
+ */
+export async function expectSettled(page: Page): Promise<void> {
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(page.getByText('Reading the numbers the next send would hold.')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'When you are away' }).getByRole('status')).not.toHaveText('');
+}
+
 /** Resolves CSS colours (Tailwind 4 computes to oklch) to sRGB + alpha by painting them on a canvas. */
 async function toRgba(page: Page, colours: readonly string[]): Promise<Rgba[]> {
   return page.evaluate((list) => {
