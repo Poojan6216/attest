@@ -12,6 +12,7 @@ import {
   PERF_STORAGE_GATE_BYTES,
 } from '../../../../bench/perf';
 import { BENCHES } from '../../../../bench/run_bench';
+import { monthPopupGateMs, PERF_POPUP_CI_CEILING_MS } from '../../e2e/support/perf-gates';
 
 describe('pnpm bench: perf (sprint_6 6.4)', () => {
   it('is registered, with the sprint’s gates', () => {
@@ -24,5 +25,15 @@ describe('pnpm bench: perf (sprint_6 6.4)', () => {
         PERF_POPUP_GATE_MS: 100,
       },
     );
+  });
+});
+
+describe('the 30-day popup paint gate on CI (Decisions [7.0])', () => {
+  it('holds 100 ms everywhere but GitHub Actions, and there a 250 ms ceiling', () => {
+    expect(PERF_POPUP_CI_CEILING_MS).toBe(250);
+    expect(monthPopupGateMs({})).toBe(100);
+    expect(monthPopupGateMs({ CI: 'true' })).toBe(100);
+    expect(monthPopupGateMs({ GITHUB_ACTIONS: 'false' })).toBe(100);
+    expect(monthPopupGateMs({ GITHUB_ACTIONS: 'true' })).toBe(PERF_POPUP_CI_CEILING_MS);
   });
 });
