@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "description": "Attest: receipts for your AI agents. Workspace root; the extension lives in extension/.",
-  "license": "Apache-2.0",
+  "license": "FSL-1.1-ALv2",
   "packageManager": "pnpm@10.34.6",
   "engines": {
     "node": ">=22.12.0 <23"

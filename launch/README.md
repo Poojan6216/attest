@@ -10,7 +10,7 @@
 | [screenshots/](screenshots/) and [promo-tile.png](promo-tile.png) | The store's five screenshots and its small promo tile, invented data only (`pnpm record-screenshots`) | Ready |
 | [demo.gif](demo.gif) | The 60 second demo, also in the README (`pnpm record-demo`) | Ready |
 | [show-hn.md](show-hn.md) | The Show HN title, body and first five replies | Needs founder edit: the incident and install links |
-| [reddit/](reddit/) | Three posts: [r/privacy](reddit/r-privacy.md), [r/ChatGPT](reddit/r-chatgpt.md), [r/ClaudeAI](reddit/r-claudeai.md) | Needs founder edit: the links; r/ClaudeAI says open source, which holds only if the license stays open (MANUAL.md, license) |
+| [reddit/](reddit/) | Three posts: [r/privacy](reddit/r-privacy.md), [r/ChatGPT](reddit/r-chatgpt.md), [r/ClaudeAI](reddit/r-claudeai.md) | Needs founder edit: the links; r/ClaudeAI says the source is public under the Functional Source License, which holds once the repository is public (MANUAL.md) |
 | [dm-template.md](dm-template.md) | The message to incident authors and commenters | Needs founder edit: each name, incident and the Loom link |
 | [weekly-posts.md](weekly-posts.md) | Four weeks of one post each | Needs founder edit: the incident links, and his own receipt screenshots when he has them |
 | [alerts.md](alerts.md) | Searches for people describing an agent acting unasked, and a three line reply | Ready |

@@ -14,7 +14,7 @@ You own distribution. The founder is an engineer who says he is bad at marketing
 2. `screenshots/` — generated from fixture pages via Playwright at 1280×800; no real data.
 3. `demo.gif` — the §2 demo, 60 s, no voiceover, captions only; produced by `pnpm record-demo` (`scripts/record-launch.ts`).
 4. `show-hn.md` — title (≤ 80 chars, starts "Show HN:"), body: three dated incidents, what Attest checks, "nothing leaves your browser, read the source", the honest limitations, the attacks-that-work link, install link. Plus the first five comment replies pre-drafted (privacy, "why not an API", "what about mobile", "will vendors block this", "how do you make money").
-5. `reddit/` — three posts, each tailored: r/privacy (local-only angle), r/ChatGPT or r/OpenAI (Dots/agent angle), r/ClaudeAI (open-source angle). Each ≤ 200 words, each ends with a question.
+5. `reddit/` — three posts, each tailored: r/privacy (local-only angle), r/ChatGPT or r/OpenAI (Dots/agent angle), r/ClaudeAI (readable source angle: the code is public under the FSL, not open source). Each ≤ 200 words, each ends with a question.
 6. `dm-template.md` — 80-word message to the six named incident authors and HN commenters, with a Loom placeholder; no flattery, one ask.
 7. `weekly-posts.md` — four weeks of one-post-per-week for X/LinkedIn: each is one incident + one receipt screenshot + one line.
 8. `reliability-report-v0.md` — template for the monthly "Agent Reliability Report" from opt-in aggregates: per-agent counts, verified rate, not-found rate, unasked rate, coverage caveats. Numbers only from `/v1/stats`. Never publish with n < 50 installs.

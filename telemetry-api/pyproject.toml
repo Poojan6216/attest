@@ -3,7 +3,7 @@ name = "attest-telemetry-api"
 version = "0.1.0"
 description = "Attest's one server: the opt-in daily counts from the extension, validated, stored and summed into public monthly totals, and nothing else."
 requires-python = ">=3.12,<3.13"
-license = "Apache-2.0"
+license = "FSL-1.1-ALv2"
 dependencies = [
     "fastapi>=0.115,<1",
     "motor>=3.6,<4",

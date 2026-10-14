@@ -43,7 +43,7 @@ When the founder is at the keyboard he runs these four himself by pasting the pr
 Never make the repository public (`gh repo edit … --visibility public`, or "make the repo public") while either MANUAL.md item is open: cleaning the real captures (Sprint 7) or the old bench trace in the history (Sprint 4 close). Say which is open instead (Sprint 7 close, security review SEC-7).
 
 ## Locked stack (full table in `build_spec.md §5`)
-TypeScript strict · Manifest V3 · WXT · Preact + Tailwind · Dexie · Zod · Vitest + fast-check · Playwright on fixture pages · ESLint strict + custom rules · pnpm · Node 22 · telemetry-api: FastAPI + Pydantic v2 + motor + uv on Railway · Apache-2.0 · Conventional Commits · SemVer.
+TypeScript strict · Manifest V3 · WXT · Preact + Tailwind · Dexie · Zod · Vitest + fast-check · Playwright on fixture pages · ESLint strict + custom rules · pnpm · Node 22 · telemetry-api: FastAPI + Pydantic v2 + motor + uv on Railway · FSL-1.1-ALv2 · Conventional Commits · SemVer.
 
 ## Repo layout
 Exactly `build_spec.md §6`. `src/core` is pure (no DOM, no chrome, no Dexie, no I/O, no clock, no model). Entrypoints are thin. Adapters/observers are fixture-driven and read-only.

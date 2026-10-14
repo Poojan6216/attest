@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- The license: the Functional Source License 1.1 with Apache 2.0 as the future license (FSL-1.1-ALv2, `LICENSE`). The source is public to read, run and change for any purpose but a competing product or service; each version becomes Apache 2.0 two years after its release.
 - WXT + Manifest V3 + Preact + Tailwind scaffold with TypeScript strict, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`, and a strict extension CSP.
 - Workspace commands, run from the repository root: `pnpm dev`, `pnpm build`, `pnpm build:release`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm test` and `pnpm e2e`.
 - Lint fences: `attest/no-act` (no clicks, events, DOM writes, navigation or network in anything that reads a vendor page), `src/core` purity (no impure imports, globals, clock or randomness), `attest/top-level-listeners` (MV3), and `console` only in `src/log.ts`. Inline disables have no effect in fenced scopes.

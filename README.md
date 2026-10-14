@@ -143,4 +143,6 @@ The telemetry API, in `telemetry-api/`, has its own commands, the monthly report
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+The Functional Source License, version 1.1, with Apache 2.0 as the future license (FSL-1.1-ALv2). See `LICENSE`.
+
+The source is public so anyone can check what Attest reads and what it sends. You may read, run, change and share it for any purpose but a competing one: offering it, or something substantially like it, to others in a commercial product or service. Each version becomes Apache 2.0 two years after it is released.

@@ -130,7 +130,7 @@ Don't re-litigate these. Change only with a `Decisions.md` entry that names the 
 | Telemetry backend | **FastAPI + MongoDB** on Railway. One endpoint. Strict Pydantic schema. Rate-limited. Public aggregate stats later. |
 | Encryption at rest | Optional passphrase: AES-GCM, key from PBKDF2 (600k iterations). Off by default; on = ledger unreadable without the passphrase. (Amended: AES-256-GCM is computed by `@noble/ciphers`, not WebCrypto, so rows seal inside IndexedDB transactions; the key is still WebCrypto's PBKDF2. Decisions [6.5] and [6.close], Hard Rules 2 and 9.) |
 | Grading policy | `policy/default.json`, versioned. Thresholds and windows live here, never in code. |
-| License | **Apache-2.0**. |
+| License | **FSL-1.1-ALv2** (the Functional Source License 1.1; each version becomes Apache-2.0 two years after release). The founder's choice on 2026-10-14; Apache-2.0 until then (Decisions [7.0]). |
 | Repo | `github.com/Poojan6216/attest`, public from the first commit. |
 | Versioning | SemVer. `0.1.0` is the store launch. CHANGELOG kept by hand. |
 | Commits | Conventional Commits. |
@@ -157,7 +157,7 @@ attest/
 ├── README.md
 ├── PRIVACY.md                     # the store-facing privacy policy
 ├── CHANGELOG.md
-├── LICENSE                        # Apache-2.0
+├── LICENSE                        # FSL-1.1-ALv2
 ├── agents/                        # role files (see sprints for which to read)
 ├── sprints/                       # sprint_0.md … sprint_7.md
 ├── reviews/                       # sprint_<N>/{qa,security,tech,closed}.md
@@ -610,6 +610,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-13] [7.0] Done with your go-ahead: the telemetry server runs on Railway at attest-production-5149.up.railway.app with its MongoDB, and its health, stats and address checks answer as they should; the privacy policy (0.13) names you as its operator with your contact address and says what Railway's own logs keep (7 days); the store zip, attest-0.1.0.zip, is built against that server, audited and installed on a clean profile. CI's end-to-end job had 4 failures: two test-only timing problems, now fixed (the service worker ran in the machine's time zone, not the test's; the keyboard test counted the settings page's controls before it had finished loading), and the 30-day popup paint at 116 and 124 ms on GitHub's runner against the 100 ms gate, which stays as it is until you decide.
 [2026-10-13] [7.8] Your two choices, done and recorded. CI now holds the 30-day popup paint to 250 ms on GitHub's slower machines (it measured 116 to 168 ms there), so CI still catches a real slowdown; the 100 ms gate stays on your Mac and in RESULTS.md. And v0.1.0 is tagged once GitHub Pages is live, so the tag points at the zip you upload: say "Pages is live" and I add the policy's address to the manifest, rebuild the zip, tag it and make the release page.
 [2026-10-13] [7] CI is fully green on bf02892, all eight jobs, for the first time since Sprint 3: 113 end-to-end tests, the two mandatory ones among them. One more test-only fix got it there: the settings page's tests read the page before it knew your choices (on GitHub's slow machines), so every one of them now waits until the page has loaded. What is left is yours, in MANUAL.md: the two history clean-ups, then the public repository and GitHub Pages, then "Pages is live" for the tag, the store submission and the launch posts.
+[2026-10-14] [7.0] License chosen and applied: the Functional Source License (FSL-1.1-ALv2), your choice. The code will be public to read, run and change; a competing product or service built from it is not allowed; each version becomes Apache-2.0 two years after it is released. LICENSE is the official template with "Copyright 2026 Poojan Patel"; both package.json files, the server's pyproject, the README, the changelog and the build spec say so, and the r/ClaudeAI post no longer calls Attest open source, which FSL is not. All docs and launch-copy tests pass. Next is yours: turn auto mode off and say "do the history clean-up".
 ```
 
 ---
