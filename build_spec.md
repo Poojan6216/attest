@@ -454,17 +454,17 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 
 ## 10. Definition of done (v0.1.0)
 
-- [ ] The §2 demo runs end to end against fixture pages in CI and against the founder's live accounts by hand
-- [ ] The nothing-leaves-the-browser test is green with telemetry off and with telemetry on (one allowlisted host)
-- [ ] The secret-seed test is green across IndexedDB, console, exports, telemetry
-- [ ] `grade()` determinism and model-monotonicity property tests are green
-- [ ] `attest replay` reproduces every receipt in a 30-day synthetic ledger
-- [ ] Every adapter and observer has a fixture set, a health check, a version, and a measured accuracy in `RESULTS.md`
-- [ ] `docs/attacks-that-work.md` names at least one attack that still works
-- [ ] Zero actions on vendor pages (lint rule green; E2E asserts no input events dispatched)
-- [ ] Permissions exactly as §5; CSP strict; no remote code
-- [ ] Store zip builds; listing, privacy policy, README, launch kit complete
-- [ ] `MANUAL.md` is the only thing standing between the repo and the store
+- [ ] The §2 demo runs end to end against fixture pages in CI and against the founder's live accounts by hand. *In CI: done (tests/e2e/demo-paste.spec.ts, Progress Log [3.16]). By hand: the founder's step, MANUAL.md.*
+- [x] The nothing-leaves-the-browser test is green with telemetry off and with telemetry on (one allowlisted host). *tests/e2e/network-intercept.spec.ts (@mandatory, off) and tests/e2e/telemetry.spec.ts (on, its one host); CI at 088cc7f.*
+- [x] The secret-seed test is green across IndexedDB, console, exports, telemetry. *tests/e2e/no-leak.spec.ts (@mandatory), the telemetry payloads sent and shown among its channels.*
+- [x] `grade()` determinism and model-monotonicity property tests are green. *tests/property/grade.property.spec.ts, monotonicity-batch and monotonicity-scores-batch.*
+- [x] `attest replay` reproduces every receipt in a 30-day synthetic ledger. *tests/e2e/perf-ledger.spec.ts replays the options page's export of the 30-day ledger: 5,000 receipts, 5,000 reproduced, 0 mismatched (2026-10-15).*
+- [x] Every adapter and observer has a fixture set, a health check, a version, and a measured accuracy in `RESULTS.md`. *Observers: Gmail Sent, Calendar and receipts, each measured. Deviation, accepted by the founder on 2026-10-15: the agent-page readers are off under their vendors' terms (Decisions [3.10]); the paste path that replaces them is measured (`paste`, `patterns`), and the Muse reader has synthetic fixtures, a health check and a version but no accuracy on real pages.*
+- [x] `docs/attacks-that-work.md` names at least one attack that still works.
+- [x] Zero actions on vendor pages (lint rule green; E2E asserts no input events dispatched). *`attest/no-act`; tests/e2e/no-input-events.spec.ts.*
+- [x] Permissions exactly as §5; CSP strict; no remote code. *`pnpm audit:manifest` on the release zip. Deviation, accepted by the founder on 2026-10-15: two hosts, Gmail and Calendar, not §5's five, since the agent readers are off (Decisions [3.10]).*
+- [x] Store zip builds; listing, privacy policy, README, launch kit complete. *v0.1.0's release; privacy READY (reviews/sprint_7/privacy.md).*
+- [x] `MANUAL.md` is the only thing standing between the repo and the store. *The developer account, the upload and the certified form.*
 
 ---
 
@@ -615,6 +615,7 @@ Then the Gate. A sprint is not closed until `closed.md` says VERIFIED CLEAN and 
 [2026-10-14] [7.2] Attest is public at github.com/Poojan6216/attest, as you chose. Before that, every commit's email became your GitHub no-reply address (your university address was in all of them), in a fresh repository; the hour-old one is kept private as attest-archive-2. The privacy policy is live at poojan6216.github.io/attest/PRIVACY, the extension names it as its homepage, and the store listing names it too. main is protected: nobody can force-push or delete it, and others' changes must pass all eight CI checks (you can still push directly). Your other choices are in too: Hard Rule 1 says what the code does, the server uses PyMongo's driver instead of the deprecated motor, and the tests use httpx2. Railway follows the new repository, and the server answers as before. Next: the store zip with the policy address, the v0.1.0 tag and the release page.
 [2026-10-14] [7.8] Attest 0.1.0 is released: github.com/Poojan6216/attest/releases/tag/v0.1.0. The tag points at 088cc7f, which passed all eight CI checks; the store zip on the release page was built there by pnpm build:release, which audited it and installed it on a clean Chrome profile, and the download matches it byte for byte. It carries the privacy policy's address as its homepage and talks only to the two model vendors and your Railway server. What is left is yours: the Chrome Web Store developer account ($5), uploading that zip, certifying the privacy form and submitting (MANUAL.md has every click); then send me the store's item id for Railway.
 [2026-10-15] [7.7] The last privacy and security reviews ran on the release: privacy says READY for the store, and neither found anything critical, high or medium; the zip is clean, so v0.1.0 stands. Their small items are fixed: the policy's website no longer serves the saved Gmail and Calendar test pages (which could have looked like a fake Gmail) or the "open source" footer; the policy (now 0.14) adds a "Your rights" section and says the usage numbers are pseudonymous; the store form's draft adds two cautious boxes; there is a SECURITY.md; and the re-fake tools' record check is tighter. Four GitHub settings the security review suggests are yours to approve (MANUAL.md).
+[2026-10-15] [7.9] With your go-ahead, GitHub now scans for leaked keys and blocks pushes holding one, takes private vulnerability reports, keeps the v0.1.0 tag and its release files from ever changing, and runs only the actions CI uses; the two private archives can never be made public by a later session. The Definition of done is checked: ten of eleven items ticked with their evidence, two of them as the deviations you accepted (the agent readers are off under their vendors' terms). New proof for one item: replaying the options page's export of a 30-day ledger reproduces all 5,000 receipts. One item is left, and it is yours: run the demo by hand on your own Gmail and Calendar (about 15 minutes, steps in MANUAL.md). Say "demo done" with the two grades you saw, and I run the gate and write the Final Report.
 ```
 
 ---

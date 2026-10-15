@@ -27,13 +27,14 @@ import {
 } from './support/perf-ledger';
 import { measurePopupPaint, medianOf } from './support/popup-paint';
 import { MINUTE_MS } from './support/priya';
+import { replayFile } from './support/replay';
 
 const STORAGE_GATE_BYTES = PERF_STORAGE_GATE_BYTES;
 // 100 ms, or CI's ceiling on GitHub's runner (Decisions [7.0]); each title names the one it holds.
 const POPUP_GATE_MS = monthPopupGateMs();
 const POPUP_RUNS = PERF_POPUP_RUNS;
 test(
-  `the 30-day ledger: under 50 MB, the popup paints in under ${String(POPUP_GATE_MS)} ms, the exports and the idle worker measured`,
+  `the 30-day ledger: under 50 MB, the popup paints in under ${String(POPUP_GATE_MS)} ms, replay reproduces every receipt, the exports and the idle worker measured`,
   { tag: '@perf' },
   async () => {
     test.setTimeout(15 * 60_000);
@@ -44,18 +45,25 @@ test(
       const bytes = await storageBytes(extension);
       const paint = medianOf(await measurePopupPaint(extension, POPUP_RUNS), 'firstPaintMs');
       const json = await timeExport(extension, 'Export ledger');
+      // build_spec §10: `attest replay` reproduces every receipt of the 30-day ledger, from the file the options page
+      // saved. The CLI exits non-zero, so this throws, when one receipt differs.
+      const replayed = replayFile(json.file);
       const csv = await timeExport(extension, 'Export receipts');
       const idleHeap = await serviceWorkerHeapBytes(extension);
       console.log(
         `[perf-ledger] storage ${String(bytes)} B; popup first paint ${String(paint)} ms; ` +
           `JSON export ${String(json.ms)} ms, ${String(json.bytes)} B, peak heap +${String(json.peakHeapBytes)} B; ` +
           `CSV export ${String(csv.ms)} ms, ${String(csv.bytes)} B, peak heap +${String(csv.peakHeapBytes)} B; ` +
-          `worker idle heap ${String(idleHeap)} B`,
+          `worker idle heap ${String(idleHeap)} B; replay: ${replayed.trim().split('\n').slice(1).join(',').replace(/\s+/gu, ' ')}`,
       );
       expect(bytes).toBeGreaterThan(0);
       expect(bytes).toBeLessThan(STORAGE_GATE_BYTES);
       expect(paint).toBeLessThan(POPUP_GATE_MS);
       expect(json.bytes).toBeGreaterThan(0);
+      const receipts = Number(/receipts\s+(\d+)/u.exec(replayed)?.[1]);
+      expect(receipts).toBeGreaterThanOrEqual(rows.claims?.length ?? Number.POSITIVE_INFINITY);
+      expect(replayed).toMatch(new RegExp(`reproduced\\s+${String(receipts)}\\n`, 'u'));
+      expect(replayed).toMatch(/mismatched\s+0\n/u);
       expect(csv.bytes).toBeGreaterThan(0);
       expect(idleHeap).toBeGreaterThan(0);
     } finally {

@@ -27,3 +27,11 @@ export function replayExport(ledger: LedgerExport): string {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/** The summary lines `pnpm attest replay` prints for the export the options page saved at `file`. */
+export function replayFile(file: string): string {
+  return execFileSync('pnpm', ['--silent', 'attest', 'replay', file], {
+    cwd: EXTENSION_ROOT,
+    encoding: 'utf8',
+  });
+}

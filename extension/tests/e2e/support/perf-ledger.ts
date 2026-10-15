@@ -71,6 +71,8 @@ export interface ExportRun {
   readonly bytes: number;
   /** The options page's JS heap at its highest while the export ran, above where it started. */
   readonly peakHeapBytes: number;
+  /** The file the page saved, readable until the extension's browser closes. */
+  readonly file: string;
 }
 
 /** Clicks `button` on the options page and times the file it saves, sampling the page's heap all the while. */
@@ -94,12 +96,13 @@ export async function timeExport(extension: LaunchedExtension, button: string): 
   await page.getByRole('button', { name: button }).click();
   const file = await downloaded;
   const ms = Date.now() - started;
-  const bytes = (await readFile(await file.path())).length;
+  const saved = await file.path();
+  const bytes = (await readFile(saved)).length;
   const heap = await page.evaluate((): unknown => Reflect.get(window, '__attestHeap'));
   await page.close();
   const start = Number(Reflect.get(heap ?? {}, 'start'));
   const peak = Number(Reflect.get(heap ?? {}, 'peak'));
-  return { ms, bytes, peakHeapBytes: Math.max(0, peak - start) };
+  return { ms, bytes, peakHeapBytes: Math.max(0, peak - start), file: saved };
 }
 
 /** One DevTools protocol call on `wsUrl`'s target, answered or failed within ten seconds. */
