@@ -24,6 +24,7 @@ import { attributeVerdict, closeWindow, createInertWindow, textNodes } from './c
 import { CaptureError } from './capture-error';
 import { Faker } from './capture-fakes';
 import { captureKey } from './capture-key';
+import { isInside, REPOSITORY, writeRecord } from './capture-record';
 import { type PiiKind, Scrubber } from './capture-pii';
 import { fakeRowValues, replaceIds, type RowStats } from './capture-rows';
 import { isCalendarPage } from './capture-url';
@@ -113,9 +114,6 @@ export function refakeHtml(
 const pageUrlOf = (file: string): string =>
   file.split(path.sep).includes('gcal') ? 'https://calendar.google.com/' : 'https://mail.google.com/';
 
-/** The repository root: a record written under it would commit the old fakes. */
-const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
 export async function main(argv: readonly string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -124,29 +122,36 @@ export async function main(argv: readonly string[]): Promise<number> {
     strict: true,
   });
   const record = values.record === undefined ? undefined : path.resolve(values.record);
-  if (record !== undefined && !path.relative(REPOSITORY, record).startsWith('..')) {
+  if (record !== undefined && isInside(REPOSITORY, record)) {
     throw new CaptureError(
       'bad_args',
       '--record must name a file outside the repository: it holds the old fakes.',
     );
   }
   const seed = await captureKey();
-  const made: (Replacement & { file: string })[] = [];
+  const results: { readonly file: string; readonly result: RefakeResult }[] = [];
   for (const file of positionals) {
-    const result = refakeHtml(await readFile(file, 'utf8'), {
-      seed,
-      pageUrl: pageUrlOf(path.resolve(file)),
-      also: values.also ?? [],
+    const html = await readFile(file, 'utf8');
+    results.push({
+      file,
+      result: refakeHtml(html, { seed, pageUrl: pageUrlOf(path.resolve(file)), also: values.also ?? [] }),
     });
+  }
+  // The record first (./capture-record.ts): a record that cannot be written leaves every page as it was.
+  if (record !== undefined) {
+    const made = results.flatMap(({ file, result }) =>
+      result.made.map((entry) => ({ ...entry, file: path.basename(file) })),
+    );
+    await writeRecord(record, `${JSON.stringify(made, null, 1)}\n`);
+  }
+  for (const { file, result } of results) {
     await writeFile(file, result.html);
     const counts = new Map<string, number>();
     for (const entry of result.made) counts.set(entry.kind, (counts.get(entry.kind) ?? 0) + 1);
     console.log(
       `${path.basename(file)}: ${[...counts].map(([kind, n]) => `${String(n)} ${kind}`).join(', ') || 'nothing'}`,
     );
-    made.push(...result.made.map((entry) => ({ ...entry, file: path.basename(file) })));
   }
-  if (record !== undefined) await writeFile(record, `${JSON.stringify(made, null, 1)}\n`, { mode: 0o600 });
   return 0;
 }
 

@@ -372,3 +372,355 @@ Each needs a wrong or hostile answer, which is why this is LOW. But the report i
   - methods, query strings, the trailing slash and CORS;
   - the report script's address check, its handling of a 200 answer and urllib's redirects, with `urlopen` stubbed (SEC-3).
 - `ffmpeg -i launch/demo.gif -vsync 0 <scratch>/f-%d.png`, then every frame, screenshot and the tile viewed. PNG chunks and GIF blocks listed. Every changed text file scanned for addresses at non-reserved domains, counting only, in the lines Sprint 7 added. The demo's two source pages and the capture folders were counted the same way, never printing a value.
+
+## Re-run 2026-10-14 on v0.1.0 (088cc7f)
+
+Role: agents/security_reviewer.md (task 7.7, again, on the release build). Range: `git diff 4f5d3c2..5f12c02`, from the Sprint 7 close ("chore(sprint-7): close 58 review gaps", 4f5d3c2 in the rewritten history; `commit-map-2026-10-14.txt` maps the old ids) to HEAD: 20 commits, 52 files. Also the release zip, `extension/.output/attest-0.1.0.zip` (SHA-256 `a2f6e40ff33abf49…faad4`, built at the tag v0.1.0 = 088cc7f), and the public repository's settings. Every file:line below is as at 5f12c02.
+
+What changed, by kind:
+
+- **Shipped extension code.** Two constants:
+  - `TELEMETRY_HOST` is the deployed Railway host (`extension/src/config-network.ts:22`);
+  - `HOMEPAGE_URL` (`src/config-manifest.ts:19`) is written as the manifest's `homepage_url` (`wxt.config.ts:204`). The audit allows that key with that value only (`scripts/audit-manifest.ts:35`, `:150`).
+- **Telemetry API.** PyMongo's `AsyncMongoClient` replaces motor (`app/store.py:24`, `:104-107`, `:143-144`). For the tests only: `httpx2` (with `httpcore2` and `truststore`) in place of `httpx`, `mongomock` in place of `mongomock-motor`, and `tests/async_mongo.py`. The image still installs with `uv sync --locked --no-dev` (Dockerfile unchanged since 5.8).
+- **Test tooling.** `extension/tests/tools/capture-refake-people.ts` (new); `capture-fakes.ts` now exports its pools.
+- **CI.** The unit job installs Playwright's Chromium (`.github/workflows/ci.yml:47-48`).
+- **The repository.** Public since 2026-10-14: a new repository holding the rewritten history, two rulesets on `main`, Pages built from `main`'s root, the tag and release v0.1.0.
+- **Everything else.** Docs, the license (FSL-1.1-ALv2), tests.
+
+`policy/` and `pnpm-lock.yaml` are unchanged; `telemetry-api/uv.lock` changed.
+
+**How.**
+
+- Read every changed code, config and tool file against the checklist.
+- Unzipped the release zip into a new empty folder in the scratchpad. Read its manifest and CSP, grepped every bundle, page and stylesheet, and compared every source its source maps hold with the tree at 088cc7f.
+- Read the repository's GitHub settings with read-only `gh api` calls. Changed nothing.
+- Ran the tools listed at the end.
+- Did not run Playwright, `pnpm e2e` or the extension's full unit suite. CI run 38675724976 on 088cc7f passed all eight jobs, `build · e2e` with both mandatory tests among them.
+- Never read the capture key. Fixture values were counted by shape, never printed.
+
+I wrote only this section and scratch files outside the repository.
+
+**Verdict: 6 gaps.** 0 CRITICAL, 0 HIGH, 0 MEDIUM, 6 LOW.
+
+The release zip is what the tag says, and holds nothing it should not:
+
+- it is byte for byte the build in `extension/.output/chrome-mv3/`, and GitHub's digest of the release asset `attest-0.1.0.zip` is the same SHA-256;
+- all 420 sources under `src/`, `entrypoints/` and `policy/` in its source maps equal their files at 088cc7f;
+- its `connect-src` names the two model vendors and the Railway host only, it has no development page, and `fetch(` is at two sites in `background.js` only.
+
+The repository holds no secret, no home path and no personal value but those the founder chose to publish (PRIVACY.md's operator and private contact). The gaps are in what surrounds the release:
+
+- the public repository's own guards are off (SEC-R3, SEC-R4);
+- Pages publishes the whole repository beside the policy (SEC-R2);
+- the telemetry host is a name the founder holds only while Railway's service keeps it (SEC-R5);
+- what is left of the clean-up: the re-fake tool's record guard (SEC-R1) and the two private archives (SEC-R6).
+
+### Checklist
+
+| Item | Status | Finding |
+| --- | --- | --- |
+| Network grep finds only `src/telemetry/send.ts` | PASS, one documented exception (unchanged) | Two hits, as at the close: `send.ts:38` and `src/intel/providers/byo.ts:94`. No EventSource, importScripts, WebTransport or RTCPeerConnection. In the zip, `fetch(` is only in `background.js`, twice. |
+| Network-intercept E2E ran; allowlist one host or none | NOT RUN here; green on CI | Not run, as asked. CI run 38675724976 on 088cc7f: `build · e2e` passed, its @mandatory step and the report check among it. Now that `TELEMETRY_HOST` resolves, what matters is that no test reaches it: every launch runs behind the dead proxy (`extension/tests/e2e/support/extension.ts:176-180`), the perf gate and the zip's install check included, since they use the same launcher. |
+| No remote img, fonts or CDN | PASS | The zip's four pages load only `/chunks/` and `/assets/`; its stylesheet has no `url(` or `@import`. |
+| No externally_connectable, webRequest or DNR | PASS | None in the zip's manifest. |
+| Observations and claims go through `redact.project()` | PASS | No new path. |
+| Policy allowlist unchanged, or logged | PASS | `policy/` is unchanged. |
+| Secret-seed test green across every channel | NOT RUN here; green on CI | The same CI run; `no-leak.spec.ts` is among the mandatory tests. |
+| Length caps | PASS | No new field. The re-fake keeps each phrase on its side of the 80-character subject hint (`capture-refake-people.ts:41`, `:132`). |
+| Exports and shares use the projection | PASS | Unchanged. |
+| `attest/no-act`, zero disables | PASS | ESLint exits 0 on the seven changed extension files and on `scripts/audit-manifest.ts`. No `eslint-disable` in `src` or `entrypoints`. |
+| No click, submit, dispatch, value or focus on vendor DOM | PASS | The shipped change is two constants. |
+| No tabs.create or update on a vendor host | PASS | None added. |
+| No executeScript with string code | PASS | None. |
+| Permissions ⊆ allowed set | PASS | storage, alarms, scripting, notifications, sidePanel; optional idle; unchanged. |
+| host_permissions exact | PASS | Gmail and Calendar only. |
+| Optional permission requested in a gesture | PASS | Unchanged. |
+| CSP | PASS, with SEC-R5 | `default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' blob:; form-action 'none'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://attest-production-5149.up.railway.app`. `pnpm audit:manifest extension/.output/attest-0.1.0.zip`: OK. Whose name the host is: SEC-R5. |
+| `homepage_url`, a new manifest key | PASS, with SEC-R2 | The audit requires exactly `HOMEPAGE_URL` and fails any other value or none (`scripts/audit-manifest.ts:150`), unit-tested. It is a link on Chrome's details page; no code reads it. What its site publishes besides the policy: SEC-R2. |
+| No remote code | PASS | No `eval(`. `Function(` only as Zod's jitless probe (three files, as before). Every `import(` is a relative chunk. The bit.ly and tinyurl strings are Dexie's error texts. |
+| Page text never a selector, type, key or instruction | PASS | Unchanged. |
+| Model input allowlisted, tested with a double | PASS | Unchanged. |
+| Bus messages parsed; unknown dropped and logged | PASS | Unchanged. |
+| Stored data parsed on read | PASS | Unchanged. |
+| Text nodes only | PASS | Unchanged. |
+| Dexie bump; encryption; wipe | N/A | Unchanged. |
+| Install id random, resettable, the only identifier | PASS | Unchanged. |
+| `log.ts` only; no DOM or raw objects | PASS | No shipped logging change. `capture-refake-people.ts` prints file names and counts only (`:231-237`), and its errors carry no value. |
+| No PII in user-facing errors | PASS | Unchanged. The zip's issue link names the public repository. |
+| No bare catch; every catch logs | PASS | No catch added. `store.py` still turns `PyMongoError` into `StoreError`, which the routes log. |
+| Pydantic `extra='forbid'` inbound; JSON-Schema parity green | PASS | Inbound unchanged. `uv run pytest`: 278 passed, the parity tests among them. |
+| Rate limit per install id and per IP; IP never stored | PASS | Unchanged; a stored document is still `{_id, payload, received_at}`. |
+| No endpoint beyond `/health`, `/v1/aggregate`, `/v1/stats` | PASS | The routes are unchanged. |
+| Secrets in env only; `pip-audit` clean | PASS | `MONGO_URL` comes from the environment, as before; no secret in `railway.json`, the Dockerfile or the API's README. `uv run pip-audit`: "No known vulnerabilities found". The image's packages (`uv export --locked --no-dev`): 18, PyMongo 4.18.3 and dnspython in place of motor. httpx2, httpcore2, truststore and mongomock are for the tests and never in the image. |
+| `pnpm audit --prod` | PASS | "No known vulnerabilities found". `pnpm-lock.yaml` unchanged. |
+| New dependency logged | PASS, with a note | Decisions [7.close] (2026-10-14, the Mongo driver) names PyMongo, mongomock and httpx2, but no license, size or maintenance. Read from their metadata: PyMongo Apache-2.0 (MongoDB); httpx2 and httpcore2 BSD-3-Clause (by Tom Christie, maintained by Pydantic Services; Starlette 1.7's test client imports `httpx2` first and warns on `httpx`); truststore MIT; mongomock ISC. truststore 0.10.5 was published 2026-10-12, two days before the lock. |
+| Vendor terms | N/A | No adapter changed. |
+
+### Beyond the checklist
+
+#### The release zip
+
+- **What it is.** `diff -rq` finds it identical to `extension/.output/chrome-mv3/` (built 23:20). GitHub reports the release asset's digest as `sha256:a2f6e40f…faad4`, the local file's. `sprints/sprint_7.md:26`, on protected `main`, records the same.
+- **Its manifest.**
+  - Version 0.1.0, `homepage_url` the policy's address, `minimum_chrome_version` 122, `incognito: not_allowed`.
+  - The permissions and hosts above, and no content script declared.
+  - No development page: no `dev.html` or `model-check.html`. The words appear only in two source maps, as a type name and a comment.
+- **Every URL in its code and pages.**
+  - The vendors' endpoints and the telemetry host, in the background's chunk only.
+  - The observer hosts' match patterns, and the agents' sites as data.
+  - The policy's address and the issue link, both on the public repository.
+  - WXT's and Tailwind's comment URLs, and Dexie's error links.
+  - The two content scripts hold no telemetry or vendor host (privacy review gap 15 holds).
+- **Its source maps.** 420 sources under `src/`, `entrypoints/` and `policy/`, all equal to 088cc7f's files, and 82 under `node_modules/`. No home path, no test, no fixture.
+- **Personal values.** None: the GitHub handle `Poojan6216` appears only in the two links.
+
+#### The telemetry API's driver
+
+- What it does is unchanged: the errors (`PyMongoError`, `DuplicateKeyError`), the two-second server selection, the stored document, the indexes; `aggregate` is awaited, as PyMongo's async collection requires.
+- The stand-in lives under `tests/`, and the image copies only `app/` (`Dockerfile`, `COPY app ./app`). Nothing in `app/` imports from the tests or mongomock.
+- ruff, `ruff format --check` and mypy strict are clean; 278 tests pass; `uv lock --check` is current.
+
+#### The re-fake tool
+
+- What it reads, writes and prints:
+  - it reads the capture key, every page named and every `--scan` file;
+  - it rewrites the pages in place;
+  - it writes the mapping, every old fake beside its new one, to `--record`;
+  - it prints file names and counts.
+- The record must stay out of the repository: committed, it would bring back the old fakes the history rewrite removed. The guard that keeps it out has holes (SEC-R1).
+- No record is in the working tree, tracked or ignored.
+
+#### CI
+
+- The new step installs Chromium with its system packages in the unit job, as the e2e job already did.
+- Unchanged around it:
+  - the workflow's token stays `contents: read`;
+  - every action stays pinned by SHA;
+  - the triggers stay `push` to `main` and `pull_request`, never `pull_request_target`, so a fork's PR runs with a read-only token and no secret (the repository has none).
+
+#### The public repository
+
+- **At HEAD (`git grep`).**
+  - **Keys.** No token or key shape but the tests' invented `sk-ant-…invented…` keys. No tracked `.env`, key or credential file.
+  - **Paths.** Absolute paths only as test strings (an invented user's home folder, under `/home/…` and `/Users/…`) and in check-docs' own rule text.
+  - **The founder.** The founder's Gmail address once, in PRIVACY.md's Contact, the private contact the founder chose (MANUAL.md:70). The GitHub handle in links.
+- **The captures.** The 25 captured pages hold 462 addresses at non-reserved domains. Every one has a local part in the faker's shape, at a kept sender's domain (by design, Decisions [2.close-r3]). There are no others. Counted, never printed.
+- **The history.** Every reachable blob (5,055) was searched, and the seven versions of `bench/traces/popup-paint.zip` were unzipped.
+  - No path of this Mac's home folder in any trace.
+  - The founder's address appears only in PRIVACY.md's versions.
+  - All 488 author and committer fields are the no-reply address, apart from Dependabot's and GitHub's; the tag's tagger is the no-reply address too.
+- **The old ids.** Four original ids from the map, asked of the public repository's API, each answer "No commit found"; their new ids resolve. The repository is not a fork and has no fork.
+- **Settings, read only.**
+  - **Rulesets.**
+    - "main: no force-push or deletion" has no bypass.
+    - "main: CI checks pass" requires the eight jobs, each bound to GitHub Actions' app (id 15368), so no other app's status counts. Repository admins bypass it always; it is not strict.
+    - The only collaborator is the founder (admin). No ruleset covers tags (SEC-R4).
+  - **Actions.**
+    - The default token is read-only and cannot approve PRs.
+    - A first-time contributor's PR waits for approval.
+    - Every action is allowed, and SHA pinning is not required (SEC-R4).
+    - No secrets and no variables; artifacts are kept 90 days.
+  - **Security.**
+    - Dependabot alerts and security updates are on.
+    - Off: secret scanning, push protection, validity checks and private vulnerability reporting (SEC-R3), and immutable releases (SEC-R4).
+  - **Pages.** The legacy build of `main` at `/`, HTTPS enforced, no `_config.yml` (SEC-R2).
+  - **Environments.**
+    - `github-pages`, with a branch policy.
+    - Railway's `elegant-quietude / production`, with no protection rule. Railway deploys `main` on a change under `telemetry-api/` (Decisions [7.0]).
+
+### Gaps
+
+| # | Sev | Rule | Where | Gap | Fix direction (one line) |
+| --- | --- | --- | --- | --- | --- |
+| SEC-R1 | LOW | HR2, HR10 | `extension/tests/tools/capture-refake-people.ts:195-196`, `:216-222`, `:227-229`, `:235`; `extension/tests/unit/tools/capture-refake-people.spec.ts:128-133`; `docs/adapters.md:425` | The record's "outside the repository" check is a string prefix on an unresolved path, which three kinds of path inside the repository pass: `..people.json` at its root, its path in another case, a symlink. `0o600` holds only for a new file, and the record is written after the pages | Compare real paths (or ask git), test `..` plus a separator, create the record exclusively without following links, write it before any page, test each case |
+| SEC-R2 | LOW | — | GitHub Pages (legacy build of `main` at `/`); `extension/src/config-manifest.ts:19`; `launch/store-listing.md:81`; `MANUAL.md:69`; `Decisions.md:1708` | Pages publishes the whole repository on the policy's origin and path, 64 Google and Muse look-alike fixture pages among it | Publish the policy alone, at the same address, and test what is published |
+| SEC-R3 | LOW | HR10 | Repository settings: `security_and_analysis`, private vulnerability reporting; no `SECURITY.md`; `PRIVACY.md:173` | On the public repository, secret scanning, push protection and private vulnerability reporting are off, and no SECURITY.md says where to report | Turn all three on and add a SECURITY.md naming the private route |
+| SEC-R4 | LOW | HR9 | Rulesets (branch only); immutable releases off; Actions `allowed_actions: all`, `sha_pinning_required: false`; `MANUAL.md:72`; `Decisions.md:1709` | The release's tag and zip can be moved or replaced, and only convention keeps every action pinned | A tag ruleset on `v*`, immutable releases, Actions limited to the three owners used, SHA pinning required |
+| SEC-R5 | LOW | HR1 | `extension/src/config-network.ts:22`; `Decisions.md:1698`; `telemetry-api/README.md:48` | The one telemetry host is a name under Railway's shared domain. Freed, anyone can take it, and every installed build would send its usage numbers there | Never give the name up while a build naming it may be installed (MANUAL.md, Decisions); move to a registered domain before a wide launch |
+| SEC-R6 | LOW | HR2, HR10 | `CLAUDE.md:42-43`; `MANUAL.md:67`; `reviews/sprint_7/commit-map-2026-10-14.txt:5` | `attest-archive` and `attest-archive-2` hold everything the clean-ups removed. Only one MANUAL.md sentence keeps them private, and CLAUDE.md's go-public rule names neither | Name both in CLAUDE.md's rule as never public or transferred, and set a date to delete them |
+
+#### SEC-R1 (LOW, HR2, HR10): the record's guard lets three kinds of path inside the repository through
+
+**Where.**
+
+- `extension/tests/tools/capture-refake-people.ts`:
+  - `:195-196`, `REPOSITORY`, the repository's path as the module's URL gives it;
+  - `:216-222`, the check: `path.relative(REPOSITORY, path.resolve(record)).startsWith('..')`;
+  - `:227-229`, every page rewritten in place, then the record written at `:235` with `{ mode: 0o600 }`.
+- `extension/tests/unit/tools/capture-refake-people.spec.ts:128-133`: one path inside (`extension/tests/people.json`), and none.
+- `docs/adapters.md:425`: `--record "$TMPDIR/people.json"`.
+
+**What happens.** Measured on this Mac with Node's `path`, and with `writeFile` in the scratchpad. The tool itself was not run, since it reads the capture key.
+
+1. **A name that starts with two dots.** `--record <repository>/..people.json` passes: its relative path, `..people.json`, starts with `..`. The file lands in the repository's root, which `.gitignore` does not cover, so `git add -A` commits it.
+2. **Another case.** `--record /Users/…/documents/attest/people.json` passes, and so does `…/ATTEST/extension/people.json`: `path.relative` compares case by case, and this Mac's APFS volume does not, so the file lands in the repository.
+3. **A symlink.** A path through a symlink into the repository passes, since nothing resolves real paths. `writeFile` also follows a symlink at the record's own name.
+4. **The mode.** `writeFile`'s `mode` applies only when it creates the file. Measured: over an existing file of mode 644, the record stays 644.
+5. **The order.** The pages are written before the record. When the record cannot be written (a folder that does not exist, or `$TMPDIR` unset, so `/people.json`), every page is already re-faked and the mapping is lost.
+
+The record maps every old fake to its new one. Committed, it would put back in the public repository the old fakes that the history rewrite removed, each confirmable with the public seed (SEC-L2). The tool has done its work, and Decisions [7.close] says its records were deleted, so this needs the tool again and a slip: LOW.
+
+**Fix.**
+
+- Resolve the record's folder with `fs.realpath`, and compare it with the repository's real path, case-folded where the file system ignores case. Or refuse whenever `git -C <folder> rev-parse --show-toplevel` succeeds.
+- Read the relative path as `rel === '..' || rel.startsWith('..' + path.sep)`, never a bare prefix.
+- Create the record exclusively (`wx`) without following a link (`O_NOFOLLOW`), and refuse an existing file.
+- Write the record first, then the pages.
+- Add the four cases to the spec: `..x` at the root, the repository in another case, a symlink, an existing file.
+
+#### SEC-R2 (LOW): Pages publishes the whole repository beside the policy
+
+**Where.**
+
+- GitHub Pages: the legacy build of `main` at `/` (`gh api repos/Poojan6216/attest/pages`). There is no `_config.yml` and no `.nojekyll`.
+- `extension/src/config-manifest.ts:19` and `launch/store-listing.md:81`: the manifest's homepage and the store's privacy policy URL are this site's `/attest/PRIVACY`.
+- `MANUAL.md:69`; Decisions [7.2] (`Decisions.md:1708`).
+
+**What happens.**
+
+- A legacy build runs Jekyll over the whole tree and publishes every file outside dot and underscore folders, about 1,700 tracked files. Static HTML is served as it is.
+- Among them are 64 fixture pages under `extension/tests/fixtures/pages/{gmail,gcal,muse}/`:
+  - 41 are titled as Gmail and 18 as Calendar;
+  - 51 hold a form, and 59 link to `accounts.google.com`;
+  - 25 are the founder's own Gmail and Calendar pages, re-faked.
+- They are live pages at `https://poojan6216.github.io/attest/extension/tests/fixtures/pages/…`, on the policy's origin and under its path. This is derived from the settings and Jekyll's defaults; no page was fetched, by this review's rules.
+- None holds a password field, and none outside `_harness/` (which Jekyll leaves out) holds a script, so no page can collect or run anything.
+- The risk is to the policy. Pages that copy Google's mail and calendar on a host that is not Google's are what phishing classifiers flag. A Safe Browsing flag on that origin would put a warning in front of the policy the store requires and the manifest links. Search engines would also index the captures as pages.
+
+**Fix.**
+
+- Publish the policy alone, at the same address (`/attest/PRIVACY`). The safer way is a Pages workflow, its actions pinned by SHA, that uploads only the rendered policy. A `_config.yml` whose `exclude` leaves only `PRIVACY.md` also works, but a new top-level folder would be published until someone adds it to the list.
+- Add a test, or a step in that workflow, that fails when the site holds anything but the policy.
+
+#### SEC-R3 (LOW, HR10): no secret scanning and no private report route on the public repository
+
+**Where.**
+
+- `gh api repos/Poojan6216/attest`: `secret_scanning`, `secret_scanning_push_protection`, `secret_scanning_validity_checks` and `secret_scanning_non_provider_patterns` are all `disabled`.
+- `private-vulnerability-reporting`: `enabled: false`.
+- No `SECURITY.md`. `PRIVACY.md:173` sends people to public issues, and to the private contact for anything private.
+
+**What happens.**
+
+- The founder pushes to `main` directly; the ruleset lets admins bypass. Day to day, the project handles what must never be pushed: a model key for the own-key path, and Railway's `MONGO_URL`.
+- Nothing on the repository scans a push, or the history, for one. GitHub's partner scanning and the push protection on the founder's own account may still apply, but they are not this repository's settings, and they cover no other pusher.
+- Someone who finds a vulnerability sees no private route on GitHub. The route they see is a public issue.
+
+**Fix.**
+
+- Turn on secret scanning, push protection, validity checks and non-provider patterns, all free for a public repository.
+- Turn on private vulnerability reporting, and add a `SECURITY.md` that names it and the private contact.
+- These are settings, so they go in MANUAL.md, or to the agent on the founder's word.
+
+#### SEC-R4 (LOW, HR9): the release's tag and zip can be changed after the fact
+
+**Where.**
+
+- Both rulesets target `~DEFAULT_BRANCH`; none targets tags.
+- `gh api repos/Poojan6216/attest/immutable-releases`: `enabled: false`. The release v0.1.0 reports `immutable: false`.
+- `actions/permissions`: `allowed_actions: all`, `sha_pinning_required: false`.
+- `MANUAL.md:72` tells the founder to upload "that same zip (it is attached to the release)". Decisions [7.8] (`Decisions.md:1709`) says the release notes give its SHA-256.
+
+**What happens.**
+
+- Any token with write access can delete `v0.1.0` and point it elsewhere, or replace the release's zip. The SHA-256 in the notes can be edited in the same call, so it is no check against whoever changes the asset. Only `sprints/sprint_7.md:26`, on protected `main`, keeps the original.
+- Every workflow and the setup action pin each action by SHA today, but only by convention. A later change could name a tag or a branch, and the setting allows any action from anywhere.
+- Only the founder can write today, so either needs his token or a slip: LOW.
+
+**Fix.**
+
+- Add a ruleset on `refs/tags/v*`: no deletion, no update, no force-push. Creating a tag stays allowed.
+- Turn on immutable releases for every later release.
+- Limit Actions to the three owners used (`actions`, `pnpm`, `astral-sh`), and require SHA pinning.
+
+#### SEC-R5 (LOW, HR1): the one telemetry host is a name the founder holds only while Railway's service keeps it
+
+**Where.**
+
+- `extension/src/config-network.ts:22`, and so the CSP's `connect-src` in every build from v0.1.0 on.
+- Decisions [7.0] (`Decisions.md:1698`), which chose Railway's address over a custom domain.
+- `telemetry-api/README.md:48`.
+
+**What happens.**
+
+- `attest-production-5149.up.railway.app` is a name in Railway's shared domain. The founder holds it while his service keeps it as its domain.
+- Railway lets a project pick its own free name under `up.railway.app`. Once this one is freed, anyone can take it: the service or the project deleted, or the domain removed or renamed, say in a move to a custom domain.
+- From then on, every installed build that names it, with the option on, sends its usage numbers there each day: the install id, the counts, the versions and the date.
+- The extension cannot tell. The CSP allows a name, not a key, and whoever holds the name answers its own CORS.
+- Decisions [7.0] records that a move to a custom domain needs a new version. It does not record that the old name must then stay held for as long as any install still runs a version that names it.
+- It needs the founder to give the name up: LOW.
+
+**Fix.**
+
+- Write it down in MANUAL.md and Decisions: never delete the Railway service, nor remove or rename its domain, while any version naming it may still be installed. A move to a new domain keeps the old one answering (a 410, or the same API) until then.
+- Before a wide launch, move to a domain the founder registers and renews, so the name stays his whatever the host.
+
+#### SEC-R6 (LOW, HR2, HR10): the two private archives hold everything the clean-ups removed, and no agent rule keeps them private
+
+**Where.**
+
+- `CLAUDE.md:42-43`, "Going public": its rule names "the repository" and the two clean-ups, both now done.
+- `MANUAL.md:67`: "keep `Poojan6216/attest-archive` private". `attest-archive-2` is named only as staying private.
+- `reviews/sprint_7/commit-map-2026-10-14.txt:5` tells every reader the archive exists.
+
+**What happens.**
+
+- What each archive holds, by Decisions [7.close]:
+  - `attest-archive`: the history before the rewrite. That is the capture files with the old fakes (each confirmable with the public seed, SEC-L2), the trace with this Mac's paths, the founder's university address in every author and committer field, and twelve pull request refs.
+  - `attest-archive-2`: the university address in every commit.
+- Both are private today: `private: true`, no fork (read).
+- One visibility change or transfer of either undoes the clean-up, and nothing an agent reads forbids it. CLAUDE.md's rule is spent now that both items are ticked, and it names neither archive.
+
+**Fix.**
+
+- Extend CLAUDE.md's "Going public" rule: never make `attest-archive` or `attest-archive-2` public, never transfer them, and never push their history anywhere public.
+- Decide when they can be deleted (the commit map already keeps every old id), and put that date in MANUAL.md.
+
+### Notes (not security gaps)
+
+- **Railway's PR environments** cannot be read from here. With the repository public, a fork's pull request must never be built with the project's variables (`MONGO_URL`). Nothing read shows such environments on: GitHub lists only Railway's production environment. Confirming they are off is a one-line check in Railway.
+- **`ALLOWED_EXT_IDS` is empty.** So v0.1.0's usage numbers cannot be delivered until the store gives the item its id, as Decisions [7.0] says. No security effect.
+- **The e2e launcher passes `env: { ...process.env, TZ }` to the browser** (`extension/tests/e2e/support/extension.ts:187-192`). Playwright's default environment is the same `process.env`, so nothing new reaches the browser.
+- **The license change** has no security effect.
+
+### Commands run
+
+- `git log --oneline 4f5d3c2..HEAD`, `git diff --stat`, and the diffs of every changed code, config and tool file. `git status` at the start and before writing.
+- The checklist's network grep over `extension/src` and `extension/entrypoints`, with EventSource, importScripts, WebTransport and RTCPeerConnection added. The `eval(`, `new Function(` and remote `import(` greps.
+- On the zip:
+  - `shasum -a 256`, then `unzip` into a new empty scratch folder, and `diff -rq` with `extension/.output/chrome-mv3/`;
+  - the manifest printed;
+  - `fetch(`, `eval(`, `Function(` and `import(` greps, and every URL, across the bundles, pages and stylesheet;
+  - every source map's sources listed, and their contents compared with `git show 088cc7f:<path>` (420 equal, 0 different);
+  - home paths, key shapes and the founder's names searched in every file, maps included.
+- `pnpm audit:manifest extension/.output/attest-0.1.0.zip`: OK. `pnpm audit --prod`: no known vulnerabilities.
+- In `telemetry-api/`:
+  - `uv run pip-audit`: no known vulnerabilities;
+  - `uv lock --check`, `uv export --locked --no-dev`, `uv tree --no-dev`;
+  - ruff, `ruff format --check`;
+  - `mypy app tests scripts`: no issues in 34 files;
+  - `pytest`: 278 passed.
+- `eslint --max-warnings 0` on the seven changed extension files and on `scripts/audit-manifest.ts`: exit 0.
+- `vitest run` on four specs: capture-refake-people, audit-manifest, the telemetry facts and manifest-hosts. 68 passed, with `ATTEST_CAPTURE_KEY_FILE` pointed at a scratch path so nothing could read the capture key.
+- Node's `path.relative` on the guard's edge cases, and `fs.promises.writeFile` over an existing file and through a symlink, in the scratchpad (SEC-R1).
+- `git grep` on HEAD, every match counted:
+  - key and token shapes, credential file names, absolute paths;
+  - the founder's names and addresses, and the email domains outside the fixtures;
+  - in the fixture pages: addresses, titles, forms, scripts and links, by shape, never printed.
+- The history:
+  - every reachable blob (5,055) searched for home paths and the founder's address;
+  - the seven trace zips unzipped and searched;
+  - the author, committer and tagger emails listed;
+  - four original ids asked of the public repository.
+- `gh api`, read only:
+  - the repository and its rulesets;
+  - Actions: the token's permissions, approval of forks' PRs, allowed actions, and the counts of secrets and variables;
+  - the environments, Pages and its latest build;
+  - private vulnerability reporting, immutable releases and vulnerability alerts;
+  - collaborators, forks and pull requests;
+  - the release and its assets;
+  - the jobs of CI run 38675724976;
+  - the two archives' visibility.
+
+**Counts: 0 CRITICAL, 0 HIGH, 0 MEDIUM, 6 LOW** (SEC-R1 to SEC-R6).

@@ -26,6 +26,7 @@ import { parseArgs } from 'node:util';
 import { CaptureError } from './capture-error';
 import { Faker, matchCase, NAME_HEADS, NAME_TAILS, PHRASE_WORDS } from './capture-fakes';
 import { captureKey } from './capture-key';
+import { isInside, REPOSITORY, writeRecord } from './capture-record';
 import { escapeRegExp } from './capture-pii';
 import { SCHEMA_LIMITS } from '../../src/core/schema-primitives';
 
@@ -192,9 +193,6 @@ export function applyPeople(
   return { text: out + text.slice(last), counts };
 }
 
-/** The repository root: a record written under it would commit the old fakes. */
-const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
 const recordOf = (mapping: PeopleMapping): string =>
   `${JSON.stringify(
     Object.fromEntries(Object.entries(mapping).map(([kind, map]) => [kind, Object.fromEntries(map)])),
@@ -214,7 +212,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     strict: true,
   });
   const record = values.record === undefined ? undefined : path.resolve(values.record);
-  if (record === undefined || !path.relative(REPOSITORY, record).startsWith('..')) {
+  if (record === undefined || isInside(REPOSITORY, record)) {
     throw new CaptureError(
       'bad_args',
       '--record must name a file outside the repository: it holds the old fakes.',
@@ -224,15 +222,16 @@ export async function main(argv: readonly string[]): Promise<number> {
   for (const file of positionals) texts.set(file, await readFile(file, 'utf8'));
   const scanned = await Promise.all((values.scan ?? []).map((file) => readFile(file, 'utf8')));
   const mapping = peopleMapping(fakesIn([...texts.values(), ...scanned]), await captureKey());
-  for (const [file, text] of texts) {
-    const result = applyPeople(text, mapping);
+  const results = [...texts].map(([file, text]) => ({ file, result: applyPeople(text, mapping) }));
+  // The record first (./capture-record.ts): a record that cannot be written leaves every file as it was.
+  await writeRecord(record, recordOf(mapping));
+  for (const { file, result } of results) {
     if (values['dry-run'] !== true) await writeFile(file, result.text);
     const { email, name, phrase, clamp } = result.counts;
     console.log(
       `${file}: ${String(email)} emails, ${String(name)} names, ${String(phrase)} phrases, ${String(clamp)} cut hints`,
     );
   }
-  await writeFile(record, recordOf(mapping), { mode: 0o600 });
   const sizes = Object.entries(mapping).map(([kind, map]) => `${String(map.size)} ${kind}s`);
   console.log(`mapping: ${sizes.join(', ')}`);
   return 0;

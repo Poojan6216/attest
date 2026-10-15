@@ -1,0 +1,26 @@
+# GitHub Pages builds this repository's root (MANUAL.md, GitHub Pages): it serves the privacy policy (PRIVACY.md, at
+# /attest/PRIVACY, the manifest's homepage_url) and the documents it links (docs/), and nothing else. The saved Gmail,
+# Calendar and agent test pages under extension/ must never be served from a public address: a copy of Gmail at the
+# policy's own address reads as a deceptive page (Sprint 7 privacy re-run, gap 19). _layouts/default.html is the one
+# layout, with no theme footer (gap 18: the default theme's "This site is open source" is wrong under FSL-1.1-ALv2).
+title: Attest
+exclude:
+  - extension
+  - telemetry-api
+  - bench
+  - launch
+  - reviews
+  - sprints
+  - agents
+  - scripts
+  - policy
+  - node_modules
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - tsconfig.json
+  - eslint.config.js
+  - CLAUDE.md
+  - MANUAL.md
+  - build_spec.md
+  - Decisions.md

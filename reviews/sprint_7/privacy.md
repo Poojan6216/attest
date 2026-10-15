@@ -208,3 +208,188 @@ Role: `agents/privacy_reviewer.md`, run in full, reading Attest 0.1.0 as the Chr
 Gaps 12 to 17 are LOW and are worth folding into the same edits.
 
 When gaps 1 to 4 are done and gaps 6 to 11 are fixed, a re-run of this review on the release zip can say READY.
+
+## Re-run 2026-10-14 on v0.1.0 (088cc7f)
+
+Role: `agents/privacy_reviewer.md`, run again in full on what the store gets: the tagged release, v0.1.0 on `088cc7f`. Read on the night of 2026-10-14, US Eastern (the live pages answered at 03:53 UTC on 15 October). Range: `4f5d3c2..5f12c02`, the Sprint 7 close to the release commit; after `088cc7f`, only Decisions.md, MANUAL.md, build_spec.md and the sprint file changed. Nothing was fixed; this section is the review's only write.
+
+**What was read.**
+- **The store zip**, `extension/.output/attest-0.1.0.zip`, SHA-256 `a2f6e40ff33abf4999e360c3c23b4e21ed42d857235da6fe91ed614dae3faad4`, unzipped into an empty scratch folder: its manifest, its 63 files, every bundle and every source map. The maps embed 420 of Attest's own source files, and each is byte for byte the file at `088cc7f`, so the zip is that commit's build.
+- **The live policy**, https://poojan6216.github.io/attest/PRIVACY, the architecture page it links, the site's home, and two of the test pages the site also serves (finding 19).
+- **The telemetry host**: `GET /health` answered 200 `{"status":"ok"}`; `GET /v1/stats` answered 204, so nothing is published yet.
+- `launch/store-listing.md`, `PRIVACY.md` 0.13, `docs/privacy-architecture.md`, the README's first screen, the launch posts, `telemetry-api/app/store.py` and the API's README, Decisions `[7.close]`, `[7.2]` and `[7.8]`, and MANUAL.md's open items.
+- **Network.** Besides those GETs: one HEAD of the policy page, and one `git ls-remote` of origin to read the tag. Nothing was sent anywhere else. github.com was not fetched, so the repository's visibility comes from Decisions `[7.2]` and the Pages build (gap 2).
+
+**Verdict: READY.** Every HIGH and MEDIUM gap of the review above is closed, on the zip and on the live page. One step is left before the store: the founder certifies the privacy form at submission. The draft answers are complete and accurate enough to certify. Five new LOW findings remain. None blocks, and three are worth the few lines each takes before Submit.
+
+### Gaps 1 to 17, now
+
+1. **[HIGH then] The policy had no public address. Closed.**
+   - The zip's manifest holds `"homepage_url": "https://poojan6216.github.io/attest/PRIVACY"`. The audit fails any other value (`scripts/audit-manifest.ts:149`, `HOMEPAGE_URL` at `extension/src/config-manifest.ts:19`).
+   - The listing gives the same address as the privacy policy URL (`launch/store-listing.md:81`).
+   - The address answers 200 `text/html` with no redirect. Its stylesheet's `?v=` is `088cc7f63df4…`, so Pages built it from the tagged commit.
+   - The page is PRIVACY.md 0.13: every non-empty line of the file was found verbatim in its text, the host, the operator, the private address, the 7 days and the 90 days among them.
+   - Its one internal link, the architecture's §12, answers 200, and the anchor exists.
+2. **[HIGH then] No public source. Closed.**
+   - Decisions `[7.2]` (2026-10-14): the repository is public, Pages builds `main` from its root, and `main` is protected.
+   - The page's own "Improve this page" link edits `github.com/Poojan6216/attest/edit/main/PRIVACY.md`.
+   - The zip's two links into the repository: the options page's "Read how" (`PRIVACY_DOC_URL`, `extension/src/config.ts:385`) and the degraded banner's report link (`ISSUES_URL`, `:379`). The policy's history and Contact (`PRIVACY.md:169,173`) and the listing's homepage and support (`launch/store-listing.md:13-14`) point there too.
+   - **The published history.** Every author and committer field of the 246 commits is a GitHub no-reply address, and no commit message holds a personal address.
+   - **The fixture pages,** scanned by count only:
+     - neither the founder's name nor his address appears;
+     - 16 addresses sit at domains outside the reserved ones: 7 are companies' sending addresses, 8 are pool-made fakes, and 1 is in a synthetic page;
+     - a surname that appears 14 times is an invented person at a reserved domain, also in synthetic pages only.
+3. **[HIGH then] No store zip. Closed.** The checks the review above asked for, on the zip:
+   - (a) `unzip -l` lists 63 files, with no `dev.html`, no `model-check.html` and no chunk of theirs.
+   - (b) `connect-src` is `'self' https://api.anthropic.com https://api.openai.com https://attest-production-5149.up.railway.app`. No host under `.invalid` appears anywhere; the `.invalid` strings in the bundles are error codes such as `window.invalid`.
+   - (c) Exactly two `fetch(` call sites in all bundles, both in `background.js`:
+     - the own key's, to the vendor's endpoint;
+     - the telemetry's, to `https://attest-production-5149.up.railway.app/v1/aggregate`.
+
+     Each sends `credentials: 'omit'`, `referrerPolicy: 'no-referrer'`, `cache: 'no-store'` and `redirect: 'error'`.
+   - (d) `pnpm audit:manifest` passes on the zip and on its unzipped manifest.
+   - (e) PRIVACY.md no longer says a server is not running, and `privacy-policy.spec.ts` holds that.
+   - Also clean:
+     - no test fixture and no absolute path in any source map;
+     - no `eval`, `new Function`, `importScripts`, XHR, WebSocket, `sendBeacon`, `chrome.identity` or Google API;
+     - each of the four pages loads one local module script and no inline script, and the CSS has no `url()` or `@import`.
+
+   The clean-profile install is Decisions `[7.8]`'s; no browser was used here.
+4. **[HIGH then] The privacy form is the founder's to certify. Not a blocker: the draft is ready to certify.** Read against the zip, the answers hold:
+   - **Single purpose:** one sentence (`:60`).
+   - **Permissions:** eight lines (`:49-56`), exactly the zip's five permissions, one optional permission and two hosts.
+   - **Remote code:** "No" is true of the zip (gap 3).
+   - **What the developer collects** (`:77`): the fields of `TelemetryPayload` exactly, with the publication and the 90 days.
+   - **Categories for the usage numbers** (`:78`): a stated default, *Personally identifiable information* and *User activity*.
+   - **The own key** (`:79`): the fields of `IntelCandidate` exactly, and a stated cautious default.
+   - **The three certifications** (`:80`) and the live policy URL (`:81`).
+   - `store-listing.spec.ts` and `store-listing-permissions.spec.ts` hold the fields and the permissions (both pass).
+   - **One limit of the form:** it takes categories without an "opt-in" mark, so the store's card will not say opt-in. The description and the policy do, which is enough.
+   - **The choice:** the draft still leaves the own key's declaration to the founder (MANUAL.md:73, step 4), with a clear cautious default. Certifying is the founder's step at submission. Two boxes deserve a second look first (finding 20).
+5. **[MEDIUM then] OpenAI's terms not re-read. Closed.** Decisions `[7.close]` (`Decisions.md:1695`): the founder's Chrome read OpenAI's Terms of Use on 2026-10-13 (effective 1 January 2026). "Automatically or programmatically extract data or Output" reads word for word as quoted in `[3.10]`. Meta's, Anthropic's and Google's terms were re-read the same day, and MANUAL.md:62 item (3) says so. The ChatGPT reader stays off: the zip asks for no agent's host.
+6. **[MEDIUM then] The policy understated what the own key sends. Closed.**
+   - `PRIVACY.md:97` names a purchase's receipt email. `:104` and `:110` name Attest's id for the match and, for a purchase, the merchant.
+   - The architecture's §1 says the same (`docs/privacy-architecture.md:30`).
+   - `privacy-policy.spec.ts` holds both of the policy's paragraphs to every field of the model's input schema (passes).
+   - The zip's options page says the same, naming both vendors' hosts.
+7. **[MEDIUM then] The policy misstated the telemetry server. Closed.**
+   - `PRIVACY.md:112` names `attest-production-5149.up.railway.app`, the zip's only telemetry host.
+   - `:116` now reads: "Nothing Attest reads from your pages reaches Attest's maker; with the usage numbers on, only the report above does."
+8. **[MEDIUM then] No server retention, no operator, no private contact. Closed.**
+   - **Retention.** A TTL index deletes each document 90 days after it arrived (`telemetry-api/app/store.py:32,114`, `expireAfterSeconds=RETENTION_DAYS * 86_400`). It survived the move to PyMongo's async client (`71e5f6c`).
+   - **The policy** says so (`PRIVACY.md:112,122,136`), as does the architecture (`:561`).
+   - **Operator and host.** It names the operator, Poojan Patel, and Railway as the host of the server and its database (`:126`).
+   - **Contact.** It gives a private address (`:173`) and says how to have one install id's reports deleted (`:136`).
+   - **Reports already sent.** It says they stay on the server until then, whatever is deleted in the browser (`:136`).
+   - **Left over.** Gap 8 also cited GDPR's legal-basis and complaint items, and its named fixes did not cover them: finding 22.
+9. **[MEDIUM then] The publication was not said where people consent. Closed.**
+   - The zip's options page says, beside the switch: "Totals across all installs, a month at a time and never one install's numbers, are published, and Attest's monthly report on how often each agent's claims checked out is written from them."
+   - The listing's Limited Use and form answer say it (`:66,77`). The policy's stated purpose includes the publication (`PRIVACY.md:112`).
+   - Nothing was published before the disclosure: `/v1/stats` answers 204.
+10. **[MEDIUM then] The 50-install floor could be beaten. Closed, with the limit accepted at the close.**
+    - **What the server does now.** It publishes one closed month and has a per-agent floor. An install counts only once its reports arrived on 3 dates, and one client may send for at most 4 install ids a day.
+    - **What the policy says.** The floors make made-up installs "slow, not impossible" (`PRIVACY.md:112`). The close accepted the residue, two addresses reaching 50 (closed.md, accepted 1), and the founder checks the store's user count before each report.
+    - **Checked here.** `test_stats.py`, `test_store.py` and `test_api_close_7.py` pass, 29 tests.
+11. **[MEDIUM then] Launch copy said "never sends". Closed.**
+    - The r/privacy title says Attest "keeps your mail in your browser" (`launch/reddit/r-privacy.md:7`).
+    - The message says "sending nothing unless you turn it on" (`launch/dm-template.md:7`).
+    - The Show HN title says "runs locally, misses some" (`launch/show-hn.md:15`).
+    - `launch-kit.spec.ts` refuses the old claims (passes). The r/ClaudeAI post no longer calls the code open source (`launch/reddit/r-claudeai.md:3`), and no file under `launch/` does; the policy's web page does, through its theme (finding 18).
+12. **[LOW then] "Counts only". Closed.** Each says "counts, a random install id, versions and the date", or its equal: the listing (`:20,66,77`), the policy (`PRIVACY.md:10,20`) and the README (`README.md:33`).
+13. **[LOW then] The policy's storage lists. Closed.**
+    - Local storage (`PRIVACY.md:91,144`): the install id, the choices, the storage folder's name, and the own key with its vendor.
+    - Session memory: the away-detection marker, a clicked alert's receipt, the unlocked keys and the rebuild marker.
+14. **[LOW then] The server "never logs" the address, unverified for the host. Closed.**
+    - The policy (`PRIVACY.md:112`) and the architecture (`:470`) say what Railway's log keeps: the address, the full user agent, the path, the status and the timings, for 7 days on the plan used (30 on Pro). They also say Attest's maker does not use it.
+    - Residue, not counted: `telemetry-api/README.md:11` still says the address "is never stored and never logged". That is true of the API's code, in a developer document. One clause pointing to Railway's log would match the policy.
+15. **[LOW then] The page readers carried the AI vendors' endpoints. Closed.**
+    - The zip's `content-scripts/gmail.js` and `gcal.js` hold only two URL hosts, `mail.google.com` and `calendar.google.com`.
+    - They hold none of the vendors' APIs, `chatgpt.com`, `claude.ai`, `muse.ai` or the telemetry host, and no `fetch`, XHR, `sendBeacon` or WebSocket.
+    - The vendors' endpoints are in one shared chunk, which only the service worker and the extension's pages import.
+16. **[LOW then] The demo GIF had no invented-data guard. Closed.**
+    - `onlyInvented` (`extension/tests/e2e/support/launch-shots.ts:33`, called at `:54,106,161`) runs before every picture of both recorders. `demo.record.ts` takes its frames from there.
+    - No commit since 7.4 touches the screenshots, the promo tile or the GIF, so the viewing in the review above stands.
+17. **[LOW then] Two §11 limits missing. Closed.** All seven limits, Dots' Pro tier and the on-device model among them, are in `README.md:10` and `launch/store-listing.md:26`. `readme.spec.ts` and `store-listing.spec.ts` hold them to §11 (both pass).
+
+### New findings
+
+18. **[LOW] The policy's own web page says "This site is open source."**
+    - The repository has no `_config.yml` and no layout, so Pages uses its default theme. Its footer, under the policy, reads "This site is open source. Improve this page."
+    - The code is under FSL-1.1-ALv2 (`LICENSE`, `README.md:146`). The founder's own copy says that license is not open source and keeps the words out (`launch/reddit/r-claudeai.md:3`).
+    - The same theme loads `anchor-js` 4.1.0 from cdnjs.cloudflare.com, with an integrity hash. The page has no analytics and no tracker.
+
+    → the Pages site, built from the repository's root → honesty of copy. Fix: a root `_layouts/default.html`, the theme's layout without that footer line (and, if wanted, without anchor-js); or a theme without it. Then check that the address still answers.
+
+19. **[LOW] The policy's origin also serves every saved Gmail, Calendar and Muse test page.**
+    - Pages publishes the whole repository, so `extension/tests/fixtures/pages/**` is served as web pages: 64 of them, since Jekyll skips only `_harness/`.
+    - Two were fetched: a Gmail capture (1,025,718 bytes) and a Calendar capture (254,935 bytes). Each answered 200 `text/html`, the same size as the repository's file.
+    - Their personal values are fakes or invented, and they hold no script and no password field.
+    - They are still Google-styled Gmail and Calendar pages served from an origin that is not Google's, which is what Safe Browsing's deceptive-site checks look for. A warning on `poojan6216.github.io` would stand in front of the address the manifest and the listing give for the policy. A store reviewer who meets it can reject the item for a policy that does not open.
+    - The risk is a guess, hence LOW. The fix is a few lines.
+
+    → the Pages source (the repository's root) → CWS User Data policy (a privacy policy link that works); role: "Privacy policy URL live". Fix: a root `_config.yml` whose `exclude` leaves out what the site does not need (`extension/` at least; `bench/`, `telemetry-api/` and `scripts/` too). Then confirm that `/attest/PRIVACY` and `/attest/docs/privacy-architecture.html` still answer 200 and a fixture's address answers 404.
+
+20. **[LOW] Two form categories the cautious answers leave out.**
+    - **The own key.** The cautious answer (`launch/store-listing.md:79`) declares personally identifiable information, personal communications, financial information and website content, but not *Authentication information*. The key is a credential. Attest stores it (`PRIVACY.md:91`) and sends it in each request's header, to the company that issued it (`:110`). A reviewer who sees a key field in the options page may look for that box. Tick it with the others, or write why not: it goes only to its own issuer.
+    - **The usage numbers.** `coverageHours` (`extension/src/telemetry/schema.ts:66`) is how many hours of a day Gmail and Calendar were read. That is nearer the form's *Web history* ("time of visit") than *User activity*, which the form defines as clicks, mouse position, scrolling, keystrokes and network monitoring. Tick Web history as well, or write why User activity alone.
+
+    → `launch/store-listing.md:78-79` → CWS User Data policy, disclosure; role: "Data usage form answers match the code". Nothing in the zip changes.
+
+21. **[LOW] "Anonymous" usage numbers carry a persistent id, and the form will say so.**
+    - These call the usage numbers anonymous: the options page's switch (`TelemetryToggle.tsx:76`), the policy (`PRIVACY.md:10,20,112`), the listing (`:20,66`) and the architecture.
+    - The payload carries a random install id that joins an install's days until a reset (`PRIVACY.md:122`). Railway's log keeps each report's address and full user agent beside it for 7 days (`:112`). In GDPR's terms (Recital 26) that is pseudonymous data, not anonymous.
+    - With the cautious answer ticked, the store's card will show "Personally identifiable information" beside a description that says "anonymous daily usage numbers".
+    - The facts beside the word are accurate everywhere, and the role's own checklist uses the word, so this is LOW.
+
+    → the listing and the policy → honesty of copy; the listing agreeing with the form. Fix, without touching the zip: in the listing and the policy, "usage numbers" with "no name or address, a random install id", or "pseudonymous". Leave the switch's label for the next version, or record in Decisions why "anonymous" stays.
+
+22. **[LOW] The policy still lacks three of GDPR Article 13's items for the usage numbers.**
+    - **The legal basis:** consent, given by the switch (Art. 6(1)(a), 13(1)(c)).
+    - **Where the server and its database run:** Railway's region, and that reports go to that country (13(1)(f)).
+    - **Two rights:** to see one install id's reports, beside the deletion the policy already offers (`:136`), and to complain to a data protection authority (13(2)(b), (d)).
+
+    The data are opt-in counts under a random id, so the harm is small. Gap 8 cited these articles, and its named fixes are done. → `PRIVACY.md` → GDPR Art. 13. Fix: one short "Your rights" paragraph near Contact, and a version bump.
+
+### CONFIRMED on the zip and the live pages
+
+- **Listing and manifest agree.**
+  - The zip's name and summary are the listing's.
+  - The permission table is the zip's manifest exactly: `incognito: not_allowed`; no `content_scripts`, `web_accessible_resources`, `tabs` or `identity`.
+  - The listing's Homepage (the repository, `:13`) is the dashboard's field for the store's page. The manifest's `homepage_url` (the policy) is Chrome's "Open extension website". The two do not conflict.
+- **What leaves.** The zip sends only what its policy, listing and options page say.
+  - Since the close, `extension/src` changed only in `TELEMETRY_HOST` and `HOMEPAGE_URL`.
+  - The options page's statements are in the zip as quoted above, the telemetry host shown beside the switch.
+  - The issue link and the alert text are unchanged since the close.
+- **The live server.** `/health` answers 200. `/v1/stats` answers 204 with `Cache-Control: public, max-age=3600`: nothing is published.
+- **Stored data, retention, encryption, uninstall, export and Delete all data.** No stored type and no ledger code changed since the close, so its CONFIRMED items stand.
+- **Third parties.** The extension's runtime dependencies are unchanged. The API swapped motor for PyMongo, MongoDB's own driver, and added nothing else. There are no analytics, data broker or crash reporter.
+- **Children.** The audience is adults (`launch/store-listing.md:70`).
+- **The promise in the zip.** The manifest says "Nothing is sent unless you opt in." The pages say "Nothing leaves your browser." only while both sending options are off, and "Nothing leaves your browser unless you turn on an option that sends." otherwise.
+
+### Tests run here
+
+- **Vitest, 11 files, 109 tests pass:** the privacy policy, the privacy architecture, the listing, the listing's permissions, the launch kit, the README, the telemetry example, the telemetry facts, the manifest audit, the manifest hosts and the options page's telemetry.
+- **`uv run pytest`, 29 tests pass:** `test_stats.py`, `test_store.py` and `test_api_close_7.py`.
+- **`pnpm audit:manifest`:** OK on the zip and on its unzipped manifest.
+- **Not run:** Playwright and the end-to-end suite. CI on `088cc7f` passed all eight checks, the two `@mandatory` tests among them (Decisions `[7.8]`).
+
+### STORE-READINESS VERDICT
+
+**READY.**
+
+- **Closed.** Gaps 1, 2, 3 and 5 to 17, with the evidence above. The zip is `088cc7f`'s build, and it sends nothing its policy, listing and options page do not say.
+- **Gap 4, the founder's at submission.** The draft answers are complete and accurate enough to certify. Certify with the cautious answers for both options, plus finding 20's two boxes or the reason against each.
+- **Open: 0 CRITICAL, 0 HIGH, 0 MEDIUM, 5 LOW (18 to 22).** None blocks submission.
+  - **Before Submit:** 19 (the policy's address), 20 (the boxes being certified) and 21 (the word beside them).
+  - **Can wait:** 18 and 22 can come in the policy's next version.
+  - **No rebuild:** none of the fixes changes the zip, so v0.1.0 stands.
+
+**For the closer, text and site files only:**
+- 18: a root `_layouts/default.html` without the "This site is open source" footer, or a theme without it.
+- 19: a root `_config.yml` that excludes `extension/` and the other folders the site does not need. Then recheck the policy's and the architecture's addresses, and that a fixture's address is a 404.
+- 20: `launch/store-listing.md:78-79`. Add *Authentication information* for the own key and *Web history* for `coverageHours`, or the reason against each.
+- 21: "anonymous" in `launch/store-listing.md:20,66` and `PRIVACY.md:10,20,112`. Or record in Decisions why it stays.
+- 22: `PRIVACY.md`, a "Your rights" paragraph (consent, Railway's region, access, a complaint), and version 0.14.
+- **Optional:**
+  - `telemetry-api/README.md:11`, a clause on Railway's 7-day log.
+  - MANUAL.md:62 item (1) is done (the repository is public and Pages serves the policy) and can be ticked.

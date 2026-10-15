@@ -122,3 +122,20 @@ Run on `c03d43d`, a clean tree, with this report and the Progress Log apart:
 - **Not run here:** `scripts/prove_flow.py` needs Docker, which this machine lacks. CI's `telemetry-api-flow` job runs it on the next push, the month's sums on real MongoDB among its steps. Its sums step was run here against the tests' store only.
 
 Commit: `chore(sprint-7): close 58 review gaps`.
+
+## Close of the re-runs on v0.1.0 (2026-10-15)
+
+The privacy re-run says **READY** (0 CRITICAL, 0 HIGH, 0 MEDIUM, 5 LOW: 18 to 22) and the security re-run finds 0 CRITICAL, 0 HIGH, 0 MEDIUM and 6 LOW (SEC-R1 to SEC-R6); the release zip is clean in both, and no fix below changes it, so v0.1.0 stands.
+
+| Finding | Outcome | What was done |
+|---|---|---|
+| Privacy 18: the policy's page says "This site is open source" | FIXED | `_layouts/default.html`, the site's one layout, with no theme footer. |
+| Privacy 19 and SEC-R2: Pages served the saved Gmail, Calendar and Muse test pages beside the policy | FIXED | `_config.yml` excludes `extension/` and every other folder but `docs/`, so the site is the policy, the documents it links and the root's Markdown; checked live after Pages rebuilt (the policy and the architecture page answer 200, a test page 404). |
+| Privacy 20: two form categories | FIXED | `launch/store-listing.md`: the cautious answers add *Web history* for `coverageHours` and *Authentication information* for the own key, which goes only to its issuer. The founder certifies. |
+| Privacy 21: "anonymous" usage numbers carry a persistent id | FIXED in the policy and the listing; the switch's label ACCEPTED for 0.1.0 | PRIVACY.md and the listing say the reports hold nothing about who you are, but the install id links one install's days, so they are pseudonymous. The options switch, "anonymous usage numbers", is in the shipped zip and keeps its name until the next version. |
+| Privacy 22: GDPR Article 13 items | FIXED | PRIVACY.md 0.14, "Your rights": consent as the basis, the server and database in Railway's US East region (Virginia, United States, seen in each service's settings), seeing or deleting one install id's reports through the private contact, and a complaint to a data protection authority. |
+| SEC-R1: the record guard of both re-fake tools | FIXED | `extension/tests/tools/capture-record.ts`: one check for both tools that resolves links, ignores letter case and reads `..name` at the root as inside; the record is written owner-only even over an existing file, and before any page is rewritten. `tests/unit/tools/capture-record.spec.ts` holds each path the review found. |
+| SEC-R3: secret scanning, push protection, private vulnerability reporting, SECURITY.md | FIXED (SECURITY.md); the three settings MANUAL | `SECURITY.md` says how to report privately. Turning the three settings on is the founder's (repository settings). |
+| SEC-R4: tags and releases can be changed; any action may run | MANUAL | A tag ruleset on `v*`, immutable releases and an Actions allow-list are repository settings, the founder's to turn on. |
+| SEC-R5: the telemetry host is a name on Railway's shared domain | MANUAL | A standing MANUAL.md item: never give the name up while a build naming it may be installed, and consider a domain of the founder's own before a wide launch. |
+| SEC-R6: the two private archives | MANUAL | A standing MANUAL.md item: keep both private, never transfer them, and delete them when the old history is no longer needed. Naming them in CLAUDE.md's go-public rule is the founder's to approve. |
