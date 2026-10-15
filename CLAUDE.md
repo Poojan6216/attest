@@ -40,7 +40,7 @@ When the founder is at the keyboard he runs these four himself by pasting the pr
 8. Minimal permissions; 9. No remote code, strict CSP; 10. Never log secrets; 11. Read vendor pages only when the user has them open; 12. Never report an unmeasured number
 
 ## Going public
-Never make the repository public (`gh repo edit … --visibility public`, or "make the repo public") while either MANUAL.md item is open: cleaning the real captures (Sprint 7) or the old bench trace in the history (Sprint 4 close). Say which is open instead (Sprint 7 close, security review SEC-7).
+Never make the repository public (`gh repo edit … --visibility public`, or "make the repo public") while either MANUAL.md item is open: cleaning the real captures (Sprint 7) or the old bench trace in the history (Sprint 4 close). Say which is open instead (Sprint 7 close, security review SEC-7). Both were done on 2026-10-14 and `Poojan6216/attest` is public. Never make `Poojan6216/attest-archive` or `Poojan6216/attest-archive-2` public, and never transfer either: they hold the history the clean-ups removed (MANUAL.md; Sprint 7 security re-run, SEC-R6).
 
 ## Locked stack (full table in `build_spec.md §5`)
 TypeScript strict · Manifest V3 · WXT · Preact + Tailwind · Dexie · Zod · Vitest + fast-check · Playwright on fixture pages · ESLint strict + custom rules · pnpm · Node 22 · telemetry-api: FastAPI + Pydantic v2 + PyMongo async + uv on Railway · FSL-1.1-ALv2 · Conventional Commits · SemVer.
