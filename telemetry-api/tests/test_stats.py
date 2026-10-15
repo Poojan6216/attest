@@ -1,20 +1,19 @@
-"""``GET /v1/stats`` (sprint_7 7.5; agents/backend_engineer.md rule 7; app/stats.py; Sprint 7 close), over the
-in-memory store, and its sums over mongomock's motor stand-in too. Read on 20 November 2026, it publishes October:
-nothing (204) below 50 installs, the current small dataset among them; an install counted only once its reports arrived
-on three UTC dates; at 50, each agent's installs, receipts and VERIFIED, NOT_FOUND and UNASKED counts and rates, with
-the days outside October left out and an agent fewer than 50 installs used null; never an install id; the same answer
-until November is published, which a client may keep an hour, or less when November comes sooner; 503 when the
-database does not answer. The answer's agents, and the store's sums, are the payload schema's.
+"""``GET /v1/stats`` (sprint_7 7.5; agents/backend_engineer.md rule 7; app/stats.py; Sprint 7 close), over the in-memory
+store, and its sums over an in-memory stand-in of PyMongo's async client (tests/async_mongo.py) too. Read on 20 November
+2026, it publishes October: nothing (204) below 50 installs, the current small dataset among them; an install counted
+only once its reports arrived on three UTC dates; at 50, each agent's installs, receipts and VERIFIED, NOT_FOUND and
+UNASKED counts and rates, with the days outside October left out and an agent fewer than 50 installs used null; never an
+install id; the same answer until November is published, which a client may keep an hour, or less when November comes
+sooner; 503 when the database does not answer. The answer's agents, and the store's sums, are the payload schema's.
 """
 
 import asyncio
 from datetime import UTC, date, datetime, timedelta
 
-from mongomock_motor import AsyncMongoMockClient
-
 from app.schema import AGENTS, GRADES, AgentCounts, GradeCounts
 from app.stats import MIN_DAYS, MIN_INSTALLS
-from app.store import Document, MongoStore, Totals, sums
+from app.store import Totals, sums
+from tests.async_mongo import AsyncMongoMock, store_over
 from tests.memory import MemoryStore
 from tests.support import NOVEMBER_PUBLISHED, OCTOBER, Sent, api, fifty, install, month_of, sent
 
@@ -130,8 +129,8 @@ def test_mongo_sums_what_the_memory_store_sums() -> None:
         *on_one_date(month_of(62, VERIFIED=5)),
         sent(63, date(2026, 11, 1), VERIFIED=9),
     ]
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    mongo = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    mongo = store_over(mock)
     memory = MemoryStore()
     since, until = (day.isoformat() for day in OCTOBER)
 

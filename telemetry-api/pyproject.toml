@@ -6,16 +6,16 @@ requires-python = ">=3.12,<3.13"
 license = "FSL-1.1-ALv2"
 dependencies = [
     "fastapi>=0.115,<1",
-    "motor>=3.6,<4",
     "pydantic>=2.9,<3",
     "pydantic-settings>=2.6,<3",
+    "pymongo>=4.13,<5",
     "uvicorn>=0.32,<1",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
-    "mongomock-motor>=0.0.36",
+    "httpx2>=2.13.1",
+    "mongomock>=4.3",
     "mypy>=2.4.0",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",

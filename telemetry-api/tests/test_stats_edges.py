@@ -12,14 +12,14 @@ from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from mongomock_motor import AsyncMongoMockClient
 from pymongo.errors import ServerSelectionTimeoutError
 
 from app.main import create_app
 from app.schema import AGENTS, GRADES
 from app.settings import Settings
 from app.stats import MIN_DAYS, MIN_INSTALLS, PublishedStats, Stats, rate
-from app.store import Document, MongoStore, StoreError, Totals
+from app.store import Document, StoreError, Totals
+from tests.async_mongo import AsyncMongoMock, store_over
 from tests.memory import MemoryStore
 from tests.support import NOON, NOVEMBER_PUBLISHED, OCTOBER, Clock, api, fifty, month_of, report, sent
 
@@ -38,8 +38,8 @@ def test_counts_installs_never_the_days_they_sent() -> None:
 
 
 def test_mongo_counts_installs_never_the_days_they_sent() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    mongo = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    mongo = store_over(mock)
 
     async def run() -> Totals:
         for n in range(3):
@@ -113,8 +113,8 @@ def test_rates_every_grade_s_receipts_to_four_places() -> None:
 
 
 def test_mongo_sums_ignore_a_count_no_payload_holds_and_a_day_outside_every_month() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    mongo = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    mongo = store_over(mock)
     collection = mock["attest_telemetry"]["aggregates"]
     _, arrival = sent(0, date(2026, 10, 10))
     text_count = {**report(1, date(2026, 10, 10)), "counts": {"muse": {"VERIFIED": "7"}}}
@@ -155,8 +155,8 @@ def test_mongo_sums_ignore_a_count_no_payload_holds_and_a_day_outside_every_mont
 
 
 def test_a_database_error_in_a_sum_is_a_store_error_and_a_503(monkeypatch: pytest.MonkeyPatch) -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    mongo = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    mongo = store_over(mock)
 
     def refuse(*_args: object, **_kwargs: object) -> object:
         message = "no server answered"

@@ -2,7 +2,7 @@
 
 You build the one and only server component: a FastAPI endpoint that accepts opt-in aggregate counts from the extension and stores them in MongoDB. It is tiny on purpose. Your job is to keep it tiny, strict, and boring. If you find yourself adding a second endpoint, a user table, or anything that stores a string from the client, stop and re-read `build_spec.md` Hard Rule 1.
 
-## Tech: Python 3.12 + FastAPI + Pydantic v2 + motor (async Mongo) + uv + Railway
+## Tech: Python 3.12 + FastAPI + Pydantic v2 + PyMongo's async client (`AsyncMongoClient`; motor until 2026-10-14) + uv + Railway
 
 ## Rules
 1. Type hints on ALL functions. Pydantic models for every request and response. `model_config = ConfigDict(extra='forbid')` on the inbound model: any extra field → 422.

@@ -1,16 +1,15 @@
-"""The Mongo store (sprint_5 5.8; agents/backend_engineer.md rule 4), over mongomock's motor stand-in: one insert of
-exactly ``{payload, received_at}``, the document holding nothing else but its ``_id``, the hash of the install id and
-the day; one install's day stored once however often it comes (Sprint 5 close, tech review TECH-3); a ping; and the two
-indexes the first call makes (Sprint 7 close, privacy review gap 8, security review SEC-4): one deletes a document
-``RETENTION_DAYS`` after it arrived, the other serves the sums' days.
+"""The Mongo store (sprint_5 5.8; agents/backend_engineer.md rule 4), over an in-memory stand-in of PyMongo's async
+client (tests/async_mongo.py): one insert of exactly ``{payload, received_at}``, the document holding nothing else but
+its ``_id``, the hash of the install id and the day; one install's day stored once however often it comes (Sprint 5
+close, tech review TECH-3); a ping; and the two indexes the first call makes (Sprint 7 close, privacy review gap 8,
+security review SEC-4): one deletes a document ``RETENTION_DAYS`` after it arrived, the other serves the sums' days.
 """
 
 import asyncio
 from datetime import UTC, datetime
 
-from mongomock_motor import AsyncMongoMockClient
-
-from app.store import RETENTION_DAYS, Document, MongoStore, document_id
+from app.store import RETENTION_DAYS, document_id
+from tests.async_mongo import AsyncMongoMock, store_over
 
 AT = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 PAYLOAD: dict[str, object] = {
@@ -21,8 +20,8 @@ PAYLOAD: dict[str, object] = {
 
 
 def test_stores_exactly_the_payload_and_when_it_came() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    store = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    store = store_over(mock)
 
     async def run() -> list[dict[str, object]]:
         await store.insert(PAYLOAD, AT)
@@ -37,8 +36,8 @@ def test_stores_exactly_the_payload_and_when_it_came() -> None:
 
 
 def test_stores_one_install_s_day_once() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    store = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    store = store_over(mock)
 
     async def run() -> tuple[list[bool], int]:
         stored = [await store.insert(PAYLOAD, AT), await store.insert(PAYLOAD, AT)]
@@ -50,14 +49,14 @@ def test_stores_one_install_s_day_once() -> None:
 
 
 def test_pings() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    store = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    store = store_over(mock)
     assert asyncio.run(store.ping()) is True
 
 
 def test_the_first_call_makes_the_retention_and_day_indexes() -> None:
-    mock: AsyncMongoMockClient[Document] = AsyncMongoMockClient()
-    store = MongoStore("mongodb://unused", "attest_telemetry", mock)
+    mock = AsyncMongoMock()
+    store = store_over(mock)
 
     async def run() -> dict[str, dict[str, object]]:
         await store.insert(PAYLOAD, AT)

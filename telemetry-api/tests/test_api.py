@@ -17,7 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -58,10 +58,10 @@ def client(install_limit_per_day: int = 24, ip_limit_per_day: int = 240) -> tupl
     return TestClient(create_app(settings, store, clock)), store, clock
 
 
-def post(api: TestClient, payload: object, **headers: str) -> httpx.Response:
+def post(api: TestClient, payload: object, **headers: str) -> httpx2.Response:
     """POSTs ``payload`` as JSON from ``ADDRESS``."""
     sent = {**JSON, "x-forwarded-for": ADDRESS, **headers}
-    response: httpx.Response = api.post("/v1/aggregate", content=json.dumps(payload), headers=sent)
+    response: httpx2.Response = api.post("/v1/aggregate", content=json.dumps(payload), headers=sent)
     return response
 
 

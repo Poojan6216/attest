@@ -16,7 +16,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -40,11 +40,11 @@ def api(**settings: int) -> tuple[TestClient, MemoryStore, Clock]:
     return TestClient(create_app(config, store, clock)), store, clock
 
 
-def post(client: TestClient, n: int, day: str = "2026-10-09", address: str = "203.0.113.7") -> httpx.Response:
+def post(client: TestClient, n: int, day: str = "2026-10-09", address: str = "203.0.113.7") -> httpx2.Response:
     """Install ``n``'s payload about ``day``, from ``address``."""
     payload = {**VALID, "installId": install(n), "dayBucket": day}
     headers = {"content-type": "application/json", "x-forwarded-for": address}
-    response: httpx.Response = client.post("/v1/aggregate", content=json.dumps(payload), headers=headers)
+    response: httpx2.Response = client.post("/v1/aggregate", content=json.dumps(payload), headers=headers)
     return response
 
 

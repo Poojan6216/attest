@@ -20,7 +20,7 @@ from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
 from app.main import create_app
@@ -80,12 +80,12 @@ class DownCollection:
     """A collection whose server never answers."""
 
     async def create_index(self, keys: list[tuple[str, int]], **_options: object) -> None:
-        """Fails as motor does when no server answers."""
+        """Fails as PyMongo does when no server answers."""
         message = f"no server answered for an index of {len(keys)} keys"
         raise ServerSelectionTimeoutError(message)
 
     async def insert_one(self, document: Document) -> None:
-        """Fails as motor does when no server answers."""
+        """Fails as PyMongo does when no server answers."""
         message = f"no server answered for {len(document)} fields"
         raise ServerSelectionTimeoutError(message)
 
@@ -102,13 +102,13 @@ class DownAdmin:
     """The admin database of a server that never answers."""
 
     async def command(self, name: str) -> None:
-        """Fails as motor does when no server answers."""
+        """Fails as PyMongo does when no server answers."""
         message = f"no server answered {name}"
         raise ServerSelectionTimeoutError(message)
 
 
 class DownClient:
-    """A motor client whose server never answers."""
+    """A client whose server never answers."""
 
     admin = DownAdmin()
 
@@ -119,7 +119,7 @@ class DownClient:
 
 def down_store() -> MongoStore:
     """The Mongo store over a client whose server never answers."""
-    client = cast("AsyncIOMotorClient[Document]", DownClient())
+    client = cast("AsyncMongoClient[Document]", DownClient())
     return MongoStore("mongodb://unused", "attest_telemetry", client)
 
 

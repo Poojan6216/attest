@@ -30,7 +30,7 @@ Sprint 6 adds `agents/privacy_reviewer.md` and the red-team report to step 4's i
 When the founder is at the keyboard he runs these four himself by pasting the prompts. When he is not, you run them. Same files, same order, same outputs.
 
 ## Hard rules (summary; full text in `build_spec.md §4`)
-1. Nothing leaves the browser (one opt-in telemetry host, numbers only; a test enforces it)
+1. Nothing leaves the browser unless the person turns on an option that sends; each reaches exactly one host (the telemetry host, numbers only; the own model key's vendor, a claim's allowlisted facts); a test enforces it
 2. Derived facts, never raw content (allowlist in `policy/default.json`; a secret-seed test enforces it)
 3. Attest never acts on a vendor page (lint rule `attest/no-act`)
 4. `grade()` is pure and deterministic; the optional model only proposes scores
@@ -43,7 +43,7 @@ When the founder is at the keyboard he runs these four himself by pasting the pr
 Never make the repository public (`gh repo edit … --visibility public`, or "make the repo public") while either MANUAL.md item is open: cleaning the real captures (Sprint 7) or the old bench trace in the history (Sprint 4 close). Say which is open instead (Sprint 7 close, security review SEC-7).
 
 ## Locked stack (full table in `build_spec.md §5`)
-TypeScript strict · Manifest V3 · WXT · Preact + Tailwind · Dexie · Zod · Vitest + fast-check · Playwright on fixture pages · ESLint strict + custom rules · pnpm · Node 22 · telemetry-api: FastAPI + Pydantic v2 + motor + uv on Railway · FSL-1.1-ALv2 · Conventional Commits · SemVer.
+TypeScript strict · Manifest V3 · WXT · Preact + Tailwind · Dexie · Zod · Vitest + fast-check · Playwright on fixture pages · ESLint strict + custom rules · pnpm · Node 22 · telemetry-api: FastAPI + Pydantic v2 + PyMongo async + uv on Railway · FSL-1.1-ALv2 · Conventional Commits · SemVer.
 
 ## Repo layout
 Exactly `build_spec.md §6`. `src/core` is pure (no DOM, no chrome, no Dexie, no I/O, no clock, no model). Entrypoints are thin. Adapters/observers are fixture-driven and read-only.

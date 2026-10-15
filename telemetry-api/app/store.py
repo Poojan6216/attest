@@ -1,8 +1,8 @@
 """Where the aggregates go (sprint_5 5.8; agents/backend_engineer.md rule 4): one document per install and day, of
 exactly ``{_id, payload, received_at}``. Never the address, never a header. The extension sends a day again when it
 did not see the API's answer, so delivery is at least once (Sprint 5 close, tech review TECH-3): the ``_id`` is the
-SHA-256 of the install id and the day, and a day already stored is not stored again. ``MongoStore`` is the motor
-client's; the tests keep theirs in memory (tests/memory.py). A database that does not take a document, or does not
+SHA-256 of the install id and the day, and a day already stored is not stored again. ``MongoStore`` is PyMongo's
+async client's; the tests keep theirs in memory (tests/memory.py). A database that does not take a document, or does not
 answer a sum, raises ``StoreError``, which the API answers with 503.
 
 A document is deleted ``RETENTION_DAYS`` after it arrived, by a TTL index on ``received_at`` (Sprint 7 close, privacy
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.schema import AGENTS, GRADES
@@ -101,9 +101,9 @@ def sums(since: str, until: str, min_days: int) -> list[Document]:
 class MongoStore:
     """The aggregates collection of ``db`` at ``url``."""
 
-    def __init__(self, url: str, db: str, client: AsyncIOMotorClient[Document] | None = None) -> None:
+    def __init__(self, url: str, db: str, client: AsyncMongoClient[Document] | None = None) -> None:
         """A client of ``url`` that waits at most two seconds for the server, or ``client`` (the tests' stand-in)."""
-        self._client: AsyncIOMotorClient[Document] = client or AsyncIOMotorClient(url, serverSelectionTimeoutMS=2_000)
+        self._client: AsyncMongoClient[Document] = client or AsyncMongoClient(url, serverSelectionTimeoutMS=2_000)
         self._aggregates = self._client[db]["aggregates"]
         self._indexed = False
 
@@ -140,7 +140,8 @@ class MongoStore:
         """The month's sums (header), from one pipeline."""
         try:
             await self._index()
-            rows = await self._aggregates.aggregate(sums(since, until, min_days)).to_list(None)
+            cursor = await self._aggregates.aggregate(sums(since, until, min_days))
+            rows = await cursor.to_list(None)
         except PyMongoError as error:
             message = "the database did not answer a sum"
             raise StoreError(message) from error
