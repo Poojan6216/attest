@@ -1,0 +1,244 @@
+# Commit ids before and after the history rewrite of 2026-10-14 (Decisions.md [7.close], MANUAL.md clean-ups).
+# An id quoted in a file written before then (the Progress Log, Decisions.md, reviews/, RESULTS.md, bench/results)
+# names the old history: find it in the first column. Columns: old id, new id, date, subject. A commit whose ids
+# match did not change. The old history is kept, private, in Poojan6216/attest-archive.
+e6c2db43ee3919f3198aab9ccf601066babb3dd3 e6c2db43ee3919f3198aab9ccf601066babb3dd3 2026-10-01 chore(sprint-0): scaffold WXT MV3 extension with Preact, Tailwind, strict TS
+397cc4c10e3710a2c4c93a12ebaf0990fc5edbae 397cc4c10e3710a2c4c93a12ebaf0990fc5edbae 2026-10-01 feat(lint): add attest/no-act, core purity fences, and MV3 listener rule
+be6b6b941b2009ba27634dc80d4375211a7b60d4 be6b6b941b2009ba27634dc80d4375211a7b60d4 2026-10-01 test(rails): add Vitest, fast-check, Playwright extension launcher, fixture server
+df0faf4a45145bcc57a2eaec999a0f755f019637 df0faf4a45145bcc57a2eaec999a0f755f019637 2026-10-01 chore(sprint-0): add placeholder §7 schemas, seeded secrets, fake browser in Vitest
+5d89c732af4529da2a1478d761b1ce2c101f335b 5d89c732af4529da2a1478d761b1ce2c101f335b 2026-10-01 feat(core): add policy/default.json and the pure, frozen policy loader
+33b83ffa9aed286f6933ab8d892b785525d8fc7c 33b83ffa9aed286f6933ab8d892b785525d8fc7c 2026-10-01 feat(ledger): add Dexie schema v1, typed repos, migrations, and export
+6c62da7e858b7442dd4e5da6493e30fd0b62fad4 6c62da7e858b7442dd4e5da6493e30fd0b62fad4 2026-10-01 feat(bus): add Zod-typed message bus with fail-closed listen and send
+bc433e6ab819717bbce88ea3cd58b6611e03124d bc433e6ab819717bbce88ea3cd58b6611e03124d 2026-10-01 feat(tools): add read-only fixture capture tool with PII sanitiser
+784a0802a12e433dc2e3e705d925296b1a42fb4a 784a0802a12e433dc2e3e705d925296b1a42fb4a 2026-10-01 feat(options): add options shell, resettable install id, PRIVACY.md; wire worker
+a3764ba5f5230d2546d27abc2de009cb9a7fd7d3 a3764ba5f5230d2546d27abc2de009cb9a7fd7d3 2026-10-01 test(e2e): add @mandatory network-intercept test with NetLog attribution
+c04ffc3dd442ba7708a819d39c590707ae5df673 c04ffc3dd442ba7708a819d39c590707ae5df673 2026-10-01 test(e2e): add @mandatory secret-seed no-leak test across every channel
+b816bd43503b44878bb6d5175b2bdc66b1da8d45 b816bd43503b44878bb6d5175b2bdc66b1da8d45 2026-10-01 ci: run lint, typecheck, unit, build, and @mandatory E2E on every push
+89e7cc1ba7bc3a4f62c4c2c46ba414dc0ff75dea 89e7cc1ba7bc3a4f62c4c2c46ba414dc0ff75dea 2026-10-01 docs: seed Decisions.md with every §5 row and update the changelog
+892d160b03559ac4d49a0932d224b5c5d3c13b06 892d160b03559ac4d49a0932d224b5c5d3c13b06 2026-10-01 chore(sprint-0): close 45 review gaps
+305c9af00c8ca9d35964a686caf29fd6c3c9ef2f 305c9af00c8ca9d35964a686caf29fd6c3c9ef2f 2026-10-01 ci: run on main pushes and PRs only; Dependabot monthly, grouped, no majors
+937c33312724790ccc426ccaa9a20f97affb8627 937c33312724790ccc426ccaa9a20f97affb8627 2026-10-01 chore: close sprint 0
+1bfdaf145889ec572214d7371dfb78ded246986d c778d0071a941fa1fdde7db466acc6fcd83d832a 2026-10-01 chore(deps): Bump pnpm/action-setup (#8)
+d6feeae87d0a16d9a67435e90d0ea95005d80011 e3c1bf91484ff0054144f09f1cdc23a461ff937c 2026-10-01 feat(core): add pure SHA-256, canonical JSON, hash-derived ids, named units
+16407ee4778eeec4d5f22f821da68caf1b430c78 a43787e8dcab89ebc1b9e99b025d45d074cbfc9f 2026-10-01 docs(core): add the Sprint 1 grading contract (docs/grading.md v1.1)
+c91fec5e33b5c1665e58dfe598474a8f7d4e8614 c1712dd7a7512f13206cf6f7361eca84de28e777 2026-10-01 feat(core): canonical branded schemas in src/core/schema.ts (task 1.0)
+426093a150568de9000b3cd843a19c35d7f38d01 25658d3592944d7a0a8cd6b4457d5b70de709649 2026-10-01 feat(core): policy v2 with basis points, policyHash, strict validations
+02e5c53ec8535ef69cd4d53419f55022bbb4f8ac f6ad96ffaa57cca76af06ea4dd87baaa94fba8fa 2026-10-01 feat(core): normalisation of addresses, names, amounts, subjects, times (1.1)
+f9366212ae635fab8717b8c5ed9290429c0b778f fc5d79e42ffb8a6afecdf071a8995e0bcbe1b5b6 2026-10-01 test(golden): 67 golden scenarios written from the grading contract alone
+e0bef4ae730394e31007575c1336951f7a694e79 7c194699ddbf0ba52c84d376a75b403c892601d9 2026-10-01 docs(core): grading contract v1.2 and the wave A decisions
+35cca8e225fc837266b5c30432237cb7dde150a5 5d122cb4fdf5217c41489531489ed16aaaab30a6 2026-10-02 feat(core): exact ratios and match features (task 1.4)
+64a2826cc54cf8ef9fa52a2a7cdf8e6f20240663 7670933e899931c387dee49481466a2075a410c4 2026-10-02 feat(core): allowlist redaction projection (task 1.2)
+d15081e273ecea183eff1c8fa24441289f9d1a9c 72743185d14e98e993fc60560f10be17a2da6adc 2026-10-02 feat(core): windows, candidate retrieval, one-to-one assignment, perf bench (1.3)
+9b68181a1cef7725742c945fe454f0f597831cc2 f3afecf107d290ee0dea0168d0d3852b6e07f621 2026-10-02 feat(core): apply grading contract v1.2 to schema, policy and normalisation
+98a7b6f491fa4923ecbc809868a713020e7b253d 3ac6cb71f28249ca2b105c5c54ab6fca36b07d5a 2026-10-02 test(golden): update scenarios to contract v1.2; 77 scenarios
+02a89c245265a5f4a24592aecc04597b7281e42f a8e8f866466e645dce8a74da9974c78224df99ac 2026-10-02 docs(core): grading contract v1.3 and the wave B decisions
+15176d38243dec37aecd5d281067e87640c0358c 324a351d32f17087649f536d2844130f3db327a9 2026-10-02 feat(core): grade() with conditions and receipt builder (task 1.5, perf pending)
+73d0529d49a928b30fde2f5a00527f0d7b8dceed a40b81b678be5c33668baac112e9497b490bc252 2026-10-02 feat(core): receipt state machine (task 1.6)
+3d66927026a32eaba06739b7f378f51b69522c51 5665abfe6ff6157161274cab5ba9f344a2ef1bdf 2026-10-02 feat(core): UNASKED attribution, scope and spend, reason text (tasks 1.7, 1.8)
+7bce4a2d3d0ca6fe4b8b0fa4c469adffb2653dd1 de4237e608acea60453797314d8f99953e5798c2 2026-10-02 feat(core): gradeBatch and the end-to-end golden runner (perf gate red)
+d9303dfff1b974828604c0e7d15cd6c32211ab16 6d87e879234e7af3a835853c9adcfd218b638072 2026-10-02 feat(core): apply grading contract v1.3 to existing modules
+73cb59cd2024cef3075bf14723cde687edebbb83 359cac7f25e5551b8eb37a33f462aef7639014a5 2026-10-02 test(golden): update scenarios to contract v1.3; 84 scenarios
+314d8b622732c2a90ac35902913030392c7d2e5a dc3e5c5f5e08310a9852943b2f9a4d7876ae1e8f 2026-10-02 docs(core): grading contract v1.4 and the wave C decisions
+25dd3d0a9d428dd35537e8610efacab89d9d1204 fa1fa8495ab0a5bb7930d11decbcaa1e117a4303 2026-10-02 perf(core): first grading optimisation pass and contract v1.5 hashing
+c5805d9359541464d53cf8d5d0de6d6e02cece81 0947f068b0da6bd72450e911572aedebd658a1fd 2026-10-02 perf(core): grading gate met; serial perf pass measured by median of 3 (1.5)
+1af0a41d4db998812dc68d4dad2072ea40d7ca08 9d594e192959c9fe2bcfc1c436fe14d6061b0f2f 2026-10-02 feat(core): contract v1.4 semantics in batch, grade, attribution, state and schema
+ad6cb885f6055003b873f28f869136ef79ae351d 0dfe378832f32185ca625cd21b5bb4007a061b69 2026-10-02 test(golden): golden scenarios and runner on contract v1.4
+36fe223f37e701fe63412a65135f31282056f660 641da841becb5b568261fecb4f361376bf74e3ed 2026-10-02 feat(core): replay and the attest CLI (1.9)
+b77f870c6823dad57f03e8cb6258fadb46891598 6bf8d16d1a0f2fab92b001123ddd6e7088ae3e5d 2026-10-02 test(core): the build_spec §2 demo as a test (1.10)
+0067c80750260fb3f986c36b9cf48c40144059ce d1da9219ade979864ecbb0754d075d9ce792735f 2026-10-02 docs(core): grading reference v1, state diagram and check-docs (1.11)
+1957414dac1028bb3e5559994bf3ed4d340a283d bcf45df58be8bb67114e2d271f3f5513d4b8c8ef 2026-10-02 chore(sprint-1): close 63 review gaps
+cb247055fccd32b0aa0a9e5e14b67f09fad37fe8 4573f045a429f7c0cf7f66119f93cc49c1840f7b 2026-10-02 fix(sprint-1): close 36 defects found by adversarially verifying the close
+9611f4fbfc7187eb7e51acc0ec2044cd5092cdcc 5199a7e54e2276a673c81ea6fd7980b4b9507dfb 2026-10-03 fix(sprint-1): close 23 defects found by verifying round 2
+c1f50468a08a5c862a0b6bdb091d25620788de83 8322b3dce4acb4c3e800e1dffb9e78e969ad56b0 2026-10-03 fix(sprint-1): close the last 8 findings from verifying rounds 3 and 4
+60bca2d087b62f433a17a1bb008b2267edbc0845 13214ea4580ae08934996d6c445d677d55c8ddc8 2026-10-03 chore: close sprint 1
+e08e0666254a9bd3921413f0453f87712f40aa68 9c5cf81908dc1b306f41b9c90820f11e8e84347a 2026-10-03 feat(observers): host permissions and the observer skeleton (2.0)
+291718bbbcae62b05a760746dc57cc042e015c54 902df4696e17e1068093f6da38ee7719f15e4a91 2026-10-03 test(fixtures): synthetic Gmail and Calendar fixtures with labels (2.1/2.4 stand-ins)
+3b6b7d388a1fcd765ea6addee6e0cd0e90a6347f b9f40ae56c0d129de50fec6d878431315b280c14 2026-10-03 feat(ledger): Dexie ObservationIndex, coverage store and retention purge (2.6)
+c0f3eae68c1dbb5b1a0ef14c3d2f0bee1c8cdb13 2a7b5b48feb0e7a68362a2266863829a966e8530 2026-10-03 feat(observers): Gmail Sent observer (2.2)
+d850b671ec4514dc966746dd30db08e36d76437c 945fb478606ce619f070691d4a7e078641a2ba04 2026-10-03 feat(observers): receipt parsers (2.3)
+58ccd0b4b9dd29de8e53feec33f35982ac2e26c1 00a9898d78358d7c5e8b2bef4e88b9a30437a431 2026-10-03 feat(observers): Calendar observer and snapshot diff (2.5)
+127f1d5bfa2f62b0f122363449ec569cc47f250c 107b3a092843f5f89d1d579d8faffa9d07960dd8 2026-10-03 chore(sprint-2): wave B integration and records
+193d7dad2ac8c524aa32e20b5509037fdfa03c39 f5ce26723c3e3dc38329fef9c1620cf9a7a18111 2026-10-03 chore(bench): RESULTS.md with the Gmail, receipt and Calendar accuracy benches
+a201a7eb788549bb591ff46ba85064199dbab7dd 85dd43339b31a65431fe5cf3c2bc3db8635846fd 2026-10-04 test(core): engine drift canary keyed by the engine's Unicode version
+9dae915cf7a15e0203befbe578c3904da6a7daaf c36be0e5cc8b55dd95d770bc41cfedcc5d3541e9 2026-10-04 build(tooling): pre-push hook tests the pushed commit in a temporary worktree
+66aa49f2f5e1ea6431e4500c0dc64a153b1cab7b a2bfb4ffe055dec39ef2b3e159c624ab0808d119 2026-10-04 feat(core): grading contract v1.11 for observed data
+391ceca2a1a2175dc5ddc0347cebbca75afe5314 f6c339a4c3622a77f3f346f66e5d40dd2881c568 2026-10-04 feat(observers): coverage windows per pass, receipt points, Calendar heartbeat
+58108b972d66b835824ec067df83dde024e57b05 8bb56ad5b4b0a15725ea9f1526695e24b8bc168a 2026-10-04 feat(background): wire Gmail and Calendar observers to the ledger (2.7)
+71c6a48ebbf51844491585c6d1274a6f518bd8f3 f4f0372b7b204cc91b017593d29cd6fb216d9848 2026-10-04 docs: adapter and privacy-architecture docs v1 (2.9) and Sprint 2 records
+1e54fd9b8311a0eb3a037ae4e3859a033fd7b7ed 9ddb6b3a85e825b1caab30818fb875f7bba3bf8b 2026-10-04 chore(bench): RESULTS.md for the wired observers
+6cc0386037c88b5ff1cf7b223631050096dc75a4 d9674df2174cdf9b35797a3069c9e722b5d5ea68 2026-10-05 fix(sprint-2): close the Sprint 2 reviews
+678ef67771a73a634fa0fce9fa52e05e41b1d8b6 4322da88869d78a4b169fc868a29209b5f398763 2026-10-05 chore(sprint-2): bench results and the Sprint 2 close report
+95f11ee5a8dba709f637073f54b38133f65ad4d8 4754d6d22e59b8d486a44623abd0b061b32a876a 2026-10-06 test(tooling): stub WXT in the tests that only read config files
+5ba029186f063baf2dd6ac2d002899984f8aecc7 c461ccf2f92bca716e11d9a3a5643d68a6b21fa2 2026-10-06 fix(capture): record a checkbox's live ticked state, not its markup's
+3917b6087936565d6b7b48349e01c3e949807e7b c4a8ffb48bed09c3382439595195b9c23283c615 2026-10-06 fix(capture): keep areas, short calendar ids and a hidden list's text
+ba790d22a3b92668b7e7927e3c05695b4d9a0694 3be38bf8ed9d83a30de9e405f3536b3cd25683db 2026-10-06 fix(observers): read real Gmail and Google Calendar pages
+a11572f64eda5d4382663c4a0f66a5f1db7408b2 c1aa2f6c572fa1099f887197dc77c56270c6ea9d 2026-10-06 fix(capture): copy no page stylesheets
+f2c1d83a6b346dc4377b361c76bf32a15a990b7b d1c1f182f5eed7b04e8e0e286270bc435ba56f64 2026-10-07 fix(capture): cut other sites' links, phone links, card endings and handles
+1b2b69841fb8ec5f674b92ce5034d3bca26f2db9 7d3fefcee192e753b7a226eaef4a862d6fe97181 2026-10-07 fix(core): grading contract v1.14, a Sent list looked at too early is not settled
+fb87912f388eec1108a63aff02903598188c1f5b f822c95dadcbaee3ab4e74da5aa5589c8b6cfddd 2026-10-07 fix(observers): read the real Gmail and Calendar captures of 2026-10-06
+aa762acd2cb2e06e9df3210dac8d0d60e5c2a7c1 94fcfacb245668e982f3d0ec71605eb891ed1a37 2026-10-07 chore(bench): RESULTS.md on the real captures of 2026-10-06
+8eb006dc895a71622a8732bab40c6d88ad9db4a4 bf79c77cc22c507c720289ab73b18db47028953b 2026-10-07 chore(sprint-2): record the gate re-run on the re-closed tree
+b9508baa128ffa70588f2994f6b3545362c1445d a020506176585fe48bff8f8da49af54cb6831fdc 2026-10-07 docs: record the push and that the capture steps stay with the founder
+53420c8c180c71b18bcc0848814259805d095b98 303c55a82f9114d49eb02c0c0f14e3b1be49274c 2026-10-07 fix(test): let each parsed page go when its test ends, and pin CI's 2 GB heap
+4ed5f43ad5475cac52e3479fd6b1b59667ad8991 41f659b92b20d93562dd777d07c7d0c1d456a31c 2026-10-07 test(property): fix three floors that failed at random and a point-span oracle
+e820765ba75f6f363e8a9312274f6bcbf44757a3 cb501fbe43651ed9c7c6af4dad624622acb68bc1 2026-10-07 ci: run the checks as five jobs side by side, each inside 30 minutes
+4667589f57e2b32e44e8b62ce84350015f954961 81044ae893ff0e13ae83b7e974c3a2a8df812517 2026-10-07 fix(capture): fake the card endings and order numbers a table row labels
+098793aff0021a0621a0b5f7245199a54b611ae9 25f4dc0f6587e12395e30bcea1906b424512e0c7 2026-10-07 fix(capture): fake codes, labelled numbers and addresses receipts print
+a91d104c76796731b97f5a401b602db73d342d7b 29374fb78bf4e015d64727e57343183878920d06 2026-10-07 fix(capture): cut written addresses with no scheme, fake Meet codes
+d1dde3cf157358394b0d47b4115bb1457d7e784c 8a80d6269441a8519bff25f383cd57763cdaca22 2026-10-07 fix(observers): read the real receipt captures of 2026-10-07 (gmail.receipt 1.4.0)
+82f66738a417fa0e97e4725d0f59a6862de427fa b2fee9bd5b7b36d005d6f939ad75e2726f84bba5 2026-10-07 chore(bench): RESULTS.md with the first real receipts
+72d4f71bd7c1ecfcf7a87b850caf4f5b5f7e0f71 bb26912a8f10347f52c93f61771d9b1892914028 2026-10-07 fix(observers): read Sent mails composed as drafts first (gmail.sent 1.3.0)
+e8bd2ddb0592f2451aaa8df0c842f28ddf223f77 c0e9302e97d327ed52b779ed4fcd891fbacbd785 2026-10-07 chore(bench): RESULTS.md with the draft-first Sent rows
+3654f9dd1bb0463219e48050a01d31ab868980e0 d3c80883cfd5951df92b7905bd01c7203cb5e71b 2026-10-07 fix(observers): a page an observer does not read reports IDLE (2.11)
+649f435064a4c9427e36b36ba288f7f429f9026c 4e13f99ca1265a7a188cf990456035cf294a5c14 2026-10-07 chore(bench): RESULTS.md with IDLE health on Gmail views not read
+7aa1fa46a0febc8c682dbf372509133157eaef3b 031084ffce43744c88f834d3940b53c4c6f18516 2026-10-08 chore(sprint-2): close 29 review gaps (third round)
+79d21370b1cd24b1b5630ac4635a3b3bde860354 47e844b9649187ee35c53b960e3bd908c01c5739 2026-10-08 chore(sprint-2): record the third close; the history rewrite waits for the founder
+c3ea7531b1cd0907a9486762dc0511b247f40aed 0cd7cae2da066f06d6249a06059ed2ea9d045967 2026-10-08 chore(bench): RESULTS.md on the third close, measured on a clean tree
+19697eff53d83a5ef96fe836cbf36ec1327b86ec 135c07ff44d22f40449f89106f260d022561578b 2026-10-08 chore: close sprint 2
+aa922c5a7275bd971ac7440b6f52a25066052343 ded68ed61ab58a0bbe8868dacdc3a6553d652aa9 2026-10-08 perf(core): rank a batch table's ids by number
+e69eea6c735e3c8e7337c1c932a3f64e55cd93b8 e2ce2d7c2292d4b976796dc31e043d07791a7364 2026-10-08 chore(bench): RESULTS.md on ded68ed, measured on a clean tree
+9bd1ee10e3a914b2a1c0e2fab6c8deeb5f9fadc0 3415207fa2d595ecdc28e574abcd5086b6bbf5d6 2026-10-08 feat(adapters): claim pattern tables for Muse, ChatGPT/Dots and Claude
+637cd8d0fb9b52f5cda5e9cc4cc89462eb43c05a 77b6b8dde4b9d60c6552fb3f7a853ad6f95f460a 2026-10-08 feat(adapters): agent adapter skeleton with Request, Claim and scope capture
+d94311d40b81087178351454af65c3821c4318f6 509e02c96ca9e3efcdd0ba6c2d8397d8fb68df03 2026-10-08 fix(adapters): read the pattern confidence levels from data
+d52204fae0fa2ce96dd63de1d21f5a3ea82331af 90bc4dfc3aa840ed044cf5a80a049e7cb32ea9a2 2026-10-08 feat(adapters): Muse adapter on synthetic Muse fixtures
+5f25f6f3c01b12391d72f3de702292d301f42890 3d368f532c07adea79a4f182d35829c25c1109f9 2026-10-08 chore(sprint-3): every remaining task waits on the founder
+5b51aaf4405787acfda6018ae2d6bc33a9bd07ba d67ae89ec41e2fd494771fec4be799b1d24dcdbc 2026-10-08 chore(deps-dev): Bump the minor-and-patch group across 1 directory with 3 updates (#10)
+b9aed52ad3bf45c87046b77d82e7881c66e48d5d 09989fd2645115e7f2a82802f4e4975150dca852 2026-10-08 feat(adapters): run the Muse reader on muse.ai
+fc9216ab10516a1aae2ab20f627aa8fa27d39841 fbd91aa0ebb8f341d8605ca70f7995c14e273213 2026-10-08 feat(adapters): keep the agent readers off under the vendors' terms
+2cc81006ba1efec9a464b2e042106270b7347223 06828963944b1976976ea50d6b6e1d4ba4b104a1 2026-10-08 docs: tick the test cleanup and the capture key backup in MANUAL.md
+8c3470f057eae3906050ab0b8e50a5b066c402c2 3cd14b4397fd5e38ec8e1cd814e4c01fe66eef51 2026-10-08 docs(sprint-3): take claims from a pasted activity log
+1751becb12724f03f4b29e3d10c6467170524cfa 1e67fb7b92a7a1ef0866988c9086c768a0715139 2026-10-08 docs: park the permission letters for later in MANUAL.md
+ce2df23badc890fff54a23641c9a848289ae05d1 c97815eac8e5f4bd5bfe27478234770d3cca9bb6 2026-10-08 feat(adapters): read claims from a pasted activity log
+991f7383a6efd005d61aa37be2d2974173cab666 698f4cfce2fbabd6cb022164722721055e93c6fa 2026-10-08 feat(sidepanel): add agent activity by paste, with a preview
+f0203923078c11e9e523234a1070770fb8f2666b f9d3b0ddcc9f539fdfcf456c8bf5fd05355137be 2026-10-08 feat(ledger): keep each receipt's inputs and policy for replay
+f9b00df50cb0cd32f3593164809a6570fa95184f 6bb9293f9ec393a301721ae06de3c0981f3f8a79 2026-10-08 feat(background): grade claims in one ordered batch transaction
+c7960f9b86e6411a7524445e82975ac571cf47e5 560c7c1fc6705c98547b0696525dbf740f181803 2026-10-08 feat(background): import pasted claims and grade on a grace alarm
+31e467ad4cd6b505d96cf4e4bfade9e564eb8f85 6bb437b6a3a3f4d5fac6b717b038ebf4f8963920 2026-10-08 test(e2e): paste through the side panel in both mandatory tests
+0a5253c41986fc4937f6d78fd0e8a372772de80a 466a9462d321d367c4307d21a25fd764c560c1c4 2026-10-09 feat(attribution): session pings from pasted logs and opt-in away detection
+5e9024b02491055c8ed47d3e8ae226b52ba8488c fe53e2b281fea28c6031c86ccaf895cb43e74331 2026-10-09 feat(adapters): read a calendar claim's event start from its own words
+c39b97b2b7915e09ca726c18b02b528e94a6b858 e3a560f2c31089cc10474eec9e4c13769fa7d723 2026-10-09 fix(background): read an orphan's activity wherever the batch's coverage reaches
+c4572d45216b69ea93a06c6e7a8c755d12cbaa72 43788ff5ce86a9c639483124ecde45c6d13f5150 2026-10-09 test(e2e): the section 2 demo end to end through a pasted log
+cfa71ae0193dcd020c6a476a024cb352583a19d6 ddbd0e8fd5c0e9ea570eb245d7053bd98f763280 2026-10-09 docs: give the real reason the demo week made the calendar claim PARTIAL
+8ab40c9bf0154c41ad31f710afe31df919cc25b6 a88021208bbae9aedf905dbc70a9c967890fec7b 2026-10-09 fix(grading): a clock repair never makes a calendar creation claim NOT_FOUND (S2-SIM2-1)
+bbda3df7a8ac65e1e06dc8e21b4f589d02625f13 0b977c70cd7ad1c8d7559785e726d054573592d7 2026-10-09 fix(sprint-3): close the first Sprint 3 review gaps
+20303f6a77afbf401d44ae482e17801c03e8aded 2f7c97f54891f66149f581d445577c4d79013661 2026-10-09 fix(sprint-3): close the remaining Sprint 3 review gaps
+b18ed757ff3f7977ce0b30229632c922fe40def5 fdc4e0e0641ae95199b37125a5ab4afe8ea42332 2026-10-09 chore(bench): RESULTS.md on 2f7c97f, measured on a clean tree
+a5de595e2946b069617b070b9960b755685f5e61 a5a5c4fa32fc219138118f0ab7a53fd044f141fd 2026-10-09 chore(sprint-3): close 34 review gaps
+fc5cefe8ea26f511dab51e4dbb97b60d02d16bf5 77fdc9d4904b9677407c246c9b57e27b672f90e7 2026-10-09 docs: keep the Sprint 3 gate and build on without vendor access
+c684e497a053959ad81b3b0b01cfde85554772f8 ff9bfea8c530d7b8be1adba23958873d6c2964d0 2026-10-09 feat(ui): UI data layer with indexed, paged ledger reads
+7db0c6ae90d71a98f7fcbf9499980c4632111a93 3c781146916cf2fcd4cba03842e80d60ceca9495 2026-10-09 chore(bench): RESULTS.md on ff9bfea with the ui reads section
+4713fad09fff548fa403bae2daf9032631170f3a d7d1291d9d3105e3453e047a461ad0ac8366486b 2026-10-09 feat(ui): design tokens and the shared receipt components
+266ad48f938dd811582369eb81debd557a524e8c 683e53d5792a2891ec8e211c53eee2bb23a20e62 2026-10-09 feat(popup): today's receipts, with what Attest checked above them
+ccf101477e0134bc729dc755cddcac2b20bbd8dc 602578d8b8a3078d783bdc323186d7ef62bdddd1 2026-10-09 fix(bench): read the popup's paints without named page functions
+a81e8271e24a067b090e8877f3221a4962562e8c 5ce79bbad3a78a62985a0d3b862fc1a373f08fa2 2026-10-09 chore(bench): RESULTS.md on 602578d with the popup paint and its trace
+3f567b409fa8fe47f4bcf4a959edc84b36309dee 43bd879ba12ffcc0dd5a7ef55c094f7475a343f9 2026-10-09 feat(sidepanel): the receipt timeline, its detail, and a person's mark
+ceb88e7523beb1143f0b848e4a36236336f5c096 6ebe8abd8ebdd7ed14c8bd98d914120be7b6f062 2026-10-09 feat(options): grants per agent, saved by the service worker
+0e4c7fa17418515c9ffa0c52176cd780c69c8f41 f919453a8e6cd2337c0fe7ab726b4dba1099caf4 2026-10-09 feat(options): readers on/off, retention, paged exports, delete all
+c0cf2eabbb4aa84282ca8d6f20e0f76d8fe79c2a 2498b90312954b4d967e5e75557d1573202b4b5e 2026-10-09 feat(alerts): one notification per final NOT_FOUND, UNASKED or OVER_SCOPE
+0df3bc56d98bdd21f5df7523e18138650137c99f 8e3af2189fefd8ea96b47f7df17eaafc25cf8c23 2026-10-09 feat(digest): a weekly digest, kept in the ledger, shared redacted
+eacaa23c6e254642507ef00396320fad589e179b 8947d82ac0702ba0205bc1746105e0024061ca3b 2026-10-09 feat(share): share a receipt or a week, redacted, as text or an image
+aef62f29ca7f3485527d3012b8cbff697ace17ef 3905a61dd1b1053f8d1223ff3eb177564b610ead 2026-10-09 feat(autocheck): opt-in Check Gmail for me opens the Sent folder once
+efefaa05f03747ca78208f0887f564b0f8d88180 ffe3887765ddfd2703a4f212221f3cd4792d6d39 2026-10-09 feat(a11y): axe-clean surfaces, a keyboard walk, and a copy test
+265c9fe45db2e7b1d42eea61e9e59e974ebb88a4 f300d9abb358eaebcafe91046e4ca380f1d0b6b1 2026-10-09 test(sprint-4): the QA, security and tech reviews, and QA's tests
+bff489e381e2473c4b6285024d7e433e64094f10 2f2043df0326bcbeccfb2f274354322c29c88752 2026-10-09 fix(sprint-4): close the first review gaps: share redaction, consent, auto-check, wipe
+dc28dd5e62867f27e7c61d9ff6977dc2ef00c0fe 7b7c1bd38d184dbaa9409ac0164c808b34fbc2f0 2026-10-09 fix(sprint-4): close the second review gaps: digest, ordered reads, layering, reach
+f4708597c80c27495a1d3c8f82bca8f9ef67ee46 2b3c5fabe8d0bc5ec58d6a2577977eabd33b9c57 2026-10-09 fix(sprint-4): close review gaps, batch 3
+25a2d8ff65ad0852f545ab6561cda0f3d192bd46 548a68f42e8a93573656c0f1653be7a543b76ca5 2026-10-10 fix(sprint-4): close review gaps, batch 4
+d71d49ebc3e132ce60d6a3eac6421efd51182049 167fc6792aab4d6785dcefdffe5b043aa431052d 2026-10-10 fix(e2e): the readers wait evaluates in the worker without a named function
+7bf39e14d7bd715c7e390ba6fac4e40a1db7c635 004ecb49e8440a70b48d26328df391064c70a3cd 2026-10-10 chore(bench): RESULTS.md on 167fc67, the Sprint 4 close, on a quiet machine
+f8df169d20caea3d009c59db2fa55eb7bdfbfb4a ce6b93a3a1f04079c90941fee5e42acd6e72794c 2026-10-10 chore(sprint-4): close 48 review gaps
+a82916e27e68635a21fb01e1701a67906daaaf90 e06a4c57dcbc2c67b3d0109feb357503e9f77b34 2026-10-10 chore: close sprint 4
+7706ed52c753589f1d19f6b87482ae95d4d66ee8 cfe6042d2090776d294abf70e7082707e006c2aa 2026-10-10 feat(core): the model may only raise a partial match, proven by a monotonicity property
+df2e1703bec501329e7891b29952cf40ec0edebf db7027c65d059e0b7c1ebecdd8e2aa96874250e9 2026-10-10 feat(intel): the advisory model's input, prompt, answer and call contract
+4a34adcde27a4a7df08e28745599d135e0c8cd6f d835a290efe5201d16c99e140e48bca8f0e07b6e 2026-10-10 feat(intel): Chrome's on-device model as a provider, and its switch in the options page
+34a1ae060f546af3ce1ee13fd17b55ee451aa40d a993223b758921194e7da2863674cbe64e3d121d 2026-10-10 feat(intel): the person's own model key, kept from vendor pages, sent only to its vendor
+d1a37ac40594deabcd3a63afb30f4401b6f47e72 be98d93f79cf9b0dba825ea9ffc55f29e73b12c3 2026-10-10 feat(intel): the model helps grade, asked once per partial claim, never holding a receipt
+b29275acf988503678726b93ff3f6b03cdc6dd15 11e3380b2837d8c6ded47de039be4ea02f32003c 2026-10-10 feat(bench): the intel bench, its labelled matching corpus, and the model recorders
+54d76a557fae01e45a0e1899fd580cda7f901615 737201bd4fffbde4c1ec39e3e98a4700fea2821e 2026-10-10 chore(bench): RESULTS.md on 11e3380 with the intel bench
+d0b287549aac990765134478fa4e44946bf5e5ed f08fa2210ec3e09de5bc092e5b3861aab68cc36b 2026-10-10 feat(telemetry): the payload schema, in the extension and the API, held equal
+4231228d4fbf061d3f304bc97016b6dfd94ace1d b75e8bdc0b3f87bf88a134952249e83f36e0b818 2026-10-10 feat(telemetry): opt-in daily numbers, built from the ledger, sent once a day to one host
+31c159142351600584c26908d55d165f1fd0036a 80a49c5ec2db9bbefc992c38635eb13cde00e648 2026-10-10 feat(telemetry-api): take the daily payload, limit it, store only it and when it came
+5f32641e3799dad90309d8f8e64429455fa916c6 5bb60bd1201288a519c61830de192d05c6c14f57 2026-10-10 docs: the optional model and the usage numbers, with a payload the real builder makes
+d979079b725010a308e926009f0397edf8e61867 9c746951a9d99895b02d492b312f882478a1cb93 2026-10-10 chore(sprint-5): the sprint-end reviews, and the tests QA wrote
+270ebe374bae43f55d976a01bad1136bec734803 5780d5ac9f73fe06fc8734d3a739cfa28f60ca97 2026-10-10 fix(sprint-5): close the review gaps, batch 1: what leaves, the stop, redirects, the API
+d49cab0fd3921c30d2871f0353b18be46bbc1ecb 4c7cc864a6a0834819957efbbd110e4312656bad 2026-10-10 fix(sprint-5): close the review gaps, batch 2: pages, keys, days, goldens
+aa164b27b0645625dc756ffd4cb9c67252a25698 21b131bb10a8b58cf2e43213afaa154c11bc5a11 2026-10-10 chore(bench): RESULTS.md on 4c7cc86, the Sprint 5 close
+33b39e62dfc61fd088854e0ce0c99cf0785efe56 43e7e82445977b5d66b2eaede5a3a9650319a0c1 2026-10-10 test(core): build model-raise's observation from the core fixtures
+415c5e44ca7efc16b99ecb740b4fd82136635251 b5c4f27ac0c3980b921a944aad1a2503f0851ad4 2026-10-10 chore(sprint-5): close 45 review gaps
+3091d8614a4b12fb8ca345659f8de8b7dac2cbd4 66f60883e6b1c86b574f3c8d8cebe6c258d0dcac 2026-10-10 docs: record the Sprint 5 gate; two items wait on the founder
+261ba8ecbcdc10d80746b8db13fbb49d783f759c e2f528ea0c0d99855f3579f6d85562e09ce8c229 2026-10-10 feat(redteam): the red-team harness, its fixture format and pnpm redteam
+66aad093d36703121443520587d001980c46b5b2 40c9f3d5c2fed4f0df77a381d28d7643d6894812 2026-10-10 fix(bench): say "1 bench run", not "1 benches"
+7698164017dcd7fda56119582310ec94177962b4 21752ea60383340f1a3afda6724fc6bca0196bdb 2026-10-10 chore(bench): the red team's first report, empty, on 40c9f3d
+bd678a840c52f2385b6aa241f1dbb66e8b93319d 85b21a59c0bed712d7e1c9e839bdc451c29aa035 2026-10-10 feat(redteam): attacks 1 to 4: inflation, paraphrase, look-alikes, time
+80d49dc64b898cebb420e8d40c2fdd28e2633cda 73230df2185c546bc4016909aa8f2cc7661108cc 2026-10-10 chore(bench): the red team's strategies 1 to 4, measured on 85b21a5
+d086c86b700fa61819ffa6b8bf1b9b9c030171e8 be1c7802f8bb58b0c8ba16ee8f57312cddfdf9bf 2026-10-10 fix(bench): a bench with no gate says it was measured, not that it passed
+9506e3d9a03780edb49e23cf670b0c40e0402f89 cdb7b849caca1380d51a2e3dcb03e5b75476ad0b 2026-10-10 docs(redteam): strategies 1 to 4 in attacks-that-work, with their numbers
+1719335cfc37973e2edb5c4ce77732a2fef03ed2 085e69c6e24cab03ccfd30babede9ef98636a99e 2026-10-10 feat(redteam): attacks 5 to 7 and forged evidence, with a CI guard
+f1209e37e06a3d1485e9ad1bef72b10a4c0aea10 44538fdbdb4afb18210fae558bfe9b9872660658 2026-10-10 chore(bench): the red team's eight strategies, measured on 085e69c
+5859d3bfb38898bec8400b3cf57276d99a5332d4 eaf4020f5e76300fd111d759e10102631f07aabe 2026-10-10 docs(redteam): strategies 5 to 7 and 14 in attacks-that-work
+b2d202843b67f4bca5e5113e5f0f134853edb86b 2e1998aa21670dc1a596e57a79b6a6fab3e32c86 2026-10-10 feat(redteam): attacks 8 to 11 and UNASKED false accusations
+964869c7fef8e1868830d9770ba62dfd5dc3abf2 2549fb39e0ea8154b693a0298877a2407abe8f14 2026-10-10 chore(bench): the red team's thirteen strategies, measured on 2e1998a
+6d05ff00b69a3f52fc48f50c917ec30fc723cb97 a5390501e632900a077954bb7a8d8bf09dfa4e69 2026-10-10 docs(redteam): strategies 8 to 15 in attacks-that-work, thirteen in all
+8acde802fc86cb71faffc2ba62bf22182696833d 4aad9ee8c1b1657fe39b700da8b231d93650e05d 2026-10-10 feat(perf): month-of-use gates: 10,000 Sent rows, a 30-day ledger, batching
+ea6f30e9d3458d5ec3666cc20c719228ced7be42 459ccd04e0c5ff56624bfc1af032dd966ec2ab70 2026-10-10 fix(perf): no named function inside the export's heap sampler
+99185436f2070d86aee36ea227fb29c68ad1bb5d ff25e8c2d100343c8d93ad6d2ce5c81672baa3f1 2026-10-10 chore(bench): performance and memory at a month of use, on 459ccd0
+122d527ce70041f640f0f8bc1ff169ab9e1e632a dd5927f1c5612b72caf1029770625d4e7c591e4a 2026-10-10 feat(crypto): optional encryption at rest (6.5)
+63736260ccf2b4ef4fbbeb42a7c8066997c5710d d4e86188380c5df2493ed6bc00e4be81b0e3679e 2026-10-10 feat(manifest): audit the built manifest in CI (6.6)
+4da9873eadc70215ad42b993c94c0675039a3946 2002b30a4ed61584247a453dfb85527297c62b89 2026-10-10 docs(privacy): store-policy pre-review, NOT READY on founder items (6.7)
+2b2635d873f6d4cc07927dda17857d7b4a1b8540 0c8fada45afa29cf51d780cd39b2dc6400de5ae4 2026-10-10 docs(threat-model): what Attest defends, its boundaries and weakest links (6.8)
+7d325729a59c30c9076919db061cf12422446e9a a9d5d7d7a0b2792d39b3bf6c69a63d88ce2dd99a 2026-10-10 fix(ui): say what an Unasked receipt cannot catch (6.9)
+8065826c25a88b7c0da9d80fc16f4be2ab4381e8 532aa27e2fcddb7f429ee20fb6dd6b3589398fef 2026-10-12 chore(bench): red team and perf re-run on a9d5d7d, unchanged (6.9)
+10566db22fc452c15c72428df20eda8b07ec2f64 990519b0db28537756405983b76c0107093c5cf7 2026-10-12 chore(sprint-6): sprint-end QA, security and tech reviews
+a25e6c5d0368459dbbe973caec95532e97b3b078 76bda9e3702ce49d8ed1516e9bd6e984e8ae71fa 2026-10-12 fix(ledger): rebuild the database after sealing, so Chrome's files keep no plain copy (SEC-1)
+e49b86a156fdb8a87983e66e591538c71a428f0d 8f87eb87c2f861da30762bb325cec3688b5923d0 2026-10-12 docs(red-team): strategy 13 reads the profile's files, with the fix and its numbers (SEC-1)
+7df58b4a258922655c20cb7e3482c24c79335d9b 02e13e10150a42d6ef9ddcc51d551d83fe4a66f8 2026-10-12 fix(byo): seal the person's own model key while encryption is on (SEC-2)
+7ba7f79444f615007d67581ac457390a0c39cc9d 047627e1f2419702db76db8ac1538079ad401044 2026-10-12 fix(manifest): audit every key, pin incognito and Chrome 120, hold the CSP to the extension (SEC-3, TECH-4)
+7a4526a63c33174bf63afc6f8b8bbe858e40adb4 d99b2dd19cf2586941d967c5640dc21e10f625ad 2026-10-12 fix(export): leave the encryption state out of exports (SEC-4, TECH-11)
+0a9f338d7292bb86050b38d8ad550754e75dfc05 4676ab3deab0def154f51def110940cd03e4c537 2026-10-12 fix(crypto): locking fails closed (SEC-5, TECH-6)
+c526130352c2f86d75cdc159289574a82dad24b3 e08bd43c666bf792c8daf5523ce3bf2581b19571 2026-10-12 fix(crypto): a damaged key record is said and logged as damaged, never as a wrong passphrase (SEC-6, TECH-7)
+e54e896d4b8ba976b9943f26e3635be9be5759cb b84dd80c6aa6f7002fbcc62ca9e1f436740b5169 2026-10-12 fix(ledger): an upgrade of an encrypted ledger cannot write a sealed table in the clear (SEC-7, TECH-10)
+6341866a04cdb63f3db427250ef17359f7819b09 51910adf5886b0180c089942709a7b409b931f67 2026-10-12 fix(ui): the Unasked notice states the two-sign rule as measured (SEC-8, TECH-3)
+8fed601031b2777782f1cada0d7141b9f7d416ae 728d0156ebd45fe002dc1587282381d5eeebeae4 2026-10-12 docs: correct statements about encryption, and hold §12's table to the code (SEC-9, TECH-15)
+ea74f3cbd392fe058ba4a0c37df241ada5ec1587 ff206441c46512496ccca7567ba6242240977b66 2026-10-12 perf(popup): load the cipher and the unlock prompt only for an encrypted ledger (TECH-1)
+e5fdf36b6bff3197b1ff73fa1b11497480ebac7d b65152b2ee2eb3305425c804f5fa9c35020bfddc 2026-10-12 docs: record @noble/ciphers' size, audit and timing trade; amend build_spec §5 (SEC-10)
+ba0d63ebccd4a390d30efdaacf8ecbb57c07a7d4 1afb2e2301bd66f9f70097ff72027f27d6c3673b 2026-10-12 fix(crypto): a stopped job says so, is retried, and offers Try again; tests that could not fail now can (TECH-2, TECH-13)
+66fe138dd6b8816f938b6bbb9eba7ddfeeaded5a 6b3bd7b2a8825ed693717dc55ce4404fd3bf703e 2026-10-12 test(crypto): every sealed table round-trips, and the job pages a table keyed by an array (TECH-5, QA-3)
+213f6d8aa0fedebc266a0c56716926d782d789a3 b273a3103d22d38782db40f0f46401671702b717 2026-10-12 fix(ui): a locked ledger is no failure in the side panel's detail, older receipts, the usage numbers or a command (TECH-8)
+a97e2e800ed4e9708caa9ffddc0a8a19095e79a5 5b3434728a822c01f1e3a53b7050001c939cbba0 2026-10-12 fix(lint): fence src/crypto as worker code below the ledger, and ban every Node built-in (TECH-9)
+4dacf5b9f43e4a123a1408e1788516bb32ab23f4 1ad267a5333b8e1663a4714337de82f171555d4d 2026-10-12 test(build): every test and bench builds for production, and the bundle test fails a development build (QA-2)
+d7a4015d691bf8f3e6904b0cebe85647c61e33fb 0f3e74d7d45e96a2eb64b935a579f08973f14ee3 2026-10-12 refactor(sprint-6): measure a sealed month, rebuild by whole pages, write duplicated logic once (TECH-12, TECH-14, TECH-16)
+a1efd7b846fadc2283aba5f2b68ee8b960def282 30df68281f7a17863a93c72900a947aa2b026110 2026-10-13 test(copy): Try is the verb of a stopped job's Try again (TECH-2)
+6dffbef6e725fcef1ed37338946eadbf9e562c00 afb32ca654dd88cabb1f98d029c3e3665bd98d0f 2026-10-13 fix(ledger): keep the ledger in its own storage bucket so a rebuild deletes every older copy
+17a39e413186b2ae685c487a3f36b9a10041cdf9 144e3e9672a3d3f8ab57234748916618fd2d3054 2026-10-13 docs(attacks): strategy 13 cites the storage-bucket rebuild and its runs under load
+285b7238907683580729b51fb1bfac1843857103 f265b92e3248271d0a7f78b4822a75e0da428248 2026-10-13 chore(sprint-6): close 31 review gaps
+20bd94aae243f82f798edb926129b15e27bfc961 f182d8ac258882f3c73e71635a62459d1b5ecf06 2026-10-13 chore: close sprint 6
+702e802e5e0035f2f91e208509bf4fd5f22ad433 8a01b244ae1bcf781b24eca39b049b47a0c8f36c 2026-10-13 feat(release): version 0.1.0, a checked release zip, and RESULTS.md held to its result files (7.0)
+75a71f2bca37bfc15c1bd33c2e8f6b73de6eded6 581c2fc4dfde1349bb2ca74a55b4b43837d44ff0 2026-10-13 docs(readme): limitations first, numbers from RESULTS.md, held by a test (7.1)
+c0a533bb0c87769bae10662cb375420e156aa47f 566d82e47de3c160e6bb81c11594b63cb07b1894 2026-10-13 docs: final for 0.1.0, every doc's two-line header held by a test (7.2)
+8e2db30724d7c2b2d149c1a42d202884189b3462 bc4382295c8f5b80ecc478e12f3e4d4c76b36b70 2026-10-13 feat(launch): the §2 demo as a captioned 60-second GIF, recorded by pnpm record-demo (7.3)
+1b8efaf08d56227f03c8b0bb907102e0ea9d65ad fd0cf3371ca2dc80ae6e6c0afdfd1b1306b19572 2026-10-13 feat(launch): store listing with its screenshots, promo tile and an icon of Attest's own (7.4)
+18c1513459b4e5eb8314444a2bc2e7ee0d7c28d3 1b29db31f765a07c8e3e90168ff8c04b13eee52d 2026-10-13 feat(telemetry-api): GET /v1/stats, public aggregates from 50 installs, and the report written from it (7.5)
+509f3b69cb8abe65c55437834d475b8394abd5a5 5f6caaf953bf6e8c684c46a13050a41a1332a541 2026-10-13 feat(launch): the launch kit, every post ready to paste and held to RESULTS.md (7.6)
+d2d3db94c19653f0f0c0de7939a809813091ae8f 8f0c89a08323436e3f95310f5f087a630961f039 2026-10-13 test(sprint-7): the QA, security, tech and privacy reviews, and QA's tests
+3a86f1455b4ea0ffc456932216edca3288813a0b 41937c6152864a52368407a5b4d5a0139a125b82 2026-10-13 fix(telemetry-api): publish one closed month, and vouch for the report
+5166db32c570721f9b3b8518e39249dee36d432a 41e953ac5cdee13b70992d23d1aff497d6f48bbd 2026-10-13 fix(release): hold the store zip to a store build, and check every picture
+792bcf65be9ef29b0b35d898f4421c6a8dd21620 cce20a530035599113e7de0bc17733f3c312cbf7 2026-10-13 fix(docs): hold every public number to its metric, and the copy to what ships
+f782c37832d414bbdc3ed614cccf2fba3af8b8b7 35bce826334b2705edc9dd72a84ae26ba321d95d 2026-10-13 fix(build): import the network config where the build reads it
+44a693eceeb384ce7bbba4dc76a08e1e4da4cc47 65894be664851e7ebc0e45b496a02cd76208698a 2026-10-13 docs: point at the modules that now hold the hosts, and say what the key sends
+23ea9c6b689b37f3ab74dd64ea2c70d16177e754 764082ca78bd6d4a1a73b10a7daafd8c6a4887ea 2026-10-13 fix(telemetry-api): let one client send for 4 install ids a day, not 5
+c03d43d065848ad7806a56cf4a01f2e7617a691c a2cdaeeaf99894cd8cc82ad755d478b723b14f0d 2026-10-13 chore(bench): regenerate RESULTS.md at the Sprint 7 close
+43ef0125f0c3df3861b3610a4664ea1edf20db64 74fc172c1ce8767529674c66281ca8dcec321a94 2026-10-13 chore(sprint-7): close 58 review gaps
+7ac82eca05d50f7b6880f44d65e36fa7237f3da9 d0db712441db48685571a70b1fce7433e1137fca 2026-10-13 docs(privacy): name the server's operator and a private contact; OpenAI's terms re-read
+ffca5134349dfeb720822a65a44051105c3705d1 0ed92edc0a8618d527d82416d1ed6c1ec96696eb 2026-10-13 test: hold three specs to what they mean in any time zone
+eeb60f57607b5ccbc42943a10343b3e64d84e266 64b0fbc90b4e4caa7009c91e2959af4cacd2a0f8 2026-10-13 feat(telemetry): post to the API deployed on Railway
+e948eb09c9d22fc9731886f5a815bb80b7e1febf c7dfcd254f03a8e003ef3233f9ea60a366840ac2 2026-10-13 ci: install Playwright's Chromium before the unit job's perf gates
+cbf013fdb23ba2b24c60cd2dc91a725ba457651a 751253142a27f70f723b2d1df98ad2c4b29abd8c 2026-10-13 docs(privacy): say what Railway keeps of each request, and for how long
+94bec89fba0ad6582f6188fa3fdc811e0da178b1 81a3db29e18377f32b7a1c8d5fda0a3c6d08933f 2026-10-13 test(e2e): run the worker in the test's time zone, and count the settings controls once loaded
+741b28d8a29968c4e4f167dd843ebf8ccd31b70e 3381ee78323a0f2149d83b45f4c700527ffef812 2026-10-13 chore(sprint-7): tick 7.0, the store zip built against the deployed server
+a40ac39d8080dfbe2b28032a97805deaf64b0ad1 a06f1f3dc986413f6021b00018678a9c067c3076 2026-10-13 test(perf): hold the 30-day popup paint to a 250 ms ceiling on GitHub's runner
+cc699744af29aa6025288e00e20425fd08e3d7dc 187970f5566633467510dd964782773e49f83fae 2026-10-13 chore(sprint-7): tag v0.1.0 once Pages is live, the founder's choice
+bf028929697a30d222e91a715bd1d724f7fef655 be69f86614318b86e4ec0aaa7a5cad58a1284733 2026-10-13 test(e2e): open the options page only once every read has answered
+53396ddfd94552860a64dde4ce99e57087e8d89b b5711069da114723d200a714071ec9206e768703 2026-10-13 docs: log CI fully green on be69f86
+6794ef2d0840880ea2de7524bdc2c385ddbc360b 595cc67b4d706dd78dadf3a62286c58279499570 2026-10-14 docs(manual): the Sprint 4 push is done, CI green on be69f86
+5acaded365ec92393d2aa7a47446c6ef23990bfb 067c6d2d44f79801ab9d7dfcfe4e427baeff14e5 2026-10-14 chore(license): license Attest under FSL-1.1-ALv2, the founder's choice
+dfd50f424487d05381224e203973a39db077e52d fa62abe83be1fdb309190bd4e310673dff594cb5 2026-10-14 fix(fixtures): re-fake the real captures' emails, names and phrases with the capture key
