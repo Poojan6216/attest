@@ -10,6 +10,8 @@ The store takes both from the manifest the build makes ([`extension/wxt.config.t
 - **Summary** (132 characters at most): Checks what your AI agents say they did against your own Gmail and Calendar tabs. Nothing is sent unless you opt in.
 - **Category:** Productivity → Tools
 - **Language:** English
+- **Homepage URL:** https://github.com/Poojan6216/attest
+- **Support URL:** https://github.com/Poojan6216/attest/issues
 
 ## Description
 
@@ -76,4 +78,4 @@ Adults who use AI agents with their own Gmail and Google Calendar. Not directed 
 - **Form categories for the usage numbers:** the cautious answer ticks *Personally identifiable information*, for the install id, a persistent random identifier, and *User activity*, for the hours of the day Gmail and Calendar were read and the receipts counted per agent; each as opt-in and off by default. It ticks none of the content categories (personal communications, website content, financial information), since no field of the payload can hold content. The founder certifies the final answer.
 - **Data sent to a third party you choose:** with your own model key on (off by default), for a claim still checking with a partial match: the claim's kind, counterparty, short subject, amount and time, and the same for the one email or event it partly matched, with Attest's id for it and, for a purchase, the merchant, go to Anthropic or OpenAI, whichever company the key is for, under that company's terms ([§10](../docs/privacy-architecture.md#10-the-optional-model)). Attest's maker receives none of it. Whether the form counts this as collection, and under which categories (personally identifiable information, personal communications, financial information, website content), is the founder's call when filling it in; the cautious answer declares them, as sent only with the user's own key, opt-in.
 - **Certifications:** Attest does not sell or transfer user data outside the approved uses, does not use or transfer it for anything but its single purpose, and does not use or transfer it to decide creditworthiness or for lending.
-- **Privacy policy URL:** not set yet. `PRIVACY.md` needs a public address first (MANUAL.md, Sprint 6).
+- **Privacy policy URL:** https://poojan6216.github.io/attest/PRIVACY (`PRIVACY.md` on GitHub Pages; the manifest's `homepage_url` is the same address, and `pnpm audit:manifest` holds it to it).

@@ -6,7 +6,7 @@
 
 | File | What it is | Status |
 |---|---|---|
-| [store-listing.md](store-listing.md) | The Chrome Web Store listing: name, summary, description, permissions, privacy answers | Needs founder edit: the privacy policy's address, and certifying the privacy answers |
+| [store-listing.md](store-listing.md) | The Chrome Web Store listing: name, summary, description, permissions, privacy answers | Needs founder edit: certifying the privacy answers (the privacy policy's address is set, 2026-10-14) |
 | [screenshots/](screenshots/) and [promo-tile.png](promo-tile.png) | The store's five screenshots and its small promo tile, invented data only (`pnpm record-screenshots`) | Ready |
 | [demo.gif](demo.gif) | The 60 second demo, also in the README (`pnpm record-demo`) | Ready |
 | [show-hn.md](show-hn.md) | The Show HN title, body and first five replies | Needs founder edit: the incident and install links |

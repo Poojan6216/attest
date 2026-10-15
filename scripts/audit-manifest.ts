@@ -17,13 +17,14 @@
  *    extension, leaves `object-src` or `form-action` open, names a host in any directive but `connect-src`, or lets a
  *    page connect anywhere but the extension, the two model vendors' APIs and the opt-in telemetry's host; images may
  *    also come from `blob:`, the share image's preview;
- *  - `minimum_chrome_version` is missing or below MIN_CHROME_MAJOR (src/config-manifest.ts), the one the build sets.
+ *  - `minimum_chrome_version` is missing or below MIN_CHROME_MAJOR (src/config-manifest.ts), the one the build sets;
+ *  - `homepage_url` is not HOMEPAGE_URL (src/config-manifest.ts), the privacy policy's public address (sprint_7 7.2).
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { MIN_CHROME_MAJOR } from '../extension/src/config-manifest';
+import { HOMEPAGE_URL, MIN_CHROME_MAJOR } from '../extension/src/config-manifest';
 import { BYO_VENDORS, TELEMETRY_HOST } from '../extension/src/config-network';
 
 /** The manifest keys Attest uses, and `version_name`, which WXT may add: any other fails (header). */
@@ -31,6 +32,7 @@ export const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'manifest_version',
   'name',
   'description',
+  'homepage_url',
   'version',
   'version_name',
   'icons',
@@ -145,6 +147,7 @@ export function auditManifest(manifest: unknown): string[] {
   const version = typeof stated === 'string' ? Number.parseInt(stated, 10) : Number.NaN;
   if (!(version >= MIN_CHROME_VERSION))
     problems.push(`minimum_chrome_version must be at least ${String(MIN_CHROME_VERSION)}`);
+  if (fields.homepage_url !== HOMEPAGE_URL) problems.push(`homepage_url must be ${HOMEPAGE_URL}`);
   return problems;
 }
 

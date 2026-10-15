@@ -6,7 +6,8 @@
  * resource, a CSP that loads remote or inline code or connects to another host, and an old or missing Chrome version.
  * Since the Sprint 6 close (security review SEC-3, tech review TECH-4), also: any key Attest does not use, an optional
  * host among them; incognito allowed; a Chrome older than the build's own; and a CSP without `default-src 'self'`, with
- * a host in any directive but `connect-src`, or with forms sent anywhere. A release zip's manifest is read too.
+ * a host in any directive but `connect-src`, or with forms sent anywhere. Since sprint_7 7.2, a homepage other than the
+ * privacy policy's public address. A release zip's manifest is read too.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,7 +22,7 @@ import {
   MIN_CHROME_VERSION,
   readManifest,
 } from '../../../../scripts/audit-manifest';
-import { MIN_CHROME_MAJOR } from '../../../src/config-manifest';
+import { HOMEPAGE_URL, MIN_CHROME_MAJOR } from '../../../src/config-manifest';
 import config from '../../../wxt.config';
 
 // As in tests/unit/docs/doc-pins.spec.ts: `defineConfig` returns its argument, so the stub never loads WXT.
@@ -123,6 +124,12 @@ const ASKING_FOR_MORE: readonly [string, Record<string, unknown>, string][] = [
     'Chrome 121',
     { minimum_chrome_version: '121' },
     `minimum_chrome_version must be at least ${String(MIN_CHROME_MAJOR)}`,
+  ],
+  ['no homepage', { homepage_url: undefined }, `homepage_url must be ${HOMEPAGE_URL}`],
+  [
+    'another homepage',
+    { homepage_url: 'https://attest.example/privacy' },
+    `homepage_url must be ${HOMEPAGE_URL}`,
   ],
   [
     'every host, optionally',

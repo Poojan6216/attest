@@ -11,6 +11,13 @@
  */
 export const MIN_CHROME_MAJOR = 122;
 
+/**
+ * The manifest's `homepage_url`: the privacy policy (PRIVACY.md) as GitHub Pages serves it from the public repository
+ * (sprint_7 7.2; MANUAL.md, GitHub Pages). The store listing names the same address, and the audit holds the manifest
+ * to it (scripts/audit-manifest.ts).
+ */
+export const HOMEPAGE_URL = 'https://poojan6216.github.io/attest/PRIVACY';
+
 /** The item's name, which the store shows as its title (launch/store-listing.md; Decisions [7.4]). */
 export const MANIFEST_NAME = 'Attest — receipts for your AI agents';
 
