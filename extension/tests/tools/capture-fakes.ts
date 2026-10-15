@@ -14,7 +14,7 @@ import { createHmac } from 'node:crypto';
 /** The only domains a sanitised fixture may contain after an '@' (RFC 2606 reserved). */
 export const FAKE_EMAIL_DOMAINS = ['example.com', 'example.org', 'example.net'] as const;
 
-const NAME_HEADS = [
+export const NAME_HEADS = [
   'Ash',
   'Bel',
   'Cor',
@@ -32,7 +32,7 @@ const NAME_HEADS = [
   'Pem',
   'Ros',
 ];
-const NAME_TAILS = [
+export const NAME_TAILS = [
   'ley',
   'wick',
   'ton',
@@ -80,7 +80,7 @@ const CITY_NAMES = [
   'Springvale',
   'Westhaven',
 ];
-const PHRASE_WORDS = [
+export const PHRASE_WORDS = [
   'amber',
   'basin',
   'cobalt',

@@ -419,6 +419,12 @@ If anything personal is left, re-capture with more `--names` or `--redact-select
 cd extension && pnpm exec tsx tests/tools/capture-refake.ts --record "$TMPDIR/refake.json" <fixture.html>…
 ```
 
+The emails, names and phrases are re-faked by [`capture-refake-people.ts`](../extension/tests/tools/capture-refake-people.ts), found by the faker's own shapes (two pool names at a reserved domain, or a kept receipt sender's domain; a pool name; a capitalised pool word and the lower-case ones after it), never by guessing what a name is. One mapping, keyed by the capture key and built over every file named and every `--scan` file (the same pages' older versions), serves the pages and their labels alike, so the labels need no hand edits. A new phrase stays on its old one's side of a subject hint's 80 characters, so every hint is cut where it was, and a label's hint cut from a long phrase gets the new phrase's cut; every other length is free, since a new fake as long as its old one would confirm a guess by length. The record (`--record`, required) holds the old fakes and is written outside the repository only. Run it before `capture-refake.ts`, then the fixture tests:
+
+```sh
+cd extension && pnpm exec tsx tests/tools/capture-refake-people.ts --record "$TMPDIR/people.json" <fixture.html>… <labels.json>…
+```
+
 The synthetic `synthetic-*` files were written by hand, not captured, and keep the real sender addresses the receipt parsers match ([`extension/tests/fixtures/pages/README.md`](../extension/tests/fixtures/pages/README.md)). The `@` check applies to captures.
 
 ### 6.4 What the sanitiser cannot catch
