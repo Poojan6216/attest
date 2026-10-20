@@ -145,7 +145,7 @@ describe('the popup', () => {
     });
     const rows = [...root.querySelectorAll('li[data-receipt]')];
     expect(rows.map((row) => row.getAttribute('data-receipt'))).toEqual([ulid(1), ulid(2), ulid(3)]);
-    expect(rows[0]?.textContent).toContain('Checking — final from 12:30');
+    expect(rows[0]?.textContent).toContain('Checking: final from 12:30');
     expect(rows[1]?.textContent).toContain(
       "Attest did not see Google Calendar during this claim's time window.",
     );

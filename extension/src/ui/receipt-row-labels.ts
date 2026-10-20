@@ -1,6 +1,6 @@
 /**
  * What a receipt row says (sprint_4 4.2; agents/ux_engineer.md rules 1, 4 and 6): its one line (the claim, or what an
- * UNASKED receipt is about), its status ("Checking — final from 14:48", an override, or a receipt the batches no longer
+ * UNASKED receipt is about), its status ("Checking: final from 14:48", an override, or a receipt the batches no longer
  * grade), why a grade that is no verification is what it is, and an UNASKED receipt's signals. The reasons are the
  * stored ones in words (src/core/reason-text.ts) and every time is a stored instant (`finalFrom`, `computedAt`). Pure:
  * the caller passes now and the last batch instant.
@@ -47,8 +47,8 @@ export function statusLine(receipt: Receipt, nowMs: number, lastBatchMs: number 
   if (receipt.finalFrom === undefined) return 'Checking';
   const from = clockTime(receipt.finalFrom, nowMs);
   return nowMs < Date.parse(receipt.finalFrom)
-    ? `Checking — final from ${from}`
-    : `Checking — waiting for a check after ${from}`;
+    ? `Checking: final from ${from}`
+    : `Checking: waiting for a check after ${from}`;
 }
 
 /** The reasons that say why a grade is what it is, by grade (the rule's own and coverage reasons, §15). */

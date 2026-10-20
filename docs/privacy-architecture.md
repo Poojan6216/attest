@@ -484,7 +484,7 @@ Limitations first. The install id joins your days: the server can tell that two 
 ```json
 {
   "installId": "0b7e1c52-9d4a-4f3e-8a61-5c2d7e9f1a3b",
-  "extVersion": "0.1.0",
+  "extVersion": "0.1.1",
   "chromeMajor": 141,
   "dayBucket": "2026-10-09",
   "adaptersEnabled": {

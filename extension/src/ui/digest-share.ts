@@ -41,7 +41,7 @@ function notableLine(receipt: NotableReceipt): string {
       : `“${escapeMarkdown(withoutAddresses(receipt.subjectHint))}”`,
   ].filter((part) => part !== undefined);
   const mark = receipt.mark === undefined ? '' : ` (marked ${gradeLabel(receipt.mark.grade)} by the person)`;
-  return `- ${gradeLabel(receipt.grade)}: ${who}${parts.length === 0 ? '' : ` — ${parts.join(', ')}`}${mark}`;
+  return `- ${gradeLabel(receipt.grade)}: ${who}${parts.length === 0 ? '' : ` (${parts.join(', ')})`}${mark}`;
 }
 
 /** The digest as markdown (header). */

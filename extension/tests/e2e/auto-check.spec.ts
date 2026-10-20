@@ -65,7 +65,7 @@ async function pendingEmailClaim(session: VendorSession): Promise<() => Promise<
   expect(await states()).toEqual(['PENDING']);
   // Within its grace, the popup's row says from when the receipt is final (QA review GAP 11).
   const popup = await session.extension.openExtensionPage('popup.html');
-  await expect(popup.locator('li[data-receipt]').first()).toContainText('Checking — final from');
+  await expect(popup.locator('li[data-receipt]').first()).toContainText('Checking: final from');
   await popup.close();
   return states;
 }
@@ -89,7 +89,7 @@ async function popupSaysWhy(session: VendorSession, nowMs: number): Promise<stri
   );
   // Past its grace, with no Gmail check after it yet, the row says the receipt waits for one (QA review GAP 11).
   await expect(popup.locator('li[data-receipt]').first()).toContainText(
-    'Checking — waiting for a check after',
+    'Checking: waiting for a check after',
   );
   return errors;
 }

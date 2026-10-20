@@ -19,7 +19,7 @@ export const MIN_CHROME_MAJOR = 122;
 export const HOMEPAGE_URL = 'https://poojan6216.github.io/attest/PRIVACY';
 
 /** The item's name, which the store shows as its title (launch/store-listing.md; Decisions [7.4]). */
-export const MANIFEST_NAME = 'Attest — receipts for your AI agents';
+export const MANIFEST_NAME = 'Attest: receipts for your AI agents';
 
 /**
  * The pages built for development and the tests, never for the store: the components page (entrypoints/dev, sprint_4

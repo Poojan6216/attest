@@ -6,7 +6,7 @@
 
 The store takes both from the manifest the build makes ([`extension/wxt.config.ts`](../extension/wxt.config.ts)), so they are written there, and a test holds this file to them.
 
-- **Name:** Attest — receipts for your AI agents
+- **Name:** Attest: receipts for your AI agents
 - **Summary** (132 characters at most): Checks what your AI agents say they did against your own Gmail and Calendar tabs. Nothing is sent unless you opt in.
 - **Category:** Productivity → Tools
 - **Language:** English

@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-19
+
+### Changed
+
+- The name in the Chrome Web Store and Chrome is "Attest: receipts for your AI agents", with a colon where it had a dash.
+- A receipt still being checked says "Checking: final from 14:48" (or "Checking: waiting for a check after …"), and a shared digest lists each receipt's details in brackets, "Not found: Muse (Purchase, 6 Oct 2026, 14:00, $120.00)", where both had a dash.
+
 ## [0.1.0] - 2026-10-13
 
 ### Added

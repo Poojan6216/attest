@@ -186,10 +186,10 @@ describe('a week shared, whatever its page text', () => {
         expect(lines.filter((line) => line.startsWith('#'))).toEqual(
           plainLines.filter((line) => line.startsWith('#')),
         );
-        const item = lines.find((line) => line.startsWith('- Unasked: likely Muse — '));
+        const item = lines.find((line) => line.startsWith('- Unasked: likely Muse ('));
         expect(item).toBeDefined();
-        expect(item?.endsWith(`“${escapeMarkdown(withoutAddresses(hint))}”`)).toBe(true);
-        expect(shareLines(markdown).some(({ text }) => text.endsWith(`“${withoutAddresses(hint)}”`))).toBe(
+        expect(item?.endsWith(`“${escapeMarkdown(withoutAddresses(hint))}”)`)).toBe(true);
+        expect(shareLines(markdown).some(({ text }) => text.endsWith(`“${withoutAddresses(hint)}”)`))).toBe(
           true,
         );
         expect(markdown).not.toContain('@');

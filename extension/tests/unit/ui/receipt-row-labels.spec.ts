@@ -1,6 +1,6 @@
 /**
  * What a receipt row says (sprint_4 4.2; src/ui/receipt-row-labels.ts): the claim in one line, or what an UNASKED
- * receipt is about with its signal count; the status ("Checking — final from …" from the stored `finalFrom`, an
+ * receipt is about with its signal count; the status ("Checking: final from …" from the stored `finalFrom`, an
  * override and its reason, a superseded receipt, a PENDING receipt the batches no longer grade); the reason that
  * explains an UNVERIFIABLE, OVER_SCOPE or NOT_FOUND grade, in the core's words; and each UNASKED signal, saying
  * "likely". Times are on the clock of the zone the test runs in; every assertion holds in any zone.
@@ -76,10 +76,10 @@ describe('statusLine', () => {
   it('says from when a PENDING receipt can be final, and that it waits once that has passed', () => {
     const at = (ms: number) => receipt({ finalFrom: iso(ms) });
     expect(statusLine(at(NOW + 30 * MINUTE), NOW, NOW - 5 * MINUTE)).toBe(
-      `Checking — final from ${clockTime(iso(NOW + 30 * MINUTE), NOW)}`,
+      `Checking: final from ${clockTime(iso(NOW + 30 * MINUTE), NOW)}`,
     );
     expect(statusLine(at(NOW - MINUTE), NOW, NOW - 5 * MINUTE)).toBe(
-      `Checking — waiting for a check after ${clockTime(iso(NOW - MINUTE), NOW)}`,
+      `Checking: waiting for a check after ${clockTime(iso(NOW - MINUTE), NOW)}`,
     );
     expect(statusLine(receipt(), NOW, NOW - 5 * MINUTE)).toBe('Checking');
   });
@@ -89,7 +89,7 @@ describe('statusLine', () => {
     expect(statusLine(stale, NOW, NOW - MINUTE)).toBe(
       `No longer checked since ${clockTime(stale.computedAt, NOW)}`,
     );
-    expect(statusLine(stale, NOW, null)).toMatch(/^Checking — final from /u);
+    expect(statusLine(stale, NOW, null)).toMatch(/^Checking: final from /u);
   });
 
   it('gives an override with its reason, a superseded receipt in words, and nothing for a FINAL one', () => {
