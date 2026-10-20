@@ -2,7 +2,6 @@ import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 
 import { log } from '../../../src/log';
-import { Button } from '../../../src/ui/Button';
 
 /** The id of the window the popup belongs to, once Chrome has said it; null until then, or when it cannot. */
 function useWindowId(): number | null {
@@ -19,6 +18,10 @@ function useWindowId(): number | null {
   }, []);
   return id;
 }
+
+/** A quiet text button in the popup's footer: the receipts, not the navigation, lead (agents/ux_engineer.md rule 1). */
+const LINK =
+  'rounded-md px-2 py-1 text-xs font-medium text-ink-muted hover:bg-skeleton hover:text-ink focus-visible:outline focus-visible:outline-2';
 
 /**
  * The popup's ways on (sprint_4 4.2, 4.7): the side panel, for the timeline and each receipt's detail; the weekly
@@ -66,16 +69,16 @@ export function PopupLinks() {
     );
   };
   return (
-    <nav aria-label="Attest pages" class="flex flex-wrap items-center gap-2">
-      <Button variant="secondary" onClick={openTimeline}>
+    <nav aria-label="Attest pages" class="flex flex-wrap items-center gap-1">
+      <button type="button" class={LINK} aria-label="Open timeline" onClick={openTimeline}>
         Open timeline
-      </Button>
-      <Button variant="secondary" onClick={openDigest}>
-        Open weekly digest
-      </Button>
-      <Button variant="secondary" onClick={openSettings}>
+      </button>
+      <button type="button" class={LINK} aria-label="Open weekly digest" onClick={openDigest}>
+        Open digest
+      </button>
+      <button type="button" class={LINK} aria-label="Open settings" onClick={openSettings}>
         Open settings
-      </Button>
+      </button>
       {failed ? (
         <p role="alert" class="w-full text-xs text-error-fg">
           Chrome did not open it. Try again.

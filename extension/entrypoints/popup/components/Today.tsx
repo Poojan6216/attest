@@ -4,7 +4,9 @@ import { DegradedBanner } from '../../../src/ui/DegradedBanner';
 import { EmptyState } from '../../../src/ui/EmptyState';
 import { ReceiptRow } from '../../../src/ui/ReceiptRow';
 import { autoCheckShown } from '../../../src/ui/auto-check-text';
+import { coverageLines } from '../../../src/ui/receipt-labels';
 import { AutoCheckNotice } from './AutoCheckNotice';
+import { VerdictLine } from './VerdictLine';
 
 export interface TodayProps {
   readonly view: PopupView;
@@ -29,7 +31,12 @@ export function Today({ view, nowMs, userAgent }: TodayProps) {
         <AutoCheckNotice notice={view.autoCheck} nowMs={nowMs} />
       ) : null}
       <CoverageHeader coverage={view.coverage} nowMs={nowMs} />
-      <section aria-labelledby="today-heading" class="space-y-1">
+      <VerdictLine
+        items={today.items}
+        more={today.next !== null}
+        gaps={coverageLines(view.coverage, nowMs).some((line) => !line.current)}
+      />
+      <section aria-labelledby="today-heading" class="space-y-2">
         <h2 id="today-heading" class="text-sm font-semibold" elementtiming="today">
           Today
         </h2>
@@ -39,7 +46,7 @@ export function Today({ view, nowMs, userAgent }: TodayProps) {
             what it did.
           </EmptyState>
         ) : (
-          <ul aria-labelledby="today-heading" class="divide-y divide-rule">
+          <ul aria-labelledby="today-heading" class="space-y-2">
             {today.items.map((item) => (
               <ReceiptRow key={item.receipt.id} item={item} nowMs={nowMs} lastBatchMs={view.lastBatchMs} />
             ))}

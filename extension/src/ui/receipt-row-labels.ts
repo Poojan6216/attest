@@ -9,7 +9,7 @@ import { reasonText } from '../core/reason-text';
 import type { Reason, Receipt } from '../ledger/types';
 import type { ReceiptItem } from '../ledger/views';
 import { clockTime } from './format';
-import { claimTypeLabel, claimWhat, count } from './labels';
+import { claimTypeLabel, claimWhat } from './labels';
 import { evidenceSummary, gradeLabel } from './receipt-labels';
 
 /** The row's one line: the claim as extracted, what an UNASKED receipt is about, or a scope receipt's finding. */
@@ -21,10 +21,8 @@ export function receiptLine(item: ReceiptItem, nowMs: number): string {
     return what === null ? claimTypeLabel(claim.type) : `${claimTypeLabel(claim.type)}: ${what}`;
   }
   if (receipt.grade === 'UNASKED') {
-    const signals = count(signalLines(receipt).length, 'signal', 'signals');
-    return orphan === undefined
-      ? `An action Attest no longer keeps (${signals})`
-      : `${evidenceSummary(orphan, nowMs)} (${signals})`;
+    // The signals' count is the row's "Why likely" summary, one tap from the signals (rule 4), not repeated here.
+    return orphan === undefined ? 'An action Attest no longer keeps' : evidenceSummary(orphan, nowMs);
   }
   const [first] = receipt.reasons;
   return first === undefined ? gradeLabel(receipt.grade) : reasonText(first);

@@ -56,7 +56,7 @@ describe('receiptLine', () => {
     expect(receiptLine(item(receipt()), NOW)).toBe('A claim Attest no longer keeps');
   });
 
-  it('says what an UNASKED receipt is about and how many signals it has', () => {
+  it('says what an UNASKED receipt is about; the row\'s "Why likely" holds the count of its signals', () => {
     const sent = makeObservation({
       occurredAt: iso(NOW - 2 * 60 * MINUTE),
       observedAt: iso(NOW - 119 * MINUTE),
@@ -64,11 +64,9 @@ describe('receiptLine', () => {
     const orphan = Observation.parse(sent);
     const line = receiptLine(item(unasked(SIGNALS), { orphan }), NOW);
     expect(line).toBe(
-      `Sent-folder row, ${clockTime(sent.occurredAt, NOW)}, to alice@example.com, “Quarterly numbers” (2 signals)`,
+      `Sent-folder row, ${clockTime(sent.occurredAt, NOW)}, to alice@example.com, “Quarterly numbers”`,
     );
-    expect(receiptLine(item(unasked(SIGNALS.slice(0, 1))), NOW)).toBe(
-      'An action Attest no longer keeps (1 signal)',
-    );
+    expect(receiptLine(item(unasked(SIGNALS.slice(0, 1))), NOW)).toBe('An action Attest no longer keeps');
   });
 });
 

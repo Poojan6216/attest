@@ -15,8 +15,8 @@ export interface ReceiptRowProps {
 }
 
 /**
- * One receipt in a list (agents/ux_engineer.md rules 1, 4 and 6): the grade chip first, then the claim in one line,
- * then the agent ("Likely agent: …" for UNASKED), and in the side panel an Open button for its details; below, its status and why its
+ * One receipt as a card (agents/ux_engineer.md rules 1, 4 and 6): the grade chip first, with the agent ("Likely agent: …"
+ * for UNASKED) and, in the side panel, an Open button on the same row; then the claim across the card's full width; below, its status and why its
  * grade is what it is, and an UNASKED receipt's signals one tap away.
  */
 export function ReceiptRow({ item, nowMs, lastBatchMs, onOpen }: ReceiptRowProps) {
@@ -27,22 +27,24 @@ export function ReceiptRow({ item, nowMs, lastBatchMs, onOpen }: ReceiptRowProps
   const reason = reasonLine(receipt);
   const signals = unasked ? signalLines(receipt) : [];
   return (
-    <li class="py-row" data-receipt={receipt.id}>
-      <div class="flex items-start gap-2">
+    <li class="rounded-lg border border-rule bg-surface px-3 py-2 shadow-sm" data-receipt={receipt.id}>
+      <div class="flex items-center justify-between gap-2">
         <GradeChip grade={receipt.grade} />
-        <p class="min-w-0 flex-1 break-words text-sm text-ink">{line}</p>
-        <AgentBadge agent={receipt.agent} likely={unasked} />
-        {onOpen === undefined ? null : (
-          <button
-            type="button"
-            onClick={onOpen}
-            aria-label={`Open details: ${line}`}
-            class="shrink-0 rounded border border-rule px-1.5 py-0.5 text-xs text-ink hover:bg-skeleton"
-          >
-            Open
-          </button>
-        )}
+        <div class="flex items-center gap-1">
+          <AgentBadge agent={receipt.agent} likely={unasked} />
+          {onOpen === undefined ? null : (
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={`Open details: ${line}`}
+              class="shrink-0 rounded border border-rule px-1.5 py-0.5 text-xs text-ink hover:bg-skeleton"
+            >
+              Open
+            </button>
+          )}
+        </div>
       </div>
+      <p class="mt-1 break-words text-sm text-ink">{line}</p>
       {status === null ? null : <p class="mt-0.5 text-xs text-ink-muted">{status}</p>}
       {reason === null ? null : <p class="mt-0.5 text-xs text-ink-muted">{reason}</p>}
       {signals.length === 0 ? null : (

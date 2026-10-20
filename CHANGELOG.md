@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- The popup answers first: a line at the top says how many of today's receipts need a look (and how many are still checking), each receipt is a card with its grade and agent on top and the claim across the full width, and the links to the timeline, the digest and the settings sit quietly at the foot. An Unasked receipt no longer repeats its signal count, which "Why likely" shows.
+
 ## [0.1.1] - 2026-10-19
 
 ### Changed

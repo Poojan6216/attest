@@ -251,7 +251,9 @@ describe("the popup's links", () => {
     const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
     await show(sources(view([])).given);
     const button = (label: string) =>
-      [...root.querySelectorAll('button')].find((candidate) => candidate.textContent === label);
+      [...root.querySelectorAll('button')].find(
+        (candidate) => candidate.getAttribute('aria-label') === label,
+      );
     await act(async () => {
       button('Open timeline')?.click();
       await Promise.resolve();
@@ -269,7 +271,9 @@ describe("the popup's links", () => {
     Reflect.set(fakeBrowser.sidePanel, 'open', vi.fn().mockRejectedValue(new Error('no gesture')));
     await show(sources(view([])).given);
     await act(async () => {
-      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Open timeline')?.click();
+      [...root.querySelectorAll('button')]
+        .find((b) => b.getAttribute('aria-label') === 'Open timeline')
+        ?.click();
       await Promise.resolve();
     });
     expect(root.querySelector('nav [role="alert"]')?.textContent).toBe('Chrome did not open it. Try again.');

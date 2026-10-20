@@ -279,7 +279,7 @@ describe('popup and side panel shells', () => {
     expect(root.textContent).toContain(PRIVACY_UNKNOWN);
     // Skeleton rows while the ledger is read (tests/unit/popup/popup.spec.ts covers the day itself).
     expect(statusText()).toBe("Loading today's receipts");
-    expect([...root.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
+    expect([...root.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
       'Open timeline',
       'Open weekly digest',
       'Open settings',

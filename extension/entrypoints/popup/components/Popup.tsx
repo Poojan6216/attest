@@ -26,9 +26,8 @@ export function Popup({ sources, privacy }: PopupProps) {
   const notice = useLoaded(state.status === 'locked', loadLockedNotice);
   return (
     <main class="w-[22rem] space-y-3 bg-surface p-gutter text-sm text-ink">
-      <header class="flex flex-wrap items-center justify-between gap-2">
+      <header>
         <h1 class="text-base font-semibold">Attest</h1>
-        <PopupLinks />
       </header>
       {state.status === 'loading' ? <Skeleton rows={4} label="Loading today's receipts" /> : null}
       {state.status === 'failed' ? (
@@ -42,7 +41,10 @@ export function Popup({ sources, privacy }: PopupProps) {
       {state.status === 'ready' ? (
         <Today view={state.view} nowMs={state.nowMs} userAgent={navigator.userAgent} />
       ) : null}
-      <PrivacyLine sources={privacy} class="text-xs text-ink-muted" />
+      <footer class="space-y-1 border-t border-rule pt-2">
+        <PopupLinks />
+        <PrivacyLine sources={privacy} class="text-xs text-ink-muted" />
+      </footer>
     </main>
   );
 }
