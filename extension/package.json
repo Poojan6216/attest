@@ -2,7 +2,7 @@
   "name": "attest",
   "description": "Checks what your AI agents say they did against your own Gmail and Calendar tabs. Nothing is sent unless you opt in.",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "license": "FSL-1.1-ALv2",
   "engines": {

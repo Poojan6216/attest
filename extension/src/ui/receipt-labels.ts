@@ -136,7 +136,7 @@ export function evidenceSummary(observation: Observation, nowMs: number): string
 
 /**
  * Every field of a piece of evidence, as label and value, in the order the detail lists them: what Attest stored about
- * it, all of it (sprint_4 4.3: the detail shows every field that fed the score). "First seen" is its sighting
+ * it, all of it (sprint_4 4.3: the detail shows every field that fed the score). "Attest saw it" is its sighting
  * (`sightedAt` when the ledger stored it later, else `observedAt`); "Stored" is when the ledger stored it.
  */
 export function evidenceFields(observation: Observation, nowMs: number): [string, string][] {
@@ -153,8 +153,8 @@ export function evidenceFields(observation: Observation, nowMs: number): [string
     fields.push(['Amount', formatAmount(observation.amountCents, observation.currency)]);
   }
   if (observation.subjectHint !== undefined) fields.push(['Subject', observation.subjectHint]);
-  fields.push(['First seen', clockTime(observation.sightedAt ?? observation.observedAt, nowMs)]);
-  fields.push(['Stored', clockTime(observation.observedAt, nowMs)]);
+  fields.push(['Attest saw it', clockTime(observation.sightedAt ?? observation.observedAt, nowMs)]);
+  fields.push(['Saved', clockTime(observation.observedAt, nowMs)]);
   return fields;
 }
 

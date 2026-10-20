@@ -120,7 +120,7 @@ describe('EvidenceList, EmptyState and Skeleton', () => {
     expect(list.querySelector('ul')?.getAttribute('aria-label')).toBe('Evidence');
     expect(list.querySelectorAll('li')).toHaveLength(3);
     const terms = [...list.querySelectorAll('li:nth-child(2) dt')].map((term) => term.textContent);
-    expect(terms).toEqual(['Source', 'What', 'When', 'With', 'Subject', 'First seen', 'Stored']);
+    expect(terms).toEqual(['Source', 'What', 'When', 'With', 'Subject', 'Attest saw it', 'Saved']);
     expect(show(h(EvidenceList, { observations: [], nowMs: NOW })).textContent).toBe('No evidence.');
   });
 

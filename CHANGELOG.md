@@ -4,11 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-20
+
 ### Changed
 
 - The popup answers first: a line at the top says how many of today's receipts need a look (and how many are still checking), each receipt is a card with its grade and agent on top and the claim across the full width, and the links to the timeline, the digest and the settings sit quietly at the foot. An Unasked receipt no longer repeats its signal count, which "Why likely" shows.
 - What Attest has checked is calmer: a source not checked comes first, in yellow, and every current check is one quiet line with a green dot. A sent email in the evidence reads "Sent email, 14:02, to …" where it said "Sent-folder row".
 - A grant in the settings reads in steps: what the agent may do as a highlighted summary, its actions in four groups (email and messages, calendar, money, other), and "Access you gave it (optional)" where it said "Declared access".
+- The weekly digest's "What Attest could check" is three short parts: days not checked as yellow pills, each reader on one line with a status dot, and "Not every unasked send is caught: why", its explanation one tap away. A receipt's evidence says "Attest saw it" and "Saved" where it said "First seen" and "Stored".
 
 ## [0.1.1] - 2026-10-19
 

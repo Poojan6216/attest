@@ -157,8 +157,8 @@ describe('evidence', () => {
       ['When', '10:02'],
       ['To', 'priya@example.com'],
       ['Subject', 'Q3 deck'],
-      ['First seen', '10:03'],
-      ['Stored', '10:04'],
+      ['Attest saw it', '10:03'],
+      ['Saved', '10:04'],
     ]);
     const order = observation({
       source: 'gmail.receipt',
@@ -177,8 +177,8 @@ describe('evidence', () => {
       'When',
       'Merchant',
       'Amount',
-      'First seen',
-      'Stored',
+      'Attest saw it',
+      'Saved',
     ]);
   });
 });
