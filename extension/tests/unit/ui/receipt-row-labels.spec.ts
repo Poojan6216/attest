@@ -64,7 +64,7 @@ describe('receiptLine', () => {
     const orphan = Observation.parse(sent);
     const line = receiptLine(item(unasked(SIGNALS), { orphan }), NOW);
     expect(line).toBe(
-      `Sent-folder row, ${clockTime(sent.occurredAt, NOW)}, to alice@example.com, “Quarterly numbers”`,
+      `Sent email, ${clockTime(sent.occurredAt, NOW)}, to alice@example.com, “Quarterly numbers”`,
     );
     expect(receiptLine(item(unasked(SIGNALS.slice(0, 1))), NOW)).toBe('An action Attest no longer keeps');
   });

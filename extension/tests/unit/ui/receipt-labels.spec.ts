@@ -150,7 +150,7 @@ describe('evidence', () => {
       sightedAt: iso(new Date(2026, 9, 9, 10, 3).getTime()),
       rowKeyHash: 'ab'.repeat(32),
     });
-    expect(evidenceSummary(sent, NOW)).toBe('Sent-folder row, 10:02, to priya@example.com, “Q3 deck”');
+    expect(evidenceSummary(sent, NOW)).toBe('Sent email, 10:02, to priya@example.com, “Q3 deck”');
     expect(evidenceFields(sent, NOW)).toEqual([
       ['Source', 'Gmail Sent'],
       ['What', 'Email sent'],

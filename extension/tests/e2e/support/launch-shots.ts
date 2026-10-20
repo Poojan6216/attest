@@ -146,7 +146,7 @@ async function detailShot(session: VendorSession): Promise<Buffer> {
   const unasked = panel.locator('li[data-receipt]').filter({ hasText: 'Grade: Unasked' });
   await unasked.getByRole('button', { name: /^Open details/u }).click();
   await expect(panel.getByRole('heading', { name: 'Receipt' })).toBeFocused();
-  await expect(panel.getByRole('list', { name: 'Evidence' })).toContainText('Sent-folder row');
+  await expect(panel.getByRole('list', { name: 'Evidence' })).toContainText('Sent email');
   return checkedShot(panel, PANEL);
 }
 

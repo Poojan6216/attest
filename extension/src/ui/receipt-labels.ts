@@ -109,7 +109,7 @@ export function reportUrl(health: AdapterHealth, userAgent: string): string {
 }
 
 const EVIDENCE_KINDS: Readonly<Record<Observation['type'], string>> = Object.freeze({
-  'email.sent': 'Sent-folder row',
+  'email.sent': 'Sent email',
   'purchase.made': 'Order email',
   'subscription.changed': 'Subscription email',
   'listing.posted': 'Listing email',
@@ -120,7 +120,7 @@ const EVIDENCE_KINDS: Readonly<Record<Observation['type'], string>> = Object.fre
   other: 'Other evidence',
 });
 
-/** One piece of evidence in one line (ux_engineer rule 5): "Sent-folder row, 14:02, to priya@example.com, “Q3 deck”". */
+/** One piece of evidence in one line (ux_engineer rule 5): "Sent email, 14:02, to priya@example.com, “Q3 deck”". */
 export function evidenceSummary(observation: Observation, nowMs: number): string {
   const parts = [EVIDENCE_KINDS[observation.type], clockTime(observation.occurredAt, nowMs)];
   if (observation.counterparty !== undefined) {

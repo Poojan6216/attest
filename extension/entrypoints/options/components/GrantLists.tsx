@@ -35,7 +35,7 @@ export function GrantLists({ agent, draft, errors, edit }: GrantListsProps) {
       />
       <GrantTextField
         id={`${agent}-access`}
-        label="Declared access"
+        label="Access you gave it (optional)"
         hint="What you gave it access to, one per line, such as gmail.send."
         value={draft.access}
         error={errors.access}

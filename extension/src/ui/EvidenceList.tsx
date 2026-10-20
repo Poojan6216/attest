@@ -13,7 +13,7 @@ export interface EvidenceListProps {
 }
 
 /**
- * A receipt's evidence (agents/ux_engineer.md rule 5): each piece in one specific line ("Sent-folder row, 14:02, to
+ * A receipt's evidence (agents/ux_engineer.md rule 5): each piece in one specific line ("Sent email, 14:02, to
  * priya@example.com, “Q3 deck”"), then every field Attest stored about it, so nothing that fed the score is hidden.
  */
 export function EvidenceList({ observations, nowMs, emptyText = 'No evidence.' }: EvidenceListProps) {

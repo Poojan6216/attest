@@ -16,7 +16,13 @@ export interface AgentGrantFormProps {
   readonly save: GrantSources['save'];
 }
 
-const ACTIONS = ActionType.options.map((type) => [type, claimTypeLabel(type)] as const);
+/** The actions in plain groups, so nine checkboxes read as four short questions (agents/ux_engineer.md rule 7). */
+const GROUPS: readonly (readonly [string, readonly ActionType[]])[] = [
+  ['Email and messages', ['email.sent', 'message.sent']],
+  ['Calendar', ['calendar.created', 'calendar.updated', 'calendar.deleted']],
+  ['Money', ['purchase.made', 'subscription.changed']],
+  ['Other', ['listing.posted', 'other']],
+];
 
 /**
  * One agent's grant (sprint_4 4.4; agents/ux_engineer.md rule 7): what it may do in plain language, its actions, the
@@ -31,27 +37,33 @@ export function AgentGrantForm({ agent, stored, muted, save }: AgentGrantFormPro
   return (
     <section
       aria-labelledby={`${agent}-grant`}
-      class="space-y-3 rounded border border-neutral-300 p-3 dark:border-neutral-700"
+      class="space-y-4 rounded-lg border border-rule bg-surface p-4 shadow-sm"
     >
       <h3 id={`${agent}-grant`} class="font-semibold">
         {name}
       </h3>
-      <p class="text-sm">
+      <p class="rounded-md border border-rule bg-skeleton/40 px-3 py-2 text-sm">
         {made.ok ? grantSentence(name, made.grant) : `${name}: fix the fields below to see what it may do.`}
       </p>
-      <CheckGroup
-        legend="May do"
-        options={ACTIONS}
-        checked={(type) => draft.allowedTypes.includes(type)}
-        onToggle={(type) => {
-          const on = !draft.allowedTypes.includes(type);
-          edit({
-            allowedTypes: ActionType.options.filter((each) =>
-              each === type ? on : draft.allowedTypes.includes(each),
-            ),
-          });
-        }}
-      />
+      <fieldset class="space-y-2">
+        <legend class="mb-1 text-sm font-medium text-ink">What {name} may do</legend>
+        {GROUPS.map(([legend, types]) => (
+          <CheckGroup
+            key={legend}
+            legend={legend}
+            options={types.map((type) => [type, claimTypeLabel(type)] as const)}
+            checked={(type) => draft.allowedTypes.includes(type)}
+            onToggle={(type) => {
+              const on = !draft.allowedTypes.includes(type);
+              edit({
+                allowedTypes: ActionType.options.filter((each) =>
+                  each === type ? on : draft.allowedTypes.includes(each),
+                ),
+              });
+            }}
+          />
+        ))}
+      </fieldset>
       <GrantLists agent={agent} draft={draft} errors={errors} edit={edit} />
       <label class="flex items-center gap-2 text-sm">
         <input
