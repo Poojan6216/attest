@@ -36,7 +36,7 @@
     "@noble/ciphers": "2.4.0",
     "dexie": "4.4.6",
     "preact": "10.29.8",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
